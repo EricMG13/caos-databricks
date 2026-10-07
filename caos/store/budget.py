@@ -211,6 +211,27 @@ def remaining(conn: StoreConnection, run_id: UUID) -> Decimal:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
 
 
+def overspent(conn: StoreConnection, run_id: UUID) -> bool:
+    """Whether a call of this run was charged above a reservation that names
+    a credit price (R2.6): an AI-unit bill the run's pinned per-token price
+    did not bound, so any further attempt would reserve the same way and
+    overshoot the same way. Read from the ledger, which holds the whole
+    charge whatever became of the refusal or the park after it (F589). A
+    token-priced overrun is not counted: it keeps the budget exit it always
+    had. Caller owns the transaction."""
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM budget_reservations r"
+            " JOIN budget_ledger l USING (run_id, attempt_id)"
+            " WHERE r.run_id = %s AND r.credit_price IS NOT NULL"
+            " AND l.amount > r.amount LIMIT 1",
+            (run_id,),
+        ).fetchone()
+    except psycopg.Error:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    return row is not None
+
+
 def ceiling_of(conn: StoreConnection, run_id: UUID) -> Decimal:
     """The run's own ceiling, unreduced by what it has spent.
 

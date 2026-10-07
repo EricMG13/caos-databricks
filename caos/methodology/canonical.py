@@ -19,18 +19,22 @@ anchored ones.
 from __future__ import annotations
 
 import hashlib
+import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
+from fractions import Fraction
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import psycopg
 
 from caos import methodology
 from caos.blobs import BlobStore
+from caos.copilot import NANO_PER_CREDIT
 from caos.evidence.citations import (
     EXCERPT,
     MIN_EXCERPT_WORDS,
@@ -174,6 +178,9 @@ from caos.store.runs import attempt_ordinal
 from caos.store.source_sets import SourceSet, load_source_set
 from caos.store.work import require_resendable
 
+if TYPE_CHECKING:
+    from caos.pricing import CreditPrice
+
 # The bill of an answer already paid for is written this many times at most,
 # a pause apart, before the store fault is let through (ST-12): a failover
 # between the call and its one write would otherwise lose the only record that
@@ -265,6 +272,37 @@ def _within_reservation(
     return taken
 
 
+def _settled_within(taken: Reservation | None, charge: Decimal | None) -> bool:
+    """Whether a known AI-unit charge is within the reservation its call ran
+    under (R2.6). A reservation that names a credit price settles its call in
+    AI units, which the pinned per-token price no longer bounds, so a charge
+    above it is possible: it is named on stderr by its figures alone --
+    `BUDGET_CHARGE_OVER_RESERVATION reserved=<d> charged=<d> nano_aiu=<n>` --
+    and the caller refuses the answer after the ledger holds all of it. A
+    token-priced charge keeps the budget exit it always had: its overrun is
+    accepted and consumes the run's capacity. An unknown charge or a missing
+    reservation is decided elsewhere."""
+    if taken is None or taken.credit is None or charge is None:
+        return True
+    if charge <= taken.amount:
+        return True
+    print(
+        f"{RefusalCode.BUDGET_CHARGE_OVER_RESERVATION.value}"
+        f" reserved={taken.amount} charged={charge}"
+        f" nano_aiu={_nano_aiu(taken.credit, charge)}",
+        file=sys.stderr,
+    )
+    return False
+
+
+def _nano_aiu(credit: CreditPrice, charge: Decimal) -> str:
+    """The AI units a charge settled at its reservation's credit price (0048
+    holds it above zero), as a whole count, exactly; `-` when the charge is no
+    whole count of them."""
+    units = Fraction(charge) * NANO_PER_CREDIT / Fraction(credit.per_credit)
+    return str(units.numerator) if units.denominator == 1 else "-"
+
+
 def _per_credit(taken: Reservation) -> Decimal | None:
     """The credit price a reservation was taken under, or None (0048)."""
     return None if taken.credit is None else taken.credit.per_credit
@@ -343,6 +381,10 @@ def execute_handoff(
         drop = _drop_kind(completion, (charge, generation, diagnostic))
         require_idle(conn)
         bill(conn, attempt, CallOutcome(charge, model, generation, diagnostic, drop))
+    # Recorded in full above, then refused: the answer is not accepted and
+    # the run parks, terminal for its pin (R2.6).
+    if not _settled_within(covered, charge):
+        raise Refusal(RefusalCode.BUDGET_CHARGE_OVER_RESERVATION)
     if unstored:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
     if completion.refusal is not None:
@@ -1749,6 +1791,14 @@ def replay_billed(  # noqa: PLR0913 -- one run's nodes, keyword-only
         _stored_identity(
             conn, assignment, bundle, adapter=methodology.CANONICAL_ADAPTER_VERSION
         )
+        # Refused as the live call was, never accepted: a crash between the
+        # bill and its explanation leaves it here (R2.6).
+        if not _settled_within(reserved_for(conn, attempt_id), charge):
+            return Replayed(
+                attempt_id,
+                Verdict.REFUSED,
+                code=RefusalCode.BUDGET_CHARGE_OVER_RESERVATION,
+            )
         try:
             judged = _replayed_answer(conn, blobs, bundle, assignment, body)
         except Refusal as refusal:

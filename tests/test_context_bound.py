@@ -486,10 +486,22 @@ def test_a_pinned_copilot_entry_above_the_listing_refuses_at_start(
         declare_listed({"gpt-6-luna": 400_000})
     assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
     assert copilot.CONTEXT_LISTED == {}
-    # Equal is no excess, and the listing is then declared.
+    # Equal is no excess, a pinned model the seat did not list is held to
+    # nothing, and the listing is then declared.
     _declare(monkeypatch, "copilot:gpt-6-luna@high", 400_000)
+    _declare(monkeypatch, "copilot:gpt-6-sol", 900_000)
     declare_listed({"gpt-6-luna": 400_000})
     assert copilot.CONTEXT_LISTED == {"gpt-6-luna": 400_000}
+    assert context_tokens("copilot:gpt-6-sol") == 900_000
+
+
+@pytest.mark.usefixtures("unlisted")
+def test_a_listed_count_of_one_token_is_declared_and_leaves_no_room() -> None:
+    declare_listed({"gpt-6-luna": 1})
+    assert context_tokens("copilot:gpt-6-luna") == 1
+    with pytest.raises(Refusal) as refused:
+        request_ceiling("copilot:gpt-6-luna")
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
 
 
 @pytest.mark.usefixtures("unlisted")
