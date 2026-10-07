@@ -3993,6 +3993,20 @@ def test_property_a_settled_charge_is_within_its_reservation_or_named_exactly(
         )
 
 
+def test_a_charge_that_is_no_whole_count_of_ai_units_names_none() -> None:
+    """A charge the reservation's credit price does not divide into whole
+    nano-AIU came from no AI-unit bill: the line says `-`, never a guess."""
+    taken = Reservation(
+        Decimal("0.0000000001"), PRICE, CreditPrice(CREDIT, date(2026, 10, 1))
+    )
+    said = io.StringIO()
+    with contextlib.redirect_stderr(said):
+        assert not canonical._settled_within(taken, Decimal("0.000000000101"))
+    assert said.getvalue() == (
+        "BUDGET_CHARGE_OVER_RESERVATION reserved=1E-10 charged=1.01E-10 nano_aiu=-\n"
+    )
+
+
 @EXAMPLES
 @given(AMOUNTS, AMOUNTS)
 def test_property_a_token_priced_reservation_bounds_no_charge(
