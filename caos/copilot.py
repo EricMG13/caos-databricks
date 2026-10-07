@@ -37,6 +37,7 @@ import math
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import threading
@@ -602,22 +603,17 @@ def _file_digest(path: str) -> str:
         return hashlib.file_digest(read, "sha256").hexdigest()
 
 
-def _runtime_entry() -> str:
-    """The runtime to start, resolved: exactly the operator's (R3, F591,
-    F594).
+def _runtime_entry() -> tuple[str, str]:
+    """The operator's runtime and its pinned digest (R3, F591, F594).
 
     `RUNTIME_ENV` names its entry, an absolute path to a file that is no
-    link, and `RUNTIME_DIGEST_ENV` pins `runtime_digest` of its directory.
-    The path is resolved once (`os.path.realpath`); the resolved directory
-    is hashed whole on every call and is what is started, so a symlinked
-    parent retargeted later changes nothing, and a file swapped back to its
-    old size and mtime is still read. No stat-keyed trust is kept: the real
-    1.0.90 bundle (103 MB, 42 files) hashes in under 0.1 s, beside a call of
-    seconds. Anything else refuses `PROVIDER_NOT_CONFIGURED` before a client
-    starts. The SDK's own resolution -- a downloaded bundle, whose cached
-    files it never re-checks, under a cache root the worker's
-    `COPILOT_CLI_EXTRACT_DIR`, `XDG_CACHE_HOME` or `LOCALAPPDATA` can move --
-    is never consulted.
+    link, and `RUNTIME_DIGEST_ENV` pins `runtime_digest` of its directory;
+    the entry is resolved once (`os.path.realpath`). Anything else refuses
+    `PROVIDER_NOT_CONFIGURED` before a client starts. The source is never
+    started: each call starts its own verified copy (`_staged`, F596). The
+    SDK's own resolution -- a downloaded bundle, whose cached files it never
+    re-checks, under a cache root the worker's `COPILOT_CLI_EXTRACT_DIR`,
+    `XDG_CACHE_HOME` or `LOCALAPPDATA` can move -- is never consulted.
     """
     named = os.environ.get(RUNTIME_ENV, "")
     pinned = os.environ.get(RUNTIME_DIGEST_ENV, "")
@@ -628,15 +624,61 @@ def _runtime_entry() -> str:
         or not os.path.isfile(named)
     ):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    resolved = os.path.realpath(named)
-    if not _native(resolved):
+    return os.path.realpath(named), pinned
+
+
+# Where a call keeps its own copy of the runtime, in its private directory.
+_STAGED = "caos-runtime"
+_CHUNK = 1 << 20
+
+
+def _staged(source: str, pinned: str, home: str) -> str:
+    """The call's own copy of the pinned runtime, verified: its entry (F596).
+
+    Every file of the source directory is copied into `home`, owner-only,
+    and hashed as its bytes are written, so the digest is of exactly the
+    copy that is started -- not of a source file that can be swapped between
+    the hash and the start, or while the runtime runs and opens the library
+    beside its entry. The copy's entry must be the host's native executable
+    (`_native`, F595, F597; refused with the typed stderr line
+    `PROVIDER_NOT_CONFIGURED reason=runtime_not_native`) and the copy's
+    digest the pinned one; otherwise, or when a source file vanished while
+    it was read, `PROVIDER_NOT_CONFIGURED`. The copy goes with `home`.
+    """
+    root = os.path.join(home, _STAGED)
+    lines: list[str] = []
+    try:
+        for relative, path in _runtime_files(os.path.dirname(source)):
+            target = os.path.join(root, *relative.split("/"))
+            os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
+            lines.append(f"{relative}\0{_copied(path, target)}\n")
+    except FileNotFoundError:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED) from None
+    entry = os.path.join(root, os.path.basename(source))
+    if not os.path.isfile(entry):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    if not _native(entry):
         # A script runs an interpreter found on `PATH`, which no digest
         # covers (F595): named on stderr by its reason, never its path.
         print("PROVIDER_NOT_CONFIGURED reason=runtime_not_native", file=sys.stderr)
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    if not hmac.compare_digest(runtime_digest(resolved), pinned):
+    digest = hashlib.sha256("".join(sorted(lines)).encode()).hexdigest()
+    if not hmac.compare_digest(digest, pinned):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    return resolved
+    return entry
+
+
+def _copied(source: str, target: str) -> str:
+    """Copy one file to a new `target` the owner alone may use, and return
+    the SHA-256 of exactly the bytes written."""
+    digest = hashlib.sha256()
+    with open(source, "rb") as read, open(target, "xb") as written:
+        while chunk := read.read(_CHUNK):
+            digest.update(chunk)
+            written.write(chunk)
+        mode = stat.S_IMODE(os.fstat(read.fileno()).st_mode) & 0o700
+    os.chmod(target, mode)
+    return digest.hexdigest()
 
 
 # The first bytes of a native executable (F595): ELF; Mach-O, 32 and 64 bit
@@ -679,10 +721,11 @@ async def _client() -> AsyncIterator[tuple[CopilotClient, str]]:
     """
     from copilot import CopilotClient, RuntimeConnection
 
-    executable = _runtime_entry()
+    source, pinned = _runtime_entry()
     _silenced()
     home = tempfile.mkdtemp(prefix="caos-copilot-")
     try:
+        executable = _staged(source, pinned, home)
         async with CopilotClient(
             connection=RuntimeConnection.for_stdio(path=executable),
             mode="empty",

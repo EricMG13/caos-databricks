@@ -18,6 +18,7 @@ import logging
 import math
 import os
 import re
+import shutil
 import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, tzinfo
@@ -3480,11 +3481,16 @@ class FakeRuntime:
     session: ClassVar[FakeSession] = FakeSession([])
     # The pinned runtime's entry, set by the `runtime` fixture.
     entry: ClassVar[str] = ""
+    # What the "runtime" does as it starts, after CAOS staged it.
+    on_start: ClassVar[Callable[[], None] | None] = None
 
     def __init__(self, **options: object) -> None:
         self.options: dict[str, Any] = dict(options)
         self.home = Path(str(options["base_directory"]))
         self.home_existed = self.home.is_dir()
+        # The tree of the runtime CAOS hands the SDK to start, as it is then.
+        started = getattr(options.get("connection"), "path", None)
+        self.started_digest = expected_digest(Path(started).parent) if started else None
         self.created: dict[str, Any] = {}
         self.entered = False
         self.exited = False
@@ -3492,6 +3498,9 @@ class FakeRuntime:
 
     async def __aenter__(self) -> FakeRuntime:
         self.entered = True
+        started = type(self).on_start
+        if started is not None:
+            started()
         logging.getLogger("copilot._jsonrpc").warning("[CLI] %s", SECRET)
         return self
 
@@ -3523,6 +3532,11 @@ def runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[FakeRuntime
     monkeypatch.setenv(RUNTIME_ENV, Runtime.entry)
     monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(tmp_path / "runtime"))
     return Runtime
+
+
+def staged(made: FakeRuntime) -> str:
+    """The runtime entry a call starts: the copy in its own directory."""
+    return str(made.home / "caos-runtime" / "copilot-runtime")
 
 
 def sent_options(made: FakeRuntime) -> dict[str, Any]:
@@ -3632,7 +3646,7 @@ def test_the_runtime_never_auto_logs_in_and_sees_only_the_allow_listed_environme
     connection = made.options.pop("connection")
     assert isinstance(connection, StdioRuntimeConnection)
     assert (connection.path, tuple(connection.args), connection.env) == (
-        runtime.entry,
+        staged(made),
         (),
         None,
     )
@@ -3644,8 +3658,8 @@ def test_the_runtime_never_auto_logs_in_and_sees_only_the_allow_listed_environme
         "log_level": "none",
         "use_logged_in_user": False,
     }
-    assert environment == child_environment(str(made.home), runtime.entry)
-    assert environment["PATH"] == os.path.dirname(runtime.entry)
+    assert environment == child_environment(str(made.home), staged(made))
+    assert environment["PATH"] == os.path.dirname(staged(made))
     assert environment["COPILOT_GITHUB_TOKEN"] == "parent-token"
     for name in ("GH_TOKEN", "GITHUB_TOKEN", "COPILOT_PROVIDER_API_KEY", "GH_HOST"):
         assert name not in environment
@@ -3693,8 +3707,9 @@ def test_only_the_pinned_runtime_runs_and_the_environment_cannot_choose_it(
     monkeypatch.setenv("COPILOT_CLI_EXTRACT_DIR", str(tmp_path / "planted"))
     monkeypatch.setenv("COPILOT_CLI_PATH", str(planted / "copilot-runtime"))
     ask_copilot(PROMPT, TARGET, 5.0)
-    assert runtime.made[-1].options["connection"].path == runtime.entry
+    assert runtime.made[-1].options["connection"].path == staged(runtime.made[-1])
     pinned = os.environ[RUNTIME_DIGEST_ENV]
+    assert runtime.made[-1].started_digest == pinned
     for name, value in (
         (RUNTIME_ENV, ""),
         (RUNTIME_ENV, "copilot-runtime"),
@@ -3737,16 +3752,16 @@ def test_every_call_reads_the_whole_runtime_again(
     runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """No stat-keyed trust (F594): size, mtime and inode are the owner's to
-    set back, so each call hashes the runtime it is about to start. The real
-    1.0.90 bundle (103 MB, 42 files) hashes in 57-87 ms here."""
+    set back, so each call copies and hashes the whole runtime it starts
+    (F596)."""
     read: list[str] = []
-    digest = copilot_module._file_digest
+    copied = copilot_module._copied
 
-    def counted(path: str) -> str:
-        read.append(path)
-        return digest(path)
+    def counted(source: str, target: str) -> str:
+        read.append(source)
+        return copied(source, target)
 
-    monkeypatch.setattr(copilot_module, "_file_digest", counted)
+    monkeypatch.setattr(copilot_module, "_copied", counted)
     for calls in (1, 2, 3):
         ask_copilot(PROMPT, TARGET, 5.0)
         assert len(read) == 3 * calls
@@ -3786,7 +3801,8 @@ def test_a_runtime_reached_through_a_retargeted_link_is_never_started(
     monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(good))
     ask_copilot(PROMPT, TARGET, 5.0)
     started = runtime.made[-1].options["connection"].path
-    assert started == os.path.realpath(good / "copilot-runtime")
+    assert started == staged(runtime.made[-1])
+    assert runtime.made[-1].started_digest == expected_digest(good)
     assert runtime.made[-1].options["env"]["PATH"] == os.path.dirname(started)
     current.unlink()
     current.symlink_to(twin)
@@ -3852,7 +3868,48 @@ def test_a_native_executable_entry_is_started(
     monkeypatch.setenv(RUNTIME_ENV, str(root / "copilot-runtime"))
     monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(root))
     ask_copilot(PROMPT, TARGET, 5.0)
-    assert runtime.made[-1].options["env"]["PATH"] == str(root.resolve())
+    assert runtime.made[-1].started_digest == expected_digest(root)
+
+
+def test_the_runtime_started_is_a_verified_copy_in_the_calls_own_directory(
+    runtime: type[FakeRuntime],
+) -> None:
+    """F596: the pinned directory is copied into the call's private
+    directory, the copy is what is hashed and what is started, and it goes
+    with the call."""
+    ask_copilot(PROMPT, TARGET, 5.0)
+    [made] = runtime.made
+    assert made.options["connection"].path == staged(made)
+    assert made.started_digest == os.environ[RUNTIME_DIGEST_ENV]
+    assert not made.home.exists()
+
+
+def test_a_runtime_swapped_once_it_was_staged_changes_nothing(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The re-check's race (`r3_race.py`): the entry and the library beside
+    it are replaced while the call runs -- the hard-linked or renamed-in
+    kind as well. The copy that runs never sees it."""
+    source = tmp_path / "runtime"
+    kept = {
+        name: (source / name).read_bytes()
+        for name in ("copilot-runtime", "runtime.node")
+    }
+    copies: list[dict[str, bytes]] = []
+
+    def swapped() -> None:
+        for name in kept:
+            replacement = source / f"{name}.evil"
+            replacement.write_bytes(MACH_O + b" EVIL")
+            os.replace(replacement, source / name)
+        home = runtime.made[-1].home / "caos-runtime"
+        copies.append({name: (home / name).read_bytes() for name in kept})
+
+    monkeypatch.setattr(runtime, "on_start", swapped)
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert copies == [kept]
+    assert runtime.made[-1].started_digest == os.environ[RUNTIME_DIGEST_ENV]
+    _refused_before_any_client(runtime)
 
 
 def test_a_runtime_changed_after_it_was_verified_is_refused(
@@ -4088,11 +4145,12 @@ def test_a_home_the_runtime_left_behind_is_named_on_stderr_without_its_path(
     def kept(path: object, *_args: object, **_kwargs: object) -> None:
         return None
 
+    removed = shutil.rmtree
     monkeypatch.setattr("shutil.rmtree", kept)
     ask_copilot(PROMPT, TARGET, 5.0)
     [made] = runtime.made
     assert made.home.exists()
-    made.home.rmdir()
+    removed(made.home)
     _out, err = capsys.readouterr()
     assert err == "COPILOT_HOME_NOT_REMOVED\n"
 
