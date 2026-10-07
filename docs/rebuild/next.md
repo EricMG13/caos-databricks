@@ -179,3 +179,8 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
   - whether `toolDefinitionsTokens` is 0 with no tools.
 
   Until then a type off a list refuses or voids, and costs a re-run, never a second payment.
+- N182 (2026-10-07; D77, addendum 2; F573–F575) — The firm-seat spike (N177, N180, N181) must also record:
+  - the `interactionType` a plain smoke's `assistant.usage` and `model.call_failure` state. Any stated value refuses until the owner admits that one (F575);
+  - whether a failed dispatch is closed by a `model.call_finished` with outcome `error` (F573). Without one, every failure is spend and D110 never re-attempts;
+  - whether an internal retry stays one dispatch or opens a second;
+  - whether `session.idle.mode` is `interactive`.
