@@ -686,21 +686,6 @@ def _summed(blocks: Sequence[object]) -> Decimal | None:
     return total
 
 
-def _per_request_units(usages: Sequence[Mapping[str, Any]]) -> Decimal | None:
-    """The sum of the per-request `copilotUsage.totalNanoAiu` figures, exactly,
-    or None when one is stated and is not a finite, non-negative number."""
-    total = Decimal(0)
-    for usage in usages:
-        capi = usage.get("copilotUsage")
-        if capi is None:
-            continue
-        figure = capi.get("totalNanoAiu") if isinstance(capi, Mapping) else None
-        if not _finite_count(figure):
-            return None
-        total += Decimal(figure)  # exact: a float converts without rounding
-    return total
-
-
 def _finite_count(value: object) -> TypeIs[int | float]:
     return (
         isinstance(value, int | float)
