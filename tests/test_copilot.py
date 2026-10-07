@@ -2936,6 +2936,15 @@ def test_property_per_request_spend_bills_only_when_its_sum_is_within_the_bill(
     assert nano == (total if sum(figure for _h, figure in stated) <= total else None)
 
 
+def test_only_a_fusion_phase_states_its_request_as_usage() -> None:
+    """F579, found by mutation testing: a `usage` field of any other event is
+    no per-request block, so it is held alone and never added."""
+    phase = phase_completed(7)
+    other = {**phase, "type": "session.fusion_completed"}
+    assert copilot_module._requests([other]) == []
+    assert copilot_module._requests([phase]) == [phase["data"]["usage"]]
+
+
 # The SDK classes that state nano-AIU, by how the bill holds each: summed as
 # per-request spend, the cumulative bill itself, an aggregate held alone (a
 # fusion turn's total of its phases; a shutdown's per-model sum), or a
