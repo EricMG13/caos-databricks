@@ -49,7 +49,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, BinaryIO, TypeIs
+from typing import TYPE_CHECKING, Any, BinaryIO, NoReturn, TypeIs
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel
@@ -59,7 +59,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from openai import OpenAIError
 
 from caos import provider
-from caos.pricing import CreditPrice, exact_context
+from caos.pricing import CreditPrice, ModelPrice, exact_context
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
     TIMEOUT_SECONDS,
@@ -71,7 +71,7 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
 
 if TYPE_CHECKING:
-    from copilot import CopilotClient, CopilotSession, SessionEvent
+    from copilot import CopilotClient, CopilotSession, ModelInfo, SessionEvent
     from copilot.generated.rpc import PermissionDecisionReject
 
 PLATFORM = "copilot"
@@ -392,6 +392,11 @@ class _Listed(Mapping[str, int]):
     def _declare(self, values: Mapping[str, int]) -> None:
         with self._lock:
             if self._declared:
+                # The same listing again (the in-process worker configures
+                # again after a store fault) changes nothing; any other is
+                # a second pin (F598).
+                if dict(values) == dict(self._values):
+                    return
                 raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
             self._values = MappingProxyType(dict(values))
             self._declared = True
@@ -403,7 +408,8 @@ CONTEXT_LISTED = _Listed()
 def declare_listed(listed: Mapping[str, int]) -> None:
     """Pin each listed model's context window for this process (R4).
 
-    Once per process: a second declaration, a key that is no runtime model
+    Once per process: a second declaration that differs from the first (the
+    same one again changes nothing), a key that is no runtime model
     id, a value that is no positive whole count, or a pinned
     `caos.provider.CONTEXT_TOKENS` entry for a `copilot:` name of that model
     above its listed value refuses `PROVIDER_NOT_CONFIGURED`, and nothing is
@@ -941,6 +947,286 @@ class ChatCopilot(BaseChatModel):
                 raise failed
         message = reply_message(seen, target)
         return ChatResult(generations=[ChatGeneration(message=message)])
+
+
+# --- readiness at worker start (Task 5; R3, R2.1, R4) -----------------------
+
+# The GitHub host the seat must be signed in on (R3): a pin, never an
+# inherited `GH_HOST`; the firm's data-residency host when it has one.
+HOST_ENV = "CAOS_COPILOT_HOST"
+DEFAULT_HOST = "github.com"
+_HOST = re.compile(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?")
+# The only credential readiness accepts: `COPILOT_GITHUB_TOKEN`, which the
+# runtime reports as `env` (`AuthInfoType.ENV`).
+_SEAT_AUTH = "env"
+# How long the runtime has to start, say who is signed in and list its models.
+READY_SECONDS = 60.0
+# What readiness prints of what the runtime says: identifiers only, else a mark.
+_LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}")
+_VERSION = re.compile(r"[0-9A-Za-z.+-]{1,64}")
+_WORD = re.compile(r"[a-z0-9_-]{1,32}")
+# Every rate an input token can be billed at, per tier (R2.1): the deprecated
+# `cache_price` too, since a listing may state only it.
+_INPUT_RATES = (
+    "input_price",
+    "cache_price",
+    "cache_read_price",
+    "cache_write_price",
+    "cache_write1_h_price",
+)
+# A price floor is shown rounded up to this many decimal places of a dollar.
+_FLOOR_PLACES = 12
+
+
+def require_ready(choices: Mapping[str, ModelPrice]) -> None:
+    """The approved Copilot models in `choices` answer on this machine, or
+    `PROVIDER_NOT_CONFIGURED` before any run is claimed (D77; R3, R2.1, R4).
+
+    No runtime starts unless one is a `copilot:` model; a `copilot-cli:` name
+    is refused (deferred, owner decision (a)). Otherwise the credit price must
+    be set, the host pin valid, and the pinned runtime verified as it starts
+    (`_client`). The seat must be signed in through `COPILOT_GITHUB_TOKEN`
+    (`authType == "env"`) on the pinned host. Every approved model must be
+    offered to it, enabled by policy, pinned at an effort it takes (`usable`)
+    and priced at no less than its listing (`_floors`). One line is printed
+    for the runtime and one per approved model, each listed fact an
+    identifier or a count, else `-`, never the token. Only when all hold is each
+    offered model's context declared, once per process (`declare_listed`).
+    """
+    targets = {name: target for name in choices if (target := parsed(name))}
+    if not targets:
+        return
+    if any(target.platform == CLI_PLATFORM for target in targets.values()):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    credit = credit_price()
+    host = _pinned_host()
+    seat = _seat(host)
+    if seat is None:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    login, version, offered = seat
+    print(
+        f"copilot runtime={_shown(version, _VERSION)} host={host} "
+        f"login={_shown(login, _LOGIN)}",
+        file=sys.stderr,
+    )
+    by_id = {info.id: info for info in offered}
+    ready = [
+        _model_ready(name, target, by_id.get(target.name), choices[name], credit)
+        for name, target in targets.items()
+    ]
+    if not all(ready):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    declare_listed(
+        {
+            target.name: tokens
+            for target in targets.values()
+            if target.name in by_id
+            and (tokens := _listed_context(by_id[target.name])) is not None
+        }
+    )
+
+
+def usable(info: ModelInfo, target: CopilotModel) -> bool:
+    """Enabled by policy, and sent at an effort it takes -- or at none only
+    when it takes none, because the runtime would apply its default (AR-15)."""
+    enabled = info.policy is None or info.policy.state == "enabled"
+    efforts = info.supported_reasoning_efforts or []
+    if target.reasoning_effort is None:
+        return enabled and not efforts
+    return enabled and target.reasoning_effort in efforts
+
+
+def _pinned_host() -> str:
+    """`HOST_ENV`, else `DEFAULT_HOST`: a lower-case host name, or refused."""
+    host = os.environ.get(HOST_ENV, "") or DEFAULT_HOST
+    if not _HOST.fullmatch(host):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return host
+
+
+def _seat(host: str) -> tuple[str | None, str, list[ModelInfo]] | None:
+    """The signed-in login, the runtime's version and the models it lists,
+    from one verified runtime within `READY_SECONDS`; None when the seat is
+    not signed in through the env token on `host`, and then nothing is
+    listed. What the runtime raises refuses, named on stderr by its class
+    alone, never its text (it is the runtime's)."""
+    try:
+        from copilot._jsonrpc import JsonRpcError, ProcessExitedError
+    except ImportError:
+        _no_sdk()
+    unready = (
+        JsonRpcError,
+        ProcessExitedError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        TimeoutError,
+    )
+    try:
+        return asyncio.run(_listing(host))
+    except ImportError:
+        _no_sdk()
+    except unready as error:
+        print(
+            "PROVIDER_NOT_CONFIGURED reason=runtime_unready "
+            f"class={type(error).__name__}",
+            file=sys.stderr,
+        )
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED) from None
+
+
+def _no_sdk() -> NoReturn:
+    """The SDK is not installed on this machine: no `copilot:` model runs."""
+    print("PROVIDER_NOT_CONFIGURED reason=sdk_not_installed", file=sys.stderr)
+    raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED) from None
+
+
+async def _listing(host: str) -> tuple[str | None, str, list[ModelInfo]] | None:
+    async with asyncio.timeout(READY_SECONDS), _client() as (client, _home):
+        status = await client.get_auth_status()
+        if not (
+            status.isAuthenticated is True
+            and status.authType == _SEAT_AUTH
+            and status.host in (host, f"https://{host}")
+        ):
+            return None
+        version = (await client.get_status()).version
+        return status.login, version, await client.list_models()
+
+
+def _model_ready(
+    name: str,
+    target: CopilotModel,
+    info: ModelInfo | None,
+    price: ModelPrice,
+    credit: CreditPrice,
+) -> bool:
+    """Whether `info` can answer `target` at `price`; its line printed."""
+    shown_credit = f"credit_price={credit.per_credit}@{credit.as_of.isoformat()}"
+    if info is None:
+        print(
+            f"copilot {name} offered=n policy=- usable=- efforts=- "
+            "max_prompt_tokens=- max_context_window_tokens=- context=- "
+            f"price_check=- price_floor=- {shown_credit}",
+            file=sys.stderr,
+        )
+        return False
+    answers = usable(info, target)
+    floors = _floors(info, credit)
+    covered = floors is not None and (
+        Fraction(price.input_per_token) >= floors[0]
+        and Fraction(price.output_per_token) >= floors[1]
+    )
+    limits = info.capabilities.limits
+    policy = "-" if info.policy is None else _shown(info.policy.state, _WORD)
+    efforts = ",".join(
+        _shown(effort, _WORD) for effort in info.supported_reasoning_efforts or []
+    )
+    print(
+        f"copilot {name} offered=y policy={policy} usable={'y' if answers else 'n'} "
+        f"efforts={efforts or '-'} "
+        f"max_prompt_tokens={_shown_count(limits.max_prompt_tokens)} "
+        f"max_context_window_tokens={_shown_count(limits.max_context_window_tokens)} "
+        f"context={_shown_count(_listed_context(info))} "
+        f"price_check={_price_check(floors, covered)} "
+        f"price_floor={_shown_floors(floors)} {shown_credit}",
+        file=sys.stderr,
+    )
+    return answers and covered
+
+
+def _floors(info: ModelInfo, credit: CreditPrice) -> tuple[Fraction, Fraction] | None:
+    """The least per-token pin, in dollars, that covers every rate the
+    listing bills an input and an output token at, in both tiers (R2.1):
+    `rate / batchSize x credit price x multiplier`, exact. None when the
+    listing states no batch size, no input or no output rate, or a figure
+    that is no finite, non-negative number: then no pin can be checked."""
+    billing = info.billing
+    prices = None if billing is None else billing.token_prices
+    if billing is None or prices is None:
+        return None
+    batch = prices.batch_size
+    multiplier = _rate(1 if billing.multiplier is None else billing.multiplier)
+    tiers: list[Any] = [prices]
+    if prices.long_context is not None:
+        tiers.append(prices.long_context)
+    inputs = _highest([getattr(tier, rate) for tier in tiers for rate in _INPUT_RATES])
+    outputs = _highest([tier.output_price for tier in tiers])
+    if (
+        type(batch) is not int
+        or batch <= 0
+        or multiplier is None
+        or inputs is None
+        or outputs is None
+    ):
+        return None
+    scale = Fraction(credit.per_credit) * multiplier / batch
+    return inputs * scale, outputs * scale
+
+
+def _highest(listed: Sequence[object]) -> Fraction | None:
+    """The greatest rate stated; None when none is, or any stated is no rate."""
+    rates = [_rate(value) for value in listed if value is not None]
+    if not rates or None in rates:
+        return None
+    return max(rate for rate in rates if rate is not None)
+
+
+def _rate(value: object) -> Fraction | None:
+    """A listed figure exactly as its shortest decimal form states it; None
+    when it is no finite, non-negative number."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    if not math.isfinite(value) or value < 0:
+        return None
+    return Fraction(repr(value))
+
+
+def _listed_context(info: ModelInfo) -> int | None:
+    """The model's context window as listed (R4): the long-context tier's
+    prompt budget, else the default tier's, else the capability limits'
+    prompt budget, else their context window; None when none is listed."""
+    prices = None if info.billing is None else info.billing.token_prices
+    long = None if prices is None else prices.long_context
+    limits = info.capabilities.limits
+    for tokens in (
+        None if long is None else long.max_prompt_tokens,
+        None if prices is None else prices.max_prompt_tokens,
+        limits.max_prompt_tokens,
+        limits.max_context_window_tokens,
+    ):
+        if tokens is not None:
+            return tokens
+    return None
+
+
+def _price_check(floors: tuple[Fraction, Fraction] | None, covered: bool) -> str:
+    if floors is None:
+        return "unpriced"
+    return "ok" if covered else "low"
+
+
+def _shown_floors(floors: tuple[Fraction, Fraction] | None) -> str:
+    """Both floors in dollars per token, each rounded up, never down."""
+    if floors is None:
+        return "-"
+    return ",".join(_rounded_up(floor) for floor in floors)
+
+
+def _rounded_up(value: Fraction) -> str:
+    places = 10**_FLOOR_PLACES
+    whole = Decimal(math.ceil(value * places)).scaleb(-_FLOOR_PLACES)
+    return f"{whole.normalize():f}"
+
+
+def _shown(value: object, allowed: re.Pattern[str]) -> str:
+    """`value` when it is text `allowed` matches in full, else `-`."""
+    return value if isinstance(value, str) and allowed.fullmatch(value) else "-"
+
+
+def _shown_count(value: object) -> str:
+    """`value` when it is a whole count, else `-`."""
+    return str(value) if type(value) is int else "-"
 
 
 def reply_message(seen: Sequence[Event], target: CopilotModel) -> AIMessage:
