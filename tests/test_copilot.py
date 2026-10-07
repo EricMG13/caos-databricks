@@ -5409,3 +5409,23 @@ def test_the_production_smoke_needs_a_credit_price_for_copilot(
     with pytest.raises(Refusal) as refused:
         gateway_smoke.main()
     assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+def test_a_batch_of_one_token_prices_each_token_at_its_rate(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    base = {"batchSize": 1, "inputPrice": 0.0005, "outputPrice": 0.002}
+    ready.offered = [listed(billing=billed(base, {}), state=None)]
+    require_ready({MODEL: PRICE})
+    line = capsys.readouterr().err.splitlines()[-1]
+    # No policy listed is no policy to refuse, printed as such.
+    assert " policy=- usable=y " in line
+    assert " price_check=ok price_floor=0.000005,0.00002 " in line
+
+
+@pytest.mark.parametrize("value", [True, False, "0.3", None, [0.3]])
+def test_a_figure_that_is_no_number_is_no_rate(value: object) -> None:
+    """The SDK's own parsing never hands these on; a later SDK might."""
+    assert copilot_module._rate(value) is None
+    assert copilot_module._rate(0) == 0
+    assert copilot_module._rate(0.3) == Fraction(3, 10)
