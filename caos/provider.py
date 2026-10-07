@@ -298,14 +298,27 @@ reserved_amount: ContextVar[Decimal | None] = ContextVar(
 )
 
 
+# The price of one AI credit that reservation was taken under (R2.2): what a
+# Copilot call made inside it is settled at, never the environment's figure.
+# None for a reservation that names none, which settles no Copilot call.
+reserved_credit: ContextVar[Decimal | None] = ContextVar(
+    "caos_reserved_credit", default=None
+)
+
+
 @contextmanager
-def reserving(amount: Decimal) -> Iterator[None]:
-    """Name `amount` as the reservation every call made inside this block runs
-    under; the previous one is restored when the block ends, however it ends.
-    An amount that is no spend is refused before the block is entered."""
+def reserving(amount: Decimal, *, credit: Decimal | None = None) -> Iterator[None]:
+    """Name `amount`, and the credit price it was taken under, as the
+    reservation every call made inside this block runs under; the previous
+    one is restored when the block ends, however it ends. An amount or a
+    credit price that is no spend is refused before the block is entered."""
     validate_spend(amount)
+    if credit is not None:
+        validate_spend(credit)
     named = reserved_amount.set(amount)
+    priced = reserved_credit.set(credit)
     try:
         yield
     finally:
+        reserved_credit.reset(priced)
         reserved_amount.reset(named)

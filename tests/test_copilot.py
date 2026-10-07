@@ -10,12 +10,15 @@ fails the fake and not the adapter.
 from __future__ import annotations
 
 import inspect
+import logging
 import math
+import os
 import re
 from collections.abc import Callable, Mapping, Sequence
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from fractions import Fraction
+from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
@@ -30,22 +33,27 @@ from langchain_core.messages import AIMessage, HumanMessage
 from caos import copilot as copilot_module
 from caos import models
 from caos.copilot import (
+    CREDIT_PRICE_ENV,
     NANO_PER_CREDIT,
     ChatCopilot,
     CopilotModel,
     CopilotStatusError,
     Event,
+    child_environment,
+    credit_price,
+    output_cap,
     parsed,
     reply_message,
     settled_charge,
 )
 from caos.models import ChatCompletions, completions
-from caos.pricing import ModelPrice
+from caos.pricing import CreditPrice, ModelPrice
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
     TIMEOUT_SECONDS,
     DropKind,
     reserved_amount,
+    reserved_credit,
     reserving,
 )
 from caos.refusals import Refusal, RefusalCode
@@ -1188,6 +1196,34 @@ def test_reserving_names_the_reservation_only_inside_its_block() -> None:
     with pytest.raises(RuntimeError), reserving(Decimal(2)):
         raise RuntimeError
     assert reserved_amount.get() is None
+
+
+def test_reserving_names_the_credit_price_beside_the_amount() -> None:
+    assert reserved_credit.get() is None
+    with reserving(Decimal("1.5"), credit=CREDIT):
+        assert (reserved_amount.get(), reserved_credit.get()) == (
+            Decimal("1.5"),
+            CREDIT,
+        )
+        with reserving(Decimal("0.25")):
+            assert (reserved_amount.get(), reserved_credit.get()) == (
+                Decimal("0.25"),
+                None,
+            )
+        assert reserved_credit.get() == CREDIT
+    assert (reserved_amount.get(), reserved_credit.get()) == (None, None)
+    for credit, code in (
+        (0.01, RefusalCode.MONEY_NOT_DECIMAL),
+        (Decimal(-1), RefusalCode.MONEY_INVALID),
+        (Decimal("Infinity"), RefusalCode.MONEY_INVALID),
+    ):
+        with (
+            pytest.raises(Refusal) as refused,
+            reserving(Decimal(1), credit=cast(Decimal, credit)),
+        ):
+            pytest.fail("entered")
+        assert refused.value.code is code
+        assert (reserved_amount.get(), reserved_credit.get()) == (None, None)
 
 
 @pytest.mark.parametrize(
@@ -3096,3 +3132,220 @@ def test_property_the_finish_stands_only_when_every_dispatch_names_only_the_pin(
     message = reply_message(seen, TARGET)
     assert ("finish_reason" in message.response_metadata) is stands
     assert message.response_metadata["nano_aiu"] == 251_164_000
+
+
+# Task 3 (R8 row 2): the credit price, the output cap, the SDK transport and
+# the factory dispatch.
+
+
+def test_the_credit_price_is_a_dated_decimal_or_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert credit_price("0.01,2026-10-01") == CreditPrice(
+        Decimal("0.01"), date(2026, 10, 1)
+    )
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.0125,2026-09-30")
+    assert credit_price() == CreditPrice(Decimal("0.0125"), date(2026, 9, 30))
+    monkeypatch.delenv(CREDIT_PRICE_ENV)
+    for written in (
+        None,
+        "",
+        "0.01",
+        "0.01,",
+        ",2026-10-01",
+        "0.01,2026-10-01,x",
+        "0,2026-10-01",
+        "0.00,2026-10-01",
+        "-0.01,2026-10-01",
+        "+0.01,2026-10-01",
+        "1e-2,2026-10-01",
+        ".01,2026-10-01",
+        " 0.01,2026-10-01",
+        "0.01 ,2026-10-01",
+        "NaN,2026-10-01",
+        "\u0660.\u0660\u0661,2026-10-01",
+        "0.01,2026-13-01",
+        "0.01,20261001",
+        "0.01,2026-10-1",
+        "0.01,2999-01-01",
+        "1" + "0" * 131072 + ",2026-10-01",
+    ):
+        with pytest.raises(Refusal) as refused:
+            credit_price(written)
+        assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+        assert refused.value.args == (RefusalCode.PROVIDER_NOT_CONFIGURED,)
+
+
+def test_the_credit_price_is_never_later_than_today_in_utc() -> None:
+    today = datetime.now(UTC).date()
+    assert credit_price(f"0.01,{today.isoformat()}").as_of == today
+
+
+def test_the_output_cap_is_the_sessions_cap_and_the_cli_is_deferred() -> None:
+    assert output_cap(MODEL) == MAX_COMPLETION_TOKENS == 65536
+    assert output_cap("copilot:gpt-6-luna") == 65536
+    assert output_cap("claude-opus-5-5") == 65536
+    for deferred in ("copilot-cli:gpt-6-luna", "copilot-cli:claude-opus-5.5@high"):
+        with pytest.raises(Refusal) as refused:
+            output_cap(deferred)
+        assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+# Every name R3 excludes from the child, set in the parent with a value that
+# must not cross.
+EXCLUDED = (
+    "GH_TOKEN",
+    "GITHUB_TOKEN",
+    "GITHUB_ASKPASS",
+    "GIT_ASKPASS",
+    "SSH_ASKPASS",
+    "COPILOT_HMAC_KEY",
+    "COPILOT_HMAC_ASKPASS",
+    "COPILOT_PROVIDER_BASE_URL",
+    "COPILOT_PROVIDER_API_KEY",
+    "COPILOT_PROVIDER_API_KEY_COMMAND",
+    "COPILOT_PROVIDER_BEARER_TOKEN",
+    "COPILOT_PROVIDER_ANYTHING",
+    "COPILOT_ALLOW_ALL",
+    "COPILOT_OTEL_ENABLED",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT",
+    "GH_HOST",
+    "COPILOT_GH_HOST",
+    "COPILOT_CLI_PATH",
+    "COPILOT_MODEL",
+    "COPILOT_AUTO_TIER",
+    "COPILOT_CUSTOM_INSTRUCTIONS_DIRS",
+    "COPILOT_OFFLINE",
+    "GITHUB_COPILOT_PROMPT_MODE_ANY",
+    "USE_TGREP",
+    "BASH_ENV",
+    "COPILOT_SDK_DEFAULT_CONNECTION",
+    "COPILOT_HOME",
+    "CAOS_COPILOT_RUNTIME",
+    "CAOS_COPILOT_CREDIT_PRICE",
+    "http_proxy",
+    "SOME_OTHER_NAME",
+)
+POSIX_NEEDS = ("HOME", "TMPDIR", "LANG")
+WINDOWS_NEEDS = (
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "USERPROFILE",
+    "TEMP",
+    "TMP",
+    "LOCALAPPDATA",
+)
+PROXY = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "SSL_CERT_FILE",
+    "NODE_EXTRA_CA_CERTS",
+)
+
+
+def parent_environment(monkeypatch: pytest.MonkeyPatch, *names: str) -> None:
+    for name in list(os.environ):
+        monkeypatch.delenv(name)
+    for name in names:
+        monkeypatch.setenv(name, f"parent-{name}")
+
+
+@pytest.mark.parametrize(
+    ("platform", "needs"), [("darwin", POSIX_NEEDS), ("win32", WINDOWS_NEEDS)]
+)
+def test_the_child_environment_is_exactly_the_allow_list(
+    monkeypatch: pytest.MonkeyPatch, platform: str, needs: tuple[str, ...]
+) -> None:
+    parent_environment(
+        monkeypatch,
+        *EXCLUDED,
+        *POSIX_NEEDS,
+        *WINDOWS_NEEDS,
+        *PROXY,
+        "COPILOT_GITHUB_TOKEN",
+        "PATH",
+    )
+    monkeypatch.setattr("sys.platform", platform)
+    runtime = os.path.join("opt", "copilot", "bin", "copilot-runtime")
+    child = child_environment("private-home", runtime)
+    assert child == {
+        "COPILOT_HOME": "private-home",
+        "COPILOT_GITHUB_TOKEN": "parent-COPILOT_GITHUB_TOKEN",
+        "COPILOT_DISABLE_KEYTAR": "1",
+        "COPILOT_AUTO_UPDATE": "false",
+        "NO_COLOR": "1",
+        "PATH": os.path.join("opt", "copilot", "bin"),
+        **{name: f"parent-{name}" for name in (*needs, *PROXY)},
+    }
+
+
+def test_the_child_environment_copies_only_what_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent_environment(monkeypatch)
+    monkeypatch.setattr("sys.platform", "linux")
+    assert child_environment("home", "/runtime/copilot") == {
+        "COPILOT_HOME": "home",
+        "COPILOT_DISABLE_KEYTAR": "1",
+        "COPILOT_AUTO_UPDATE": "false",
+        "NO_COLOR": "1",
+        "PATH": "/runtime",
+    }
+
+
+def test_a_script_runtime_finds_node_and_nothing_else_on_its_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    node_home = tmp_path / "node" / "bin"
+    node_home.mkdir(parents=True)
+    node = node_home / "node"
+    node.write_text("#!/bin/sh\n", encoding="utf-8")
+    node.chmod(0o755)
+    gh = tmp_path / "gh" / "bin"
+    gh.mkdir(parents=True)
+    (gh / "gh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (gh / "gh").chmod(0o755)
+    parent_environment(monkeypatch)
+    monkeypatch.setenv("PATH", os.pathsep.join((str(gh), str(node_home))))
+    monkeypatch.setattr("sys.platform", "linux")
+    child = child_environment("home", "/runtime/index.js")
+    assert child["PATH"] == os.pathsep.join(("/runtime", str(node_home)))
+    monkeypatch.setenv("PATH", str(gh))
+    with pytest.raises(Refusal) as refused:
+        child_environment("home", "/runtime/index.js")
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+def test_the_sdk_logger_reaches_no_handler(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    caught: list[logging.LogRecord] = []
+
+    class Caught(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            caught.append(record)
+
+    root = logging.getLogger()
+    held = Caught()
+    root.addHandler(held)
+    try:
+        copilot_module._silenced()
+        sdk = logging.getLogger("copilot")
+        assert sdk.propagate is False
+        assert sdk.level == logging.CRITICAL
+        assert [type(handler) for handler in sdk.handlers] == [logging.NullHandler]
+        for name in ("copilot._jsonrpc", "copilot.client", "copilot"):
+            logging.getLogger(name).warning("[CLI] %s", SECRET)
+            logging.getLogger(name).critical("[CLI] %s", SECRET)
+        # Idempotent, and it undoes a handler someone attached since.
+        sdk.addHandler(logging.StreamHandler())
+        copilot_module._silenced()
+        assert [type(handler) for handler in sdk.handlers] == [logging.NullHandler]
+        logging.getLogger("copilot._jsonrpc").error("[CLI] %s", SECRET)
+    finally:
+        root.removeHandler(held)
+    assert caught == []
+    out, err = capsys.readouterr()
+    assert SECRET not in out + err
