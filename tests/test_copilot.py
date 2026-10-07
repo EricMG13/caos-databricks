@@ -53,6 +53,7 @@ from caos.provider import (
     TIMEOUT_SECONDS,
     DropKind,
     reserved_amount,
+    reserved_credit,
     reserving,
 )
 from caos.refusals import Refusal, RefusalCode
@@ -1195,6 +1196,34 @@ def test_reserving_names_the_reservation_only_inside_its_block() -> None:
     with pytest.raises(RuntimeError), reserving(Decimal(2)):
         raise RuntimeError
     assert reserved_amount.get() is None
+
+
+def test_reserving_names_the_credit_price_beside_the_amount() -> None:
+    assert reserved_credit.get() is None
+    with reserving(Decimal("1.5"), credit=CREDIT):
+        assert (reserved_amount.get(), reserved_credit.get()) == (
+            Decimal("1.5"),
+            CREDIT,
+        )
+        with reserving(Decimal("0.25")):
+            assert (reserved_amount.get(), reserved_credit.get()) == (
+                Decimal("0.25"),
+                None,
+            )
+        assert reserved_credit.get() == CREDIT
+    assert (reserved_amount.get(), reserved_credit.get()) == (None, None)
+    for credit, code in (
+        (0.01, RefusalCode.MONEY_NOT_DECIMAL),
+        (Decimal(-1), RefusalCode.MONEY_INVALID),
+        (Decimal("Infinity"), RefusalCode.MONEY_INVALID),
+    ):
+        with (
+            pytest.raises(Refusal) as refused,
+            reserving(Decimal(1), credit=cast(Decimal, credit)),
+        ):
+            pytest.fail("entered")
+        assert refused.value.code is code
+        assert (reserved_amount.get(), reserved_credit.get()) == (None, None)
 
 
 @pytest.mark.parametrize(
