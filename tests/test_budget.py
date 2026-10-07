@@ -837,3 +837,37 @@ def test_the_store_holds_a_reservations_credit_price_whole_and_positive(
             (attempt_id, run_id[0] if run_id else None, COPILOT, price, as_of),
         )
     conn.rollback()
+
+
+def test_a_runs_first_copilot_reservation_pins_its_credit_price_for_the_run(
+    case: tuple[StoreConnection, UUID], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F468's rule for the per-token price, applied to the credit (R2.2,
+    F592): a redeploy that moves the pin mid-run settles no later node of
+    that run at the new price; a new run takes the pin in force."""
+    conn, case_id = case
+    run_id = _run_with_ceiling(conn, case_id)
+    conn.commit()
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
+    first = start_attempt(conn, run_id, "CP-1")
+    reserve(conn, first, Decimal("0.10"), price=COPILOT_PRICE)
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.05,2026-10-02")
+    second = start_attempt(conn, run_id, "CP-2")
+    reserve(conn, second, Decimal("0.10"), price=COPILOT_PRICE)
+    # The run's pin holds even with the environment's gone.
+    monkeypatch.delenv(CREDIT_PRICE_ENV)
+    third = start_attempt(conn, run_id, "CP-3")
+    reserve(conn, third, Decimal("0.10"), price=COPILOT_PRICE)
+    for attempt in (first, second, third):
+        taken = reserved_for(conn, attempt)
+        assert taken is not None
+        assert taken.credit == CREDIT
+    conn.rollback()
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.05,2026-10-02")
+    successor = _run_with_ceiling(conn, case_id)
+    conn.commit()
+    later = start_attempt(conn, successor, "CP-1")
+    reserve(conn, later, Decimal("0.10"), price=COPILOT_PRICE)
+    taken = reserved_for(conn, later)
+    assert taken is not None
+    assert taken.credit == CreditPrice(Decimal("0.05"), date(2026, 10, 2))

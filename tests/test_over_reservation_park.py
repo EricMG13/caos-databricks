@@ -1,4 +1,5 @@
-"""R2.6 held by the ledger, not by the park alone (F589).
+"""R2.6 held by the ledger, not by the park alone (F589), and R2.2's credit
+price held by the run, not the environment (F592), through the worker.
 
 A Copilot call charged above its reservation is recorded in full, refused
 `BUDGET_CHARGE_OVER_RESERVATION`, and its run parks for good. The park is a
@@ -13,6 +14,7 @@ run with the same code. Turned from the adversarial audit's probes
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
@@ -34,6 +36,7 @@ from caos.graph.route import ResolvedRoute
 from caos.graph.worker import module_execution, work_once
 from caos.methodology.bundle import Bundle
 from caos.pricing import ModelPrice
+from caos.provider import Completion
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.budget import overspent, reserve
@@ -190,3 +193,45 @@ def test_a_token_priced_overrun_never_stops_an_attempt(
     assert not overspent(conn, run_id)
     conn.rollback()
     start_attempt(conn, run_id, "CP-2")
+
+
+class Redeployed(RealisticLiteCompletions):
+    """Answers, then the operator re-pins the credit price, as a redeploy
+    between two nodes of one run would."""
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = super().complete(prompt, json_object=json_object)
+        os.environ[CREDIT_PRICE_ENV] = "0.05,2026-10-02"
+        return done
+
+
+def test_one_run_settles_at_one_credit_price_across_a_redeploy(
+    pinned_run: _Run,
+) -> None:
+    """The audit's probe (`test_p4_credit_not_run_pinned.py`)."""
+    run = pinned_run
+    execution_for = module_execution(
+        lambda price: Redeployed(
+            run.source_id, model=price.model, price=price, charge=Decimal("0.0000001")
+        ),
+        PRICE,
+        run.bundle,
+        run.blobs,
+    )
+    work_once(
+        run.conn,
+        run.blobs,
+        execution_for=execution_for,
+        config=CONFIG,
+        stopping=Event(),
+    )
+    rows = run.conn.execute(
+        "SELECT count(*), count(DISTINCT (credit_price, credit_as_of)),"
+        " min(credit_price) FROM budget_reservations WHERE run_id = %s",
+        (run.run_id,),
+    ).fetchone()
+    run.conn.rollback()
+    assert rows is not None
+    reserved, prices, price = rows
+    assert reserved > 1
+    assert (prices, price) == (1, Decimal("0.01"))
