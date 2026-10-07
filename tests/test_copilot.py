@@ -9,6 +9,7 @@ fails the fake and not the adapter.
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import logging
 import math
@@ -1109,8 +1110,11 @@ def test_a_rate_limit_with_no_spend_is_asked_again_under_the_same_reservation(
         calls.append(prompt)
         return next(answers)
 
-    completion = provider(ask).complete(PROMPT)
+    with reserving(Decimal("2.00"), credit=CREDIT):
+        completion = provider(ask).complete(PROMPT)
     assert completion.refusal is None
+    # Billed once, for the call that answered: the 429 spent nothing.
+    assert completion.charge == Decimal("0.00251164")
     assert calls == [PROMPT, PROMPT]
 
 
@@ -1145,7 +1149,8 @@ def test_chat_copilot_asks_once_with_the_prompt_its_pinned_model_and_deadline() 
 
 
 def test_through_the_factory_the_exact_call_completes_with_its_call_id() -> None:
-    completion = provider(replying(*SDK_HAPPY)).complete(PROMPT, json_object=True)
+    with reserving(Decimal("2.00"), credit=CREDIT):
+        completion = provider(replying(*SDK_HAPPY)).complete(PROMPT, json_object=True)
     assert completion.refusal is None
     assert completion.content == "answer"
     assert completion.generation_id == "provider-call-1"
@@ -3786,3 +3791,65 @@ def test_a_cli_copilot_name_is_refused_until_its_transport_is_built(
         with pytest.raises(Refusal) as refused:
             refused_call()
         assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+# -- The charge through `ChatCompletions` (R2.4, R2.5) ------------------------
+
+
+def test_a_copilot_message_is_billed_in_ai_units_at_the_reservations_credit_price() -> (
+    None
+):
+    for seen in (HAPPY, SDK_HAPPY):
+        with reserving(Decimal("2.00"), credit=CREDIT):
+            completion = provider(replying(*seen)).complete(PROMPT)
+        assert completion.refusal is None
+        # 251,164,000 nano-AIU at $0.01 a credit, never the token counts.
+        assert completion.charge == Decimal("0.00251164")
+    with reserving(Decimal("2.00"), credit=Decimal("0.02")):
+        doubled = provider(replying(*SDK_HAPPY)).complete(PROMPT)
+    assert doubled.charge == Decimal("0.00502328")
+
+
+def test_a_copilot_message_with_no_ai_units_is_an_unknown_charge() -> None:
+    no_checkpoint = [
+        event for event in SDK_HAPPY if event["type"] != "session.usage_checkpoint"
+    ]
+    with reserving(Decimal("2.00"), credit=CREDIT):
+        completion = provider(replying(*no_checkpoint)).complete(PROMPT)
+    # Its token counts are not its bill (R2.4).
+    assert invoked(no_checkpoint).usage_metadata is not None
+    assert (completion.content, completion.charge, completion.refusal) == (
+        None,
+        None,
+        RefusalCode.PROVIDER_RESPONSE_INVALID,
+    )
+    assert completion.drop_kind is None
+
+
+def test_a_reservation_with_no_credit_price_cannot_settle_a_copilot_call() -> None:
+    for scope in (reserving(Decimal("2.00")), contextlib.nullcontext()):
+        with scope:
+            completion = provider(replying(*SDK_HAPPY)).complete(PROMPT)
+        assert (completion.content, completion.charge, completion.refusal) == (
+            None,
+            None,
+            RefusalCode.PROVIDER_RESPONSE_INVALID,
+        )
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"inputTokens": 10**7},
+        {"outputTokens": MAX_COMPLETION_TOKENS + 1},
+        {"inputTokens": 0, "cacheReadTokens": 0, "cacheWriteTokens": 0},
+    ],
+)
+def test_token_counts_past_their_bound_leave_a_copilot_charge_unknown(
+    changed: dict[str, object],
+) -> None:
+    seen = sdk_call(usage=usage(**changed))
+    with reserving(Decimal("2.00"), credit=CREDIT):
+        completion = provider(replying(*seen)).complete(PROMPT)
+    assert completion.charge is None
+    assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID

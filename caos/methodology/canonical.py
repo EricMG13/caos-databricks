@@ -146,6 +146,7 @@ from caos.provider import (
     reported_charge,
     request_ceiling,
     resend_checked,
+    reserving,
 )
 from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import StoreConnection, connect
@@ -233,8 +234,9 @@ def _within_reservation(
     prompt: str,
     *,
     attempt_id: UUID,
-) -> None:
-    """Refuse a request this attempt's reservation does not cover (Task 8.2).
+) -> Reservation:
+    """Refuse a request this attempt's reservation does not cover (Task 8.2),
+    or answer the reservation that covers it.
 
     The loop priced the prompt `check_context` built and reserved for it; this
     unit builds its own under the attempt's own identity. A rebuilt prompt that
@@ -260,6 +262,12 @@ def _within_reservation(
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     if priced_request(taken.price, measured) > taken.amount:
         raise Refusal(RefusalCode.RESERVATION_BELOW_REQUEST)
+    return taken
+
+
+def _per_credit(taken: Reservation) -> Decimal | None:
+    """The credit price a reservation was taken under, or None (0048)."""
+    return None if taken.credit is None else taken.credit.per_credit
 
 
 def execute_handoff(
@@ -310,7 +318,7 @@ def execute_handoff(
             lambda built: _prompt(bundle, assignment, identity, built, carried),
             lambda size: _covered(provider, taken, size),
         )
-        _within_reservation(conn, provider, prompt, attempt_id=attempt)
+        covered = _within_reservation(conn, provider, prompt, attempt_id=attempt)
 
         bundle.verify_manifest()
         model = producer_identifier(provider.model, limit=256)
@@ -319,7 +327,12 @@ def execute_handoff(
         require_idle(conn)
         # A transport that asks again after a rate limit re-reads the fence
         # first (ST-7): a lost lease or a recorded cancel sends nothing more.
-        with resend_checked(lambda: _still_resendable(conn, assignment)):
+        # The call runs inside its reservation: a Copilot call caps its session
+        # in credits by it (R2.7) and is settled at its credit price (R2.2).
+        with (
+            reserving(covered.amount, credit=_per_credit(covered)),
+            resend_checked(lambda: _still_resendable(conn, assignment)),
+        ):
             completion = provider.complete(prompt, json_object=True)
         charge = reported_charge(
             completion.charge if isinstance(completion.charge, Decimal) else None

@@ -13,6 +13,8 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
+from datetime import date
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -37,6 +39,7 @@ from test_execution_freshness import (
 from test_loop_charges import ESTIMATE, REPORT, REPORTED
 
 from caos.blobs import BlobStore
+from caos.copilot import CREDIT_PRICE_ENV
 from caos.evidence import read as evidence_read
 from caos.graph.route import ResolvedRoute, RouteNode, resolve_route
 from caos.graph.runtime import ProviderResult
@@ -55,10 +58,16 @@ from caos.methodology.handoff import (
 )
 from caos.methodology.invocation import host_identity
 from caos.methodology.runner import ModuleProvider
-from caos.pricing import ModelPrice
-from caos.provider import Completion, CompletionProvider, encode_request
+from caos.pricing import ModelPrice, worst_case
+from caos.provider import (
+    Completion,
+    CompletionProvider,
+    encode_request,
+    reserved_amount,
+    reserved_credit,
+)
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection
+from caos.store import StoreConnection, budget
 from caos.store.run_inputs import load_run_input
 from caos.store.runs import Accepted, accept_attempt, start_attempt
 from caos.store.source_sets import load_source_set
@@ -467,3 +476,58 @@ def test_a_quote_outside_the_captured_blocks_is_kept_unverified(
             source, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED, marker=1
         ),
     )
+
+
+# -- The reservation in scope around the call (Task 3; R2.2, R2.7) -----------
+
+COPILOT = "copilot:claude-opus-5.5@high"
+# Small enough that its worst case fits the default run ceiling.
+COPILOT_PRICE = ModelPrice(
+    COPILOT, Decimal("0.000000001"), Decimal("0.00000001"), date(2026, 10, 1)
+)
+
+
+def _scope() -> tuple[Decimal | None, Decimal | None]:
+    return reserved_amount.get(), reserved_credit.get()
+
+
+def test_the_call_runs_inside_its_reservation_scope(harness: _Harness) -> None:
+    scopes: list[tuple[Decimal | None, Decimal | None]] = []
+    completions = CanonicalCompletions(
+        harness.source_id, during=lambda: scopes.append(_scope())
+    )
+    _run(harness, "CP-0", completions)
+    assert scopes == [(ESTIMATE, None)]
+    assert _scope() == (None, None)
+
+
+def test_a_copilot_call_runs_at_its_reservations_credit_price(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scopes: list[tuple[Decimal | None, Decimal | None]] = []
+    completions = CanonicalCompletions(
+        harness.source_id,
+        model=COPILOT,
+        price=COPILOT_PRICE,
+        charge=Decimal("0.0001"),
+        during=lambda: scopes.append(_scope()),
+    )
+    node = _node(harness, "CP-0")
+    attempt = start_attempt(harness.conn, harness.run_id, node.route_node_id)
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
+    budget.reserve(
+        harness.conn, attempt, worst_case(COPILOT_PRICE), price=COPILOT_PRICE
+    )
+    # A pin that moved after the reservation is not the call's (R2.2).
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.05,2026-10-02")
+    provider = ModuleProvider(
+        harness.conn,
+        harness.bundle,
+        harness.blobs,
+        completions,
+        harness.route,
+        harness.run_id,
+    )
+    provider.execute(node.route_node_id, "CP-0", attempt_id=attempt)
+    assert scopes == [(worst_case(COPILOT_PRICE), Decimal("0.01"))]
+    assert _scope() == (None, None)

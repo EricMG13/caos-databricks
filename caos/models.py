@@ -61,6 +61,7 @@ from caos.provider import (
     encode_request,
     finish_refusal,
     reported_charge,
+    reserved_credit,
 )
 from caos.refusals import Refusal, RefusalCode
 from caos.store.outcomes import producer_identifier
@@ -204,11 +205,13 @@ class ChatCompletions:
         self, prompt: str, message: AIMessage, *, json_object: bool = False
     ) -> Completion:
         content = _text(message.content)
-        charge = self._charge(
-            message.usage_metadata,
-            sent=len(self.request_bytes(prompt, json_object=json_object)),
-            answered=bool(content),
-        )
+        sent = len(self.request_bytes(prompt, json_object=json_object))
+        if copilot.parsed(self.model) is None:
+            charge = self._charge(
+                message.usage_metadata, sent=sent, answered=bool(content)
+            )
+        else:
+            charge = self._settled(message, sent=sent, answered=bool(content))
         generation = producer_identifier(_claimed_id(message), limit=512)
         if generation is None:
             generation = (
@@ -242,6 +245,20 @@ class ChatCompletions:
                 None, charge, generation, RefusalCode.PROVIDER_RESPONSE_INVALID
             )
         return Completion(content, charge, generation)
+
+    def _settled(
+        self, message: AIMessage, *, sent: int, answered: bool
+    ) -> Decimal | None:
+        """A Copilot call's charge: its AI units at the credit price of the
+        reservation it runs under (R2.3, R2.4), never its token counts, which
+        are not the bill. Counts it does state must still be possible
+        (`_charge`'s bound, R2.5), or the charge is unknown. A reservation
+        that names no credit price settles nothing: unknown."""
+        if message.usage_metadata is not None and (
+            self._charge(message.usage_metadata, sent=sent, answered=answered) is None
+        ):
+            return None
+        return copilot.settled_charge(message, reserved_credit.get())
 
     def _charge(
         self, usage: Mapping[str, Any] | None, *, sent: int, answered: bool
