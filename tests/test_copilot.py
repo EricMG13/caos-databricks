@@ -3703,3 +3703,86 @@ def test_a_home_the_runtime_left_behind_is_named_on_stderr_without_its_path(
     made.home.rmdir()
     _out, err = capsys.readouterr()
     assert err == "COPILOT_HOME_NOT_REMOVED\n"
+
+
+# -- The factory dispatch (Task 3, Design 2) ----------------------------------
+
+
+def test_a_copilot_model_is_answered_by_chat_copilot_never_the_gateway(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import databricks_langchain
+
+    def gateway(**_given: object) -> None:
+        pytest.fail("a copilot: model reached the gateway")
+
+    monkeypatch.setattr(databricks_langchain, "ChatDatabricks", gateway)
+    monkeypatch.setattr(
+        "caos.workspace.workspace_client",
+        lambda: pytest.fail("a copilot: model built a workspace client"),
+    )
+    chat = models.chat_model(endpoint=MODEL)
+    assert isinstance(chat, ChatCopilot)
+    assert (chat.model, chat.ask, chat.timeout) == (
+        MODEL,
+        ask_copilot,
+        TIMEOUT_SECONDS,
+    )
+    monkeypatch.setenv(models.ENDPOINT_ENV, "copilot:gpt-6-luna")
+    configured = models.chat_model()
+    assert isinstance(configured, ChatCopilot)
+    assert configured.model == "copilot:gpt-6-luna"
+
+
+def test_a_copilot_identity_names_its_platform_model_and_effort() -> None:
+    assert models.identity_of(MODEL) == "copilot/claude-opus-5.5/high/65536"
+    assert models.identity_of("copilot:gpt-6-luna") == "copilot/gpt-6-luna/none/65536"
+    # The Copilot name carries its own effort: a separate one is not its.
+    assert models.identity_of(MODEL, "low") == "copilot/claude-opus-5.5/high/65536"
+    assert (
+        models.identity_of("claude-opus-5-5") == "databricks/claude-opus-5-5/none/65536"
+    )
+    assert (
+        models.identity_of("claude-opus-5-5", "high")
+        == "databricks/claude-opus-5-5/high/65536"
+    )
+    assert provider(replying()).qualification_identity == (
+        "copilot/claude-opus-5.5/high/65536"
+    )
+
+
+@pytest.mark.parametrize(
+    "name", ["copilot:Opus", "COPILOT:gpt-6-luna", "copilot:", "copilot:x@turbo"]
+)
+def test_a_malformed_copilot_name_is_refused_before_any_client(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import databricks_langchain
+
+    monkeypatch.setattr(
+        databricks_langchain, "ChatDatabricks", lambda **_: pytest.fail("built")
+    )
+    for refused_call in (
+        lambda: models.chat_model(endpoint=name),
+        lambda: models.identity_of(name),
+    ):
+        with pytest.raises(Refusal) as refused:
+            refused_call()
+        assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+def test_a_cli_copilot_name_is_refused_until_its_transport_is_built(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import databricks_langchain
+
+    monkeypatch.setattr(
+        databricks_langchain, "ChatDatabricks", lambda **_: pytest.fail("built")
+    )
+    for refused_call in (
+        lambda: models.chat_model(endpoint="copilot-cli:gpt-6-luna"),
+        lambda: models.identity_of("copilot-cli:gpt-6-luna@high"),
+    ):
+        with pytest.raises(Refusal) as refused:
+            refused_call()
+        assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
