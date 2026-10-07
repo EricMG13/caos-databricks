@@ -39,7 +39,7 @@ import sys
 import tempfile
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
@@ -482,9 +482,15 @@ PERMISSION_ASKED = "caos.permission_asked"
 _BUILTIN_MCP_SERVERS = ("github-mcp-server", "githubiq")
 # The SDK's credit cap is floored at 30 credits (R2.7).
 MIN_CREDIT_CAP = 30
-# The events that end a call: the main agent went idle, or it failed. A
-# sub-agent's (`agentId` set) ends nothing; the mapping refuses it.
-_ENDS = frozenset({"session.idle", "session.error"})
+# A call ends when the main agent goes idle. A `session.error` it will not
+# recover from (not `eligibleForAutoSwitch`, as `_settles` reads it) ends the
+# call too, once the events on the frames after it have had this long to
+# arrive -- or sooner, at the idle: the runtime may state the failed call's
+# spend after its error (F590), and spend left unread would turn a billed
+# call into a declared drop that D110 re-attempts. An error it may recover
+# from ends nothing. A sub-agent's events (`agentId` set) end nothing; the
+# mapping refuses them.
+_AFTER_ERROR_SECONDS = 2.0
 # How long an abort is waited for once the deadline has passed.
 _ABORT_SECONDS = 5.0
 
@@ -614,13 +620,18 @@ async def _asked(
     prompt: str, target: CopilotModel, seconds: float, credits: int | None
 ) -> list[Event]:
     seen: list[Event] = []
-    ended = asyncio.Event()
+    idle = asyncio.Event()
+    failed = asyncio.Event()
 
     def heard(event: SessionEvent) -> None:
         wire = event.to_dict()
         seen.append(wire)
-        if wire.get("type") in _ENDS and wire.get("agentId") is None:
-            ended.set()
+        if wire.get("agentId") is not None:
+            return
+        if wire.get("type") == "session.idle":
+            idle.set()
+        elif wire.get("type") == "session.error" and _settles(wire):
+            failed.set()
 
     def denied(_request: object, _invocation: object) -> PermissionDecisionReject:
         from copilot.generated.rpc import PermissionDecisionReject
@@ -637,11 +648,29 @@ async def _asked(
         async with session:
             await session.send(prompt)
             try:
-                await ended.wait()
+                await _settled(idle, failed)
             except asyncio.CancelledError:
                 await _aborted(session)
                 raise
     return list(seen)
+
+
+async def _settled(idle: asyncio.Event, failed: asyncio.Event) -> None:
+    """Until the main agent is idle; after an error it will not recover
+    from, at most `_AFTER_ERROR_SECONDS` more for the events after it. The
+    call's own deadline bounds both."""
+    waits = [asyncio.ensure_future(idle.wait()), asyncio.ensure_future(failed.wait())]
+    try:
+        await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for waiting in waits:
+            waiting.cancel()
+    if idle.is_set():
+        return
+    # The grace running out is the expected end of an error with no idle
+    # after it: what arrived in it is read, and nothing else is held back.
+    with suppress(TimeoutError):
+        await asyncio.wait_for(idle.wait(), _AFTER_ERROR_SECONDS)
 
 
 async def _aborted(session: CopilotSession) -> None:

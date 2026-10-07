@@ -17,6 +17,7 @@ import logging
 import math
 import os
 import re
+import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, tzinfo
 from decimal import Decimal
@@ -3437,14 +3438,24 @@ def url_request() -> object:
 class FakeSession:
     """Stands in for `copilot.CopilotSession`: delivers its events to the
     `on_event` handler it was created with when the prompt is sent, asking the
-    permission handler first at `asks_at` when set."""
+    permission handler first at `asks_at` when set, and `later` on a frame
+    `delay` seconds after, as the runtime's reader thread would."""
 
     def __init__(
-        self, seen: Sequence[Event], *, ends: bool = True, asks_at: int | None = None
+        self,
+        seen: Sequence[Event],
+        *,
+        ends: bool = True,
+        asks_at: int | None = None,
+        later: Sequence[Event] = (),
+        delay: float = 0.0,
     ) -> None:
         self.seen = seen
         self.ends = ends
         self.asks_at = asks_at
+        self.later = later
+        self.delay = delay
+        self.frames: list[asyncio.Task[None]] = []
         self.options: dict[str, Any] = {}
         self.sent: list[str] = []
         self.decisions: list[object] = []
@@ -3462,7 +3473,14 @@ class FakeSession:
                 )
                 self.decisions.append(decided)
             self.options["on_event"](Wire(event))
+        if self.later:
+            self.frames.append(asyncio.get_running_loop().create_task(self._next()))
         return "message-1"
+
+    async def _next(self) -> None:
+        await asyncio.sleep(self.delay)
+        for event in self.later:
+            self.options["on_event"](Wire(event))
 
     async def abort(self) -> None:
         self.aborted = True
@@ -3512,6 +3530,8 @@ def runtime(monkeypatch: pytest.MonkeyPatch) -> type[FakeRuntime]:
         session: ClassVar[FakeSession] = FakeSession(SDK_HAPPY)
 
     monkeypatch.setattr("copilot.CopilotClient", Runtime)
+    # A short grace after an error, so a test of one never waits 2 s.
+    monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.2)
     monkeypatch.setattr(
         "copilot._cli_download.ensure_runtime_wrapper", lambda: DOWNLOADED
     )
@@ -3706,6 +3726,73 @@ def test_a_session_error_ends_the_wait_and_is_returned_as_data(
     failed = [*UNSPENT, error(402)]
     runtime.session = FakeSession(failed)
     assert ask_copilot(PROMPT, TARGET, 5.0) == failed
+    assert not runtime.session.aborted
+
+
+# The audit's probe (p1_trailing_checkpoint.py): a failed dispatch, its
+# session.error, and the checkpoint stating its spend on the next frame.
+ERRED = [
+    started(),
+    turn_start(),
+    call_start(),
+    failure("api", 503),
+    call_finished("error"),
+    final_result(result="http_5xx"),
+    error(None),
+]
+
+
+def switching(status: int | None) -> Event:
+    """A `session.error` after which the runtime may switch models and go on."""
+    return wire(
+        "session.error",
+        errorType="provider",
+        message=SECRET,
+        statusCode=status,
+        eligibleForAutoSwitch=True,
+    )
+
+
+def test_spend_stated_after_a_session_error_is_read_and_never_a_drop(
+    runtime: type[FakeRuntime],
+) -> None:
+    trailing = [checkpoint(900_000_000_000, 1), idle()]
+    runtime.session = FakeSession(ERRED, later=trailing, delay=0.02)
+    seen = ask_copilot(PROMPT, TARGET, 5.0)
+    assert seen == [*ERRED, *trailing]
+    runtime.session = FakeSession(ERRED, later=trailing, delay=0.02)
+    with reserving(Decimal("1.00"), credit=CREDIT):
+        completion = provider(ask_copilot).complete(PROMPT, json_object=True)
+    # Spent, so billed and refused, never a declared drop D110 re-attempts.
+    assert completion.drop_kind is None
+    assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+
+
+def test_an_error_the_runtime_may_recover_from_does_not_end_the_call(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.01)
+    recovered = [*UNSPENT, switching(503)]
+    rest = SDK_HAPPY[2:]
+    runtime.session = FakeSession(recovered, later=rest, delay=0.1)
+    assert ask_copilot(PROMPT, TARGET, 5.0) == [*recovered, *rest]
+    # With no idle, it waits out the deadline: indeterminate, never a drop.
+    runtime.session = FakeSession(recovered, ends=True)
+    with pytest.raises(TimeoutError):
+        ask_copilot(PROMPT, TARGET, 0.2)
+    assert runtime.session.aborted
+
+
+def test_after_an_error_the_wait_is_bounded_by_its_grace_not_the_deadline(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.05)
+    failed = [*UNSPENT, error(500)]
+    late = [checkpoint(100, 1), idle()]
+    runtime.session = FakeSession(failed, later=late, delay=1.0)
+    started_at = time.monotonic()
+    assert ask_copilot(PROMPT, TARGET, 30.0) == failed
+    assert time.monotonic() - started_at < 1.0
     assert not runtime.session.aborted
 
 
