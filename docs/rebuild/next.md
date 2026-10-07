@@ -197,3 +197,12 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
   - whether a failed dispatch is closed by a `model.call_finished` with outcome `error` (F573). Without one, every failure is spend and D110 never re-attempts;
   - whether an internal retry stays one dispatch or opens a second;
   - whether `session.idle.mode` is `interactive`.
+
+- N183 (2026-10-07; D77, addendum 2; F583–F587) — What Task 3 leaves to Task 5, the firm-seat spike (N177) and the owner.
+  - **Task 5.** Readiness must read `caos.copilot.credit_price()` and call `declare_listed` from the listing at worker start, before any run is claimed. Until it does, a worker approving a `copilot:` model with no credit price learns of it only at its first reservation, which refuses `PROVIDER_NOT_CONFIGURED` and parks that run.
+  - **The spike.** It must record:
+    - whether a permission request arrives as a `permission.requested` event or only by the direct RPC (F583 records both);
+    - whether `create_session(session_limits={"max_ai_credits": <int>})` is accepted;
+    - whether the runtime honours the client's `working_directory`.
+  - **The SDK update path.** `ensure_runtime_wrapper` is a private SDK function, pinned with the SDK at 1.0.16. An SDK update must re-check it.
+  - **The owner.** `BUDGET_CHARGE_OVER_RESERVATION` maps to HTTP 500 (Task 2's registration). A RETRY_RUN command sent directly for a run parked with it therefore answers 500, where a refused command elsewhere answers 409; the Run section no longer offers that retry (F585). Whether the code should map to 409 is the owner's call.
