@@ -131,8 +131,7 @@ def test_a_platform_with_no_resource_module_still_extracts(
 
 
 def test_the_cap_is_applied_where_the_platform_has_one() -> None:
-    pytest.importorskip("resource")
-    assert pdf.address_space_cap_available() is True
+    assert pdf.address_space_cap_available() is (sys.platform != "win32")
 
 
 def test_no_cap_is_said_once_and_the_deadline_still_binds(
