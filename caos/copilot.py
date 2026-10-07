@@ -183,49 +183,11 @@ _QUIET = frozenset(
 # after it voids the settlement: the charge is unknown and the reservation is
 # kept.
 _SETTLING = frozenset({"session.idle", "session.error", "session.shutdown"})
-# Events that are, or start, model work that can carry spend: the last usage
-# checkpoint must follow every one of them to be the session's whole bill, and
-# none may follow the end of the turn (F560).
-_BILLED = frozenset(
-    {
-        "user.message",
-        "assistant.turn_start",
-        "assistant.turn_retry",
-        "assistant.reasoning",
-        "assistant.message",
-        "assistant.usage",
-        "model.call_start",
-        "model.call_final_result",
-        "model.call_failure",
-        "model.call_finished",
-    }
+# R1.7: the event types that may follow the end of the turn in the call asked
+# for: the bill, the ending, the shutdown summary.
+_AFTER_TURN = frozenset(
+    {"session.usage_checkpoint", "session.idle", "session.shutdown"}
 )
-
-
-# Events that show the model did work, whatever any figure says (R2.10, F560).
-_WORK = frozenset({"assistant.message", "assistant.usage", "assistant.reasoning"})
-
-
-# The field naming a model on each event that names one: when stated, it must
-# be the pin, or a dispatch, turn or session ran on another model (F561).
-_MODEL_FIELDS = {
-    "session.start": "selectedModel",
-    "session.shutdown": "currentModel",
-    "assistant.turn_start": "model",
-    "assistant.turn_end": "model",
-    "assistant.turn_retry": "model",
-    "model.call_start": "model",
-    "model.call_failure": "model",
-}
-
-
-# The witnesses of the answer: a sub-agent (an `agentId` on the envelope) must
-# have written none of them (F561).
-_WITNESSES = frozenset(
-    {"assistant.message", "assistant.usage", "model.call_final_result"}
-)
-
-
 # `model.call_final_result.result` values that state an HTTP status (R1).
 _RESULT_STATUS: Mapping[str | None, int] = {
     "http_400": 400,
@@ -338,7 +300,7 @@ def reply_message(seen: Sequence[Event], target: CopilotModel) -> AIMessage:
         finish = _finish_reason(usages, answers[0])
         if finish is not None:
             metadata["finish_reason"] = finish
-    metadata.update(_bill(seen, worked=_worked(seen)))
+    metadata.update(_bill(seen, worked=_spent(seen)))
     content = answers[-1].get("content") if answers else None
     return AIMessage(
         content=content if isinstance(content, str) else "",
@@ -437,30 +399,106 @@ def _witnessed(
 
 def _admitted(event: Event, target: CopilotModel) -> bool:
     """R1.0: an allow-listed type, never a refusing one, carrying no fusion
-    attribution (a synthetic multi-model turn), and meeting its condition: a
-    model change only to the pin, a server status only for no server, and a
-    load of MCP servers, skills, extensions or custom agents only of none."""
+    attribution (a synthetic multi-model turn) and no sub-agent's envelope,
+    every field agreeing with the pin (`_fields_agree`; a model change only to
+    the pin among them), and meeting its condition: a server status only for
+    no server, and a load of MCP servers, skills, extensions or custom agents
+    only of none."""
     kind, data = event.get("type"), event.get("data")
     if not isinstance(kind, str) or not isinstance(data, Mapping):
         return False
     if kind.startswith(_REFUSING) or kind not in _ALLOWED:
         return False
-    if data.get("fusion") is not None or not _names_the_pin(kind, data, target):
+    if data.get("fusion") is not None or event.get("agentId") is not None:
         return False
-    if kind in _WITNESSES and event.get("agentId") is not None:
+    if not _fields_agree(data, target):
         return False
-    if kind == "session.model_change":
-        return data.get("newModel") == target.name
     if kind == "session.mcp_server_status_changed":
         return not data.get("serverName")
     loaded = _LOADS.get(kind)
     return loaded is None or _loaded_nothing(data.get(loaded))
 
 
-def _names_the_pin(kind: str, data: Mapping[str, Any], target: CopilotModel) -> bool:
-    """F561: an event that names a model names the pin, or names none."""
-    field = _MODEL_FIELDS.get(kind)
-    return field is None or data.get(field) in (None, target.name)
+def _fields_agree(data: Mapping[str, Any], target: CopilotModel) -> bool:
+    """F569: every field, at any depth, that names a model, an effort, an auto
+    tier, an agent, a tool or an initiator agrees with the call asked for. The
+    rule is read from the field's name, so a field the SDK adds later in one of
+    these families is held to it too. A field about the past (`previous*`, and
+    `modelFrom`, which no family's name matches) states what changed, and is
+    not held."""
+    for key, value in data.items():
+        rule = _FIELD_RULES.get(_family(key))
+        if rule is not None:
+            if not rule(value, target):
+                return False
+        elif not _nested_agree(value, target):
+            return False
+    return True
+
+
+def _nested_agree(value: object, target: CopilotModel) -> bool:
+    if isinstance(value, Mapping):
+        return _fields_agree(value, target)
+    if isinstance(value, list):
+        return all(_nested_agree(item, target) for item in value)
+    return True
+
+
+def _family(key: str) -> str | None:
+    """The family a field's name puts it in, or None for any other field."""
+    if key.startswith("previous"):
+        return None
+    if key in ("model", "modelId", "modelTo") or key.endswith(("Model", "ModelId")):
+        return "model"
+    if key == "models" or key.endswith("Models"):
+        return "models"
+    if key == "effort" or key.endswith("Effort"):
+        return "effort"
+    if key in ("agentMode", "initiator"):
+        return key
+    if key in ("isAuto", "autoTier") or key.endswith("AutoTier"):
+        return "absent"
+    if key.startswith(("agent", "tool")) or any(
+        part in key for part in ("Agent", "ubagent", "Tool")
+    ):
+        return "absent"
+    return None
+
+
+def _is_the_pin(value: object, target: CopilotModel) -> bool:
+    return value is None or value == target.name
+
+
+def _only_the_pin(value: object, target: CopilotModel) -> bool:
+    return value is None or (
+        isinstance(value, list) and all(item == target.name for item in value)
+    )
+
+
+def _at_the_effort(value: object, target: CopilotModel) -> bool:
+    return value is None or _effort(value) == target.reasoning_effort
+
+
+def _interactive(value: object, target: CopilotModel) -> bool:
+    return value in (None, "interactive")
+
+
+def _by_the_user(value: object, target: CopilotModel) -> bool:
+    return value in (None, "user")
+
+
+def _absent(value: object, target: CopilotModel) -> bool:
+    return not value
+
+
+_FIELD_RULES: Mapping[str | None, Callable[[object, CopilotModel], bool]] = {
+    "model": _is_the_pin,
+    "models": _only_the_pin,
+    "effort": _at_the_effort,
+    "agentMode": _interactive,
+    "initiator": _by_the_user,
+    "absent": _absent,
+}
 
 
 # The loads R1.0 admits only when they loaded nothing, by the field they list.
@@ -477,17 +515,14 @@ def _loaded_nothing(loaded: object) -> bool:
 
 
 def _one_answer(answers: Sequence[Mapping[str, Any]], target: CopilotModel) -> bool:
-    """R1.1 and R1.5: exactly one answer, naming the pin, with no tool request,
-    no server tool (which can mean a second, advisor model), not a tool's
-    child, and whole: one chunk of one, if chunked at all (F563)."""
+    """R1.1 and R1.5: exactly one answer, naming the pin, and whole: one chunk
+    of one, if chunked at all (F563). A server tool, which can mean a second,
+    advisor model, refuses as any `*Tool*` field does (`_fields_agree`)."""
     if len(answers) != 1:
         return False
     answer = answers[0]
     return (
         answer.get("model") == target.name
-        and not answer.get("toolRequests")
-        and answer.get("serverTools") is None
-        and answer.get("parentToolCallId") is None
         and answer.get("chunkCount") in (None, 1)
         and answer.get("chunkIndex") in (None, 0)
     )
@@ -518,8 +553,9 @@ def _one_operation(seen: Sequence[Event], target: CopilotModel) -> bool:
 
 def _usage_agrees(usages: Sequence[Mapping[str, Any]], target: CopilotModel) -> bool:
     """R1.3: at most one usage; when present it and its CAPI witness name the
-    pin, at the pinned effort, not auto-routed, stated not BYOK, with no tool
-    offered or called, and no content filter triggered."""
+    pin, at the pinned effort -- stated, not merely not contradicted -- stated
+    not BYOK, and no content filter triggered. Auto routing, tools and the
+    initiator are held by `_fields_agree` (F561, F569)."""
     if not usages:
         return True
     if len(usages) != 1:
@@ -532,40 +568,26 @@ def _usage_agrees(usages: Sequence[Mapping[str, Any]], target: CopilotModel) -> 
             capi is None
             or (isinstance(capi, Mapping) and capi.get("model") == target.name)
         )
-        and not usage.get("isAuto")
         and usage.get("isByok") is False
         and _effort(usage.get("reasoningEffort")) == target.reasoning_effort
         and usage.get("contentFilterTriggered") is not True
-        and _no_tool(usage)
-    )
-
-
-def _no_tool(usage: Mapping[str, Any]) -> bool:
-    """F561: a usage that offered or called no tool, made by the user's own
-    turn rather than a tool's or another initiator's."""
-    return (
-        not usage.get("availableToolCount")
-        and not usage.get("numToolCalls")
-        and not usage.get("toolCounts")
-        and usage.get("parentToolCallId") is None
-        and usage.get("initiator") in (None, "user")
     )
 
 
 def _session_agrees(
     seen: Sequence[Event], usages: Sequence[Mapping[str, Any]], target: CopilotModel
 ) -> bool:
-    """F561, F562, F563 (AR-15): every effort the session states -- at its start
-    and at any model change -- is the pinned one, and no auto tier is set; with
-    no usage to witness the effort, the session's start must. One prompt only:
+    """F561, F562, F563 (AR-15): the session's start and every model change
+    state the pinned effort, an unstated one included (auto tiers are held by
+    `_fields_agree`); with no usage to witness the effort, the session's start
+    must. One prompt only:
     a single user message, no autopilot continuation. Any shutdown is routine,
     on the pin alone."""
     stated = [*_data(seen, "session.start"), *_data(seen, "session.model_change")]
     if not usages and not _data(seen, "session.start"):
         return False
     if any(
-        data.get("autoTier") is not None
-        or _effort(data.get("reasoningEffort")) != target.reasoning_effort
+        _effort(data.get("reasoningEffort")) != target.reasoning_effort
         for data in stated
     ):
         return False
@@ -588,16 +610,18 @@ def _shutdown_agrees(data: Mapping[str, Any], target: CopilotModel) -> bool:
 
 
 def _ended(seen: Sequence[Event]) -> bool:
-    """R1.7: the turn ended, nothing billable followed it -- no reasoning, no
-    dispatch, no answer after the end or after an idle (F560, F563) -- and then
-    the session idled, never aborted."""
+    """R1.7: exactly one turn, which ended, nothing but `_AFTER_TURN` followed it -- no
+    reasoning, no dispatch, no answer after the end or after an idle (F560,
+    F563, F568) -- and then the session idled, never aborted."""
     idles = _indexed(seen, "session.idle")
     ends = _indexed(seen, "assistant.turn_end")
-    if not idles or not ends or any(data.get("aborted") is True for _at, data in idles):
+    if len(ends) != 1 or len(_data(seen, "assistant.turn_start")) != 1:
+        return False  # one prompt, one turn (F570)
+    if not idles or any(data.get("aborted") is True for _at, data in idles):
         return False
     last_end = ends[-1][0]
-    return last_end < idles[-1][0] and not any(
-        _kind(event) in _BILLED for event in seen[last_end + 1 :]
+    return last_end < idles[-1][0] and all(
+        _kind(event) in _AFTER_TURN for event in seen[last_end + 1 :]
     )
 
 
@@ -805,39 +829,6 @@ def _quiet(event: Event) -> bool:
             and (stated is None or _stated_zero(stated))
         )
     return False
-
-
-def _shutdown_figures(seen: Sequence[Event]) -> list[object]:
-    """Every AI-unit figure the shutdowns state, session and per model, None
-    where one states none; a per-model block that is not an object is its own
-    figure, unreadable, so it counts as spend."""
-    figures: list[object] = []
-    for data in _data(seen, "session.shutdown"):
-        metrics = data.get("modelMetrics")
-        blocks = list(metrics.values()) if isinstance(metrics, Mapping) else [metrics]
-        figures.append(data.get("totalNanoAiu"))
-        figures += [
-            block.get("totalNanoAiu") if isinstance(block, Mapping) else block
-            for block in blocks
-        ]
-    return figures
-
-
-def _worked(seen: Sequence[Event]) -> bool:
-    """F560: whether the model did any work -- an answer, a usage, reasoning, a
-    successful settled operation or a successful finished dispatch. A call that
-    worked was billed for it, so a zero figure beside it is no figure."""
-    return (
-        any(_kind(event) in _WORK for event in seen)
-        or any(
-            data.get("result") == "success"
-            for data in _data(seen, "model.call_final_result")
-        )
-        or any(
-            data.get("outcome") == "success"
-            for data in _data(seen, "model.call_finished")
-        )
-    )
 
 
 def _stated_zero(value: object) -> bool:
