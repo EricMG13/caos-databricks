@@ -35,19 +35,21 @@ import hmac
 import logging
 import math
 import os
+import platform
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, TypeIs
+from typing import TYPE_CHECKING, Any, BinaryIO, TypeIs
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel
@@ -318,13 +320,12 @@ def child_environment(home: str, executable: str) -> dict[str, str]:
 
     `COPILOT_HOME` is the call's private directory; `COPILOT_GITHUB_TOKEN` is
     copied when the worker has it; the keychain probe, auto-update and colour
-    are off; `PATH` is the directory of `executable` alone, and of `node` when
-    the runtime entry is a script, so `gh` is not findable and auto-login has
-    nothing to run. Every other name -- the GitHub CLI's and Actions' tokens,
-    askpass programs, BYOK provider settings, telemetry export, a redirected
-    host, a runtime path, a model or tier override -- is absent because it is
-    not listed. A script entry with no `node` on the worker's `PATH` refuses
-    `PROVIDER_NOT_CONFIGURED`.
+    are off; `PATH` is the directory of `executable` alone -- a native
+    runtime, never a script needing an interpreter (F595) -- so `gh` is not
+    findable and auto-login has nothing to run. Every other name -- the
+    GitHub CLI's and Actions' tokens, askpass programs, BYOK provider
+    settings, telemetry export, a redirected host, a runtime path, a model or
+    tier override -- is absent because it is not listed.
     """
     needs = _WINDOWS_NEEDS if sys.platform == "win32" else _POSIX_NEEDS
     child = {"COPILOT_HOME": home}
@@ -333,13 +334,7 @@ def child_environment(home: str, executable: str) -> dict[str, str]:
         if value is not None:
             child[name] = value
     child.update(_FIXED)
-    found = [os.path.dirname(executable)]
-    if executable.endswith(".js"):
-        node = shutil.which("node", path=os.environ.get("PATH", ""))
-        if node is None:
-            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-        found.append(os.path.dirname(node))
-    child["PATH"] = os.pathsep.join(found)
+    child["PATH"] = os.path.dirname(executable)
     return child
 
 
@@ -471,6 +466,18 @@ class CopilotStatusError(OpenAIError):
         )
 
 
+class CopilotUnsettledError(Exception):
+    """A session that failed and did not go idle within the grace after its
+    error (F593): the runtime may have spent after the error, and no event
+    said so, so the call is indeterminate -- `ChatCompletions` reads anything
+    but a vendor error as `raised`, keeps the reservation as the bill and
+    names the class on stderr (F513) -- never a declared drop D110 would
+    re-attempt. Its message is the platform's name and nothing else."""
+
+    def __init__(self) -> None:
+        super().__init__(PLATFORM)
+
+
 Ask = Callable[[str, CopilotModel, float], Sequence[Event]]
 
 
@@ -597,33 +604,16 @@ def _file_digest(path: str) -> str:
         return hashlib.file_digest(read, "sha256").hexdigest()
 
 
-def _signature(root: str) -> tuple[tuple[str, int, int], ...]:
-    """What the runtime directory looks like without reading it: each file's
-    relative path, size and modification time."""
-    files = []
-    for relative, path in _runtime_files(root):
-        stat = os.lstat(path)
-        files.append((relative, stat.st_size, stat.st_mtime_ns))
-    return tuple(sorted(files))
+def _runtime_entry() -> tuple[str, str]:
+    """The operator's runtime and its pinned digest (R3, F591, F594).
 
-
-# The runtime directories this process verified, by entry and pinned digest,
-# with their signature then: re-read in full whenever any file moves.
-_VERIFIED: dict[tuple[str, str], tuple[tuple[str, int, int], ...]] = {}
-_VERIFIED_LOCK = threading.Lock()
-
-
-def _runtime_entry() -> str:
-    """The runtime to start: exactly the operator's (R3, F591).
-
-    `RUNTIME_ENV` names its entry, an absolute path to a file -- never a
-    link, since `_runtime_files` refuses any link in the entry's directory,
-    the entry included -- and `RUNTIME_DIGEST_ENV` pins `runtime_digest` of
-    its directory,
-    checked before the first call and again whenever a file in it changes.
-    Anything else refuses `PROVIDER_NOT_CONFIGURED` before a client starts.
-    The SDK's own resolution -- a downloaded bundle, whose cached files it
-    never re-checks, under a cache root the worker's `COPILOT_CLI_EXTRACT_DIR`,
+    `RUNTIME_ENV` names its entry, an absolute path to a file that is no
+    link, and `RUNTIME_DIGEST_ENV` pins `runtime_digest` of its directory;
+    the entry is resolved once (`os.path.realpath`). Anything else refuses
+    `PROVIDER_NOT_CONFIGURED` before a client starts. The source is never
+    started: each call starts its own verified copy (`_staged`, F596). The
+    SDK's own resolution -- a downloaded bundle, whose cached files it never
+    re-checks, under a cache root the worker's `COPILOT_CLI_EXTRACT_DIR`,
     `XDG_CACHE_HOME` or `LOCALAPPDATA` can move -- is never consulted.
     """
     named = os.environ.get(RUNTIME_ENV, "")
@@ -631,18 +621,169 @@ def _runtime_entry() -> str:
     if (
         not os.path.isabs(named)
         or not _DIGEST.fullmatch(pinned)
+        or os.path.islink(named)
         or not os.path.isfile(named)
     ):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    signature = _signature(os.path.dirname(named))
-    with _VERIFIED_LOCK:
-        if _VERIFIED.get((named, pinned)) == signature:
-            return named
-    if not hmac.compare_digest(runtime_digest(named), pinned):
+    return os.path.realpath(named), pinned
+
+
+# Where a call keeps its own copy of the runtime, in its private directory.
+_STAGED = "caos-runtime"
+_BLOCK = 1 << 20
+
+
+def _staged(source: str, pinned: str, home: str) -> str:
+    """The call's own copy of the pinned runtime, verified: its entry (F596).
+
+    Every file of the source directory is copied into `home`, owner-only,
+    and hashed as its bytes are written, so the digest is of exactly the
+    copy that is started -- not of a source file that can be swapped between
+    the hash and the start, or while the runtime runs and opens the library
+    beside its entry. The copy's entry must be the host's native executable
+    (`_native`, F595, F597; refused with the typed stderr line
+    `PROVIDER_NOT_CONFIGURED reason=runtime_not_native`) and the copy's
+    digest the pinned one; otherwise, or when a source file vanished while
+    it was read, `PROVIDER_NOT_CONFIGURED`. The copy goes with `home`.
+    """
+    root = os.path.join(home, _STAGED)
+    origin = os.path.dirname(source)
+    lines: list[str] = []
+    try:
+        for relative, path in _runtime_files(origin):
+            target = os.path.join(root, os.path.relpath(path, origin))
+            os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
+            lines.append(f"{relative}\0{_copied(path, target)}\n")
+    except FileNotFoundError:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED) from None
+    entry = os.path.join(root, os.path.basename(source))
+    if not os.path.isfile(entry):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    with _VERIFIED_LOCK:
-        _VERIFIED[(named, pinned)] = signature
-    return named
+    if not _native(entry):
+        # A script runs an interpreter found on `PATH`, which no digest
+        # covers (F595): named on stderr by its reason, never its path.
+        print("PROVIDER_NOT_CONFIGURED reason=runtime_not_native", file=sys.stderr)
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    digest = hashlib.sha256("".join(sorted(lines)).encode()).hexdigest()
+    if not hmac.compare_digest(digest, pinned):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return entry
+
+
+def _copied(source: str, target: str) -> str:
+    """Copy one file to a new `target` the owner alone may use, and return
+    the SHA-256 of exactly the bytes written."""
+    digest = hashlib.sha256()
+    with open(source, "rb") as read, open(target, "xb") as written:
+        while block := read.read(_BLOCK):
+            digest.update(block)
+            written.write(block)
+        mode = stat.S_IMODE(os.fstat(read.fileno()).st_mode) & 0o700
+    os.chmod(target, mode)
+    return digest.hexdigest()
+
+
+# Names a host hands to an interpreter, whatever they hold (F595, F597): the
+# SDK starts a `.js`-family entry through `node`, and Windows runs batch and
+# PowerShell files through their shells.
+_SCRIPT_SUFFIXES = (".js", ".mjs", ".cjs", ".bat", ".cmd", ".ps1")
+# Each host's own executable format, by its machine (F597): the Mach-O CPU
+# type, the ELF `e_machine` and the PE COFF `Machine` of 64-bit hosts.
+_MACH_O_CPU = {"arm64": 0x0100000C, "x86_64": 0x01000007}
+_ELF_MACHINE = {"x86_64": 62, "amd64": 62, "aarch64": 183, "arm64": 183}
+_PE_MACHINE = {"amd64": 0x8664, "x86_64": 0x8664, "arm64": 0xAA64, "aarch64": 0xAA64}
+_MH_MAGIC_64 = b"\xcf\xfa\xed\xfe"
+_FAT_MAGIC = b"\xca\xfe\xba\xbe"
+_MH_EXECUTE = 2
+_ELF_EXECUTABLE = (2, 3)  # ET_EXEC, and ET_DYN for a position-independent one
+_PE_EXECUTABLE, _PE_DLL = 0x0002, 0x2000
+# More slices than any universal binary carries: past it, no table is read.
+_MOST_SLICES = 8
+
+
+def _host() -> tuple[str, str]:
+    """This process's platform and machine, as the loader will see them."""
+    return sys.platform, platform.machine()
+
+
+def _native(path: str) -> bool:
+    """Whether `path` is the host's own executable (F595, F597): Mach-O of
+    the host's architecture on macOS, thin or that slice of a universal
+    binary; ELF of the host machine on Linux; PE with a valid header at
+    `e_lfanew` on Windows -- an executable each time, never a library -- and
+    no name a host hands to an interpreter. Any other host refuses."""
+    if path.lower().endswith(_SCRIPT_SUFFIXES):
+        return False
+    system, machine = _host()
+    with open(path, "rb") as read:
+        if system == "darwin":
+            return _mach_o(read, _MACH_O_CPU.get(machine))
+        if system.startswith("linux"):
+            return _elf(read, _ELF_MACHINE.get(machine.lower()))
+        if system == "win32":
+            return _pe(read, _PE_MACHINE.get(machine.lower()))
+    return False
+
+
+def _at(read: BinaryIO, offset: int, size: int) -> bytes:
+    read.seek(offset)
+    return read.read(size)
+
+
+def _mach_o(read: BinaryIO, cpu: int | None) -> bool:
+    """A Mach-O executable for `cpu`: thin, or the slice for `cpu` of a
+    universal binary, which must itself be one."""
+    head = _at(read, 0, 8)
+    if head[:4] != _FAT_MAGIC:
+        return _thin(read, 0, cpu)
+    slices = int.from_bytes(head[4:8], "big")
+    if slices > _MOST_SLICES:
+        return False
+    for index in range(slices):
+        arch = _at(read, 8 + 20 * index, 20)
+        if len(arch) == 20 and int.from_bytes(arch[:4], "big") == cpu:
+            return _thin(read, int.from_bytes(arch[8:12], "big"), cpu)
+    return False
+
+
+def _thin(read: BinaryIO, offset: int, cpu: int | None) -> bool:
+    header = _at(read, offset, 16)
+    return (
+        len(header) == 16
+        and header[:4] == _MH_MAGIC_64
+        and int.from_bytes(header[4:8], "little") == cpu
+        and int.from_bytes(header[12:16], "little") == _MH_EXECUTE
+    )
+
+
+def _elf(read: BinaryIO, machine: int | None) -> bool:
+    """A 64-bit little-endian ELF executable for `machine`."""
+    header = _at(read, 0, 20)
+    return (
+        len(header) == 20
+        and header[:4] == b"\x7fELF"
+        and header[4] == 2
+        and header[5] == 1
+        and int.from_bytes(header[16:18], "little") in _ELF_EXECUTABLE
+        and int.from_bytes(header[18:20], "little") == machine
+    )
+
+
+def _pe(read: BinaryIO, machine: int | None) -> bool:
+    """A PE executable image for `machine`: the DOS stub's `e_lfanew` names a
+    PE signature and COFF header that is no DLL."""
+    stub = _at(read, 0, 64)
+    if len(stub) < 64 or stub[:2] != b"MZ":
+        return False
+    coff = _at(read, int.from_bytes(stub[60:64], "little"), 24)
+    if len(coff) < 24 or coff[:4] != b"PE\0\0":
+        return False
+    traits = int.from_bytes(coff[22:24], "little")
+    return (
+        int.from_bytes(coff[4:6], "little") == machine
+        and bool(traits & _PE_EXECUTABLE)
+        and not traits & _PE_DLL
+    )
 
 
 @asynccontextmanager
@@ -660,10 +801,11 @@ async def _client() -> AsyncIterator[tuple[CopilotClient, str]]:
     """
     from copilot import CopilotClient, RuntimeConnection
 
-    executable = _runtime_entry()
+    source, pinned = _runtime_entry()
     _silenced()
     home = tempfile.mkdtemp(prefix="caos-copilot-")
     try:
+        executable = _staged(source, pinned, home)
         async with CopilotClient(
             connection=RuntimeConnection.for_stdio(path=executable),
             mode="empty",
@@ -725,29 +867,35 @@ async def _asked(
         async with session:
             await session.send(prompt)
             try:
-                await _settled(idle, failed)
+                settled = await _settled(idle, failed)
             except asyncio.CancelledError:
                 await _aborted(session)
                 raise
+            if not settled:
+                await _aborted(session)
+                raise CopilotUnsettledError
     return list(seen)
 
 
-async def _settled(idle: asyncio.Event, failed: asyncio.Event) -> None:
-    """Until the main agent is idle; after an error it will not recover
-    from, at most `_AFTER_ERROR_SECONDS` more for the events after it. The
-    call's own deadline bounds both."""
+async def _settled(idle: asyncio.Event, failed: asyncio.Event) -> bool:
+    """Whether the main agent went idle: waited for until it does, and after
+    an error it will not recover from, at most `_AFTER_ERROR_SECONDS` more.
+    False when that grace ran out with no idle: the session never settled,
+    so what it spent after its error is unknown (F593). The call's own
+    deadline bounds both waits."""
     waits = [asyncio.ensure_future(idle.wait()), asyncio.ensure_future(failed.wait())]
     try:
         await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
     finally:
         for waiting in waits:
             waiting.cancel()
-    if idle.is_set():
-        return
-    # The grace running out is the expected end of an error with no idle
-    # after it: what arrived in it is read, and nothing else is held back.
-    with suppress(TimeoutError):
-        await asyncio.wait_for(idle.wait(), _AFTER_ERROR_SECONDS)
+    if not idle.is_set():
+        grace = asyncio.ensure_future(idle.wait())
+        try:
+            await asyncio.wait([grace], timeout=_AFTER_ERROR_SECONDS)
+        finally:
+            grace.cancel()
+    return idle.is_set()
 
 
 async def _aborted(session: CopilotSession) -> None:
