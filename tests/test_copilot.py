@@ -1978,7 +1978,7 @@ def test_property_any_type_off_the_quiet_list_is_spend_never_a_drop(
     assert copilot_module._spent(seen)
 
 
-# Quiet fragments: a dispatch is quiet only as a closed, failed one (F574).
+# Quiet parts: a dispatch is quiet only as a closed, failed one (F574).
 QUIET_FAKES: list[list[Event]] = [
     [started()],
     [wire("user.message", content=PROMPT)],
@@ -2008,7 +2008,7 @@ def test_every_quiet_type_has_a_quiet_fake() -> None:
         "session.usage_checkpoint",
         "session.shutdown",
     }
-    faked = {event["type"] for fragment in QUIET_FAKES for event in fragment}
+    faked = {event["type"] for part in QUIET_FAKES for event in part}
     assert copilot_module._QUIET | conditional <= faked | {
         "session.managed_settings_resolved",
         "session.managed_settings_enforced",
@@ -2018,9 +2018,9 @@ def test_every_quiet_type_has_a_quiet_fake() -> None:
 @EXAMPLES
 @given(st.lists(st.sampled_from(QUIET_FAKES), max_size=12))
 def test_property_a_call_of_quiet_events_alone_spent_nothing(
-    fragments: list[list[Event]],
+    parts: list[list[Event]],
 ) -> None:
-    assert not copilot_module._spent([event for part in fragments for event in part])
+    assert not copilot_module._spent([event for part in parts for event in part])
 
 
 # -- Fix round 2: the re-audit's probes, as tests. ---------------------------
@@ -2430,7 +2430,7 @@ def test_an_event_not_in_wire_form_before_the_turn_refuses(event: Event) -> None
 # -- Fix round 3: the re-audit's probes, as tests. ---------------------------
 
 
-def workflow_notice(nano_aiu: int) -> Event:
+def run_completed_notice(nano_aiu: int) -> Event:
     return wire(
         "system.notification",
         content="c",
@@ -2511,7 +2511,7 @@ def test_a_spend_figure_within_the_checkpoint_keeps_the_bill(figure: Event) -> N
 
 SUB_AGENT_SPEND: dict[str, Event] = {
     "workflow-settled-below": run_settled(50_000_000),
-    "workflow-notice": workflow_notice(50_000_000),
+    "workflow-notice": run_completed_notice(50_000_000),
     "subagent-completed": subagent_completed(),
     "sub-agent-envelope": enveloped(
         wire("session.info", infoType="x", message="m"), agentId="agent-1"
@@ -2754,8 +2754,8 @@ def test_a_stated_spend_figure_that_is_no_count_leaves_the_charge_unknown(
     )
 
 
-def test_a_workflows_spend_voids_the_bill_with_no_sub_agent_named() -> None:
-    notice = workflow_notice(1)
+def test_a_completed_runs_spend_voids_the_bill_with_no_sub_agent_named() -> None:
+    notice = run_completed_notice(1)
     kind = {**notice["data"]["kind"], "consumedSubagents": 0}
     alone = wire(notice["type"], **{**notice["data"], "kind": kind})
     assert (
