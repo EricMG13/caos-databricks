@@ -616,8 +616,10 @@ _VERIFIED_LOCK = threading.Lock()
 def _runtime_entry() -> str:
     """The runtime to start: exactly the operator's (R3, F591).
 
-    `RUNTIME_ENV` names its entry, an absolute path to a regular file that is
-    no link, and `RUNTIME_DIGEST_ENV` pins `runtime_digest` of its directory,
+    `RUNTIME_ENV` names its entry, an absolute path to a file -- never a
+    link, since `_runtime_files` refuses any link in the entry's directory,
+    the entry included -- and `RUNTIME_DIGEST_ENV` pins `runtime_digest` of
+    its directory,
     checked before the first call and again whenever a file in it changes.
     Anything else refuses `PROVIDER_NOT_CONFIGURED` before a client starts.
     The SDK's own resolution -- a downloaded bundle, whose cached files it
@@ -629,7 +631,6 @@ def _runtime_entry() -> str:
     if (
         not os.path.isabs(named)
         or not _DIGEST.fullmatch(pinned)
-        or os.path.islink(named)
         or not os.path.isfile(named)
     ):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)

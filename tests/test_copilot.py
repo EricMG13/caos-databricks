@@ -3767,6 +3767,34 @@ def test_only_the_pinned_runtime_runs_and_the_environment_cannot_choose_it(
         _refused_before_any_client(runtime)
 
 
+def test_a_relative_runtime_path_is_refused_even_where_it_resolves(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert os.path.isfile(os.path.join("runtime", "copilot-runtime"))
+    monkeypatch.setenv(RUNTIME_ENV, os.path.join("runtime", "copilot-runtime"))
+    _refused_before_any_client(runtime)
+
+
+def test_an_unchanged_runtime_is_read_once_per_process(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    read: list[str] = []
+    digest = copilot_module._file_digest
+
+    def counted(path: str) -> str:
+        read.append(path)
+        return digest(path)
+
+    monkeypatch.setattr(copilot_module, "_file_digest", counted)
+    monkeypatch.setattr(copilot_module, "_VERIFIED", {})
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert len(read) == 3
+    ask_copilot(PROMPT, TARGET, 5.0)
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert len(read) == 3, "an unchanged runtime was read again"
+
+
 def test_a_runtime_changed_after_it_was_verified_is_refused(
     runtime: type[FakeRuntime], tmp_path: Path
 ) -> None:
