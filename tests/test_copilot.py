@@ -3916,6 +3916,8 @@ def test_a_reservation_with_no_credit_price_cannot_settle_a_copilot_call() -> No
         {"inputTokens": 10**7},
         {"outputTokens": MAX_COMPLETION_TOKENS + 1},
         {"inputTokens": 0, "cacheReadTokens": 0, "cacheWriteTokens": 0},
+        # An answer that states it wrote nothing is a count never stated.
+        {"outputTokens": 0},
     ],
 )
 def test_token_counts_past_their_bound_leave_a_copilot_charge_unknown(
