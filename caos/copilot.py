@@ -178,6 +178,11 @@ _QUIET = frozenset(
         "session.managed_settings_enforced",
     }
 )
+# R2.3: the event types that may follow the last checkpoint and leave it the
+# session's whole bill -- its ending, and its shutdown summary. Any other type
+# after it voids the settlement: the charge is unknown and the reservation is
+# kept.
+_SETTLING = frozenset({"session.idle", "session.error", "session.shutdown"})
 # Events that are, or start, model work that can carry spend: the last usage
 # checkpoint must follow every one of them to be the session's whole bill, and
 # none may follow the end of the turn (F560).
@@ -627,7 +632,8 @@ def _derived_finish(answer: Mapping[str, Any]) -> str:
 
 def _bill(seen: Sequence[Event], *, worked: bool) -> dict[str, Any]:
     """R2.3 and R2.4: `nano_aiu` when the checkpoint states a whole count the
-    call can be charged on -- above zero once the model did any work (F560) --
+    call can be charged on -- above zero once the call may have spent, any event
+    off the quiet allow-list (F560, F567) --
     and `premium_requests` as a decimal string or None. No checkpoint, no
     bill."""
     marks = _indexed(seen, "session.usage_checkpoint")
@@ -661,15 +667,37 @@ def _ai_units(
 
 
 def _settled_after(seen: Sequence[Event], at: int) -> bool:
-    """F560: nothing billable after `at`, and the session ended after it -- a
-    `session.idle` or a `session.error` -- with no idle anywhere aborted, so
-    no dispatch can still be running past the figure."""
+    """F568: the checkpoint at `at` is the session's whole bill only if every
+    dispatch started before it had closed, only `_SETTLING` events follow it
+    -- no error that leaves the runtime free to switch model and go on -- and
+    the session ended after it, a `session.idle` or a `session.error`, with no
+    idle anywhere aborted."""
     after = seen[at + 1 :]
-    if any(_kind(event) in _BILLED for event in after):
+    if _dispatch_open(seen[:at]) or not all(_settles(event) for event in after):
         return False
     if any(data.get("aborted") is True for data in _data(seen, "session.idle")):
         return False
     return any(_kind(event) in ("session.idle", "session.error") for event in after)
+
+
+def _settles(event: Event) -> bool:
+    data = event.get("data")
+    if _kind(event) not in _SETTLING or not isinstance(data, Mapping):
+        return False
+    return data.get("eligibleForAutoSwitch") is not True
+
+
+def _dispatch_open(seen: Sequence[Event]) -> bool:
+    """Whether a `model.call_start` has no `model.call_finished` or
+    `model.call_failure` closing it: a dispatch still running."""
+    running = 0
+    for event in seen:
+        kind = _kind(event)
+        if kind == "model.call_start":
+            running += 1
+        elif kind in ("model.call_finished", "model.call_failure"):
+            running = max(running - 1, 0)
+    return running > 0
 
 
 def _figures_agree(seen: Sequence[Event], total: int) -> bool:
@@ -686,6 +714,10 @@ def _figures_agree(seen: Sequence[Event], total: int) -> bool:
 
 
 def _shutdown_figures_agree(data: Mapping[str, Any], total: int) -> bool:
+    """A sub-agent's spend (`agentMetrics`) cannot be reconciled with the
+    session's checkpoint, so any leaves the charge unknown (F568)."""
+    if data.get("agentMetrics"):
+        return False
     stated = data.get("totalNanoAiu")
     if stated is not None and _whole_units(stated) != total:
         return False
