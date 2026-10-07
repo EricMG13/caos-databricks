@@ -25,3 +25,6 @@ frontend/test-results/
 # Local blob caches and retained qualification runs (public documents by digest).
 .dev-data/
 .claude/launch.json
+
+# Hypothesis example database (D121).
+.hypothesis/

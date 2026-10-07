@@ -68,6 +68,7 @@ NANO_PER_CREDIT = 10**9
 # A float from the wire is a whole count only below 2**53, where every integer
 # is exactly representable (R2.3).
 _MOST_UNITS = 2**53
+_COUNT_DIGITS = len(str(_MOST_UNITS))
 # The finish reasons model families report, read in the one vocabulary
 # `provider.finish_refusal` knows. Any other passes through unchanged and is
 # refused there as an invalid response.
@@ -292,9 +293,12 @@ def settled_charge(message: AIMessage, credit: Decimal | None) -> Decimal | None
         validate_spend(credit)
     except Refusal:
         return None
-    if not credit:
-        return None
     exact = exact_context()
+    # A price must charge every count exactly, or it prices none: one too
+    # precise to multiply the largest count in the exact context would settle
+    # a zero count and refuse every other (F563).
+    if not credit or len(credit.as_tuple().digits) + _COUNT_DIGITS > exact.prec:
+        return None
     try:
         amount = exact.divide(
             exact.multiply(Decimal(units), credit), Decimal(NANO_PER_CREDIT)
