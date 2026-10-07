@@ -150,15 +150,24 @@ class DropKind(StrEnum):
     """How a call that got no answer ended (F513's kind), carried to the
     ledger (D110). Only `DECLARED` earns a node its one automatic
     re-attempt: the provider itself said the call failed, by a status or by
-    its own error object, before anything was generated."""
+    its own error object, before anything was generated. Since D118 a
+    failure it declared after content began earns the same one re-attempt
+    as `DECLARED_AFTER_CONTENT`, its own kind because that call may have
+    been billed for what it streamed (D118 fix round 1)."""
 
     # A vendor error with a status or a provider error object (a body, an
     # SSE `error` event) and no content received.
     DECLARED = "declared"
+    # (D118 fix round 1) The provider's own error object after content began,
+    # stating a 5xx, a 429 or a transient `error_type`: the same one
+    # re-attempt, but the call may have been billed for what it streamed, so
+    # its row may name the stream's generation id (0047).
+    DECLARED_AFTER_CONTENT = "declared_after_content"
     # A vendor error with neither: a connection reset or a client timeout,
     # after which the bytes received are unknown.
     VENDOR = "vendor"
-    # Anything else the client raised, held back (ST-8).
+    # Anything else the client raised, held back (ST-8), a cut after content
+    # with no transient provider error among it (D118).
     RAISED = "raised"
     # Raised and not held back.
     ESCAPED = "escaped"
@@ -203,8 +212,11 @@ def node_attempts(
 
 
 # How many automatic re-attempts of a provider-declared drop one node gets in
-# all (D110, the owner's decision of 6 October 2026 on N148).
+# all (D110, the owner's decision of 6 October 2026 on N148), whichever
+# declared kind each drop was (D118).
 DROP_REATTEMPTS = 1
+# The kinds that count as a drop the provider declared (D110, D118).
+DECLARED_KINDS = frozenset({DropKind.DECLARED, DropKind.DECLARED_AFTER_CONTENT})
 
 
 def declared_drop(attempt: NodeAttempt) -> bool:
@@ -213,7 +225,7 @@ def declared_drop(attempt: NodeAttempt) -> bool:
     between the bill and its refusal row). A declared kind beside any other
     code is no drop (F530): a 4xx neither spends the re-attempt nor is
     passed over by a guided retry."""
-    return attempt.drop_kind == DropKind.DECLARED and attempt.refusal in (
+    return attempt.drop_kind in DECLARED_KINDS and attempt.refusal in (
         None,
         RefusalCode.PROVIDER_UNAVAILABLE,
     )
@@ -315,7 +327,8 @@ class CallOutcome:
     belong in a bounded blob; only its address belongs here. Model is the
     host's configured identifier; generation_id is the provider's handle.
     `drop_kind` is how a call that got no answer ended (D110), and only
-    such a call -- no charge, generation or body -- may carry one.
+    such a call -- no charge, generation or body -- may carry one; a cut
+    declared after content may name its generation (D118 fix round 1).
     """
 
     charge: Decimal | None
@@ -519,13 +532,16 @@ def _validate(outcome: CallOutcome) -> None:
 
 def _validate_drop(outcome: CallOutcome) -> None:
     """A drop kind is typed, and only a call with no answer has one (D110):
-    a re-attempt never follows a call that was billed or said anything."""
+    a re-attempt never follows a call that was billed or said anything. A
+    cut declared after content alone may name its stream's generation, the
+    handle its unknown bill is reconciled by (D118 fix round 1, 0047)."""
     drop = outcome.drop_kind
     if drop is None:
         return
+    named = outcome.generation_id is not None
     if not isinstance(drop, DropKind) or (
         outcome.charge is not None
-        or outcome.generation_id is not None
+        or (named and drop is not DropKind.DECLARED_AFTER_CONTENT)
         or outcome.diagnostic_sha256 is not None
     ):
         raise Refusal(RefusalCode.CALL_OUTCOME_INVALID)

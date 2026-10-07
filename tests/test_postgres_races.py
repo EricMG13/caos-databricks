@@ -39,7 +39,7 @@ from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology import invocation
 from caos.methodology.bundle import Bundle
 from caos.pricing import ModelPrice
-from caos.provider import Completion, DropKind
+from caos.provider import Completion, CutAfterContentError, DropKind
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, apply_schema, connect, runs
 from caos.store.events import RunEvent, events_of
@@ -1469,6 +1469,58 @@ def test_a_call_in_flight_past_its_lease_keeps_its_node_from_a_second_call(
     _paid_once_per_node(run.conn, run.run_id, completions)
 
 
+def test_a_held_call_outlives_an_idle_session_bound_on_the_database(
+    case: tuple[StoreConnection, UUID],
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D117, D120 (the review's probe B): `call_hold` is a session-level lock
+    on a connection that sits idle, outside any transaction, for the whole
+    call. With the database set to end idle sessions after 300 ms, A's call
+    runs a second, its lease lapses and B drives the run. The store's own
+    `SET idle_session_timeout = 0`, the session's first statement, wins over
+    the database's setting, so A's hold survives: B is refused
+    `ATTEMPT_UNSETTLED` and pays for nothing, and A's bill lands. Without it
+    the server ended A's session mid-call, the hold went with it, and B paid
+    for the node again."""
+    import time
+
+    import psycopg
+    from psycopg import sql
+    from psycopg.conninfo import conninfo_to_dict
+    from test_worker import queued_run
+
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)  # the bill's reconnect
+    run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
+    database = str(conninfo_to_dict(empty_database)["dbname"])
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("ALTER DATABASE {} SET idle_session_timeout = 300").format(
+                sql.Identifier(database)
+            )
+        )
+    claimed_meanwhile: list[str] = []
+
+    def reclaimed_after_the_bound() -> None:
+        if not claimed_meanwhile:
+            claimed_meanwhile.append("pending")
+            time.sleep(1.0)  # the call outlives the server's idle bound
+            _lapsed(empty_database, run.run_id)
+            claimed_meanwhile[0] = _outcome(
+                lambda: _drive(empty_database, run, completions)
+            )
+
+    completions = _PricedCompletions(run.source_id, during=reclaimed_after_the_bound)
+    a_said = _outcome(lambda: _drive(empty_database, run, completions))
+    assert claimed_meanwhile == [RefusalCode.ATTEMPT_UNSETTLED.value]
+    assert len(completions.prompts) == 1, "B paid for nothing"
+    assert a_said == str(run.run_id), "A's session lived through its call"
+    with connect(empty_database) as conn:
+        assert _count(conn, "run_attempts", run.run_id) == 1
+        assert _count(conn, "budget_ledger", run.run_id) == 1, "A's bill landed"
+
+
 def test_a_held_call_keeps_its_node_only_while_a_live_session_holds_it(
     empty_database: str,
     prepared_run: tuple[UUID, UUID],
@@ -1585,20 +1637,31 @@ def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
 # -- D110: one re-attempt of a declared drop, across a crash -------------------
 
 
+# D118: LCR10-dec's upstream 502, an error event after content had begun, as
+# the test adapter raises it (F529).
+_CUT_502 = {"code": 502, "metadata": {"error_type": "provider_unavailable"}}
+
+
 @dataclass
 class _Dropping(_PricedCompletions):
     """The canonical fake whose first `drops` calls end as the production seam
     ends a provider's 503 (`caos.models.ChatCompletions` over a scripted
-    chat): refused PROVIDER_UNAVAILABLE, a declared drop, nothing billed."""
+    chat): refused PROVIDER_UNAVAILABLE, a declared drop, nothing billed.
+    With `after_content`, each drop is instead the provider's 502 after
+    content began (D118), declared the same way."""
 
     drops: int = 1
+    after_content: bool = False
 
     def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
         if self.drops <= 0:
             return super().complete(prompt, json_object=json_object)
         self.drops -= 1
         self.prompts.append(prompt)
-        dropped = fake_completions(ScriptedChat(answer=StatusError(503)))
+        failure: Exception = StatusError(503)
+        if self.after_content:
+            failure = CutAfterContentError(_CUT_502, generation_id="gen-cut")
+        dropped = fake_completions(ScriptedChat(answer=failure))
         return dropped.complete(prompt)
 
 
@@ -1609,9 +1672,10 @@ class _Died(BaseException):
 @pytest.mark.parametrize(
     "crash",
     [
-        (dies_in, drops)
+        (dies_in, drops, after_content)
         for dies_in in ("_explain_live", "drop_reattempt_due")
         for drops in (1, 2)
+        for after_content in (False, True)
     ],
 )
 def test_a_crash_between_a_declared_drop_and_its_re_attempt_accepts_once(
@@ -1619,7 +1683,7 @@ def test_a_crash_between_a_declared_drop_and_its_re_attempt_accepts_once(
     empty_database: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    crash: tuple[str, int],
+    crash: tuple[str, int, bool],
 ) -> None:
     """Invariants 6 and 8 across a crash. Worker A's CP-0 call is dropped by
     the provider and A dies after the drop was recorded -- before it was
@@ -1628,12 +1692,13 @@ def test_a_crash_between_a_declared_drop_and_its_re_attempt_accepts_once(
     ledger, not A's dead frame, says what is owed: B's fresh attempt is the
     one re-attempt, beside A's held reservation, and B accepts CP-0 once; if
     B's call is dropped too, that is the node's second declared drop and the
-    run stops with no third call."""
+    run stops with no third call. D118: the same for a provider's 502 after
+    content began, whose partial bill A's held reservation covers."""
     from test_worker import count, queued_run
 
-    dies_in, drops = crash
+    dies_in, drops, after_content = crash
     run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
-    completions = _Dropping(run.source_id, drops=drops)
+    completions = _Dropping(run.source_id, drops=drops, after_content=after_content)
 
     def died(*_args: object, **_kwargs: object) -> None:
         raise _Died
@@ -1655,10 +1720,10 @@ def test_a_crash_between_a_declared_drop_and_its_re_attempt_accepts_once(
     assert _outcome(lambda: _drive(empty_database, run, completions)) == str(run.run_id)
 
     nodes = len(_lite().nodes)
+    kind = "declared_after_content" if after_content else "declared"
     drop_rows = run.conn.execute(
-        "SELECT count(*) FROM call_outcomes WHERE run_id = %s"
-        " AND drop_kind = 'declared'",
-        (run.run_id,),
+        "SELECT count(*) FROM call_outcomes WHERE run_id = %s AND drop_kind = %s",
+        (run.run_id, kind),
     ).fetchone()
     run.conn.rollback()
     assert drop_rows == (drops,)
@@ -1714,13 +1779,20 @@ def _dies_at_the_second(
     monkeypatch.setattr(owner, name, maybe_die)
 
 
-@pytest.mark.parametrize("dies_in", ["_explain_live", "drop_reattempt_due"])
+@pytest.mark.parametrize(
+    "crash",
+    [
+        (dies_in, after_content)
+        for dies_in in ("_explain_live", "drop_reattempt_due")
+        for after_content in (False, True)
+    ],
+)
 def test_a_crash_after_the_re_attempts_drop_makes_no_third_call(
     case: tuple[StoreConnection, UUID],
     empty_database: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    dies_in: str,
+    crash: tuple[str, bool],
 ) -> None:
     """F530 (audit finding 1): A's first call and its re-attempt are both
     declared drops, and A dies before the stop is written. B's resume pass
@@ -1732,8 +1804,9 @@ def test_a_crash_after_the_re_attempts_drop_makes_no_third_call(
 
     from caos.store.work import requeue_run
 
+    dies_in, after_content = crash
     run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
-    completions = _Dropping(run.source_id, drops=2)
+    completions = _Dropping(run.source_id, drops=2, after_content=after_content)
     _dies_at_the_second(monkeypatch, runtime, dies_in)
     with pytest.raises(_Died):
         _drive(empty_database, run, completions)

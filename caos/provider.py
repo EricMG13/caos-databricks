@@ -45,9 +45,9 @@ if TYPE_CHECKING:
 # checks, the fenced acceptance). While the call's session lives, a lease lost
 # anyway pays nothing twice: exactly-once rests on `call_hold`, `_UNSETTLED`
 # and `replay_billed` (D83). A session the server cut mid-call (a failover, a
-# suspend; never idleness, `caos.store.IDLE_SESSION_OPTION`) took `call_hold`
-# with it, and then only the live lease keeps a second worker off the node
-# until the bill lands (D117).
+# suspend; never idleness, `caos.store.IDLE_SESSION_SET`, unless the server
+# refuses that `SET`, D120) took `call_hold` with it, and then only the live
+# lease keeps a second worker off the node until the bill lands (D117).
 # 420 s since D83: 5 of 19 default-tier calls ran past 240 s on 2 October.
 # 720 s since D117 (owner, 6 October), the lease raised with it: CP-3C at
 # effort high took 327 s in LCR6 and ran past 420 s in LCR9-dec.
@@ -156,6 +156,20 @@ def finish_refusal(finish_reason: str) -> RefusalCode | None:
     if finish_reason == "stop":
         return None
     return _FINISH_REFUSALS.get(finish_reason, RefusalCode.PROVIDER_RESPONSE_INVALID)
+
+
+class CutAfterContentError(Exception):
+    """A call the provider failed after it had begun to answer (D110, D118):
+    what a transport adapter raises when a stream it was reading ends in the
+    provider's own error object after something was generated. It keeps that
+    object as its body and none of the error's words; `caos.models` decides
+    from the body alone whether the provider declared the failure, and so
+    whether the node earns its one re-attempt (D118)."""
+
+    def __init__(self, body: object, *, generation_id: object = None) -> None:
+        super().__init__()
+        self.body = body
+        self.generation_id = generation_id
 
 
 @dataclass(frozen=True, slots=True)

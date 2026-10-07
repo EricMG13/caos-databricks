@@ -398,7 +398,7 @@ def test_a_pooled_checkpoint_session_is_never_ended_for_being_idle(
     empty_database: str,
 ) -> None:
     """D117 round 2: the pool opens its own connections and so never took
-    `caos.store.IDLE_SESSION_OPTION`; with the database ending idle sessions
+    `caos.store.IDLE_SESSION_SET`; with the database ending idle sessions
     every pooled one was ended between checkpoint writes and the pool timed
     out handing one out. Its sessions turn the bound off as the store's do."""
     db = conninfo_to_dict(empty_database)["dbname"]
