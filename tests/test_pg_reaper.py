@@ -30,8 +30,8 @@ def test_which_names_are_reapable() -> None:
     old = _NOW - MAX_AGE_SECONDS - 1
     young = _NOW - 60
     hexid = uuid4().hex
-    assert is_reapable(f"caos_test_{hexid}", _NOW)
-    assert is_reapable(f"caos_test_template_{hexid}", _NOW)
+    assert not is_reapable(f"caos_test_{hexid}", _NOW)
+    assert not is_reapable(f"caos_test_template_{hexid}", _NOW)
     assert is_reapable(f"caos_test_{old}_{hexid}", _NOW)
     assert is_reapable(f"caos_test_template_{old}_{hexid}", _NOW)
     assert not is_reapable(f"caos_test_{young}_{hexid}", _NOW)
@@ -101,16 +101,15 @@ def test_reap_drops_only_idle_old_matching_databases(empty_database: str) -> Non
             for name in names:
                 _make(admin, name)
             with psycopg.connect(_url_for(busy)):
-                # A session is running a caos_test database: old format stays.
-                reaped = reap(admin, now=now, other_sessions=1)
-                assert old in reaped and not {legacy, legacy_template} & set(reaped)
-                reaped = reap(admin, now=now, other_sessions=0)
-            assert {legacy, legacy_template} <= set(reaped)
+                reaped = reap(admin, now=now)
+            assert old in reaped
+            # Old-format, connection-free names are never dropped.
+            assert not {legacy, legacy_template} & set(reaped)
             assert not {young, busy, stranger, qualify} & set(reaped)
             assert [_exists(admin, n) for n in names] == [
                 False,
-                False,
-                False,
+                True,
+                True,
                 True,
                 True,
                 True,
