@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, ClassVar, cast
 from uuid import uuid4
 
+import gateway_smoke
 import pytest
 from copilot import (
     GetAuthStatusResponse,
@@ -75,6 +76,7 @@ from caos.copilot import (
     settled_charge,
     usable,
 )
+from caos.graph import worker
 from caos.methodology import canonical
 from caos.models import ChatCompletions, completions
 from caos.pricing import CreditPrice, ModelPrice
@@ -5321,3 +5323,89 @@ def test_a_listed_field_that_is_no_identifier_is_printed_as_a_dash(
     refused_not_configured({MODEL: PRICE})
     line = capsys.readouterr().err.splitlines()[-1]
     assert " policy=- usable=n efforts=high,- max_prompt_tokens=- " in line
+
+
+def test_a_worker_whose_copilot_model_is_not_ready_refuses_before_the_store(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(models.ENDPOINT_ENV, MODEL)
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
+    monkeypatch.delenv("CAOS_MODEL_CHOICES", raising=False)
+    monkeypatch.setattr(
+        worker, "_store_configuration", lambda: pytest.fail("the store was read")
+    )
+    ready.signed_in = False
+    assert worker.main() == 2
+    assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
+
+
+def test_the_worker_checks_readiness_on_every_approved_model_before_the_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(models.ENDPOINT_ENV, MODEL)
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
+    monkeypatch.setenv("CAOS_MODEL_CHOICES", f"{GATEWAY},0.000005,0.00002,2026-10-01")
+    checked: list[Mapping[str, ModelPrice]] = []
+
+    def checking(choices: Mapping[str, ModelPrice]) -> None:
+        checked.append(dict(choices))
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(worker, "require_ready", checking)
+    monkeypatch.setattr(
+        worker, "_store_configuration", lambda: pytest.fail("the store was read")
+    )
+    with pytest.raises(Refusal):
+        worker._configured()
+    assert checked == [{MODEL: PRICE, GATEWAY: GATEWAY_PRICE}]
+
+
+def _smoke_ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+    text = '{"ok": true}' if "JSON" in prompt else "OK"
+    # No usage event: its counts would exceed the smoke's few request bytes.
+    return sdk_call(answer=answer(text), usage=None)
+
+
+def test_the_production_smoke_takes_copilot_only_on_a_real_transport(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv(CREDIT_PRICE_ENV, READY_CREDIT)
+    scripted = completions(
+        PRICE, chat=ChatCopilot(model=MODEL, ask=_smoke_ask), endpoint=MODEL
+    )
+    monkeypatch.setattr(models, "from_environment", lambda: scripted)
+    assert gateway_smoke.main() == 2
+    assert capsys.readouterr().err == (
+        "gateway_smoke: refused, chat model is ChatCopilot\n"
+    )
+    # The transport the factory gives a Copilot name, standing in for the SDK.
+    monkeypatch.setattr(copilot_module, "ask_copilot", _smoke_ask)
+    real = completions(
+        PRICE,
+        chat=ChatCopilot(model=MODEL, ask=copilot_module.ask_copilot),
+        endpoint=MODEL,
+    )
+    monkeypatch.setattr(models, "from_environment", lambda: real)
+    assert gateway_smoke.main() == 0
+    out = capsys.readouterr().out
+    assert f"endpoint={MODEL} model=ChatCopilot " in out
+    # 251,164,000 nano-AIU at $0.01 a credit, under the smoke's reservation.
+    assert " charge=0.00251164 nano_aiu=251164000 json_mode=accepted" in out
+
+
+def test_the_production_smoke_needs_a_credit_price_for_copilot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(CREDIT_PRICE_ENV, raising=False)
+    monkeypatch.setattr(copilot_module, "ask_copilot", _smoke_ask)
+    real = completions(
+        PRICE,
+        chat=ChatCopilot(model=MODEL, ask=copilot_module.ask_copilot),
+        endpoint=MODEL,
+    )
+    monkeypatch.setattr(models, "from_environment", lambda: real)
+    with pytest.raises(Refusal) as refused:
+        gateway_smoke.main()
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
