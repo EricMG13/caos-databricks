@@ -17,7 +17,7 @@ import math
 import os
 import re
 from collections.abc import Callable, Mapping, Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, tzinfo
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
@@ -3194,9 +3194,25 @@ def test_the_credit_price_is_a_dated_decimal_or_not_configured(
         assert refused.value.args == (RefusalCode.PROVIDER_NOT_CONFIGURED,)
 
 
-def test_the_credit_price_is_never_later_than_today_in_utc() -> None:
+def test_the_credit_price_is_never_later_than_today_in_utc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     today = datetime.now(UTC).date()
     assert credit_price(f"0.01,{today.isoformat()}").as_of == today
+
+    class Clock(datetime):
+        """Half past midnight in UTC, still the evening before locally."""
+
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> Clock:
+            if tz is UTC:
+                return cls(2026, 10, 7, 0, 30, tzinfo=UTC)
+            return cls(2026, 10, 6, 20, 30)
+
+    monkeypatch.setattr(copilot_module, "datetime", Clock)
+    assert credit_price("0.01,2026-10-07").as_of == date(2026, 10, 7)
+    with pytest.raises(Refusal):
+        credit_price("0.01,2026-10-08")
 
 
 def test_the_output_cap_is_the_sessions_cap_and_the_cli_is_deferred() -> None:
