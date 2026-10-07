@@ -12,17 +12,21 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
+from fractions import Fraction
 from typing import Any, cast
 from uuid import uuid4
 
 import pytest
 from copilot import SessionEvent
 from copilot.generated.session_events import SessionEventType
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 from langchain_core.messages import AIMessage, HumanMessage
 
 from caos import copilot as copilot_module
 from caos import models
 from caos.copilot import (
+    NANO_PER_CREDIT,
     ChatCopilot,
     CopilotModel,
     CopilotStatusError,
@@ -58,15 +62,39 @@ SECRET = "private text the runtime wrote"
 
 def wire(kind: str, /, **data: object) -> Event:
     """One session event exactly as the pinned SDK writes it."""
-    written: dict[str, object] = SessionEvent.from_dict(
+    return enveloped(
         {
             "type": kind,
             "data": {key: value for key, value in data.items() if value is not None},
             "id": str(uuid4()),
             "timestamp": "2026-10-06T00:00:00Z",
         }
-    ).to_dict()
+    )
+
+
+def enveloped(event: Mapping[str, object], **envelope: object) -> Event:
+    """`event` with these envelope fields (`agentId`, `parentId`), through the
+    SDK. `from_dict` drops a key it does not know without a word, so every key
+    sent must come back from `to_dict`: a fake can only say what the SDK says."""
+    sent = {**event, **envelope}
+    written: dict[str, object] = SessionEvent.from_dict(sent).to_dict()
+    _survived(sent, written, "event")
     return written
+
+
+def _survived(sent: object, written: object, where: str) -> None:
+    """Every non-None key of `sent` is in `written`, at every depth."""
+    if isinstance(sent, Mapping):
+        assert isinstance(written, Mapping), where
+        for key, value in sent.items():
+            if value is None:
+                continue
+            assert key in written, f"{where}.{key} was dropped by the SDK"
+            _survived(value, written[key], f"{where}.{key}")
+    elif isinstance(sent, list):
+        assert isinstance(written, list) and len(written) == len(sent), where
+        for index, (item, kept) in enumerate(zip(sent, written, strict=True)):
+            _survived(item, kept, f"{where}[{index}]")
 
 
 def started(model: str = PIN, version: str = "1.0.90") -> Event:
@@ -1270,3 +1298,113 @@ def test_a_checkpoint_stating_a_boolean_is_spend_and_an_unknown_charge() -> None
     message = reply_message(sdk_call(checkpoint=stated), TARGET)
     assert "nano_aiu" not in message.response_metadata
     assert "nano_aiu" not in invoked([*UNSPENT, stated, error(500)]).response_metadata
+
+
+# -- Fix round 1: the adversarial audit's probes, as tests. ------------------
+
+
+def test_a_fake_carrying_a_key_the_sdk_does_not_know_fails() -> None:
+    with pytest.raises(AssertionError, match="dropped by the SDK"):
+        wire("session.idle", notAField=1)
+    with pytest.raises(AssertionError, match="dropped by the SDK"):
+        usage(copilotUsage={"totalNanoAiu": 1, "model": PIN, "notAField": 1})
+
+
+# -- Properties (D121): the money arithmetic and the mapping's rules. --------
+
+UNITS = st.integers(min_value=0, max_value=2**53 - 1)
+CREDITS = st.decimals(
+    min_value=Decimal("0.00000001"),
+    max_value=Decimal(1000),
+    places=8,
+    allow_nan=False,
+    allow_infinity=False,
+)
+INVALID_UNITS = st.one_of(
+    st.integers(max_value=-1),
+    st.integers(min_value=2**53),
+    st.floats(),
+    st.booleans(),
+    st.none(),
+    st.text(max_size=4),
+)
+INVALID_CREDITS = st.one_of(
+    st.decimals(max_value=Decimal(0)),
+    st.decimals(allow_nan=True).filter(lambda value: not value.is_finite()),
+    st.just(Decimal("0." + "1" * 1200)),
+    st.floats(),
+    st.integers(),
+    st.booleans(),
+    st.none(),
+)
+EXAMPLES = settings(deadline=None, max_examples=200)
+
+
+def charged(units: object, credit: object) -> Decimal | None:
+    message = AIMessage(content="", response_metadata={"nano_aiu": units})
+    return settled_charge(message, cast(Decimal, credit))
+
+
+@EXAMPLES
+@given(UNITS, CREDITS)
+def test_property_the_charge_is_exactly_the_units_at_the_credit_price(
+    units: int, credit: Decimal
+) -> None:
+    charge = charged(units, credit)
+    assert isinstance(charge, Decimal)
+    assert Fraction(charge) * NANO_PER_CREDIT == units * Fraction(credit)
+
+
+@EXAMPLES
+@given(UNITS, UNITS, CREDITS)
+def test_property_the_charge_is_additive_in_the_units(
+    first: int, second: int, credit: Decimal
+) -> None:
+    assume(first + second < 2**53)
+    whole, part, rest = (
+        charged(first + second, credit),
+        charged(first, credit),
+        charged(second, credit),
+    )
+    assert whole is not None and part is not None and rest is not None
+    assert Fraction(whole) == Fraction(part) + Fraction(rest)
+
+
+@EXAMPLES
+@given(UNITS, UNITS, CREDITS, CREDITS)
+def test_property_the_charge_never_falls_as_units_or_the_credit_price_rise(
+    first: int, second: int, low: Decimal, high: Decimal
+) -> None:
+    less, more = sorted((first, second))
+    cheap, dear = sorted((low, high))
+    assert cast(Decimal, charged(less, cheap)) <= cast(Decimal, charged(more, cheap))
+    assert cast(Decimal, charged(less, cheap)) <= cast(Decimal, charged(less, dear))
+
+
+@EXAMPLES
+@given(INVALID_UNITS, CREDITS)
+def test_property_a_count_that_is_no_whole_figure_charges_nothing(
+    units: object, credit: Decimal
+) -> None:
+    assert charged(units, credit) is None
+
+
+@EXAMPLES
+@given(UNITS, INVALID_CREDITS)
+def test_property_a_credit_price_that_is_no_positive_decimal_charges_nothing(
+    units: int, credit: object
+) -> None:
+    assert charged(units, credit) is None
+
+
+def test_a_credit_price_too_precise_for_any_count_charges_not_even_zero() -> None:
+    """F563, found by the property above: a price that cannot charge the
+    largest count exactly prices no count, zero included."""
+    precise = Decimal("0." + "1" * 1200)
+    assert charged(0, precise) is None
+    # The most digits a price may carry still charges the largest count.
+    widest = Decimal("0." + "1" * (1000 - len(str(2**53))))
+    assert charged(2**53 - 1, widest) is not None
+    too_wide = Decimal("0." + "1" * (1001 - len(str(2**53))))
+    assert charged(2**53 - 1, too_wide) is None
+    assert charged(0, too_wide) is None
