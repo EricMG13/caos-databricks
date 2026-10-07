@@ -227,7 +227,7 @@ class _DamagesWhatWasAccepted:
 
 @contextmanager
 def _without_route(conn: StoreConnection, database: str, run: UUID) -> Iterator[None]:
-    assert database == "caos_test_" + UUID(database.removeprefix("caos_test_")).hex
+    assert re.fullmatch(r"caos_test_(\d{10}_)?[0-9a-f]{32}", database)
     assert conn.info.transaction_status.name == "IDLE"
     query = (
         "SELECT t.tgname, t.tgenabled FROM pg_trigger t"

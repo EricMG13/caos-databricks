@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import traceback
 from pathlib import Path
 from typing import cast
@@ -134,7 +135,7 @@ def test_run_read_compares_each_captured_current_identity(
     conn, run, sources, _, _ = pinned
     source = sources.members[0].source_id
     database = urlsplit(empty_database).path.removeprefix("/")
-    assert database == "caos_test_" + UUID(database.removeprefix("caos_test_")).hex
+    assert re.fullmatch(r"caos_test_(\d{10}_)?[0-9a-f]{32}", database)
     assert conn.execute("SELECT current_database()").fetchone() == (database,)
     table = "sources" if field == "document_sha256" else "source_extractions"
     with conn.transaction():
