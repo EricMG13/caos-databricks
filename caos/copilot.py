@@ -150,6 +150,34 @@ _REFUSING = (
     "command.",
     "unknown",
 )
+# The two allow-lists the bill rests on (F567, F568). An allow-list, never a
+# deny-list: an event type the SDK adds later, or one this module never named,
+# falls on the side that keeps the money safe.
+#
+# R2.10: the event types a call may hold and still be a drop -- one that spent
+# nothing, which D110 may re-attempt. Each is documented by the SDK as metadata,
+# telemetry or display: the session's start, the prompt, a turn's start and end,
+# a dispatch's start and its failure, an error, an idle, an info or a warning,
+# and managed-settings notices. Three more are quiet only as `_quiet` states:
+# a settled result that failed, a checkpoint stating exactly zero, a shutdown
+# that metered nothing. Any other type -- a delta, a sub-agent, a fusion, a
+# compaction, a workflow -- means spend is possible: never a drop.
+_QUIET = frozenset(
+    {
+        "session.start",
+        "user.message",
+        "assistant.turn_start",
+        "assistant.turn_end",
+        "model.call_start",
+        "model.call_failure",
+        "session.error",
+        "session.idle",
+        "session.info",
+        "session.warning",
+        "session.managed_settings_resolved",
+        "session.managed_settings_enforced",
+    }
+)
 # Events that are, or start, model work that can carry spend: the last usage
 # checkpoint must follow every one of them to be the session's whole bill, and
 # none may follow the end of the turn (F560).
@@ -167,8 +195,12 @@ _BILLED = frozenset(
         "model.call_finished",
     }
 )
+
+
 # Events that show the model did work, whatever any figure says (R2.10, F560).
 _WORK = frozenset({"assistant.message", "assistant.usage", "assistant.reasoning"})
+
+
 # The field naming a model on each event that names one: when stated, it must
 # be the pin, or a dispatch, turn or session ran on another model (F561).
 _MODEL_FIELDS = {
@@ -180,13 +212,21 @@ _MODEL_FIELDS = {
     "model.call_start": "model",
     "model.call_failure": "model",
 }
+
+
 # The witnesses of the answer: a sub-agent (an `agentId` on the envelope) must
 # have written none of them (F561).
 _WITNESSES = frozenset(
     {"assistant.message", "assistant.usage", "model.call_final_result"}
 )
+
+
 # `model.call_final_result.result` values that state an HTTP status (R1).
-_RESULT_STATUS = {"http_400": 400, "http_413": 413, "http_429": 429}
+_RESULT_STATUS: Mapping[str | None, int] = {
+    "http_400": 400,
+    "http_413": 413,
+    "http_429": 429,
+}
 # The values that declare a failure with no status (D110): a provider-stated
 # 4xx or 5xx class. `transport_error` and `other_error` declare nothing.
 _DECLARED_RESULTS = frozenset({"http_4xx", "http_5xx"})
@@ -704,18 +744,35 @@ def _premium(value: object) -> str | None:
 
 
 def _spent(seen: Sequence[Event]) -> bool:
-    """R2.10: whether the session can have cost anything -- any sign of model
-    work (`_worked`), any checkpoint that does not state exactly zero (an
-    unreadable one included), or any shutdown figure stated and not zero. Such
-    a call is returned and billed, never raised: it is no drop, so it is never
-    re-attempted or re-sent (invariants 6 and 8; D110; F560)."""
-    if _worked(seen):
+    """R2.10, F567: whether the session can have cost anything -- whether any
+    event is off the quiet allow-list. Such a call is returned and billed,
+    never raised: it is no drop, so it is never re-attempted or re-sent
+    (invariants 6 and 8; D110)."""
+    return not all(_quiet(event) for event in seen)
+
+
+def _quiet(event: Event) -> bool:
+    """One event on R2.10's allow-list: a `_QUIET` type; a settled result that
+    states a failure; a checkpoint stating exactly zero; a shutdown that
+    metered no model and no agent and states no spend."""
+    kind, data = event.get("type"), event.get("data")
+    if not isinstance(data, Mapping):
+        return False
+    if kind in _QUIET:
         return True
-    figures = [
-        data.get("totalNanoAiu") for data in _data(seen, "session.usage_checkpoint")
-    ]
-    figures += [figure for figure in _shutdown_figures(seen) if figure is not None]
-    return any(not _stated_zero(figure) for figure in figures)
+    if kind == "model.call_final_result":
+        result = data.get("result")
+        return isinstance(result, str) and result != "success"
+    if kind == "session.usage_checkpoint":
+        return _stated_zero(data.get("totalNanoAiu"))
+    if kind == "session.shutdown":
+        stated = data.get("totalNanoAiu")
+        return (
+            data.get("modelMetrics") == {}
+            and not data.get("agentMetrics")
+            and (stated is None or _stated_zero(stated))
+        )
+    return False
 
 
 def _shutdown_figures(seen: Sequence[Event]) -> list[object]:
@@ -786,9 +843,12 @@ def _open_failure(seen: Sequence[Event]) -> Mapping[str, Any] | None:
     return failures[-1] if failures else None
 
 
-def _settled_result(seen: Sequence[Event]) -> object:
+def _settled_result(seen: Sequence[Event]) -> str | None:
+    """The last settled result's name. On a call with no spend every settled
+    result is quiet, so each names a failure (`_quiet`)."""
     finals = _data(seen, "model.call_final_result")
-    return finals[-1].get("result") if finals else None
+    result: str | None = finals[-1].get("result") if finals else None
+    return result
 
 
 def _status_of(data: Mapping[str, Any]) -> int | None:
@@ -796,15 +856,13 @@ def _status_of(data: Mapping[str, Any]) -> int | None:
     return status if type(status) is int else None
 
 
-def _from_result(settled: object) -> CopilotStatusError:
+def _from_result(settled: str | None) -> CopilotStatusError:
     """A settled result with no status from any event: the status it names, a
     declared class with none, or undeclared."""
-    status = _RESULT_STATUS.get(settled) if isinstance(settled, str) else None
+    status = _RESULT_STATUS.get(settled)
     if status is not None:
         return CopilotStatusError(status)
-    return CopilotStatusError(
-        None, declared=settled if isinstance(settled, str) else None
-    )
+    return CopilotStatusError(None, declared=settled)
 
 
 def _usage(usages: Sequence[Mapping[str, Any]]) -> UsageMetadata | None:
