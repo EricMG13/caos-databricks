@@ -1138,26 +1138,29 @@ def _model_ready(
 def _floors(info: ModelInfo, credit: CreditPrice) -> tuple[Fraction, Fraction] | None:
     """The least per-token pin, in dollars, that covers every rate the
     listing bills an input and an output token at, in both tiers (R2.1):
-    `rate / batchSize x credit price x multiplier`, exact. None when the
-    listing states no batch size, no input or no output rate, or a figure
-    that is no finite, non-negative number: then no pin can be checked."""
+    `rate / batchSize x credit price x multiplier`, exact. None -- no pin can
+    be checked -- unless the listing states a positive batch size, a
+    positive finite multiplier (or none, read as 1), and both the default
+    and the long-context tier, each with its `inputPrice` and `outputPrice`:
+    every session asks for the long-context tier (F601), and a tier that
+    leaves its own rate unstated is not priced by its other rates. Any
+    figure that is no finite, non-negative number is no price either."""
     billing = info.billing
     prices = None if billing is None else billing.token_prices
-    if billing is None or prices is None:
+    if billing is None or prices is None or prices.long_context is None:
         return None
     batch = prices.batch_size
     multiplier = _rate(1 if billing.multiplier is None else billing.multiplier)
-    tiers: list[Any] = [prices]
-    if prices.long_context is not None:
-        tiers.append(prices.long_context)
+    tiers: tuple[Any, ...] = (prices, prices.long_context)
     inputs = _highest([getattr(tier, rate) for tier in tiers for rate in _INPUT_RATES])
     outputs = _highest([tier.output_price for tier in tiers])
     if (
         type(batch) is not int
         or batch <= 0
-        or multiplier is None
+        or not multiplier
         or inputs is None
         or outputs is None
+        or any(tier.input_price is None or tier.output_price is None for tier in tiers)
     ):
         return None
     scale = Fraction(credit.per_credit) * multiplier / batch

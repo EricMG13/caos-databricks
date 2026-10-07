@@ -4710,10 +4710,11 @@ def billed(
     multiplier: float | None = 1,
 ) -> dict[str, object]:
     """A listing's `billing`, in its wire keys: both tiers, and the multiplier
-    unless None. An empty long-context tier is left out."""
-    tier: dict[str, object] = dict(base)
+    unless None. A rate given as None is left out, as is an empty long-context
+    tier."""
+    tier: dict[str, object] = {k: v for k, v in base.items() if v is not None}
     if long_context:
-        tier["longContext"] = dict(long_context)
+        tier["longContext"] = {k: v for k, v in long_context.items() if v is not None}
     billing: dict[str, object] = {"tokenPrices": tier}
     if multiplier is not None:
         billing["multiplier"] = multiplier
@@ -5024,7 +5025,7 @@ def test_readiness_refuses_a_pinned_price_below_the_listed_price_times_the_multi
 
 @pytest.mark.parametrize(
     ("multiplier", "ok"),
-    [(1.0000001, False), (2, False), (1, True), (None, True), (0.5, True), (0, True)],
+    [(1.0000001, False), (2, False), (1, True), (None, True), (0.5, True)],
 )
 def test_the_listed_multiplier_scales_every_rate(
     ready: type[FakeRuntime], multiplier: float | None, ok: bool
@@ -5040,7 +5041,8 @@ def test_a_price_floor_is_shown_rounded_up_never_down(
     ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
 ) -> None:
     base = {"batchSize": 3, "inputPrice": 0.001, "outputPrice": 0.002}
-    ready.offered = [listed(billing=billed(base, {}))]
+    long = {"inputPrice": 0.0005, "outputPrice": 0.001}
+    ready.offered = [listed(billing=billed(base, long))]
     require_ready({MODEL: PRICE})
     # 0.001 / 3 x 0.01 = 3.33...e-6, shown as 0.000003333334.
     line = capsys.readouterr().err.splitlines()[-1]
@@ -5060,6 +5062,14 @@ def test_a_price_floor_is_shown_rounded_up_never_down(
         listed(billing=billed(long_context=dict(LONG_TIER, outputPrice=math.inf))),
         listed(billing=billed(multiplier=-1)),
         listed(billing=billed(multiplier=math.nan)),
+        listed(billing=billed(multiplier=0)),
+        listed(billing=billed(multiplier=math.inf)),
+        listed(billing=billed(dict(BASE_TIER, inputPrice=None))),
+        listed(billing=billed(dict(BASE_TIER, outputPrice=None))),
+        listed(billing=billed(long_context=dict(LONG_TIER, inputPrice=None))),
+        listed(billing=billed(long_context=dict(LONG_TIER, outputPrice=None))),
+        listed(billing=billed(BASE_TIER, {})),
+        listed(billing=billed(BASE_TIER, {"maxPromptTokens": 1_000_000})),
         listed(
             billing=billed(
                 {k: v for k, v in BASE_TIER.items() if k not in INPUT_RATES},
@@ -5083,6 +5093,14 @@ def test_a_price_floor_is_shown_rounded_up_never_down(
         "infinite-rate",
         "negative-multiplier",
         "nan-multiplier",
+        "zero-multiplier",
+        "infinite-multiplier",
+        "base-no-input-price",
+        "base-no-output-price",
+        "long-no-input-price",
+        "long-no-output-price",
+        "no-long-context-tier",
+        "long-context-tier-unpriced",
         "no-input-rate",
         "no-output-rate",
     ],
@@ -5130,7 +5148,7 @@ def test_readiness_declares_each_listed_models_context_once(
     base = dict(BASE_TIER)
     if not base_prompt:
         del base["maxPromptTokens"]
-    tier = dict(LONG_TIER) if long else {"outputPrice": 2.0}
+    tier = dict(LONG_TIER) if long else {"inputPrice": 0.5, "outputPrice": 2.0}
     if not long:
         base["outputPrice"] = 1.5
     ready.offered = [listed(billing=billed(base, tier), limits=limits)]
@@ -5415,7 +5433,8 @@ def test_a_batch_of_one_token_prices_each_token_at_its_rate(
     ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
 ) -> None:
     base = {"batchSize": 1, "inputPrice": 0.0005, "outputPrice": 0.002}
-    ready.offered = [listed(billing=billed(base, {}), state=None)]
+    long = {"inputPrice": 0.0005, "outputPrice": 0.002}
+    ready.offered = [listed(billing=billed(base, long), state=None)]
     require_ready({MODEL: PRICE})
     line = capsys.readouterr().err.splitlines()[-1]
     # No policy listed is no policy to refuse, printed as such.
