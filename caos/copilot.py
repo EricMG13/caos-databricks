@@ -35,6 +35,7 @@ import hmac
 import logging
 import math
 import os
+import platform
 import re
 import shutil
 import stat
@@ -48,7 +49,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, TypeIs
+from typing import TYPE_CHECKING, Any, BinaryIO, TypeIs
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel
@@ -681,29 +682,107 @@ def _copied(source: str, target: str) -> str:
     return digest.hexdigest()
 
 
-# The first bytes of a native executable (F595): ELF; Mach-O, 32 and 64 bit
-# in either byte order, and universal; PE. The SDK starts a `.js`-family
-# entry through `node`, so such a name is no native runtime whatever it holds.
-_NATIVE_MAGIC = (
-    b"\x7fELF",
-    b"\xcf\xfa\xed\xfe",
-    b"\xce\xfa\xed\xfe",
-    b"\xfe\xed\xfa\xcf",
-    b"\xfe\xed\xfa\xce",
-    b"\xca\xfe\xba\xbe",
-    b"MZ",
-)
-_SCRIPT_SUFFIXES = (".js", ".mjs", ".cjs")
+# Names a host hands to an interpreter, whatever they hold (F595, F597): the
+# SDK starts a `.js`-family entry through `node`, and Windows runs batch and
+# PowerShell files through their shells.
+_SCRIPT_SUFFIXES = (".js", ".mjs", ".cjs", ".bat", ".cmd", ".ps1")
+# Each host's own executable format, by its machine (F597): the Mach-O CPU
+# type, the ELF `e_machine` and the PE COFF `Machine` of 64-bit hosts.
+_MACH_O_CPU = {"arm64": 0x0100000C, "x86_64": 0x01000007}
+_ELF_MACHINE = {"x86_64": 62, "amd64": 62, "aarch64": 183, "arm64": 183}
+_PE_MACHINE = {"amd64": 0x8664, "x86_64": 0x8664, "arm64": 0xAA64, "aarch64": 0xAA64}
+_MH_MAGIC_64 = b"\xcf\xfa\xed\xfe"
+_FAT_MAGIC = b"\xca\xfe\xba\xbe"
+_MH_EXECUTE = 2
+_ELF_EXECUTABLE = (2, 3)  # ET_EXEC, and ET_DYN for a position-independent one
+_PE_EXECUTABLE, _PE_DLL = 0x0002, 0x2000
+# More slices than any universal binary carries: past it, no table is read.
+_MOST_SLICES = 8
+
+
+def _host() -> tuple[str, str]:
+    """This process's platform and machine, as the loader will see them."""
+    return sys.platform, platform.machine()
 
 
 def _native(path: str) -> bool:
-    """Whether `path` is a native executable the runtime can be, by its first
-    bytes, and no name the SDK would hand to `node`."""
+    """Whether `path` is the host's own executable (F595, F597): Mach-O of
+    the host's architecture on macOS, thin or that slice of a universal
+    binary; ELF of the host machine on Linux; PE with a valid header at
+    `e_lfanew` on Windows -- an executable each time, never a library -- and
+    no name a host hands to an interpreter. Any other host refuses."""
     if path.lower().endswith(_SCRIPT_SUFFIXES):
         return False
+    system, machine = _host()
     with open(path, "rb") as read:
-        head = read.read(4)
-    return head.startswith(_NATIVE_MAGIC)
+        if system == "darwin":
+            return _mach_o(read, _MACH_O_CPU.get(machine))
+        if system.startswith("linux"):
+            return _elf(read, _ELF_MACHINE.get(machine.lower()))
+        if system == "win32":
+            return _pe(read, _PE_MACHINE.get(machine.lower()))
+    return False
+
+
+def _at(read: BinaryIO, offset: int, size: int) -> bytes:
+    read.seek(offset)
+    return read.read(size)
+
+
+def _mach_o(read: BinaryIO, cpu: int | None) -> bool:
+    """A Mach-O executable for `cpu`: thin, or the slice for `cpu` of a
+    universal binary, which must itself be one."""
+    head = _at(read, 0, 8)
+    if head[:4] != _FAT_MAGIC:
+        return _thin(read, 0, cpu)
+    slices = int.from_bytes(head[4:8], "big")
+    if slices > _MOST_SLICES:
+        return False
+    for index in range(slices):
+        arch = _at(read, 8 + 20 * index, 20)
+        if len(arch) == 20 and int.from_bytes(arch[:4], "big") == cpu:
+            return _thin(read, int.from_bytes(arch[8:12], "big"), cpu)
+    return False
+
+
+def _thin(read: BinaryIO, offset: int, cpu: int | None) -> bool:
+    header = _at(read, offset, 16)
+    return (
+        len(header) == 16
+        and header[:4] == _MH_MAGIC_64
+        and int.from_bytes(header[4:8], "little") == cpu
+        and int.from_bytes(header[12:16], "little") == _MH_EXECUTE
+    )
+
+
+def _elf(read: BinaryIO, machine: int | None) -> bool:
+    """A 64-bit little-endian ELF executable for `machine`."""
+    header = _at(read, 0, 20)
+    return (
+        len(header) == 20
+        and header[:4] == b"\x7fELF"
+        and header[4] == 2
+        and header[5] == 1
+        and int.from_bytes(header[16:18], "little") in _ELF_EXECUTABLE
+        and int.from_bytes(header[18:20], "little") == machine
+    )
+
+
+def _pe(read: BinaryIO, machine: int | None) -> bool:
+    """A PE executable image for `machine`: the DOS stub's `e_lfanew` names a
+    PE signature and COFF header that is no DLL."""
+    stub = _at(read, 0, 64)
+    if len(stub) < 64 or stub[:2] != b"MZ":
+        return False
+    coff = _at(read, int.from_bytes(stub[60:64], "little"), 24)
+    if len(coff) < 24 or coff[:4] != b"PE\0\0":
+        return False
+    traits = int.from_bytes(coff[22:24], "little")
+    return (
+        int.from_bytes(coff[4:6], "little") == machine
+        and bool(traits & _PE_EXECUTABLE)
+        and not traits & _PE_DLL
+    )
 
 
 @asynccontextmanager

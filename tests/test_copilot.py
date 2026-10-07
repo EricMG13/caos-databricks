@@ -17,8 +17,10 @@ import io
 import logging
 import math
 import os
+import platform
 import re
 import shutil
+import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, tzinfo
@@ -3374,8 +3376,67 @@ def test_the_sdk_logger_reaches_no_handler(
 # -- The SDK transport (Task 3; R3, R7, R2.7) ---------------------------------
 
 
-# The first bytes of a 64-bit Mach-O executable: the real 1.0.90 runtime's.
-MACH_O = b"\xcf\xfa\xed\xfe"
+# Executable headers as each host's loader reads them (F597).
+ARM64, X86_64 = 0x0100000C, 0x01000007  # Mach-O CPU types
+MH_EXECUTE, MH_DYLIB = 2, 6
+
+
+def mach_o(cpu: int = ARM64, filetype: int = MH_EXECUTE, magic: bytes = b"") -> bytes:
+    """A thin 64-bit Mach-O header, little-endian, as the 1.0.90 runtime's."""
+    return (
+        (magic or b"\xcf\xfa\xed\xfe")
+        + cpu.to_bytes(4, "little")
+        + bytes(4)
+        + filetype.to_bytes(4, "little")
+        + bytes(16)
+    )
+
+
+def fat(*slices: tuple[int, bytes]) -> bytes:
+    """A universal binary: its big-endian arch table, then each slice."""
+    offset = 8 + 20 * len(slices)
+    table, body = b"", b""
+    for cpu, image in slices:
+        table += (
+            cpu.to_bytes(4, "big")
+            + bytes(4)
+            + (offset + len(body)).to_bytes(4, "big")
+            + len(image).to_bytes(4, "big")
+            + bytes(4)
+        )
+        body += image
+    return b"\xca\xfe\xba\xbe" + len(slices).to_bytes(4, "big") + table + body
+
+
+def elf(machine: int = 62, kind: int = 2, width: int = 2, order: int = 1) -> bytes:
+    """An ELF header: class, byte order, type and machine (62 x86-64, 183
+    AArch64)."""
+    return (
+        b"\x7fELF"
+        + bytes([width, order, 1])
+        + bytes(9)
+        + kind.to_bytes(2, "little")
+        + machine.to_bytes(2, "little")
+        + bytes(44)
+    )
+
+
+def pe(machine: int = 0x8664, traits: int = 0x0022, at: int = 0x80) -> bytes:
+    """A DOS stub whose `e_lfanew` points at a PE signature and COFF header."""
+    stub = b"MZ" + bytes(58) + at.to_bytes(4, "little")
+    return (
+        stub
+        + bytes(at - len(stub))
+        + b"PE\0\0"
+        + machine.to_bytes(2, "little")
+        + bytes(16)
+        + traits.to_bytes(2, "little")
+    )
+
+
+# The fixture's host and its runtime: an arm64 Mac, as the owner's.
+MAC_ARM = ("darwin", "arm64")
+MACH_O = mach_o()
 
 
 def provisioned(root: Path) -> str:
@@ -3522,6 +3583,7 @@ def runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[FakeRuntime
         entry: ClassVar[str] = provisioned(tmp_path / "runtime")
 
     monkeypatch.setattr("copilot.CopilotClient", Runtime)
+    monkeypatch.setattr(copilot_module, "_host", lambda: MAC_ARM)
     # A short grace after an error, so a test of one never waits 2 s.
     monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.2)
     # Never the SDK's own resolution: only the pinned runtime runs (F591).
@@ -3843,32 +3905,103 @@ def test_an_entry_that_is_no_native_executable_is_refused_with_its_reason(
     )
 
 
-@pytest.mark.parametrize(
-    "magic",
-    [
-        b"\x7fELF",
-        b"\xcf\xfa\xed\xfe",
-        b"\xce\xfa\xed\xfe",
-        b"\xfe\xed\xfa\xcf",
-        b"\xfe\xed\xfa\xce",
-        b"\xca\xfe\xba\xbe",
-        b"MZ\x90\x00",
-    ],
-    ids=["elf", "mach-o-64", "mach-o-32", "mach-o-64-be", "mach-o-32-be", "fat", "pe"],
-)
-def test_a_native_executable_entry_is_started(
+MZ_SCRIPT = b"MZ\n/usr/bin/touch /tmp/caos-evil\n"
+# (host, entry name, entry bytes, whether it is the host's own executable).
+FORMATS = {
+    "mac-arm-thin": (MAC_ARM, "copilot", mach_o(ARM64), True),
+    "mac-x86-thin": (("darwin", "x86_64"), "copilot", mach_o(X86_64), True),
+    "mac-arm-other-arch": (MAC_ARM, "copilot", mach_o(X86_64), False),
+    "mac-arm-dylib": (MAC_ARM, "copilot", mach_o(ARM64, MH_DYLIB), False),
+    "mac-32-bit": (MAC_ARM, "copilot", mach_o(magic=b"\xce\xfa\xed\xfe"), False),
+    "mac-big-endian": (MAC_ARM, "copilot", mach_o(magic=b"\xfe\xed\xfa\xcf"), False),
+    "mac-fat-with-host": (
+        MAC_ARM,
+        "copilot",
+        fat((X86_64, mach_o(X86_64)), (ARM64, mach_o(ARM64))),
+        True,
+    ),
+    "mac-fat-without-host": (MAC_ARM, "copilot", fat((X86_64, mach_o(X86_64))), False),
+    "mac-fat-host-dylib": (
+        MAC_ARM,
+        "copilot",
+        fat((ARM64, mach_o(ARM64, MH_DYLIB))),
+        False,
+    ),
+    "mac-fat-lying-slice": (MAC_ARM, "copilot", fat((ARM64, mach_o(X86_64))), False),
+    "mac-cafebabe-script": (MAC_ARM, "copilot", b"\xca\xfe\xba\xbe\ntouch x\n", False),
+    "mac-mz-script": (MAC_ARM, "copilot", MZ_SCRIPT, False),
+    "mac-elf": (MAC_ARM, "copilot", elf(), False),
+    "mac-unknown-arch": (("darwin", "ppc"), "copilot", mach_o(ARM64), False),
+    "linux-x86-exec": (("linux", "x86_64"), "copilot", elf(62, 2), True),
+    "linux-x86-pie": (("linux", "x86_64"), "copilot", elf(62, 3), True),
+    "linux-arm": (("linux", "aarch64"), "copilot", elf(183), True),
+    "linux-other-arch": (("linux", "x86_64"), "copilot", elf(183), False),
+    "linux-32-bit": (("linux", "x86_64"), "copilot", elf(width=1), False),
+    "linux-big-endian": (("linux", "x86_64"), "copilot", elf(order=2), False),
+    "linux-relocatable": (("linux", "x86_64"), "copilot", elf(kind=1), False),
+    "linux-elf-script": (("linux", "x86_64"), "copilot", b"\x7fELF\ntouch x\n", False),
+    "linux-mz-script": (("linux", "x86_64"), "copilot", MZ_SCRIPT, False),
+    "linux-mach-o": (("linux", "x86_64"), "copilot", mach_o(), False),
+    "win-x64-exe": (("win32", "AMD64"), "copilot.exe", pe(), True),
+    "win-arm-exe": (("win32", "ARM64"), "copilot.exe", pe(0xAA64), True),
+    "win-other-arch": (("win32", "AMD64"), "copilot.exe", pe(0xAA64), False),
+    "win-dll": (("win32", "AMD64"), "copilot.exe", pe(traits=0x2022), False),
+    "win-not-executable": (("win32", "AMD64"), "copilot.exe", pe(traits=0x0020), False),
+    "win-mz-script": (("win32", "AMD64"), "copilot.exe", MZ_SCRIPT, False),
+    "win-header-past-end": (
+        ("win32", "AMD64"),
+        "copilot.exe",
+        b"MZ" + bytes(58) + (4096).to_bytes(4, "little"),
+        False,
+    ),
+    "win-bat": (("win32", "AMD64"), "copilot.bat", pe(), False),
+    "win-cmd": (("win32", "AMD64"), "copilot.CMD", pe(), False),
+    "win-ps1": (("win32", "AMD64"), "copilot.ps1", pe(), False),
+    "mac-bat": (MAC_ARM, "copilot.bat", mach_o(), False),
+    "linux-ps1": (("linux", "x86_64"), "copilot.ps1", elf(), False),
+    "other-host": (("freebsd14", "amd64"), "copilot", elf(62), False),
+    "empty": (MAC_ARM, "copilot", b"", False),
+}
+
+
+@pytest.mark.parametrize("case", list(FORMATS), ids=list(FORMATS))
+def test_only_the_hosts_own_executable_format_is_native(
+    case: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """F597: Mach-O (thin, or the host's slice of a fat binary) of the host's
+    architecture on macOS; ELF of the host machine on Linux; PE with a valid
+    header at `e_lfanew` on Windows; executables, never libraries; and no
+    `.bat`, `.cmd`, `.ps1` or `.js`-family name anywhere."""
+    host, name, content, native = FORMATS[case]
+    monkeypatch.setattr(copilot_module, "_host", lambda: host)
+    entry = tmp_path / name
+    entry.write_bytes(content)
+    assert copilot_module._native(str(entry)) is native
+
+
+def test_an_mz_prefixed_script_on_a_mac_is_refused_with_its_reason(
     runtime: type[FakeRuntime],
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
-    magic: bytes,
 ) -> None:
-    root = tmp_path / "native"
-    root.mkdir()
-    (root / "copilot-runtime").write_bytes(magic + b" runtime")
-    monkeypatch.setenv(RUNTIME_ENV, str(root / "copilot-runtime"))
-    monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(root))
-    ask_copilot(PROMPT, TARGET, 5.0)
-    assert runtime.made[-1].started_digest == expected_digest(root)
+    """The re-check's native probe (`r3_native_check.py`): an MZ, ELF or
+    CAFEBABE prefix on a shell script passed F595's first-bytes check."""
+    for prefix in (b"MZ", b"\x7fELF", b"\xca\xfe\xba\xbe"):
+        root = tmp_path / prefix.hex()
+        root.mkdir()
+        (root / "copilot-runtime").write_bytes(prefix + b"\ntouch EVIL\n")
+        monkeypatch.setenv(RUNTIME_ENV, str(root / "copilot-runtime"))
+        monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(root))
+        capsys.readouterr()
+        _refused_before_any_client(runtime)
+        assert capsys.readouterr().err == (
+            "PROVIDER_NOT_CONFIGURED reason=runtime_not_native\n"
+        )
+
+
+def test_the_host_is_this_process_platform_and_machine() -> None:
+    assert copilot_module._host() == (sys.platform, platform.machine())
 
 
 def test_the_runtime_started_is_a_verified_copy_in_the_calls_own_directory(
