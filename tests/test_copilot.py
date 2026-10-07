@@ -3893,6 +3893,19 @@ def test_property_a_settled_charge_is_within_its_reservation_or_named_exactly(
 
 
 @EXAMPLES
+@given(AMOUNTS, AMOUNTS)
+def test_property_a_token_priced_reservation_bounds_no_charge(
+    amount: Decimal, charge: Decimal
+) -> None:
+    """With no credit price the bill is the gateway's tokens, whose overrun
+    the run's capacity absorbs (Phase 2's budget exit): never refused here."""
+    said = io.StringIO()
+    with contextlib.redirect_stderr(said):
+        assert canonical._settled_within(Reservation(amount, PRICE), charge)
+    assert said.getvalue() == ""
+
+
+@EXAMPLES
 @given(AMOUNTS, CREDITS)
 def test_property_the_session_cap_covers_its_reservation_tightly(
     amount: Decimal, credit: Decimal

@@ -27,6 +27,7 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
 from fractions import Fraction
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import psycopg
@@ -177,6 +178,9 @@ from caos.store.runs import attempt_ordinal
 from caos.store.source_sets import SourceSet, load_source_set
 from caos.store.work import require_resendable
 
+if TYPE_CHECKING:
+    from caos.pricing import CreditPrice
+
 # The bill of an answer already paid for is written this many times at most,
 # a pause apart, before the store fault is let through (ST-12): a failover
 # between the call and its one write would otherwise lose the only record that
@@ -269,30 +273,33 @@ def _within_reservation(
 
 
 def _settled_within(taken: Reservation | None, charge: Decimal | None) -> bool:
-    """Whether a known charge is within the reservation its call ran under
-    (R2.6). The pinned per-token price no longer bounds an AI-unit bill, so
-    a charge above it is possible: it is named on stderr by its figures alone
-    -- `BUDGET_CHARGE_OVER_RESERVATION reserved=<d> charged=<d> nano_aiu=<n>`
-    -- and the caller refuses the answer after the ledger holds all of it. An
-    unknown charge or a missing reservation is decided elsewhere."""
-    if taken is None or charge is None or charge <= taken.amount:
+    """Whether a known AI-unit charge is within the reservation its call ran
+    under (R2.6). A reservation that names a credit price settles its call in
+    AI units, which the pinned per-token price no longer bounds, so a charge
+    above it is possible: it is named on stderr by its figures alone --
+    `BUDGET_CHARGE_OVER_RESERVATION reserved=<d> charged=<d> nano_aiu=<n>` --
+    and the caller refuses the answer after the ledger holds all of it. A
+    token-priced charge keeps the budget exit it always had: its overrun is
+    accepted and consumes the run's capacity. An unknown charge or a missing
+    reservation is decided elsewhere."""
+    if taken is None or taken.credit is None or charge is None:
+        return True
+    if charge <= taken.amount:
         return True
     print(
         f"{RefusalCode.BUDGET_CHARGE_OVER_RESERVATION.value}"
         f" reserved={taken.amount} charged={charge}"
-        f" nano_aiu={_nano_aiu(taken, charge)}",
+        f" nano_aiu={_nano_aiu(taken.credit, charge)}",
         file=sys.stderr,
     )
     return False
 
 
-def _nano_aiu(taken: Reservation, charge: Decimal) -> str:
-    """The AI units a charge settled at its reservation's credit price, as a
-    whole count, exactly; `-` when the reservation names no credit price or
-    the charge is no whole count of them."""
-    if taken.credit is None or not taken.credit.per_credit:
-        return "-"
-    units = Fraction(charge) * NANO_PER_CREDIT / Fraction(taken.credit.per_credit)
+def _nano_aiu(credit: CreditPrice, charge: Decimal) -> str:
+    """The AI units a charge settled at its reservation's credit price (0048
+    holds it above zero), as a whole count, exactly; `-` when the charge is no
+    whole count of them."""
+    units = Fraction(charge) * NANO_PER_CREDIT / Fraction(credit.per_credit)
     return str(units.numerator) if units.denominator == 1 else "-"
 
 

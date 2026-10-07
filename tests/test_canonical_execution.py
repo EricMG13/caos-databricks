@@ -551,85 +551,92 @@ def _ledger(harness: _Harness) -> list[tuple[object, ...]]:
     return [tuple(row) for row in rows]
 
 
-def test_a_charge_above_the_reservation_is_recorded_in_full_and_refused_typed(
-    harness: _Harness, capsys: pytest.CaptureFixture[str]
-) -> None:
-    over = Decimal("0.75")
-    completions = CanonicalCompletions(harness.source_id, charge=over)
-    assert _refused(harness, "CP-0", completions) is (
-        RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+def _copilot_attempt(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch, charge: Decimal
+) -> tuple[UUID, str, ModuleProvider]:
+    """A CP-0 attempt reserved at `COPILOT_PRICE`'s worst case under a pinned
+    credit price, and the provider whose call is charged `charge`."""
+    completions = CanonicalCompletions(
+        harness.source_id, model=COPILOT, price=COPILOT_PRICE, charge=charge
     )
+    node = _node(harness, "CP-0")
+    attempt = start_attempt(harness.conn, harness.run_id, node.route_node_id)
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
+    budget.reserve(
+        harness.conn, attempt, worst_case(COPILOT_PRICE), price=COPILOT_PRICE
+    )
+    provider = ModuleProvider(
+        harness.conn,
+        harness.bundle,
+        harness.blobs,
+        completions,
+        harness.route,
+        harness.run_id,
+    )
+    return attempt, node.route_node_id, provider
+
+
+# 502,328,000 nano-AIU at $0.01 a credit: above `COPILOT_PRICE`'s worst case.
+OVER = Decimal("0.00502328")
+
+
+def test_a_charge_above_the_reservation_is_recorded_in_full_and_refused_typed(
+    harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reserved = worst_case(COPILOT_PRICE)
+    assert OVER > reserved
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, OVER)
+    with pytest.raises(Refusal) as refused:
+        provider.execute(node, "CP-0", attempt_id=attempt)
+    assert refused.value.code is RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    assert refused.value.__context__ is None and refused.value.__cause__ is None
     # The money was spent: the ledger holds all of it, never the reservation.
-    assert _ledger(harness) == [(over, True, None)]
+    assert _ledger(harness) == [(OVER, True, None)]
     _out, err = capsys.readouterr()
     assert err.splitlines()[-1] == (
-        "BUDGET_CHARGE_OVER_RESERVATION reserved=0.50 charged=0.75 nano_aiu=-"
+        f"BUDGET_CHARGE_OVER_RESERVATION reserved={reserved} charged={OVER}"
+        " nano_aiu=502328000"
     )
     accepted = harness.conn.execute("SELECT count(*) FROM artifacts").fetchone()
     harness.conn.rollback()
     assert accepted == (0,)
 
 
-def test_a_charge_equal_to_the_reservation_is_accepted(harness: _Harness) -> None:
-    completions = CanonicalCompletions(harness.source_id, charge=ESTIMATE)
+def test_a_copilot_charge_equal_to_its_reservation_is_accepted(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reserved = worst_case(COPILOT_PRICE)
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, reserved)
+    result = provider.execute(node, "CP-0", attempt_id=attempt)
+    assert result.charge == reserved
+
+
+def test_a_gateway_charge_above_its_reservation_is_accepted_and_spends_capacity(
+    harness: _Harness, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A token-priced call keeps the Phase 2 budget exit: its overrun is
+    accepted and consumes the run's capacity (`tests/test_pricing.py`). Only
+    an AI-unit bill, which the pinned per-token price no longer bounds, is
+    refused above its reservation (R2.6)."""
+    completions = CanonicalCompletions(harness.source_id, charge=Decimal("0.75"))
     _attempt, result = _run(harness, "CP-0", completions)
-    assert result.charge == ESTIMATE
+    assert result.charge == Decimal("0.75")
+    assert "BUDGET_CHARGE_OVER_RESERVATION" not in capsys.readouterr().err
 
 
-def test_a_copilot_charge_above_its_reservation_names_its_ai_units(
+def test_a_billed_answer_above_its_reservation_is_never_accepted_on_replay(
     harness: _Harness,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    reserved = worst_case(COPILOT_PRICE)
-    # 502,328,000 nano-AIU at $0.01 a credit.
-    charged = Decimal("0.00502328")
-    assert charged > reserved
-    completions = CanonicalCompletions(
-        harness.source_id, model=COPILOT, price=COPILOT_PRICE, charge=charged
-    )
-    node = _node(harness, "CP-0")
-    attempt = start_attempt(harness.conn, harness.run_id, node.route_node_id)
-    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
-    budget.reserve(harness.conn, attempt, reserved, price=COPILOT_PRICE)
-    provider = ModuleProvider(
-        harness.conn,
-        harness.bundle,
-        harness.blobs,
-        completions,
-        harness.route,
-        harness.run_id,
-    )
-    with pytest.raises(Refusal) as refused:
-        provider.execute(node.route_node_id, "CP-0", attempt_id=attempt)
-    assert refused.value.code is RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
-    assert _ledger(harness) == [(charged, True, None)]
-    _out, err = capsys.readouterr()
-    assert err.splitlines()[-1] == (
-        f"BUDGET_CHARGE_OVER_RESERVATION reserved={reserved} charged={charged}"
-        " nano_aiu=502328000"
-    )
-
-
-def test_a_billed_answer_above_its_reservation_is_never_accepted_on_replay(
-    harness: _Harness, capsys: pytest.CaptureFixture[str]
-) -> None:
     """A crash after the bill and before the refusal was explained leaves the
     answer owed a verdict: the replay refuses it as the live call did, never
     accepts it (R2.6)."""
-    completions = CanonicalCompletions(harness.source_id, charge=Decimal("0.75"))
-    attempt = _reserved(harness, "CP-0")
-    node = _node(harness, "CP-0")
-    provider = ModuleProvider(
-        harness.conn,
-        harness.bundle,
-        harness.blobs,
-        completions,
-        harness.route,
-        harness.run_id,
-    )
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, OVER)
     with pytest.raises(Refusal):
-        provider.execute(node.route_node_id, "CP-0", attempt_id=attempt)
+        provider.execute(node, "CP-0", attempt_id=attempt)
     capsys.readouterr()
     replayed = replay_billed(
         harness.conn,
@@ -637,7 +644,7 @@ def test_a_billed_answer_above_its_reservation_is_never_accepted_on_replay(
         harness.bundle,
         run_id=harness.run_id,
         route=harness.route,
-        route_node_ids=(node.route_node_id,),
+        route_node_ids=(node,),
     )
     harness.conn.rollback()
     assert replayed == Replayed(
