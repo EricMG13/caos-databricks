@@ -14,3 +14,10 @@ vendor/deploy-v/** -text
 icm/** -text
 tests/parity/golden/** -text
 tests/fixtures/** -text
+
+# Code whose own bytes are pinned: `scripts/cash_flow.py` in HOST_INTEGRITY is
+# this file (caos/methodology/host.py), and the renderer and verifier are
+# hashed against `RENDERER_SHA256` and the archived copy (D79).
+caos/calculators/cash_flow.py -text
+caos/deliverable/render.py -text
+caos/deliverable/verify_package.py -text

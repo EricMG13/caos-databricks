@@ -29,7 +29,7 @@ Status: the SDK transport (`copilot:` models) is built and tested against fakes.
 ## 2. Install the worker (once)
 
 1. Install Git, `uv` and the Databricks CLI from IT's approved sources.
-2. `git clone <the enterprise repository>`, then `uv sync --locked --no-dev` in the clone; `uv` brings Python 3.13. The SDK package `github-copilot-sdk` is locked with the repository (D77, dependency addendum). On a Windows clone keep Git's `core.autocrlf` as it is: `.gitattributes` marks `vendor/deploy-v/**` and `icm/**` as `-text` (D79) so the bundle's bytes stay verified.
+2. `git clone <the enterprise repository>`, then `uv sync --locked --no-dev` in the clone; `uv` brings Python 3.13. The SDK package `github-copilot-sdk` is locked with the repository (D77, dependency addendum). On a Windows clone keep Git's `core.autocrlf` as it is: `.gitattributes` marks `vendor/deploy-v/**`, `icm/**`, the goldens and fixtures, and the three source files whose own bytes are pinned (`caos/calculators/cash_flow.py`, `caos/deliverable/render.py`, `caos/deliverable/verify_package.py`) as `-text` (D79), so the verified bytes survive the checkout.
 3. `databricks auth login --profile caos --host <workspace URL>` (section 6).
 
 ## 3. Provision the Copilot runtime (once)
@@ -147,7 +147,7 @@ At start the worker prints on stderr one runtime line, `copilot runtime=<version
 
 Other typed codes arrive on a run, not at start: a call over its reservation parks the run (below); a spent failure bills its charge and is never re-sent.
 
-**Stop.** Ctrl+C (SIGINT; on Windows also Ctrl+Break) stops it after the module in flight. Closing the window kills it; the run's lease then expires after 900 s (D117) and the next worker resumes it with no attempt run twice.
+**Stop.** Ctrl+C (SIGINT; on Windows also Ctrl+Break) stops it after the module in flight. Closing the window is the same orderly stop: the worker has up to 4 s to release its lease before Windows ends it. A lease not released in time expires after 900 s (D117) and the next worker resumes the run with no attempt run twice.
 
 ### A run parked for over-reservation
 

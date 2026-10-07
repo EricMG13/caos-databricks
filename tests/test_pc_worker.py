@@ -146,7 +146,16 @@ def test_no_cap_is_said_once_and_the_deadline_still_binds(
 
 
 @pytest.mark.parametrize(
-    "path", ["vendor/deploy-v/CANON_SHARED.md", "icm/HOST_INTEGRITY_v1.json"]
+    "path",
+    [
+        "vendor/deploy-v/CANON_SHARED.md",
+        "icm/HOST_INTEGRITY_v1.json",
+        # Hashed as bytes: HOST_INTEGRITY's `scripts/cash_flow.py`, and the
+        # renderer and verifier a filed package archives and re-hashes.
+        "caos/calculators/cash_flow.py",
+        "caos/deliverable/render.py",
+        "caos/deliverable/verify_package.py",
+    ],
 )
 def test_the_byte_verified_trees_are_never_converted(path: str) -> None:
     attributes = subprocess.run(
