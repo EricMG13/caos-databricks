@@ -125,11 +125,11 @@ $env:CAOS_MODEL_ENDPOINT = "copilot:<model>[@<effort>]"
 $env:CAOS_MODEL_PRICE = "copilot:<model>[@<effort>],<in>,<out>,<YYYY-MM-DD>"
 $env:CAOS_MODEL_CHOICES = "<more priced entries joined by ;>"   # optional
 $env:CAOS_RUN_CEILING = "<above one worst-case call>"
-uv run --no-sync python scripts/gateway_smoke.py     # one paid call of a few tokens
+uv run --no-sync python scripts/gateway_smoke.py     # two paid calls of a few tokens each
 uv run --no-sync python -m caos.graph.worker
 ```
 
-The smoke must print `model=ChatCopilot` and `json_mode=accepted` with the plain call's AI units and charge. Run it once per approved model you rely on.
+The smoke must print `model=ChatCopilot` and `json_mode=accepted` with the plain call's AI units and charge. It makes two paid calls, each a fresh session: the plain call, then the same model in JSON mode, the seam every module call uses (F27). Neither is a ledger reservation and nothing is recorded in Lakebase: the smoke only sets the in-process amount and credit price a session needs, so each session's cap is the SDK's 30-credit floor ($0.30 at $0.01 a credit, and the cap is soft, R2.7). What bounds its spend is the seat's GitHub budget, not `CAOS_RUN_CEILING`. Run it once per approved model you rely on.
 
 At start the worker prints on stderr one runtime line, `copilot runtime=<version> host=<host> login=<login>`, then one line per approved model: `copilot <name> offered=y|n policy=<state> usable=y|n efforts=<list> max_prompt_tokens=<n> max_context_window_tokens=<n> context=<n> context_check=ok|low|unlisted price_check=ok|low|unpriced price_floor=<in>,<out> credit_price=<usd>@<date>`. A field it cannot state safely prints `-`. It exits 2 with `PROVIDER_NOT_CONFIGURED` before claiming any run when readiness fails; the stderr line before it says why:
 
