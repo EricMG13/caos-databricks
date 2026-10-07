@@ -272,3 +272,26 @@ def check_resend() -> None:
     immediately before it sends a call again."""
     for check in _RESEND_CHECKS.get():
         check()
+
+
+# The amount the attempt making this call reserved (R2.7), for a transport
+# that sends its own spend cap: a guard after the fact, never the bound -- the
+# reservation and the settled check are. Unset, no cap is sent. Scoped like
+# `_RESEND_CHECKS`, and read on the call's own thread through the context
+# `models._invoked` copies.
+reserved_amount: ContextVar[Decimal | None] = ContextVar(
+    "caos_reserved_amount", default=None
+)
+
+
+@contextmanager
+def reserving(amount: Decimal) -> Iterator[None]:
+    """Name `amount` as the reservation every call made inside this block runs
+    under; the previous one is restored when the block ends, however it ends.
+    An amount that is no spend is refused before the block is entered."""
+    validate_spend(amount)
+    named = reserved_amount.set(amount)
+    try:
+        yield
+    finally:
+        reserved_amount.reset(named)

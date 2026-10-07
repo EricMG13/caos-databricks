@@ -82,6 +82,40 @@ def test_priced_request_refuses_a_malformed_or_oversized_byte_count(
     assert caught.value.code is code
 
 
+def test_a_request_is_priced_at_the_output_cap_it_is_given() -> None:
+    """R2.1, R2.5: a transport whose model may return more than
+    `MAX_COMPLETION_TOKENS` reserves its own cap; the default is unchanged."""
+    assert priced_request(PRICE, 1000, output_tokens=128_000) == (
+        PRICE.input_per_token * 1000 + PRICE.output_per_token * 128_000
+    )
+    assert priced_request(PRICE, 1000, output_tokens=1) == (
+        PRICE.input_per_token * 1000 + PRICE.output_per_token
+    )
+    assert priced_request(PRICE, 1000) == priced_request(
+        PRICE, 1000, output_tokens=MAX_COMPLETION_TOKENS
+    )
+    # An empty request still reserves its whole output.
+    assert priced_request(PRICE, 0) == PRICE.output_per_token * MAX_COMPLETION_TOKENS
+
+
+@pytest.mark.parametrize(
+    "output_tokens,code",
+    [
+        (0, RefusalCode.MONEY_INVALID),
+        (-1, RefusalCode.MONEY_INVALID),
+        (1.5, RefusalCode.MONEY_NOT_DECIMAL),
+        (True, RefusalCode.MONEY_NOT_DECIMAL),
+    ],
+)
+def test_priced_request_refuses_an_output_cap_that_is_no_count(
+    output_tokens: object, code: RefusalCode
+) -> None:
+    """No output cap reserves nothing for an answer the model may still give."""
+    with pytest.raises(Refusal) as caught:
+        priced_request(PRICE, 1000, output_tokens=cast(int, output_tokens))
+    assert caught.value.code is code
+
+
 def test_price_from_environment_refuses_a_price_for_another_model() -> None:
     """N68: `caos.models.from_environment` names the endpoint twice -- once as
     the model `price_from_environment` must match, once again to build the
