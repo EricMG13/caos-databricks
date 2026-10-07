@@ -171,3 +171,11 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
   - whether a `session.error` is always followed by a `session.idle`.
 
   Today a checkpoint is settled by either one after it (F560). Until the spike measures these, each rule stands as written, and a build may not relax one without that evidence.
+- N181 (2026-10-07; D77, addendum 2; F567–F570) — The firm-seat spike (N177, N180) must also record the evidence the four allow-lists rest on:
+  - every event type a plain failed call emits — a 5xx and a 429 at least. `_QUIET` is extended only from that list; any other type makes the call spend, never a drop, so D110 never re-attempts it;
+  - every event type that follows the last checkpoint on a plain smoke. `_SETTLING` is extended only from that list; any other leaves the charge unknown;
+  - whether a plain smoke is exactly one turn;
+  - whether `user.message.agentMode` is `interactive`;
+  - whether `toolDefinitionsTokens` is 0 with no tools.
+
+  Until then a type off a list refuses or voids, and costs a re-run, never a second payment.

@@ -1265,11 +1265,10 @@ def test_a_status_that_is_not_a_number_is_no_status() -> None:
     assert raised.value.status_code is None
 
 
-def test_a_settled_result_that_is_not_a_name_declares_nothing() -> None:
+def test_a_settled_result_that_is_not_a_name_is_spend_never_a_drop() -> None:
+    """F567: a settled result is quiet only when it names a failure."""
     odd = _malformed(final_result(result="http_5xx"), result=["http_5xx"])
-    with pytest.raises(CopilotStatusError) as raised:
-        invoked([*UNSPENT, error(None), odd])
-    assert (raised.value.status_code, raised.value.body) == (None, None)
+    assert isinstance(invoked([*UNSPENT, error(None), odd]), AIMessage)
 
 
 def test_every_usages_tokens_are_counted_and_an_absent_cache_count_is_zero() -> None:
@@ -1498,7 +1497,7 @@ def test_an_unreadable_shutdown_figure_is_spend(shutdown_event: Event) -> None:
 
 
 def test_a_shutdown_stating_zero_is_no_spend() -> None:
-    zero = shutdown(modelMetrics={PIN: metric(0)}, totalNanoAiu=0)
+    zero = shutdown(modelMetrics={}, totalNanoAiu=0)
     with pytest.raises(CopilotStatusError):
         invoked([*UNSPENT, failure("api", 500), error(500), idle(), zero])
 
@@ -1778,35 +1777,29 @@ def test_property_a_checkpoint_bills_its_value_only_as_a_whole_count(
         assert copilot_module._spent(seen)
 
 
-# One fake of every type that is, or starts, model work.
-WORK_STARTED: dict[str, Event] = {
-    "user.message": wire("user.message", content=PROMPT),
-    "assistant.turn_start": turn_start(),
-    "assistant.turn_retry": turn_retry(),
-    "assistant.reasoning": reasoning(),
-    "assistant.message": answer(),
-    "assistant.usage": usage(),
-    "model.call_start": call_start(),
-    "model.call_final_result": final_result(),
-    "model.call_failure": failure("api", 503),
-    "model.call_finished": call_finished(),
-}
+ALL_TYPES = sorted(kind.value for kind in SessionEventType)
+UNSETTLING = sorted(set(ALL_TYPES) - copilot_module._SETTLING)
 
 
-def test_every_kind_of_work_has_a_fake() -> None:
-    assert set(WORK_STARTED) == copilot_module._BILLED
+def raw(kind: str) -> Event:
+    """Raw wire, not a fake: every type has its own required fields, and these
+    properties are about the type alone, over every type the SDK knows."""
+    return {"type": kind, "data": {}}
 
 
 @EXAMPLES
-@given(st.sampled_from(sorted(WORK_STARTED)), st.booleans())
-def test_property_work_after_the_last_checkpoint_leaves_the_charge_unknown(
+@given(st.sampled_from(UNSETTLING), st.booleans())
+def test_property_any_unsettling_type_after_the_last_checkpoint_voids_the_bill(
     kind: str, after_idle: bool
 ) -> None:
-    work = WORK_STARTED[kind]
-    seen = sdk_call(idle=[idle(), work] if after_idle else [work, idle()])
+    late = raw(kind)
+    seen = sdk_call(idle=[idle(), late] if after_idle else [late, idle()])
     message = reply_message(seen, TARGET)
     assert "nano_aiu" not in message.response_metadata
-    assert "finish_reason" not in message.response_metadata
+    # A late checkpoint becomes the last one (unreadable here, so no bill);
+    # the end of the turn admits a checkpoint after it (R1.7).
+    if kind != "session.usage_checkpoint":
+        assert "finish_reason" not in message.response_metadata
 
 
 @EXAMPLES
@@ -1842,16 +1835,19 @@ OUTSIDE = sorted(
 
 @EXAMPLES
 @given(st.sampled_from(OUTSIDE), st.integers(min_value=0, max_value=len(SDK_HAPPY)))
-def test_property_any_event_type_off_the_allow_list_refuses_and_keeps_the_bill(
+def test_property_any_event_type_off_the_allow_list_refuses_its_finish(
     kind: str, at: int
 ) -> None:
     # Raw wire, not a fake: every type has its own required fields, and the
     # property is about the type alone.
-    outside: Event = {"type": kind, "data": {}}
-    seen = [*SDK_HAPPY[:at], outside, *SDK_HAPPY[at:]]
+    seen = [*SDK_HAPPY[:at], raw(kind), *SDK_HAPPY[at:]]
     message = reply_message(seen, TARGET)
     assert "finish_reason" not in message.response_metadata
-    assert message.response_metadata["nano_aiu"] == 251_164_000
+    settled_at = len(SDK_HAPPY) - 2  # the checkpoint, before the idle
+    if at <= settled_at:
+        assert message.response_metadata["nano_aiu"] == 251_164_000
+    else:
+        assert "nano_aiu" not in message.response_metadata
 
 
 POOL = [
@@ -1935,3 +1931,454 @@ def test_a_per_request_or_per_model_figure_that_is_no_count_is_an_unknown_charge
     )
     seen = sdk_call(idle=[idle(), odd])
     assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+NOT_QUIET = sorted(set(ALL_TYPES) - copilot_module._QUIET)
+
+
+@EXAMPLES
+@given(
+    st.sampled_from(NOT_QUIET),
+    st.integers(min_value=0, max_value=len(UNSPENT)),
+    st.sampled_from([[error(500)], [failure("api", 500), error(500), idle()]]),
+)
+def test_property_any_type_off_the_quiet_list_is_spend_never_a_drop(
+    kind: str, at: int, ending: list[Event]
+) -> None:
+    seen = [*UNSPENT[:at], raw(kind), *UNSPENT[at:], *ending]
+    assert isinstance(invoked(seen), AIMessage)
+    assert copilot_module._spent(seen)
+
+
+QUIET_FAKES = [
+    started(),
+    wire("user.message", content=PROMPT),
+    turn_start(),
+    turn_end(),
+    call_start(),
+    failure("api", 500),
+    failure("transport"),
+    final_result(result="http_5xx"),
+    checkpoint(0),
+    error(500),
+    idle(),
+    wire("session.info", infoType="x", message="m"),
+    wire("session.warning", warningType="x", message="m"),
+    shutdown(modelMetrics={}, totalNanoAiu=0),
+    shutdown(modelMetrics={}, totalNanoAiu=None),
+]
+
+
+def test_every_quiet_type_has_a_quiet_fake() -> None:
+    conditional = {
+        "model.call_final_result",
+        "session.usage_checkpoint",
+        "session.shutdown",
+    }
+    faked = {event["type"] for event in QUIET_FAKES}
+    assert copilot_module._QUIET | conditional <= faked | {
+        "session.managed_settings_resolved",
+        "session.managed_settings_enforced",
+    }
+
+
+@EXAMPLES
+@given(st.lists(st.sampled_from(QUIET_FAKES), max_size=12))
+def test_property_a_call_of_quiet_events_alone_spent_nothing(
+    events: list[Event],
+) -> None:
+    assert not copilot_module._spent(events)
+
+
+# -- Fix round 2: the re-audit's probes, as tests. ---------------------------
+
+
+def message_delta() -> Event:
+    return wire("assistant.message_delta", deltaContent="partial", messageId="m1")
+
+
+def reasoning_delta() -> Event:
+    return wire("assistant.reasoning_delta", deltaContent="think", reasoningId="r1")
+
+
+def fusion_completed(nano_aiu: int) -> Event:
+    return wire(
+        "session.fusion_completed",
+        cachedTokens=0,
+        commitId="c",
+        durationMs=1.0,
+        finalSourceModel=OTHER,
+        followUpModel=OTHER,
+        fusionId="f",
+        inputTokens=10,
+        outcome="success",
+        outputTokens=10,
+        pattern="single",
+        phaseCount=1,
+        requestCount=2,
+        syntheticModel="fusion-model",
+        totalNanoAiu=nano_aiu,
+        turnId="turn-1",
+    )
+
+
+def run_settled(nano_aiu: int) -> Event:
+    return wire(
+        "workflow.run_settled",
+        consumedNanoAiu=nano_aiu,
+        consumedSubagents=1,
+        elapsedMs=5,
+        runId="r",
+        status="completed",
+    )
+
+
+def compaction_complete() -> Event:
+    return wire(
+        "session.compaction_complete",
+        success=True,
+        compactionTokensUsed={
+            "inputTokens": 1000,
+            "outputTokens": 200,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "model": PIN,
+            "copilotUsage": {"totalNanoAiu": 400_000_000, "model": PIN},
+        },
+    )
+
+
+def subagent_completed() -> Event:
+    return wire(
+        "subagent.completed",
+        agentDisplayName="a",
+        agentName="a",
+        toolCallId="t",
+        model=OTHER,
+        totalTokens=5000,
+    )
+
+
+def agent_metrics(model: str, nano_aiu: int) -> dict[str, object]:
+    return {
+        "sub": {
+            "modelMetrics": {model: metric(nano_aiu)},
+            "totalApiDurationMs": 1,
+            "totalNanoAiu": nano_aiu,
+        }
+    }
+
+
+def switch_eligible_error() -> Event:
+    return wire(
+        "session.error",
+        errorType="provider",
+        message=SECRET,
+        statusCode=500,
+        eligibleForAutoSwitch=True,
+    )
+
+
+def switch_requested() -> Event:
+    return wire("auto_mode_switch.requested", requestId="s1", errorCode="x")
+
+
+def cache_break(**changed: object) -> Event:
+    return wire(
+        "prompt_cache_break",
+        contributingReasons=["model"],
+        frontierTokens=1,
+        primaryReason="model_change",
+        retentionRatio=0.0,
+        shortfallTokens=1,
+        survivedTokens=0,
+        **changed,
+    )
+
+
+def failure_with(**changed: object) -> Event:
+    data: dict[str, object] = {
+        "source": "top_level",
+        "failureKind": "api",
+        "statusCode": 503,
+        "model": PIN,
+    }
+    data.update(changed)
+    return wire("model.call_failure", **data)
+
+
+def recovered_from(failed: Event) -> list[Event]:
+    return [*RECOVERED[:3], failed, *RECOVERED[4:]]
+
+
+UNSEEN_SPEND: dict[str, Event] = {
+    "message-delta": message_delta(),
+    "reasoning-delta": reasoning_delta(),
+    "fusion-completed": fusion_completed(500_000_000),
+    "run-settled": run_settled(500_000_000),
+    "compaction-complete": compaction_complete(),
+    "subagent-completed": subagent_completed(),
+}
+
+
+@pytest.mark.parametrize("spend", list(UNSEEN_SPEND.values()), ids=list(UNSEEN_SPEND))
+def test_an_event_off_the_quiet_list_makes_a_failed_call_spend_never_a_drop(
+    spend: Event,
+) -> None:
+    seen = [*UNSPENT, spend, failure("api", 500), error(500), idle()]
+    assert isinstance(invoked(seen), AIMessage)
+    completion = provider(replying(*seen)).complete(PROMPT)
+    assert (completion.drop_kind, completion.charge) == (None, None)
+
+
+def test_a_shutdown_reporting_a_sub_agents_spend_is_never_a_drop() -> None:
+    sub = shutdown(
+        "error", modelMetrics={}, totalNanoAiu=0, agentMetrics=agent_metrics(PIN, 5)
+    )
+    seen = [*UNSPENT, failure("api", 500), error(500), idle(), sub]
+    assert isinstance(invoked(seen), AIMessage)
+
+
+LATE: dict[str, list[Event]] = {
+    "message-delta": [message_delta()],
+    "fusion-completed": [fusion_completed(900_000_000)],
+    "run-settled": [run_settled(900_000_000)],
+    "compaction": [compaction_start(), compaction_complete()],
+    "subagent-completed": [subagent_completed()],
+}
+
+
+@pytest.mark.parametrize("late", list(LATE.values()), ids=list(LATE))
+def test_work_the_old_deny_list_missed_after_the_checkpoint_voids_the_bill(
+    late: list[Event],
+) -> None:
+    message = reply_message(sdk_call(idle=[*late, idle()]), TARGET)
+    assert "nano_aiu" not in message.response_metadata
+
+
+OPEN: dict[str, list[Event]] = {
+    "dispatch-open-then-error": [*UNSPENT, checkpoint(100_000_000, 1), error(500)],
+    "dispatch-open-then-idle": [*UNSPENT, checkpoint(100_000_000, 1), idle()],
+    "switch-eligible-error": [
+        *UNSPENT,
+        failure("api", 500),
+        checkpoint(100_000_000, 1),
+        switch_eligible_error(),
+    ],
+    "switch-eligible-error-then-switch": [
+        *UNSPENT,
+        failure("api", 500),
+        checkpoint(100_000_000, 1),
+        switch_eligible_error(),
+        switch_requested(),
+    ],
+}
+
+
+@pytest.mark.parametrize("seen", list(OPEN.values()), ids=list(OPEN))
+def test_an_open_dispatch_or_a_pending_model_switch_voids_the_bill(
+    seen: list[Event],
+) -> None:
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+    completion = provider(replying(*seen)).complete(PROMPT)
+    assert (completion.drop_kind, completion.charge) == (None, None)
+
+
+FIELDS: dict[str, list[Event]] = {
+    "cache-break-to-another-model": sdk_call(
+        extra=cache_break(modelFrom=PIN, modelTo=OTHER)
+    ),
+    "cache-break-adding-tools": sdk_call(extra=cache_break(toolsAdded=["bash"])),
+    "cache-break-for-an-agent": sdk_call(extra=cache_break(agentName="sub")),
+    "recovered-failure-auto": recovered_from(failure_with(isAuto=True)),
+    "recovered-failure-other-effort": recovered_from(
+        failure_with(reasoningEffort="low")
+    ),
+    "recovered-failure-sub-agent-initiator": recovered_from(
+        failure_with(initiator="sub-agent")
+    ),
+    "recovered-failure-tool-child": recovered_from(
+        failure_with(parentToolCallId="tool-1")
+    ),
+    "dispatch-tool-child": sdk_call(
+        call_start=wire(
+            "model.call_start", turnId="turn-1", model=PIN, parentToolCallId="tool-1"
+        )
+    ),
+    "turn-tool-child": sdk_call(
+        turn_start=wire(
+            "assistant.turn_start", turnId="turn-1", model=PIN, parentToolCallId="t"
+        )
+    ),
+    "dispatch-by-a-sub-agent": sdk_call(
+        call_start=enveloped(call_start(), agentId="agent-1")
+    ),
+    "idle-by-a-sub-agent": sdk_call(idle=enveloped(idle(), agentId="agent-1")),
+    "prompt-for-an-agent-task": sdk_call(
+        extra=wire("user.message", content=PROMPT, parentAgentTaskId="task-1")
+    ),
+    "prompt-in-autopilot-mode": sdk_call(
+        extra=wire("user.message", content=PROMPT, agentMode="autopilot")
+    ),
+    "shutdown-sub-agent-on-another-model": sdk_call(
+        idle=[idle(), shutdown(agentMetrics=agent_metrics(OTHER, 1))]
+    ),
+    "shutdown-sub-agent-on-the-pin": sdk_call(
+        idle=[idle(), shutdown(agentMetrics=agent_metrics(PIN, 1))]
+    ),
+    "usage-token-detail-on-another-model": sdk_call(
+        usage=usage(
+            copilotUsage={
+                "totalNanoAiu": 251_164_000,
+                "model": PIN,
+                "tokenDetails": [
+                    {
+                        "batchSize": 1,
+                        "costPerBatch": 1.0,
+                        "tokenCount": 1,
+                        "tokenType": "input",
+                        "model": OTHER,
+                    }
+                ],
+            }
+        )
+    ),
+}
+
+
+@pytest.mark.parametrize("seen", list(FIELDS.values()), ids=list(FIELDS))
+def test_any_field_naming_another_model_effort_agent_or_tool_refuses(
+    seen: list[Event],
+) -> None:
+    message = reply_message(seen, TARGET)
+    assert "finish_reason" not in message.response_metadata
+
+
+SECOND_TURN: dict[str, list[Event]] = {
+    "two-turn-ends": sdk_call(turn_end=[turn_end(), turn_end()]),
+    "a-turn-before-the-turn": sdk_call(
+        started=[started(), turn_start(), turn_end()],
+    ),
+    "a-second-turn-start": sdk_call(turn_start=[turn_start(), turn_start()]),
+    "no-turn-start": sdk_call(turn_start=None),
+}
+
+
+@pytest.mark.parametrize("seen", list(SECOND_TURN.values()), ids=list(SECOND_TURN))
+def test_one_prompt_is_one_turn(seen: list[Event]) -> None:
+    """F570, found by the after-the-checkpoint property: a second turn is a
+    second inference round, whichever side of the bill it falls on."""
+    message = reply_message(seen, TARGET)
+    assert "finish_reason" not in message.response_metadata
+    assert message.response_metadata["nano_aiu"] == 251_164_000
+
+
+FIELDS_ADMITTED: dict[str, list[Event]] = {
+    "cache-break-from-another-model-to-the-pin": sdk_call(
+        extra=cache_break(modelFrom=OTHER, modelTo=PIN)
+    ),
+    "prompt-in-interactive-mode": sdk_call(
+        extra=wire("user.message", content=PROMPT, agentMode="interactive")
+    ),
+    "model-change-from-another-model": sdk_call(
+        extra=model_change(PIN, previous=OTHER)
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "seen", list(FIELDS_ADMITTED.values()), ids=list(FIELDS_ADMITTED)
+)
+def test_a_field_naming_only_the_pin_or_the_past_is_admitted(
+    seen: list[Event],
+) -> None:
+    assert reply_message(seen, TARGET).response_metadata["finish_reason"] == "stop"
+
+
+# What the round-2 mutation run found the suite did not pin.
+
+NAMED_FIELDS = [
+    ("model", OTHER, False),
+    ("modelId", OTHER, False),
+    ("modelTo", OTHER, False),
+    ("behaviorModelId", OTHER, False),
+    ("chosenModel", OTHER, False),
+    ("chosenModel", PIN, True),
+    ("previousModel", OTHER, True),
+    ("modelFrom", OTHER, True),
+    ("models", [PIN, OTHER], False),
+    ("models", [PIN], True),
+    ("candidateModels", [OTHER], False),
+    ("effort", "low", False),
+    ("effort", "high", True),
+    ("initialEffort", "low", False),
+    ("previousReasoningEffort", "low", True),
+    ("isAuto", True, False),
+    ("autoTier", "balance", False),
+    ("effectiveAutoTier", "fast", False),
+    ("previousAutoTier", "fast", True),
+    ("agentId", "a", False),
+    ("interruptedAgentCount", 1, False),
+    ("consumedSubagents", 1, False),
+    ("consumedSubagents", 0, True),
+    ("agentMode", "plan", False),
+    ("agentMode", "interactive", True),
+    ("initiator", "agent", False),
+    ("initiator", "user", True),
+    ("toolsAdded", ["bash"], False),
+    ("finalTool", "bash", False),
+    ("toolDefinitionsTokens", 0, True),
+    ("contextTier", "long_context", True),
+]
+
+
+@pytest.mark.parametrize(("key", "value", "agrees"), NAMED_FIELDS)
+def test_a_field_is_held_by_the_family_its_name_puts_it_in(
+    key: str, value: object, agrees: bool
+) -> None:
+    """F569: each family's rule, at the top and nested at any depth."""
+    assert copilot_module._fields_agree({key: value}, TARGET) is agrees
+    assert copilot_module._fields_agree({"outer": [{key: value}]}, TARGET) is agrees
+
+
+UNSTATED: dict[str, list[Event]] = {
+    "start-states-no-effort": sdk_call(started=started(effort=None)),
+    "model-change-states-no-effort": sdk_call(extra=model_change(PIN, effort=None)),
+}
+
+
+@pytest.mark.parametrize("seen", list(UNSTATED.values()), ids=list(UNSTATED))
+def test_an_effort_left_unstated_by_the_session_refuses(seen: list[Event]) -> None:
+    """F561: the start and every model change state the pinned effort; leaving
+    it out is no statement of it, whatever the usage says."""
+    assert "finish_reason" not in reply_message(seen, TARGET).response_metadata
+
+
+def test_a_fusion_block_refuses_even_naming_the_pin() -> None:
+    seen = sdk_call(answer=fusion(answer(), syntheticModel=PIN))
+    assert "finish_reason" not in reply_message(seen, TARGET).response_metadata
+
+
+def test_two_dispatches_with_one_closed_leave_one_open() -> None:
+    seen = sdk_call(call_start=[call_start(), call_start()])
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+def test_a_sub_agents_metered_spend_leaves_the_charge_unknown() -> None:
+    seen = sdk_call(idle=[idle(), shutdown(agentMetrics=agent_metrics(PIN, 1))])
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+@pytest.mark.parametrize("kind", ["session.idle", "session.start", "user.message"])
+def test_a_quiet_type_with_unreadable_data_is_spend(kind: str) -> None:
+    unreadable: Event = {"type": kind, "data": "x"}
+    seen = [*UNSPENT, unreadable, failure("api", 500), error(500)]
+    assert isinstance(invoked(seen), AIMessage)
+
+
+@pytest.mark.parametrize(
+    "event", [{"type": 7, "data": {}}, {"type": "session.info", "data": "x"}]
+)
+def test_an_event_not_in_wire_form_before_the_turn_refuses(event: Event) -> None:
+    seen = [SDK_HAPPY[0], event, *SDK_HAPPY[1:]]
+    assert "finish_reason" not in reply_message(seen, TARGET).response_metadata
