@@ -9,6 +9,7 @@ fails the fake and not the adapter.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import inspect
 import io
@@ -3649,6 +3650,25 @@ def test_a_call_that_does_not_end_in_time_is_aborted_and_raises(
     [made] = runtime.made
     assert made.exited
     assert not made.home.exists()
+
+
+class StuckSession(FakeSession):
+    """A session whose abort never returns."""
+
+    async def abort(self) -> None:
+        self.aborted = True
+        await asyncio.Event().wait()
+
+
+def test_an_abort_that_never_returns_is_waited_for_only_so_long(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(copilot_module, "_ABORT_SECONDS", 0.05)
+    runtime.session = StuckSession([], ends=False)
+    with pytest.raises(TimeoutError):
+        ask_copilot(PROMPT, TARGET, 0.01)
+    assert runtime.session.aborted
+    assert runtime.session.closed
 
 
 def test_a_session_error_ends_the_wait_and_is_returned_as_data(
