@@ -3337,54 +3337,6 @@ def test_the_child_environment_copies_only_what_is_set(
     }
 
 
-def test_a_script_runtime_finds_node_and_nothing_else_on_its_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    node_home = tmp_path / "node" / "bin"
-    node_home.mkdir(parents=True)
-    node = node_home / "node"
-    node.write_text("#!/bin/sh\n", encoding="utf-8")
-    node.chmod(0o755)
-    gh = tmp_path / "gh" / "bin"
-    gh.mkdir(parents=True)
-    (gh / "gh").write_text("#!/bin/sh\n", encoding="utf-8")
-    (gh / "gh").chmod(0o755)
-    parent_environment(monkeypatch)
-    monkeypatch.setenv("PATH", os.pathsep.join((str(gh), str(node_home))))
-    monkeypatch.setattr("sys.platform", "linux")
-    child = child_environment("home", "/runtime/index.js")
-    assert child["PATH"] == os.pathsep.join(("/runtime", str(node_home)))
-    monkeypatch.setenv("PATH", str(gh))
-    with pytest.raises(Refusal) as refused:
-        child_environment("home", "/runtime/index.js")
-    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
-
-
-def test_node_is_searched_on_the_workers_path_alone(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Exactly `node`, on the worker's `PATH` and nowhere else: with none
-    set, nowhere -- never the platform's default search path."""
-    searched: list[tuple[str, str | None]] = []
-
-    def which(
-        command: str, mode: int = os.F_OK | os.X_OK, path: str | None = None
-    ) -> str:
-        searched.append((command, path))
-        return os.path.join(os.sep, "opt", "node", "bin", "node")
-
-    parent_environment(monkeypatch)
-    monkeypatch.setattr("shutil.which", which)
-    monkeypatch.setattr("sys.platform", "linux")
-    child_environment("home", "/runtime/index.js")
-    monkeypatch.setenv("PATH", os.pathsep.join(("/a", "/b")))
-    child = child_environment("home", "/runtime/index.js")
-    assert searched == [("node", ""), ("node", os.pathsep.join(("/a", "/b")))]
-    assert child["PATH"] == os.pathsep.join(
-        ("/runtime", os.path.join(os.sep, "opt", "node", "bin"))
-    )
-
-
 def test_the_sdk_logger_reaches_no_handler(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -3421,11 +3373,15 @@ def test_the_sdk_logger_reaches_no_handler(
 # -- The SDK transport (Task 3; R3, R7, R2.7) ---------------------------------
 
 
+# The first bytes of a 64-bit Mach-O executable: the real 1.0.90 runtime's.
+MACH_O = b"\xcf\xfa\xed\xfe"
+
+
 def provisioned(root: Path) -> str:
     """A runtime directory as the SDK materialises one: the entry, its native
     library and an asset; the entry's path."""
     (root / "assets").mkdir(parents=True)
-    (root / "copilot-runtime").write_bytes(b"#!/bin/sh\nexit 0\n")
+    (root / "copilot-runtime").write_bytes(MACH_O + b" native runtime")
     (root / "runtime.node").write_bytes(b"\x7fELF native")
     (root / "assets" / "index.js").write_bytes(b"// asset")
     return str(root / "copilot-runtime")
@@ -3835,6 +3791,68 @@ def test_a_runtime_reached_through_a_retargeted_link_is_never_started(
     current.unlink()
     current.symlink_to(twin)
     _refused_before_any_client(runtime)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        ("copilot-runtime", b"#!/bin/sh\nexec node index.js\n"),
+        ("index.js", b"require('./runtime')\n"),
+        ("index.js", MACH_O + b" named as a script"),
+        ("copilot-runtime.mjs", MACH_O),
+        ("copilot-runtime", b"\x00\x00\x00\x00 data"),
+        ("copilot-runtime", b""),
+    ],
+)
+def test_an_entry_that_is_no_native_executable_is_refused_with_its_reason(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    entry: tuple[str, bytes],
+) -> None:
+    """The re-audit's probe (`r2_l1_js_node.py`): a script entry runs an
+    interpreter found on `PATH`, which no digest covers. Only a native
+    runtime executable inside the digested directory is started (F595)."""
+    name, content = entry
+    root = tmp_path / "scripted"
+    root.mkdir()
+    (root / name).write_bytes(content)
+    monkeypatch.setenv(RUNTIME_ENV, str(root / name))
+    monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(root))
+    capsys.readouterr()
+    _refused_before_any_client(runtime)
+    assert capsys.readouterr().err == (
+        "PROVIDER_NOT_CONFIGURED reason=runtime_not_native\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "magic",
+    [
+        b"\x7fELF",
+        b"\xcf\xfa\xed\xfe",
+        b"\xce\xfa\xed\xfe",
+        b"\xfe\xed\xfa\xcf",
+        b"\xfe\xed\xfa\xce",
+        b"\xca\xfe\xba\xbe",
+        b"MZ\x90\x00",
+    ],
+    ids=["elf", "mach-o-64", "mach-o-32", "mach-o-64-be", "mach-o-32-be", "fat", "pe"],
+)
+def test_a_native_executable_entry_is_started(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    magic: bytes,
+) -> None:
+    root = tmp_path / "native"
+    root.mkdir()
+    (root / "copilot-runtime").write_bytes(magic + b" runtime")
+    monkeypatch.setenv(RUNTIME_ENV, str(root / "copilot-runtime"))
+    monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(root))
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert runtime.made[-1].options["env"]["PATH"] == str(root.resolve())
 
 
 def test_a_runtime_changed_after_it_was_verified_is_refused(

@@ -318,13 +318,12 @@ def child_environment(home: str, executable: str) -> dict[str, str]:
 
     `COPILOT_HOME` is the call's private directory; `COPILOT_GITHUB_TOKEN` is
     copied when the worker has it; the keychain probe, auto-update and colour
-    are off; `PATH` is the directory of `executable` alone, and of `node` when
-    the runtime entry is a script, so `gh` is not findable and auto-login has
-    nothing to run. Every other name -- the GitHub CLI's and Actions' tokens,
-    askpass programs, BYOK provider settings, telemetry export, a redirected
-    host, a runtime path, a model or tier override -- is absent because it is
-    not listed. A script entry with no `node` on the worker's `PATH` refuses
-    `PROVIDER_NOT_CONFIGURED`.
+    are off; `PATH` is the directory of `executable` alone -- a native
+    runtime, never a script needing an interpreter (F595) -- so `gh` is not
+    findable and auto-login has nothing to run. Every other name -- the
+    GitHub CLI's and Actions' tokens, askpass programs, BYOK provider
+    settings, telemetry export, a redirected host, a runtime path, a model or
+    tier override -- is absent because it is not listed.
     """
     needs = _WINDOWS_NEEDS if sys.platform == "win32" else _POSIX_NEEDS
     child = {"COPILOT_HOME": home}
@@ -333,13 +332,7 @@ def child_environment(home: str, executable: str) -> dict[str, str]:
         if value is not None:
             child[name] = value
     child.update(_FIXED)
-    found = [os.path.dirname(executable)]
-    if executable.endswith(".js"):
-        node = shutil.which("node", path=os.environ.get("PATH", ""))
-        if node is None:
-            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-        found.append(os.path.dirname(node))
-    child["PATH"] = os.pathsep.join(found)
+    child["PATH"] = os.path.dirname(executable)
     return child
 
 
@@ -636,9 +629,39 @@ def _runtime_entry() -> str:
     ):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     resolved = os.path.realpath(named)
+    if not _native(resolved):
+        # A script runs an interpreter found on `PATH`, which no digest
+        # covers (F595): named on stderr by its reason, never its path.
+        print("PROVIDER_NOT_CONFIGURED reason=runtime_not_native", file=sys.stderr)
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     if not hmac.compare_digest(runtime_digest(resolved), pinned):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     return resolved
+
+
+# The first bytes of a native executable (F595): ELF; Mach-O, 32 and 64 bit
+# in either byte order, and universal; PE. The SDK starts a `.js`-family
+# entry through `node`, so such a name is no native runtime whatever it holds.
+_NATIVE_MAGIC = (
+    b"\x7fELF",
+    b"\xcf\xfa\xed\xfe",
+    b"\xce\xfa\xed\xfe",
+    b"\xfe\xed\xfa\xcf",
+    b"\xfe\xed\xfa\xce",
+    b"\xca\xfe\xba\xbe",
+    b"MZ",
+)
+_SCRIPT_SUFFIXES = (".js", ".mjs", ".cjs")
+
+
+def _native(path: str) -> bool:
+    """Whether `path` is a native executable the runtime can be, by its first
+    bytes, and no name the SDK would hand to `node`."""
+    if path.lower().endswith(_SCRIPT_SUFFIXES):
+        return False
+    with open(path, "rb") as read:
+        head = read.read(4)
+    return head.startswith(_NATIVE_MAGIC)
 
 
 @asynccontextmanager
