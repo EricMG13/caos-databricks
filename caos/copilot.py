@@ -37,12 +37,14 @@ import re
 import shutil
 import sys
 import tempfile
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+import threading
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from fractions import Fraction
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, TypeIs
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -52,6 +54,7 @@ from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import ChatGeneration, ChatResult
 from openai import OpenAIError
 
+from caos import provider
 from caos.pricing import CreditPrice, exact_context
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
@@ -361,6 +364,82 @@ def output_cap(model: str) -> int:
     if target is not None and target.platform == CLI_PLATFORM:
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     return MAX_COMPLETION_TOKENS
+
+
+_MODEL_ID = re.compile(r"[a-z0-9][a-z0-9.-]{0,127}")
+
+
+class _Listed(Mapping[str, int]):
+    """Each offered approved model's context window in tokens, by the
+    runtime's model id, as readiness read it from the listing (R4). Read-only
+    to every reader; filled once per process by `declare_listed`, then fixed
+    (invariant 10). Empty until then."""
+
+    def __init__(self) -> None:
+        self._values: Mapping[str, int] = MappingProxyType({})
+        self._declared = False
+        self._lock = threading.Lock()
+
+    def __getitem__(self, name: str) -> int:
+        return self._values[name]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._values)
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+    def _declare(self, values: Mapping[str, int]) -> None:
+        with self._lock:
+            if self._declared:
+                raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+            self._values = MappingProxyType(dict(values))
+            self._declared = True
+
+
+CONTEXT_LISTED = _Listed()
+
+
+def declare_listed(listed: Mapping[str, int]) -> None:
+    """Pin each listed model's context window for this process (R4).
+
+    Once per process: a second declaration, a key that is no runtime model
+    id, a value that is no positive whole count, or a pinned
+    `caos.provider.CONTEXT_TOKENS` entry for a `copilot:` name of that model
+    above its listed value refuses `PROVIDER_NOT_CONFIGURED`, and nothing is
+    declared.
+    """
+    declared = dict(listed)
+    for name, tokens in declared.items():
+        if not (
+            isinstance(name, str)
+            and _MODEL_ID.fullmatch(name)
+            and type(tokens) is int
+            and tokens > 0
+        ):
+            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    for pinned, tokens in provider.CONTEXT_TOKENS.items():
+        target = parsed(pinned)
+        if (
+            target is not None
+            and target.platform == PLATFORM
+            and tokens > declared.get(target.name, tokens)
+        ):
+            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    CONTEXT_LISTED._declare(declared)
+
+
+def context_tokens(model: str) -> int | None:
+    """`model`'s context window in tokens (R4, D116): for an SDK model the
+    listing's, by its runtime model id, else the pinned
+    `caos.provider.CONTEXT_TOKENS` entry under the full name, the only source
+    for any other name; None when neither declares one."""
+    target = parsed(model)
+    if target is not None and target.platform == PLATFORM:
+        listed = CONTEXT_LISTED.get(target.name)
+        if listed is not None:
+            return listed
+    return provider.CONTEXT_TOKENS.get(model)
 
 
 class CopilotStatusError(OpenAIError):
