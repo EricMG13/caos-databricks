@@ -382,7 +382,11 @@ def execute_handoff(
         require_idle(conn)
         bill(conn, attempt, CallOutcome(charge, model, generation, diagnostic, drop))
     # Recorded in full above, then refused: the answer is not accepted and
-    # the run parks, terminal for its pin (R2.6).
+    # the run parks, terminal for its pin (R2.6). `bill` returned, so the
+    # ledger holds the whole charge; a bill no retry could write raised
+    # `STORE_UNAVAILABLE` there, before any park. `unstored` is the body's
+    # blob alone (F42): the bill committed without its address, and an
+    # overrun refuses ahead of it because the answer is refused either way.
     if not _settled_within(covered, charge):
         raise Refusal(RefusalCode.BUDGET_CHARGE_OVER_RESERVATION)
     if unstored:

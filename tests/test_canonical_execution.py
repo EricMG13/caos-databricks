@@ -43,7 +43,7 @@ from caos.copilot import CREDIT_PRICE_ENV
 from caos.evidence import read as evidence_read
 from caos.graph.route import ResolvedRoute, RouteNode, resolve_route
 from caos.graph.runtime import ProviderResult
-from caos.methodology import executor, runner
+from caos.methodology import canonical, executor, runner
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import (
     HandoffOutcome,
@@ -602,6 +602,50 @@ def test_a_charge_above_the_reservation_is_recorded_in_full_and_refused_typed(
     accepted = harness.conn.execute("SELECT count(*) FROM artifacts").fetchone()
     harness.conn.rollback()
     assert accepted == (0,)
+
+
+def test_an_overrun_whose_body_was_not_stored_is_billed_before_it_parks(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LOW-1: a body the blob store refused leaves the bill to commit without
+    its address (F42), and the overrun is then refused as one: the ledger
+    holds the whole charge before the park, so `overspent` sees it and no
+    later claim reserves again on that pin."""
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, OVER)
+
+    def refused_put(_store: BlobStore, _data: bytes) -> str:
+        raise OSError
+
+    monkeypatch.setattr(BlobStore, "put", refused_put)
+    with pytest.raises(Refusal) as refused:
+        provider.execute(node, "CP-0", attempt_id=attempt)
+    assert refused.value.code is RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    assert _ledger(harness) == [(OVER, True, None)]
+    assert _diagnostic(harness) is None
+    assert budget.overspent(harness.conn, harness.run_id) is True
+    harness.conn.rollback()
+
+
+def test_an_overrun_whose_bill_was_not_written_is_a_store_fault_never_a_park(
+    harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """LOW-1: a bill that no retry could write raises `STORE_UNAVAILABLE`
+    before the overrun is judged, so no run parks on a charge the ledger does
+    not hold; the next claim meets the attempt unsettled (`_UNSETTLED`)."""
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, OVER)
+
+    def store_down(*_args: object, **_kwargs: object) -> None:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(canonical, "record_outcome", store_down)
+    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    with pytest.raises(Refusal) as refused:
+        provider.execute(node, "CP-0", attempt_id=attempt)
+    assert refused.value.code is RefusalCode.STORE_UNAVAILABLE
+    assert "BUDGET_CHARGE_OVER_RESERVATION" not in capsys.readouterr().err
+    assert _ledger(harness) == []
 
 
 def test_a_copilot_charge_equal_to_its_reservation_is_accepted(
