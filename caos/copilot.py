@@ -630,7 +630,7 @@ def _runtime_entry() -> tuple[str, str]:
 
 # Where a call keeps its own copy of the runtime, in its private directory.
 _STAGED = "caos-runtime"
-_CHUNK = 1 << 20
+_BLOCK = 1 << 20
 
 
 def _staged(source: str, pinned: str, home: str) -> str:
@@ -674,9 +674,9 @@ def _copied(source: str, target: str) -> str:
     the SHA-256 of exactly the bytes written."""
     digest = hashlib.sha256()
     with open(source, "rb") as read, open(target, "xb") as written:
-        while chunk := read.read(_CHUNK):
-            digest.update(chunk)
-            written.write(chunk)
+        while block := read.read(_BLOCK):
+            digest.update(block)
+            written.write(block)
         mode = stat.S_IMODE(os.fstat(read.fileno()).st_mode) & 0o700
     os.chmod(target, mode)
     return digest.hexdigest()
