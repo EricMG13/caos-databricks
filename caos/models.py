@@ -432,7 +432,10 @@ def _waited_out(failed: OpenAIError, sent: int, deadline: float) -> bool:
 
 
 def _rate_limited(failed: OpenAIError) -> bool:
-    return _read(failed, "status_code") == RATE_LIMITED
+    # Compared only once it is an `int` itself: no comparison runs the
+    # client's code (F530 round 2).
+    status = _read(failed, "status_code")
+    return type(status) is int and status == RATE_LIMITED
 
 
 def _retry_after(failed: OpenAIError) -> float:
@@ -471,7 +474,7 @@ def _claimed_id(message: AIMessage) -> object:
 def _status_refusal(failed: OpenAIError) -> RefusalCode:
     """A vendor error by its status class alone; its message never travels."""
     status = _read(failed, "status_code")
-    if isinstance(status, int) and status in NEVER_RETRIED:
+    if type(status) is int and status in NEVER_RETRIED:
         return RefusalCode.PROVIDER_CALL_INVALID
     return RefusalCode.PROVIDER_UNAVAILABLE
 
@@ -625,8 +628,8 @@ def _declared(failed: BaseException) -> bool:
         status = getattr(failed, "status_code", None)
         body = getattr(failed, "body", None)
         if isinstance(failed, APIConnectionError):
-            declared = False
-        elif status is not None:
+            return False
+        if status is not None:
             declared = (
                 type(status) is int
                 and FAILURE_STATUSES[0] <= status <= (FAILURE_STATUSES[1])

@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import ClassVar, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import CanonicalCompletions
@@ -38,18 +38,22 @@ from test_second_attempt import (
 
 from caos import models
 from caos.methodology.canonical import (
-    DROP_REATTEMPTS,
     _feedback_source,
-    declared_drop,
     drop_reattempt_due,
-    drop_stop_owed,
     reattempts_a_drop,
 )
 from caos.pricing import ModelPrice
 from caos.provider import Completion, DropKind
 from caos.refusals import Refusal, RefusalCode
-from caos.store import connect
-from caos.store.outcomes import CallOutcome, NodeAttempt, record_outcome
+from caos.store import StoreConnection, connect
+from caos.store.outcomes import (
+    DROP_REATTEMPTS,
+    CallOutcome,
+    NodeAttempt,
+    declared_drop,
+    drop_stop_owed,
+    record_outcome,
+)
 
 __all__ = ["harness", "route"]
 
@@ -852,22 +856,139 @@ def test_drop_stop_owed_reads_the_park_against_the_latest_drop(
     enqueue_run(conn, harness.run_id)
     conn.commit()
     assert owed()
-    # The pass that owes the stop says so with no call -- after the lease
-    # answer, as `_refuse_unexplained` does.
+    # F530 round 2: the stop is decided under the run lock, in the unit
+    # that would start the attempt -- after the lease answer, as every
+    # start is -- and nothing is written.
     from caos.boundary_text import BoundaryText
-    from caos.graph.runtime import _refuse_spent_drop
     from caos.store.work import claim_run
 
     with pytest.raises(Refusal, match=r"^LEASE_NOT_HELD$"):
-        _refuse_spent_drop(conn, harness.run_id, node, None)
-    conn.rollback()
+        start_attempt(conn, harness.run_id, node)
     lease = claim_run(conn, worker=BoundaryText.of("worker-a"), lease_seconds=60)
     conn.commit()
     assert lease is not None
     with pytest.raises(Refusal, match=r"^PROVIDER_UNAVAILABLE$"):
-        _refuse_spent_drop(conn, harness.run_id, node, lease)
-    conn.rollback()
+        start_attempt(conn, harness.run_id, node, lease=lease)
+    assert _drop_kinds(harness) == ["declared"] * 3
     park()
     assert not owed()
-    _refuse_spent_drop(conn, harness.run_id, node, lease)
-    conn.rollback()
+    start_attempt(conn, harness.run_id, node, lease=lease)
+    assert _drop_kinds(harness) == ["declared"] * 3 + [None]
+
+
+def test_a_drop_billed_after_the_node_moved_on_is_kept_but_not_counted(
+    harness: _Harness,
+) -> None:
+    """F530 round 2: a bill is never fenced -- the call happened -- but a
+    drop billed after a later attempt at the node was started (a holder
+    wedged past its call hold) keeps its row without its kind: the ledger
+    already decided without it. An exact replay of that bill is a no-op."""
+    from caos.store.runs import start_attempt
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+    first = start_attempt(conn, harness.run_id, node)
+    assert record_outcome(conn, attempt_id=first, outcome=dropped)
+    late = start_attempt(conn, harness.run_id, node)
+    latest = start_attempt(conn, harness.run_id, node)
+    assert record_outcome(conn, attempt_id=latest, outcome=dropped)
+    assert record_outcome(conn, attempt_id=late, outcome=dropped)
+    assert not record_outcome(conn, attempt_id=late, outcome=dropped)
+    assert _drop_kinds(harness) == ["declared", None, "declared"]
+
+
+class _RaisingEquality:
+    """A status that raises when compared or hashed (round 2's INFO)."""
+
+    def __eq__(self, other: object) -> bool:
+        raise RuntimeError("private")
+
+    def __hash__(self) -> int:
+        raise RuntimeError("private")
+
+
+class _OddStatus(OpenAIError):
+    def __init__(self, status: object) -> None:
+        super().__init__("private")
+        self.status_code = status
+
+
+class _RaisingInt(int):
+    def __eq__(self, other: object) -> bool:
+        raise RuntimeError("private")
+
+    def __hash__(self) -> int:
+        raise RuntimeError("private")
+
+
+@pytest.mark.parametrize("status", [_RaisingEquality(), _RaisingInt(429)])
+def test_a_status_that_raises_when_compared_is_no_status(status: object) -> None:
+    """F530 round 2: a status is compared only once it is an `int` itself,
+    so no comparison runs code of the client's; anything else is no status,
+    and the call is PROVIDER_UNAVAILABLE, `vendor`, never an escape."""
+    failed = _OddStatus(status)
+    done = fake_completions(ScriptedChat(answer=failed)).complete(PROMPT)
+    assert done.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    assert done.drop_kind is DropKind.VENDOR
+    assert not models._rate_limited(failed)
+    assert models._status_refusal(failed) is RefusalCode.PROVIDER_UNAVAILABLE
+
+
+def test_an_exact_replay_of_a_kept_drop_after_a_later_start_is_a_no_op(
+    harness: _Harness,
+) -> None:
+    """F530 round 3 (re-audit P1): a drop written with its kind, then replayed
+    exactly after a later attempt at its node started, is the same bill --
+    a no-op, never `CALL_OUTCOME_CONFLICT`. A different replay still is."""
+    from caos.store.runs import start_attempt
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+    first = start_attempt(conn, harness.run_id, node)
+    assert record_outcome(conn, attempt_id=first, outcome=dropped)
+    start_attempt(conn, harness.run_id, node)
+    assert not record_outcome(conn, attempt_id=first, outcome=dropped)
+    assert _drop_kinds(harness) == ["declared", None]
+    for other in (
+        CallOutcome(None, "m", None, drop_kind=DropKind.VENDOR),
+        CallOutcome(None, "m", None),
+    ):
+        with pytest.raises(Refusal, match=r"^CALL_OUTCOME_CONFLICT$"):
+            record_outcome(conn, attempt_id=first, outcome=other)
+
+
+def test_a_bill_retried_after_a_lost_ack_and_a_later_start_is_a_no_op(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F530 round 3 (re-audit P1b), the production path: `bill`'s first write
+    commits and its answer is lost; another worker starts an attempt at the
+    node during the pause; the retry replays the drop exactly and the bill
+    completes, with the kind first written."""
+    from caos.methodology import canonical
+    from caos.store.runs import start_attempt
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+    first = start_attempt(conn, harness.run_id, node)
+    real = record_outcome
+    tries: list[int] = []
+
+    def lost_ack(c: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome) -> bool:
+        tries.append(1)
+        said = real(c, attempt_id=attempt_id, outcome=outcome)
+        if len(tries) == 1:
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+        return said
+
+    def pause(_seconds: float) -> None:
+        with connect(harness.url) as other:
+            start_attempt(other, harness.run_id, node)
+
+    monkeypatch.setattr(canonical, "record_outcome", lost_ack)
+    monkeypatch.setattr(canonical, "_pause", pause)
+    canonical.bill(conn, first, dropped)
+    assert len(tries) == 2
+    assert _drop_kinds(harness) == ["declared", None]
