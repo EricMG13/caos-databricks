@@ -17,7 +17,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from decimal import Decimal
-from typing import cast
+from typing import ClassVar, cast
 from uuid import uuid4
 
 import pytest
@@ -40,7 +40,9 @@ from caos import models
 from caos.methodology.canonical import (
     DROP_REATTEMPTS,
     _feedback_source,
+    declared_drop,
     drop_reattempt_due,
+    drop_stop_owed,
     reattempts_a_drop,
 )
 from caos.pricing import ModelPrice
@@ -68,6 +70,44 @@ class _Body(OpenAIError):
         self.body = body
 
 
+class _Status200(_Body):
+    """A provider error object beside a status that says the call succeeded."""
+
+    status_code = 200
+
+
+class _Argued(OpenAIError):
+    """A vendor error whose only argument is a mapping: no status, no body."""
+
+
+def _validation_200() -> Exception:
+    """The client's error for a `200` whose body it could not validate."""
+    import httpx2
+    from openai import APIResponseValidationError
+
+    request = httpx2.Request("POST", "https://x.invalid/v1/chat/completions")
+    response = httpx2.Response(200, request=request, json={"choices": "private"})
+    return APIResponseValidationError(response=response, body=_ROUTER_ERROR)
+
+
+class _RaisingStatus(OpenAIError):
+    """A vendor error whose status cannot be read without raising (N162)."""
+
+    @property
+    def status_code(self) -> int:
+        raise RuntimeError("private")
+
+
+class _RaisingResponse(OpenAIError):
+    """A rate limit whose response cannot be read without raising (N162)."""
+
+    status_code = 429
+
+    @property
+    def response(self) -> object:
+        raise RuntimeError("private")
+
+
 class _Unreadable(OpenAIError):
     """A vendor error whose body cannot be read without raising."""
 
@@ -80,12 +120,16 @@ class _Escaping(BaseException):
     """What `suppress(Exception)` does not hold back."""
 
 
-def _cut() -> Exception:
+def _cut(body: object = None) -> Exception:
+    """A reset mid-body; with `body`, one that still carries an error
+    object, which a connection's failure never declares."""
     import httpx2
     from openai import APIConnectionError
 
     failed = APIConnectionError(request=httpx2.Request("POST", "https://x.invalid"))
     failed.__cause__ = httpx2.RemoteProtocolError("private")
+    if body is not None:
+        failed.body = body
     return failed
 
 
@@ -105,7 +149,24 @@ def _never(released: threading.Event) -> Callable[[str], object]:
     [
         pytest.param(StatusError(503), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
         pytest.param(StatusError(429), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
-        pytest.param(StatusError(402), DropKind.DECLARED, "PROVIDER_CALL_INVALID"),
+        # F530: a 4xx is the provider's own word, but no drop: only a call
+        # refused PROVIDER_UNAVAILABLE is ever declared.
+        pytest.param(StatusError(402), DropKind.VENDOR, "PROVIDER_CALL_INVALID"),
+        pytest.param(StatusError(400), DropKind.VENDOR, "PROVIDER_CALL_INVALID"),
+        # F530: a status below 400 or above 599 says no failure, body or not.
+        pytest.param(StatusError(200), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        pytest.param(StatusError(600), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        pytest.param(StatusError(599), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
+        pytest.param(StatusError(408), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
+        pytest.param(
+            _Status200(_ROUTER_ERROR), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"
+        ),
+        pytest.param(_validation_200(), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        # F530: an argument is not a body.
+        pytest.param(_Argued({"anything": 1}), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        pytest.param(
+            _Body(["not", "a", "mapping"]), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"
+        ),
         pytest.param(_Body(_ROUTER_ERROR), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
         pytest.param(
             _Body({"error": _ROUTER_ERROR}), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"
@@ -113,6 +174,8 @@ def _never(released: threading.Event) -> Callable[[str], object]:
         pytest.param(_Body({}), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
         pytest.param(_Body("private"), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
         pytest.param(_cut(), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        pytest.param(_cut(_ROUTER_ERROR), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        pytest.param(StatusError(99), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
         pytest.param(_Unreadable("private"), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
         pytest.param(TypeError(_ROUTER_ERROR), DropKind.RAISED, "PROVIDER_UNAVAILABLE"),
     ],
@@ -180,6 +243,13 @@ def test_the_ledger_gives_one_re_attempt_after_one_declared_drop() -> None:
     # Only the latest attempt earns it, and only a declared drop of this code.
     assert not reattempts_a_drop([declared, _attempt(malformed)])
     assert not reattempts_a_drop([_attempt("PROVIDER_CALL_INVALID", DropKind.DECLARED)])
+    # F530: a declared kind beside another code is no drop and spends nothing.
+    invalid = _attempt("PROVIDER_CALL_INVALID", DropKind.DECLARED)
+    assert declared_drop(declared) and declared_drop(_attempt(None, DropKind.DECLARED))
+    assert not declared_drop(invalid)
+    assert not declared_drop(_attempt(unavailable, DropKind.VENDOR))
+    assert reattempts_a_drop([invalid, declared])
+    assert reattempts_a_drop([invalid, _attempt(None), declared])
     for kind in (DropKind.VENDOR, DropKind.RAISED, DropKind.ESCAPED, DropKind.DEADLINE):
         assert not reattempts_a_drop([_attempt(unavailable, kind)])
     assert not reattempts_a_drop([_attempt(unavailable)])
@@ -194,6 +264,11 @@ def test_a_declared_drop_is_invisible_to_the_guided_retry_count() -> None:
     # Any other drop is an ordinary attempt, as before D110.
     timed_out = _attempt("PROVIDER_UNAVAILABLE", DropKind.DEADLINE)
     assert _feedback_source([first, timed_out]) is None
+    # F530: so is a declared kind beside another code, and an unexplained
+    # declared drop is passed over as an explained one is.
+    invalid = _attempt("PROVIDER_CALL_INVALID", DropKind.DECLARED)
+    assert _feedback_source([first, invalid]) is None
+    assert _feedback_source([first, _attempt(None, DropKind.DECLARED)]) == first
 
 
 # -- The store keeps the kind, and only beside no answer ----------------------
@@ -248,8 +323,16 @@ class _Drop:
     failure: object
 
 
-# One CP-0 call's step: drop it, flaw its answer, or (None) answer it.
-_Step = _Drop | Callable[[str], str] | None
+@dataclass(frozen=True)
+class _Said:
+    """One call whose completion `change` restates: what a provider that
+    says more than it should returns."""
+
+    change: Callable[[Completion], Completion]
+
+
+# One CP-0 call's step: drop it, restate it, flaw its answer, or answer it.
+_Step = _Drop | _Said | Callable[[str], str] | None
 
 
 @dataclass
@@ -280,6 +363,8 @@ class _Scripted:
             self.delegate.prompts.append(prompt)
             return fake_completions(ScriptedChat(answer=step.failure)).complete(prompt)
         done = self.delegate.complete(prompt, json_object=json_object)
+        if isinstance(step, _Said):
+            return step.change(done)
         if step is None:
             return done
         assert done.content is not None
@@ -399,7 +484,7 @@ def test_a_ceiling_that_cannot_cover_the_re_attempt_leaves_the_drop_standing(
         ).fetchone() == (0,)
 
 
-def test_a_ceiling_that_covers_both_re_attempts_beside_the_held_reservation(
+def test_a_ceiling_that_covers_both_reservations_makes_the_re_attempt(
     harness: _Harness,
 ) -> None:
     harness.conn.execute(
@@ -474,3 +559,315 @@ def test_drop_reattempt_due_reads_the_ledger(
     assert _run(harness, dropping) is RefusalCode.PROVIDER_UNAVAILABLE
     assert not due()
     assert _drop_kinds(harness) == ["declared", "declared"]
+
+
+def test_a_drop_after_three_guided_retries_repeats_the_third(
+    harness: _Harness,
+) -> None:
+    """Five passes: the 4th attempt, the third guided retry, is dropped, and
+    the 5th repeats it, told of the 3rd; the guided retries are not spent."""
+    answers = CanonicalCompletions(harness.source_id)
+    steps: list[_Step] = [_with_material] * 3 + [_Drop(StatusError(503))]
+    assert _run(harness, _Scripted(answers, steps)) is None
+    cp0 = [p for p in answers.prompts if _module(p) == "CP-0"]
+    assert len(cp0) == 5
+    assert all(SECOND in prompt for prompt in cp0[1:])
+    count, reserved, codes, accepted = _cp0_ledger(harness)
+    assert (count, reserved, accepted) == (5, 5, 1)
+    assert sorted(codes) == ["HANDOFF_MALFORMED"] * 3 + ["PROVIDER_UNAVAILABLE"]
+    assert _drop_kinds(harness) == [None, None, None, "declared", None]
+
+
+_UNAVAILABLE = RefusalCode.PROVIDER_UNAVAILABLE
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        pytest.param(
+            Completion(None, Decimal("0.01"), None, _UNAVAILABLE, DropKind.DECLARED),
+            id="beside-a-charge",
+        ),
+        pytest.param(
+            Completion(None, None, "gen-said", _UNAVAILABLE, DropKind.DECLARED),
+            id="beside-a-generation",
+        ),
+        pytest.param(
+            Completion(None, None, None, _UNAVAILABLE, cast("DropKind", "declared")),
+            id="untyped",
+        ),
+    ],
+)
+def test_a_drop_stated_beside_anything_said_is_never_re_attempted(
+    harness: _Harness, said: Completion
+) -> None:
+    """A provider is believed on the money and never on a drop it states
+    beside a charge or a generation, or untyped: the bill commits as said,
+    no drop kind is recorded, and the run stops."""
+    answers = CanonicalCompletions(harness.source_id)
+    stopped = _run(harness, _Scripted(answers, [_Said(lambda _done: said)]))
+    assert stopped is RefusalCode.PROVIDER_UNAVAILABLE
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"]
+    assert _drop_kinds(harness) == [None]
+    with connect(harness.url) as observer:
+        billed = observer.execute(
+            "SELECT o.generation_id, l.amount FROM call_outcomes o"
+            " LEFT JOIN budget_ledger l ON l.attempt_id = o.charged_attempt_id"
+            " WHERE o.run_id = %s",
+            (harness.run_id,),
+        ).fetchall()
+    assert billed == [(said.generation_id, said.charge)]
+
+
+def test_an_answer_stating_a_drop_is_accepted_as_an_answer(harness: _Harness) -> None:
+    answers = CanonicalCompletions(harness.source_id)
+    declared = _Said(lambda done: replace(done, drop_kind=DropKind.DECLARED))
+    assert _run(harness, _Scripted(answers, [declared])) is None
+    assert _cp0_ledger(harness) == (1, 1, [], 1)
+    assert _drop_kinds(harness) == [None]
+
+
+def test_the_passes_are_bounded_whatever_the_ledger_says(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The frame bounds its own passes -- one, `GUIDED_RETRIES` guided retries
+    and `DROP_REATTEMPTS` re-attempts -- so a ledger that always says "again"
+    still ends the node, with the last refusal standing."""
+    from caos.graph import runtime
+    from caos.methodology.canonical import GUIDED_RETRIES
+
+    monkeypatch.setattr(runtime, "second_attempt_due", lambda *_a, **_k: True)
+    answers = CanonicalCompletions(harness.source_id)
+    steps: list[_Step] = [_with_material] * 9
+    stopped = _run(harness, _Scripted(answers, steps))
+    assert stopped is RefusalCode.HANDOFF_MALFORMED
+    passes = 1 + GUIDED_RETRIES + DROP_REATTEMPTS
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"] * passes
+
+
+def test_a_declared_refusal_of_another_code_earns_nothing(harness: _Harness) -> None:
+    """A 402 is the provider's own word too, but `PROVIDER_CALL_INVALID`
+    cannot succeed by being repeated: one call, and the run stops."""
+    answers = CanonicalCompletions(harness.source_id)
+    stopped = _run(harness, _dropping(answers, StatusError(402), 2))
+    assert stopped is RefusalCode.PROVIDER_CALL_INVALID
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"]
+    assert _drop_kinds(harness) == ["vendor"]
+
+
+def test_a_4xx_on_a_guided_retry_is_not_repeated_as_that_guided_retry(
+    harness: _Harness,
+) -> None:
+    """F530 (audit finding 2): a guided retry refused 400 is an ordinary
+    refusal; the operator's requeue after it makes an ordinary attempt, not
+    the same guided retry again on every requeue."""
+    answers = CanonicalCompletions(harness.source_id)
+    steps: list[_Step] = [_with_material, _Drop(StatusError(400))]
+    steps.append(_Drop(StatusError(400)))
+    scripted = _Scripted(answers, steps)
+    assert _run(harness, scripted) is RefusalCode.PROVIDER_CALL_INVALID
+    assert _run(harness, scripted) is RefusalCode.PROVIDER_CALL_INVALID
+    assert _run(harness, scripted) is None
+    cp0 = [p for p in answers.prompts if _module(p) == "CP-0"]
+    assert [SECOND in prompt for prompt in cp0] == [False, True, False, False]
+
+
+def test_a_4xx_does_not_spend_the_nodes_re_attempt(harness: _Harness) -> None:
+    """F530 (audit finding 2): after a 400 and a requeue, a declared 503 is
+    still the node's first drop and is re-attempted."""
+    answers = CanonicalCompletions(harness.source_id)
+    steps: list[_Step] = [_Drop(StatusError(400)), _Drop(StatusError(503))]
+    scripted = _Scripted(answers, steps)
+    assert _run(harness, scripted) is RefusalCode.PROVIDER_CALL_INVALID
+    assert _run(harness, scripted) is None
+    assert [_module(p) for p in answers.prompts][:3] == ["CP-0"] * 3
+    assert _drop_kinds(harness) == ["vendor", "declared", None]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        pytest.param(_RaisingStatus("private"), id="status-raises"),
+        pytest.param(_RaisingResponse("private"), id="rate-limit-response-raises"),
+    ],
+)
+def test_a_vendor_error_that_cannot_be_read_is_unavailable_and_recorded(
+    harness: _Harness,
+    failure: Exception,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """F530 (N162): a `RuntimeError` from reading the error escaped
+    `complete` untyped before the bill -- no outcome, no F513 line, the run
+    parked INTERNAL_FAULT. It is now `PROVIDER_UNAVAILABLE`, `raised`, and
+    its outcome is recorded; nothing of its text travels."""
+    monkeypatch.setattr(models, "_sleep", lambda _seconds: None)
+    done = fake_completions(ScriptedChat(answer=failure)).complete(PROMPT)
+    assert done.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    assert done.drop_kind is DropKind.RAISED
+    line = capsys.readouterr().err
+    assert line.startswith("PROVIDER_UNAVAILABLE call=raised class=")
+    assert "private" not in line
+    if isinstance(failure, _RaisingStatus):
+        # Its facts are unknown, as F513 says of a failure that raises when read.
+        assert "class=? cause=? status=?" in line
+    answers = CanonicalCompletions(harness.source_id)
+    stopped = _run(harness, _dropping(answers, failure))
+    assert stopped is RefusalCode.PROVIDER_UNAVAILABLE
+    assert _cp0_ledger(harness) == (1, 1, ["PROVIDER_UNAVAILABLE"], 0)
+    assert _drop_kinds(harness) == ["raised"]
+
+
+def test_a_direct_callers_rerun_after_a_spent_re_attempt_is_its_own_decision(
+    harness: _Harness,
+) -> None:
+    """F530: with no work row there is no park to wait for -- a direct
+    caller (the harness, the suite) reruns only by deciding to -- so no stop
+    is owed and the rerun calls."""
+    answers = CanonicalCompletions(harness.source_id)
+    dropping = _dropping(answers, StatusError(503), 2)
+    assert _run(harness, dropping) is RefusalCode.PROVIDER_UNAVAILABLE
+    node = _node(harness, "CP-0").route_node_id
+    with connect(harness.url) as observer:
+        assert not drop_stop_owed(observer, run_id=harness.run_id, route_node_id=node)
+    assert _run(harness, dropping) is None
+    assert _drop_kinds(harness) == ["declared", "declared", None]
+
+
+def test_node_attempts_reads_each_attempt_as_the_ledger_holds_it(
+    harness: _Harness,
+) -> None:
+    """The dropped attempt: its refusal, no body, its drop kind; the accepted
+    one: no refusal, its body's address, no drop kind -- unknown is None,
+    never the word."""
+    from caos.store.outcomes import node_attempts
+
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _dropping(answers, StatusError(503))) is None
+    node = _node(harness, "CP-0").route_node_id
+    with connect(harness.url) as observer:
+        dropped, accepted = node_attempts(observer, harness.run_id, node)
+    assert (dropped.refusal, dropped.diagnostic_sha256, dropped.drop_kind) == (
+        "PROVIDER_UNAVAILABLE",
+        None,
+        "declared",
+    )
+    assert accepted.refusal is None and accepted.drop_kind is None
+    assert accepted.diagnostic_sha256 is not None
+    assert len(accepted.diagnostic_sha256) == 64
+
+
+class _GetRaises:
+    def get(self, _name: str) -> object:
+        raise RuntimeError("private")
+
+
+class _Headed:
+    headers = _GetRaises()
+
+
+class _LimitedUnreadably(OpenAIError):
+    status_code = 429
+    response = _Headed()
+
+
+def test_a_rate_limits_facts_that_raise_read_as_unreadable_or_the_default_wait(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """F530 (N162), below the client: a `Retry-After` whose read raises waits
+    the default; a status or a response that raises is `_UnreadableError`,
+    and the call it ends is `raised`, PROVIDER_UNAVAILABLE, never untyped."""
+    from caos.provider import TIMEOUT_SECONDS
+
+    assert models._retry_after(_LimitedUnreadably("private")) == (
+        models.RETRY_AFTER_SECONDS
+    )
+    with pytest.raises(models._UnreadableError):
+        models._retry_after(_RaisingResponse("private"))
+    with pytest.raises(models._UnreadableError):
+        models._rate_limited(_RaisingStatus("private"))
+    with pytest.raises(models._UnreadableError):
+        models._status_refusal(_RaisingStatus("private"))
+    ended = models._vendor_ended(
+        _RaisingResponse("private"), 1, models._clock() + TIMEOUT_SECONDS, 0.0
+    )
+    assert ended == Completion(
+        None, None, None, RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED
+    )
+    assert capsys.readouterr().err.startswith(
+        "PROVIDER_UNAVAILABLE call=raised class=_RaisingResponse "
+    )
+
+
+class _Retry:
+    headers: ClassVar[dict[str, str]] = {"retry-after": "0.5"}
+
+
+class _LimitedBriefly(OpenAIError):
+    status_code = 429
+    response = _Retry()
+
+
+def test_the_declared_bounds_and_a_brief_retry_after() -> None:
+    """`_declared`'s failure statuses are 400 to 599 inclusive, and a stated
+    wait under a second is waited as stated."""
+    assert models._declared(StatusError(400)) and models._declared(StatusError(599))
+    assert not models._declared(StatusError(399))
+    assert not models._declared(StatusError(600))
+    assert models._retry_after(_LimitedBriefly("private")) == 0.5
+
+
+def test_drop_stop_owed_reads_the_park_against_the_latest_drop(
+    harness: _Harness,
+) -> None:
+    """F530: two declared drops, a park, a third declared drop with no park
+    after it: the stop is owed for the third, whatever the park said of the
+    two before it; a park after the third settles it."""
+    from caos.store.events import RunEvent, append
+    from caos.store.runs import start_attempt
+    from caos.store.work import enqueue_run
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+
+    def drop() -> None:
+        attempt = start_attempt(conn, harness.run_id, node)
+        assert record_outcome(conn, attempt_id=attempt, outcome=dropped)
+
+    def park() -> None:
+        append(conn, harness.run_id, RunEvent.RUN_PARKED)
+        conn.commit()
+
+    def owed() -> bool:
+        said = drop_stop_owed(conn, run_id=harness.run_id, route_node_id=node)
+        conn.rollback()
+        return said
+
+    drop()
+    drop()
+    park()
+    drop()
+    assert not owed(), "no work row: a direct caller's"
+    enqueue_run(conn, harness.run_id)
+    conn.commit()
+    assert owed()
+    # The pass that owes the stop says so with no call -- after the lease
+    # answer, as `_refuse_unexplained` does.
+    from caos.boundary_text import BoundaryText
+    from caos.graph.runtime import _refuse_spent_drop
+    from caos.store.work import claim_run
+
+    with pytest.raises(Refusal, match=r"^LEASE_NOT_HELD$"):
+        _refuse_spent_drop(conn, harness.run_id, node, None)
+    conn.rollback()
+    lease = claim_run(conn, worker=BoundaryText.of("worker-a"), lease_seconds=60)
+    conn.commit()
+    assert lease is not None
+    with pytest.raises(Refusal, match=r"^PROVIDER_UNAVAILABLE$"):
+        _refuse_spent_drop(conn, harness.run_id, node, lease)
+    conn.rollback()
+    park()
+    assert not owed()
+    _refuse_spent_drop(conn, harness.run_id, node, lease)
+    conn.rollback()
