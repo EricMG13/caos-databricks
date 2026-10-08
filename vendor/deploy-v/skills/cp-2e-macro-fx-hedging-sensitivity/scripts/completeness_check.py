@@ -304,15 +304,29 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
     other table between, still does, at any distance (fork r6) -- but only for
     an ID no heading binds the near way.
 
+    In the four-line window the table goes to a line that opens with an ID
+    before one that only mentions one (fork r13), and within each, to the
+    nearest heading before the nearest prose line (fork r2): under
+    "**T4.4 — Income Statement**" and "Figures reconcile to T4.5." the table
+    is T4.4.
+
     The first table bound keeps the ID, a near heading's before a distant
-    one's, with one exception (fork r12): a table under a heading that opens
-    with the ID ("#### T4.4 — Income Statement", or a snake_case register's
-    title) takes it from a table bound by a prose line that only mentions the
-    ID ("The compact table below summarizes T4.4 ..."), whatever their order.
-    A caption that opens with the ID ("**T4.4 — Income Statement**") is never
-    displaced, and a heading that only mentions the ID ("### Notes (see
-    T4.4)") displaces nothing.
+    one's, with one exception (fork r12, widened in r13): a table under a
+    heading or caption that opens with the ID ("#### T4.4 — Income
+    Statement", "**T4.4 — Income Statement**", or a snake_case register's
+    title on a heading) takes it from a table bound by a line that only
+    mentions the ID, prose ("The compact table below summarizes T4.4 ...")
+    or heading ("### Bridge T4.4 to T4.5"), whatever their order. A table
+    bound by a line that opens with the ID is never displaced, and a line
+    that only mentions the ID displaces nothing.
     """
+    return {reg_id: (header, rows) for reg_id, (header, rows, _) in
+            _locate_registers(handoff_text, register_ids, retired_ids).items()}
+
+
+def _locate_registers(handoff_text, register_ids=None, retired_ids=()):
+    """`find_registers`, each table with its rows' own cell counts:
+    {register_id: (header, [rows], [cell count per row])} (fork r13)."""
     id_re = REGISTER_ID_RE
     titles, title_re = {}, None
     if register_ids is not None:
@@ -359,6 +373,11 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
         title = title_of.get(reg_id) if line.startswith("#") else None
         return bool(title) and re.match(re.escape(title) + r"(?![A-Za-z0-9])", rest, re.IGNORECASE) is not None
 
+    def led(line, reg_id):
+        # A heading or caption opening with the ID past emphasis or a backtick
+        # (fork r13: one test for both, as a caption's was in r12).
+        return opens_with(line, reg_id, "[*_`]")
+
     def label_id(label):
         match = id_re.search(label)
         if match:
@@ -368,7 +387,17 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
 
     lines = unfenced_markdown(handoff_text).splitlines()
     out, recent, heading, distant = {}, [], None, []
-    mentioned = set()  # IDs held by a table a prose mention bound (fork r12)
+    mentioned = set()  # IDs held by a table a mere mention bound (fork r12, r13)
+
+    def claim(reg_id, line, table):
+        if reg_id not in out:
+            out[reg_id] = table
+            if not led(line, reg_id):
+                mentioned.add(reg_id)
+        elif reg_id in mentioned and led(line, reg_id):
+            out[reg_id] = table
+            mentioned.discard(reg_id)
+
     i = 0
     while i < len(lines):
         s = lines[i].strip()
@@ -377,7 +406,7 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
             j = i + 1
             if j < len(lines) and SEPARATOR_RE.match(lines[j].strip()) and "|" in lines[j]:
                 j += 1
-            rows = []
+            rows, widths = [], []
             while j < len(lines):
                 t = lines[j].strip()
                 if not t.startswith("|"):
@@ -385,32 +414,28 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
                 # Split as the interface reader splits it (fork r6): an escaped
                 # `\|` never shifts a cell into or out of a critical column.
                 cells = _row_cells(t, len(header))
+                widths.append(len(cells))
                 cells += [""] * (len(header) - len(cells))
                 rows.append(dict(zip(header, cells[:len(header)])))
                 j += 1
             # A heading binds before a prose line that merely mentions an ID
             # ("reconciles to the T4.4 revenue base" under "### T4.5"), fork r2.
             heads = [s for s in reversed(recent) if s.startswith("#")]
-            line = next((head for head in heads if label_id(head)), None)
             # A heading led by one of the module's retired IDs (CP-1's
             # "#### T4.7 Normalized Financials") is that register's: a prose
-            # mention never claims its table (fork r7). Any other heading,
+            # line never claims its table (fork r7). Any other heading,
             # whatever IDs it names ("Inputs (CP-1 T4.6)", "#### T4.18 Debt
             # (from CP-1)" in CP-1B, "### T4 — Statements"), leaves the prose.
-            if line is None and not any(map(retired, heads)):
-                prose = [s for s in reversed(recent) if not s.startswith("#")]
-                line = next((note for note in prose if label_id(note)), None)
-            reg_id = label_id(line) if line else None
-            if reg_id:
-                if reg_id not in out:
-                    out[reg_id] = (header, rows)
-                    if not line.startswith("#") and not opens_with(line, reg_id, "[*_`]"):
-                        mentioned.add(reg_id)
-                elif reg_id in mentioned and line.startswith("#") and opens_with(line, reg_id, "[*_]"):
-                    out[reg_id] = (header, rows)
-                    mentioned.discard(reg_id)
+            prose = [] if any(map(retired, heads)) else [s for s in reversed(recent) if not s.startswith("#")]
+            named = [s for s in heads + prose if label_id(s)]
+            # A line opening with its ID first, then the nearest heading
+            # before the nearest prose line (fork r2, r13).
+            line = next((s for s in named if led(s, label_id(s))), named[0] if named else None)
+            table = (header, rows, widths)
+            if line:
+                claim(label_id(line), line, table)
             elif heading is not None and heading not in recent and label_id(heading):
-                distant.append((label_id(heading), heading, (header, rows)))
+                distant.append((label_id(heading), heading, table))
             i = j
             recent, heading = [], None
             continue
@@ -420,9 +445,7 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
             heading = s if s.startswith("#") else heading
         i += 1
     for reg_id, line, table in distant:
-        if reg_id not in out or (reg_id in mentioned and opens_with(line, reg_id, "[*_]")):
-            out[reg_id] = table
-            mentioned.discard(reg_id)
+        claim(reg_id, line, table)
     return out
 
 
@@ -493,6 +516,22 @@ def _cell_violations(contract, reg_id, n, col, value):
     return []
 
 
+def _padded(header, width, column):
+    """Whether a row of `width` cells left `column` empty only by being short:
+    the row's dict holds the value of the column's last header position."""
+    return width < len(header) and len(header) - 1 - header[::-1].index(column) >= width
+
+
+def _short_row(reg_id, n, col, width, columns):
+    """The message for a critical cell a short row left empty (fork r13,
+    N154): the row's cell count against the header's, so the model looks for
+    the missing cell, not at a cell it did fill (LCR4 and LCR6 CP-3C were told
+    "'Source Trace' holds a disqualifying placeholder ''" for a row whose
+    source trace sat one column to the left)."""
+    return (f"{reg_id} row {n}: critical column {col!r} is empty because the "
+            f"row has {width} cells under a {columns}-cell header")
+
+
 def _cell(row, column):
     """A row's cell for a contract column name, matched as `_column_key` does."""
     if column in row:
@@ -503,14 +542,15 @@ def _cell(row, column):
 
 def check(skill_text, handoff_text, module_id=None):
     contract = load_contract(skill_text, module_id or module_id_of(handoff_text))
-    present = find_registers(handoff_text, contract["registers"], contract["retired_registers"])
+    located = _locate_registers(handoff_text, contract["registers"], contract["retired_registers"])
+    present = {reg_id: (header, rows) for reg_id, (header, rows, _) in located.items()}
     violations = []
 
     for reg_id, spec in sorted(contract["registers"].items()):
         if reg_id not in present:
             violations.append(f"{reg_id}: required register missing from the handoff")
             continue
-        header, rows = present[reg_id]
+        header, rows, widths = located[reg_id]
         resolved = _resolve_columns(spec["columns"], header)
         if spec["columns"]:
             missing = [c for c in spec["columns"] if not resolved[c]]
@@ -522,12 +562,15 @@ def check(skill_text, handoff_text, module_id=None):
                 f"{spec['minimum_body_rows']}"
             )
         exempt = set(spec["disqualifier_exempt_columns"])
-        for n, row in enumerate(rows, 1):
+        for n, (row, width) in enumerate(zip(rows, widths), 1):
             for col in spec["critical_columns"]:
                 if col in exempt:
                     continue
                 for actual in resolved.get(col) or ([col] if col in row else []):
-                    violations.extend(_cell_violations(contract, reg_id, n, actual, row[actual]))
+                    found = _cell_violations(contract, reg_id, n, actual, row[actual])
+                    if found and _padded(header, width, actual):
+                        found = [_short_row(reg_id, n, actual, width, len(header))]
+                    violations.extend(found)
 
     violations.extend(_semantic_violations(contract["semantic_rules"], present, contract["blocklist"]))
     violations.extend(_fixture_violations(contract, handoff_text))
@@ -653,13 +696,45 @@ def _semantic_violations(rules, present, blocklist=frozenset()):
     return out
 
 
+# What a line may carry around a fixture marker written alone on it: heading,
+# quote and list marks before it, emphasis or a backtick around it, and a
+# closing full stop, colon, semicolon or exclamation mark (fork r13).
+FIXTURE_LINE_MARKS_RE = re.compile(r"^(?:[#>\s]+|[-*+](?=\s)|[0-9]+[.)](?=\s))*")
+
+
+def _bare_line(line):
+    """A line as a fixture marker written alone on it reads: its marks, its
+    emphasis and its closing punctuation dropped, spacing collapsed,
+    casefolded."""
+    text = FIXTURE_LINE_MARKS_RE.sub("", line.strip()).strip("*_` \t")
+    text = text.rstrip(".:;!").strip("*_` \t")
+    return re.sub(r"\s+", " ", text).casefold()
+
+
+def _front_matter_text(value):
+    """Every string value of the front matter, list items and nested values
+    included, one per line."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        value = list(value.values())
+    if isinstance(value, list):
+        return "\n".join(_front_matter_text(item) for item in value)
+    return ""
+
+
 def _fixture_violations(contract, handoff_text):
-    """The fixture markers: a front-matter flag or warning naming one, or the
-    unfenced document carrying one of the declared substrings.
+    """The fixture markers: a front-matter flag or warning naming one, or one
+    of the declared substrings in a front-matter value or written alone on an
+    unfenced line ("Integration fixture.", "- **synthetic test input**").
+
+    Fork r13: a substring anywhere in the body no longer counts, so prose that
+    denies it ("not an integration fixture or synthetic test input") is not a
+    marker.
 
     The front matter is read with the shared restricted parser; a handoff with
     none (or one the parser refuses, which validate_handoff.py reports on its
-    own) declares no flags and is judged on its text alone.
+    own) declares no flags and is judged on its lines alone.
     """
     out = []
     try:
@@ -672,9 +747,10 @@ def _fixture_violations(contract, handoff_text):
         for flag in (declared if isinstance(declared, list) else []):
             if isinstance(flag, str) and flag in contract[name]:
                 out.append(f"{field} declares the fixture marker {flag!r}")
-    text = unfenced_markdown(handoff_text).casefold()
+    declared = _front_matter_text(fields).casefold()
+    lines = {_bare_line(line) for line in unfenced_markdown(handoff_text).splitlines()}
     for sub in contract["fixture_substrings"]:
-        if sub and sub in text:
+        if sub and (sub in declared or sub in lines):
             out.append(f"document contains the fixture marker text {sub!r}")
     return out
 
@@ -766,6 +842,13 @@ def _self_check():
     v, _, _ = check(skill, bad)
     assert any("disqualifying placeholder" in x for x in v), v
 
+    # a short row names its width, not only the critical cell it left empty (fork r13)
+    v, _, _ = check(skill, good.replace("| Coverage | 2.1x | E2 |", "| Coverage | 2.1x |"))
+    assert v == ["T1.1 row 2: critical column 'Evidence ID' is empty because the row has 2 cells "
+                 "under a 3-cell header"], v
+    v, _, _ = check(skill, good.replace("| Coverage | 2.1x | E2 |", "| Coverage | 2.1x | |"))
+    assert v == ["T1.1 row 2: critical column 'Evidence ID' holds a disqualifying placeholder ''"], v
+
     # too few rows
     v, _, _ = check(skill, good.replace("| Coverage | 2.1x | E2 |\n", ""))
     assert any("body row" in x for x in v), v
@@ -816,8 +899,18 @@ def _self_check():
     assert v == ["limitation_flags declares the fixture marker 'INTEGRATION_FIXTURE_ONLY'"], v
     v, _, _ = check(split, honest.replace("validation_warnings: []", "validation_warnings:\n  - PRESENTATION_FIXTURE"))
     assert v == ["validation_warnings declares the fixture marker 'PRESENTATION_FIXTURE'"], v
-    v, _, _ = check(split, honest.replace("A source-limited screen.", "An Integration Fixture."))
-    assert v == ["document contains the fixture marker text 'integration fixture'"], v
+    # a marker written alone on a line, or in a front-matter value; prose that
+    # only names it is not one (fork r13)
+    marker = ["document contains the fixture marker text 'integration fixture'"]
+    for line in ("Integration fixture.", "> **Integration Fixture**", "- `integration fixture`"):
+        v, _, _ = check(split, honest.replace("A source-limited screen.", line))
+        assert v == marker, (line, v)
+    v, _, _ = check(split, honest.replace("validation_warnings: []",
+                                          'validation_warnings: []\nnotes: "Built from an Integration Fixture pack."'))
+    assert v == marker, v
+    for line in ("An Integration Fixture.", "The pack is issuer filings, not an integration fixture."):
+        v, _, _ = check(split, honest.replace("A source-limited screen.", line))
+        assert v == [], (line, v)
     v, _, _ = check(split, honest.replace("A source-limited screen.", "```\nintegration fixture\n```"))
     assert v == [], v
 

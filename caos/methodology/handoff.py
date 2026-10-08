@@ -1345,9 +1345,11 @@ def _width_lines(
 ) -> list[str]:
     """Every register row whose cell count is not its header's (F509), an
     advisory line: the vendor pads a short row with empty cells and drops a
-    long row's extra ones, so its own message names only the critical cell
-    left empty, and a model that sees that cell's text one column to the
-    left cannot find the fault (LCR4 CP-3C, four times). The registers are
+    long row's extra ones. Its own message names the critical cell left
+    empty and, since fork r13 (D111), the row's cell count against the
+    header's, but not the row's first cell or where its columns shift, and
+    nothing at all for a short row that empties no critical cell or for a
+    long row (LCR4 CP-3C was refused four times on it). The registers are
     the ones `check()` binds, the cells counted by the vendor's `_row_cells`;
     a tagged table the vendor already reports as of another width keeps its
     own line alone. At most `MAX_WIDTH_ROWS` rows, the rest counted."""

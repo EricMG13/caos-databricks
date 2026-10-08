@@ -53,7 +53,7 @@ CATALOG = (
 )
 
 # A run pinned to one build never executes under another.
-BUILD_ID = "9043ba7ff1021c8e51f914409a86a22935a6e51b25f2a58a182a677b82266047"
+BUILD_ID = "d8a307a94ed6b8ef7b89b4a4c90f9f78191d02aa866bda796c6b364a17b90ddc"
 
 
 def _load(path: Path) -> dict[str, object]:
@@ -512,12 +512,22 @@ def test_the_fixture_markers_are_split_from_the_thin_evidence_marker() -> None:
     assert check(skill, warned, "CP-0")[0] == [
         "validation_warnings declares the fixture marker 'PRESENTATION_FIXTURE'"
     ]
+    # Fork r13 (D111): a marker counts written alone on a line, or in a
+    # front-matter value; a sentence that only names it, a denial included,
+    # does not.
     marked = handoff_markdown(
-        identity("CP-0"), body_note="Built from an Integration Fixture pack."
+        identity("CP-0"), body_note="Integration fixture."
     ).decode()
     assert check(skill, marked, "CP-0")[0] == [
         "document contains the fixture marker text 'integration fixture'"
     ]
+    for note in (
+        "Built from an Integration Fixture pack.",
+        "The pack is issuer filings, not an integration fixture or synthetic"
+        " test input.",
+    ):
+        named = handoff_markdown(identity("CP-0"), body_note=note).decode()
+        assert check(skill, named, "CP-0")[0] == []
 
 
 def test_screening_only_never_permits_committee_ready() -> None:
