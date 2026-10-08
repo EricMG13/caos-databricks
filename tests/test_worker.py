@@ -49,7 +49,7 @@ from caos.graph.worker import (
 )
 from caos.methodology.bundle import Bundle
 from caos.pricing import ModelPrice
-from caos.provider import CompletionProvider
+from caos.provider import CONTEXT_NOT_DECLARED, CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import (
     SEARCH_PATH_OPTION,
@@ -194,7 +194,9 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     assert run_status(run.conn, run.run_id) is RunStatus.RUNNING
     # CF-044: a park otherwise left nothing on stderr for an operator watching
     # the process to notice by.
-    assert capsys.readouterr().err.strip() == code
+    # The suite's endpoint declares no context, so the run says so first (D116).
+    said = capsys.readouterr().err.splitlines()
+    assert said == [f"{CONTEXT_NOT_DECLARED} endpoint={completions.model}", code]
     run.conn.rollback()
     assert drive(run, completions) is None, "a stopped run waits for a retry"
     assert len(completions.prompts) == 4
