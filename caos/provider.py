@@ -16,11 +16,12 @@ to prevent.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from decimal import Decimal
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 
 from caos.refusals import Refusal, RefusalCode
@@ -57,6 +58,32 @@ MAX_REQUEST_BYTES = 4_194_304
 MAX_RESPONSE_BYTES = 4_194_304
 MAX_COMPLETION_TOKENS = 65_536
 
+# D116 (N157): the transport ceiling is not the model's. Each endpoint's
+# context window in tokens, declared here and pinned with the host, keyed by
+# the endpoint name a run is priced and called under (its model identity).
+# An endpoint missing here has no known context and is refused before any
+# reservation (`request_ceiling`). Sources: `openai/gpt-6-luna`, the
+# listing of the router the qualification adapter calls (1,050,000), which
+# answered FCA3-dec's 4,033,648-byte CP-0 request with a 400 this bound now
+# prevents; `databricks-claude-opus-5`, the 1M tokens D29 sized the transport
+# ceiling against.
+CONTEXT_TOKENS: Mapping[str, int] = MappingProxyType(
+    {
+        "openai/gpt-6-luna": 1_050_000,
+        "databricks-claude-opus-5": 1_000_000,
+    }
+)
+# The fewest request bytes one prompt token is assumed to take: the bound is
+# `(context - MAX_COMPLETION_TOKENS) * BYTES_PER_TOKEN_FLOOR` request bytes.
+# Measured (D116): over 195 live calls of 3 to 5 October, request bytes per
+# native prompt token ran 3.82 to 4.64, and per the router's own prompt count
+# 4.02 throughout; FCA3-dec's CP-0 took 4.53 per o200k token. Three is below
+# every one, so a request under the bound is under the context by any of
+# those counts. A pack of numeric tables alone can tokenise denser (the
+# fund's N-PORT schedule, 2.54): such a request is refused by the provider
+# before any generation, as FCA3-dec's was, never cut.
+BYTES_PER_TOKEN_FLOOR = 3
+
 # A call that cannot succeed by being repeated. Retrying one of these spends a
 # second reservation on the same certain failure.
 NEVER_RETRIED = frozenset({400, 401, 402, 403, 404, 413, 422})
@@ -65,6 +92,20 @@ _FINISH_REFUSALS = {
     "length": RefusalCode.PROVIDER_OUTPUT_TRUNCATED,
     "content_filter": RefusalCode.PROVIDER_REFUSED,
 }
+
+
+def request_ceiling(model: str) -> int:
+    """The most request bytes one call to `model` may carry (D116): its
+    declared context less the completion it may return, at
+    `BYTES_PER_TOKEN_FLOOR` bytes a token, and never past the transport's
+    `MAX_REQUEST_BYTES`. An endpoint with no declared context refuses
+    `PROVIDER_NOT_CONFIGURED`: a bound nobody declared is not a bound."""
+    tokens = CONTEXT_TOKENS.get(model)
+    if tokens is None or tokens <= MAX_COMPLETION_TOKENS:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return min(
+        MAX_REQUEST_BYTES, (tokens - MAX_COMPLETION_TOKENS) * BYTES_PER_TOKEN_FLOOR
+    )
 
 
 def finish_refusal(finish_reason: str) -> RefusalCode | None:

@@ -77,7 +77,7 @@ from caos.methodology.vendor import (
     cached_contract,
     catalog,
 )
-from caos.provider import MAX_REQUEST_BYTES, CompletionProvider
+from caos.provider import CompletionProvider, request_ceiling
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.outcomes import accepted_rows, artifact_digests
@@ -1003,6 +1003,47 @@ _PAGE_MAP_NOTE = (
 )
 
 
+# D116: what a consumer is told when its pack is larger than one request to
+# its model can carry, so its largest sources are shown as page maps. A
+# consumer has no evidence demand of its own: the gate's T8 is the one channel
+# that attaches pages (Step I rule 5).
+_CONSUMER_PAGE_MAP = (
+    "\n--- HOST EVIDENCE DELIVERY {tag} (host-owned: how the EVIDENCE above "
+    "was delivered; not citable evidence) ---\n"
+    "The evidence handed to this module is larger than one request to this "
+    "model can carry, so the host shows each source listed below as its page "
+    "map: its EVIDENCE is the first leading_lines_per_page lines of each of its "
+    "pages (lines_shown of lines), and no other line of it is in your evidence "
+    "or may be cited. Every other source is delivered whole. A fact that may "
+    "sit in a withheld line is a limitation you name, never a value you "
+    "supply. This module cannot ask for pages itself: CP-0's T8 attaches a "
+    "module the pages it needs (`<filename> pages <first>-<last>`, Step I "
+    "rule 5), and a run whose CP-0 names them delivers those pages whole.\n"
+    "{body}\n--- END HOST EVIDENCE DELIVERY {tag} ---\n"
+)
+
+
+def _delivery_section(
+    source_set: SourceSet | None,
+    tag: str,
+    page_maps: Mapping[UUID, Mapping[str, int]] | None = None,
+) -> str:
+    """A consumer's page maps (D116), or nothing: the gate's are said in its
+    source preparation section, and a consumer handed its pack whole is told
+    nothing, so its prompt is byte for byte what it was."""
+    if source_set is not None or not page_maps:
+        return ""
+    body = json.dumps(
+        [
+            {"source_id": str(source_id), "evidence_delivery": "PAGE_MAP", **shown}
+            for source_id, shown in page_maps.items()
+        ],
+        sort_keys=True,
+        indent=2,
+    )
+    return _CONSUMER_PAGE_MAP.format(tag=tag, body=body)
+
+
 def _source_preparation_section(
     source_set: SourceSet | None,
     tag: str,
@@ -1334,6 +1375,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _research_section(identity)
         + _command_section(identity)
         + _source_preparation_section(source_set, "", page_maps)
+        + _delivery_section(source_set, "", page_maps)
         + evidence
     )
     # Host-owned values join the derivation: none of them can pre-compute a tag.
@@ -1375,6 +1417,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _research_section(identity, tag)
         + _command_section(identity, tag)
         + _source_preparation_section(source_set, tag, page_maps)
+        + _delivery_section(source_set, tag, page_maps)
     )
     if identity.module_id in {"CP-1", "CP-2G", "CP-4"} and any(
         n.module_id == MODEL_MODULE for n in route.nodes
@@ -1444,15 +1487,17 @@ def _retry_section(
 
 def request_size(provider: CompletionProvider, prompt: str) -> int:
     """The whole request the provider would send for `prompt`, in bytes, or
-    `CONTEXT_OVER_CEILING` past `MAX_REQUEST_BYTES` (§45.3).
+    `CONTEXT_OVER_CEILING` past its model's `request_ceiling` (§45.3, D116):
+    `MAX_REQUEST_BYTES`, or less where the model's declared context is less.
 
     Model, parameters and JSON escapes, not the prompt's encoding alone. A
     canonical call always asks for a JSON object, so that is the request
     measured. The number is what the call is priced and reserved on (Task 8.2),
     so the bytes bounded and the bytes paid for are the same bytes.
     """
+    ceiling = request_ceiling(provider.model)
     measured = len(provider.request_bytes(prompt, json_object=True))
-    if measured > MAX_REQUEST_BYTES:
+    if measured > ceiling:
         raise Refusal(RefusalCode.CONTEXT_OVER_CEILING)
     return measured
 
