@@ -216,6 +216,11 @@ class HostIdentity:
     # digest -- as canonical JSON. None for every other module, and absent from
     # a serialised record when None, so no record written before it moved.
     research_brief: str | None = None
+    # D109: this module's part of the run's pinned command -- qualifier name
+    # to its `value` and `basis` -- as canonical JSON, rendered as the
+    # host-owned current-command section. None for a module the command does
+    # not name, and absent from a serialised record when None, as above.
+    current_command: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -762,10 +767,11 @@ WIRE_CITATION_KEYS = frozenset({"source_id", "page", "matched_text"})
 RECORD_FORMAT = "caos-canonical-record-v2"
 # What the record codec reads and writes (`record_bytes`, `_decoded_record`),
 # raised whenever a record this build writes is one an older build would
-# refuse: 1 since D106 (`unverified`, `linked`), 2 since D107 (`marker`). A
+# refuse: 1 since D106 (`unverified`, `linked`), 2 since D107 (`marker`), 3
+# since D109 (the identity's `current_command`). A
 # build with another value, or none, cannot read this build's records, so
 # `scripts/rollback_check.py` refuses a rollback across a change of it.
-RECORD_CODEC_VERSION = 2
+RECORD_CODEC_VERSION = 3
 # A validated Blocked answer's citations, judged as any answer's (D106).
 BLOCKED_FORMAT = "caos-blocked-citations-v1"
 # A body may carry the largest Markdown the host accepts plus its citations
@@ -2120,8 +2126,9 @@ def record_bytes(record: CanonicalRecord) -> bytes:
         del document["projections"]["blockers"]
     if document["citation_rule"] == ANY_RUN:
         del document["citation_rule"]
-    if document["identity"]["research_brief"] is None:
-        del document["identity"]["research_brief"]
+    for optional in ("research_brief", "current_command"):
+        if document["identity"][optional] is None:
+            del document["identity"][optional]
     for citation in document["citations"]:
         _written_citation(citation, record.citation_rule)
     document["unverified"] = [_unverified_document(e) for e in record.unverified]
@@ -2250,10 +2257,12 @@ def _with_blockers(value: object) -> dict[str, Any]:
 
 def _with_research(value: object) -> dict[str, Any]:
     """Supply the absent `research_brief` an identity omits (every module but
-    CP-DR, and every record written before §96), read back as None."""
-    if not isinstance(value, dict) or "research_brief" in value:
-        return value if isinstance(value, dict) else {}
-    return {**value, "research_brief": None}
+    CP-DR, and every record written before §96), and the absent
+    `current_command` (every module the run's command does not name, and every
+    record written before D109), each read back as None."""
+    if not isinstance(value, dict):
+        return {}
+    return {"research_brief": None, "current_command": None, **value}
 
 
 def _with_rule(value: dict[str, Any]) -> dict[str, Any]:
@@ -2450,6 +2459,7 @@ def _decoded_record(data: bytes) -> CanonicalRecord:
             ordinal=_int,
             upstream=_each(lambda ref: _typed(UpstreamRef, ref)),
             research_brief=_optional_str,
+            current_command=_optional_str,
         ),
         lineage=_each(lambda ref: _typed(LineageRef, ref)),
         projections=lambda item: _typed(
