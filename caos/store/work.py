@@ -28,12 +28,15 @@ from caos.store.events import RunEvent, append, lock_run
 from caos.store.outcomes import require_idle
 
 # Renewed by every fenced write, the reservation included, so it outlives one
-# provider call deadline (`caos.provider.TIMEOUT_SECONDS`, 420 s since D83).
+# provider call deadline (`caos.provider.TIMEOUT_SECONDS`, 720 s since D117).
 # The 180 s left are a liveness budget shared with the work before the call
-# and after it (bill, checks, accept), not a safety invariant: exactly-once
-# rests on `call_hold`, `_UNSETTLED` and `replay_billed`. Brief D5's two
-# deadlines held until D83.
-LEASE_SECONDS = 600
+# and after it (bill, checks, accept). While the call's session lives,
+# exactly-once rests on `call_hold`, `_UNSETTLED` and `replay_billed`; after a
+# session cut released `call_hold` (D117), they are the safety margin in which
+# the live lease alone keeps a second worker off the node. Brief D5's two
+# deadlines held until D83. 900 s since D117, raised with the deadline so the
+# 180 s stay (`CALL_HOLD_SECONDS`, two leases, follows it).
+LEASE_SECONDS = 900
 MAX_WORKER_BYTES = 128
 # N15 (D39): the most runs one actor may hold queued or in a worker's hands at
 # once. A run is driven one node at a time and holds a worker while it does,
@@ -456,7 +459,7 @@ def _require_seconds(seconds: int) -> None:
 
 
 # A beat older than this is not evidence that a worker is alive. One full
-# provider call plus a minute: `caos.provider.TIMEOUT_SECONDS` (420 s) plus 60.
+# provider call plus a minute: `caos.provider.TIMEOUT_SECONDS` (720 s) plus 60.
 # A worker beats once per node and not during the node's model call, so at 30 s
 # -- three poll intervals -- every call longer than half a minute reported
 # `WORKERS_STALE` for a worker that was doing exactly what it is meant to do,
@@ -465,7 +468,7 @@ def _require_seconds(seconds: int) -> None:
 # than the worker. A literal rather than an import, because the store does not
 # depend on the provider seam; the rule it follows is named here instead, and
 # `tests/test_worker_heartbeat.py` asserts the two stay in that relation.
-WORKER_STALE_AFTER = 480.0
+WORKER_STALE_AFTER = 780.0
 type WorkerState = Literal["POLLING", "WORKING", "BACKOFF", "STOPPED"]
 
 

@@ -41,7 +41,12 @@ from psycopg_pool import ConnectionPool
 
 from caos.graph.build import RunState
 from caos.refusals import Refusal, RefusalCode
-from caos.store import SOCKET_BOUNDS, owned_schema, startup_options
+from caos.store import (
+    IDLE_SESSION_OPTION,
+    SOCKET_BOUNDS,
+    owned_schema,
+    startup_options,
+)
 from caos.store.lakebase import (
     TOKEN_SECONDS,
     lakebase_database,
@@ -225,12 +230,19 @@ def _pooled(
         connection_class=connection_class,
         # `connect`'s socket bounds (W4): a half-open socket otherwise stalls a
         # checkpoint write, or the pool's own check, for the kernel's timeout.
+        # And its idle bound turned off (D117): a database that ends idle
+        # sessions otherwise ends every pooled one between writes. The search
+        # path is the graph's own, set by `_search_path`.
         kwargs={
             "autocommit": True,
             "row_factory": dict_row,
             **SOCKET_BOUNDS,
             "options": startup_options(
-                conninfo, [f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"]
+                conninfo,
+                [
+                    IDLE_SESSION_OPTION,
+                    f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",
+                ],
             ),
         },
         configure=_search_path,
