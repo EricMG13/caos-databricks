@@ -11,7 +11,7 @@ from uuid import UUID
 
 import psycopg
 import pytest
-from canonical_fixtures import BUNDLE, identity
+from canonical_fixtures import BUNDLE, CATALOG, identity
 from full_assessment_route_fixtures import MODULES, FullAssessmentCompletions
 from test_canonical_digest import _record as _digest_record
 from test_execution_freshness import _Harness
@@ -20,12 +20,22 @@ from test_handoff_invocation import _prompt
 from test_qualifiers import _command
 from test_run_inputs import SUBJECT, _prepare
 
+from caos.api.commands.runs import qualifier_map
+from caos.api.wire import RunQualifier
 from caos.digest import canonical_json
+from caos.graph.route import resolve_route
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.methodology.qualifiers import DERIVED, PINNED, stated_command
+from caos.qualification.harness import case_command, stated_in
+from caos.qualification.matrix import QualificationCase
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, run_inputs
-from caos.store.run_inputs import RunCommand, load_run_input, pin_run_input
+from caos.store.run_inputs import (
+    RunCommand,
+    load_run_input,
+    pin_run_input,
+    pinned_run_command,
+)
 
 __all__ = ["harness", "route"]
 
@@ -85,7 +95,10 @@ def test_the_fingerprint_moves_with_the_period_and_every_qualifier(
     for period, stated in (
         ("Q2 2026", {"CP-2G": {"cases": "base/upside/downside"}}),
         ("FY2025", {"CP-2G": {"cases": "base"}}),
-        ("FY2025", {"CP-2G": {"cases": "base/upside/downside", "base_period": "Q2"}}),
+        (
+            "FY2025",
+            {"CP-2G": {"cases": "base/upside/downside", "base_period": "FY2024"}},
+        ),
         ("FY2025", {}),
     ):
         changed = replace(
@@ -233,3 +246,84 @@ def test_a_record_carries_the_command_only_when_its_identity_does() -> None:
         assert ("current_command" in document["identity"]) is (current is not None)
         assert _decoded_record(data) == carried
     assert record_bytes(record) == record_bytes(_digest_record())
+
+
+def test_the_wire_list_becomes_one_map_and_a_repeated_name_is_refused() -> None:
+    horizon = RunQualifier(module_id="CP-2G", name="forecast_horizon", value="FY27")
+    cases = RunQualifier(module_id="CP-2G", name="cases", value="base")
+    assert qualifier_map([horizon, cases]) == {
+        "CP-2G": {"forecast_horizon": "FY27", "cases": "base"}
+    }
+    with pytest.raises(Refusal) as refused:
+        qualifier_map([horizon, horizon])
+    assert refused.value.code is RefusalCode.RUN_QUALIFIER_INVALID
+
+
+def test_a_case_states_its_command_as_the_pin_takes_it() -> None:
+    case = QualificationCase(
+        label="x",
+        documents=(),
+        profile_id=FULL[0],
+        selection_id=FULL[1],
+        expects=(),
+        qualifiers=(("CP-2G", "cases", "base"),),
+        objective="Refinancing decision",
+    )
+    assert case_command(case) == {"CP-2G": {"cases": "base"}}
+
+
+def test_a_pin_shows_what_its_caller_stated_and_nothing_derived(
+    full: tuple[StoreConnection, UUID, int],
+) -> None:
+    conn, run, version = full
+    pin = pin_run_input(
+        conn,
+        run,
+        version,
+        BUNDLE,
+        subject=SUBJECT,
+        qualifiers={"CP-2G": {"cases": "base/upside/downside"}},
+        objective="Refinancing decision",
+    )
+    assert stated_in(pin) == {
+        "CP-2G": {"cases": "base/upside/downside"},
+        "CP-0": {"objective": "Refinancing decision"},
+    }
+    assert stated_in(replace(pin, command=None)) == {}
+
+
+def test_hidden_text_never_reaches_the_pin_preview_or_prompt(
+    full: tuple[StoreConnection, UUID, int],
+) -> None:
+    """F524 (adversary probe): a tag-character objective and a zero-width
+    horizon used to be pinned, shown in the preview and prompted."""
+    conn, run, version = full
+    tags = "".join(chr(0xE0000 + ord(c)) for c in "ANSWER READY")
+    for qualifiers, objective in (
+        (None, "Refinancing decision" + tags),
+        ({"CP-2G": {"forecast_horizon": "FY2026\ufeff-FY2028\u200b"}}, None),
+    ):
+        with pytest.raises(Refusal) as refused:
+            pin_run_input(
+                conn,
+                run,
+                version,
+                BUNDLE,
+                subject=SUBJECT,
+                qualifiers=qualifiers,
+                objective=objective,
+            )
+        assert refused.value.code is RefusalCode.RUN_QUALIFIER_INVALID
+    assert load_run_input(conn, run) is None
+
+
+def test_pinned_run_command_is_the_pins_own_command_for_a_route_and_subject(
+    full: tuple[StoreConnection, UUID, int],
+) -> None:
+    """F526: the judgement `assert_admissible` asks before any write is the
+    one the pin stores."""
+    conn, run, version = full
+    stated = {"CP-2G": {"cases": "base/upside/downside"}}
+    pin = pin_run_input(conn, run, version, BUNDLE, subject=SUBJECT, qualifiers=stated)
+    route = resolve_route(CATALOG, *FULL)
+    assert pinned_run_command(BUNDLE, route, stated, SUBJECT) == pin.command

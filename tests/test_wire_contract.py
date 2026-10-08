@@ -72,6 +72,7 @@ from caos.api.wire import (
     RunBody,
     RunCreated,
     RunInputPinned,
+    RunQualifier,
     RunSectionDocument,
     RunSubjectView,
     RunSummary,
@@ -429,7 +430,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "questions",
         }
     ),
-    PinRunInput: frozenset({"subject", "research"}),
+    RunQualifier: frozenset({"module_id", "name", "value"}),
+    PinRunInput: frozenset({"subject", "research", "qualifiers", "objective"}),
     RunInputPinned: frozenset({"run_id", "source_set_version", "input_fingerprint"}),
     GatePreviewDocument: frozenset(
         {

@@ -15,7 +15,7 @@ from uuid import UUID
 import psycopg
 
 from caos import methodology
-from caos.boundary_text import BoundaryText
+from caos.boundary_text import BoundaryText, hides_text
 from caos.digest import canonical_digest, canonical_json
 from caos.graph.route import ResolvedRoute
 from caos.methodology.bundle import Bundle, verified_bytes
@@ -112,6 +112,12 @@ def cos_run_id(run_id: UUID, created_at: datetime) -> str:
 
 
 def _subject_text(value: object) -> bool:
+    """One line of subject text: NFC within the bound, and nothing a reader
+    cannot see (`hides_text`, F525) -- an issuer name and a period reach
+    every node's front matter and the gate preview, and a model copying a
+    hidden character back is refused `HANDOFF_MALFORMED` for the host's
+    defect. The one-line rule refuses U+2028 and U+2029 and `hides_text`
+    U+FEFF, so with it this is `handoff.INVISIBLE` too."""
     try:
         return (
             type(value) is str
@@ -121,6 +127,7 @@ def _subject_text(value: object) -> bool:
             and len(value.splitlines()) == 1
             and len(value.encode("utf-8")) <= _SUBJECT_TEXT_BYTES
             and BoundaryText.of(value, limit=_SUBJECT_TEXT_BYTES).value == value
+            and not hides_text(value)
         )
     except Refusal:
         return False
@@ -495,7 +502,7 @@ def _command_fits(command: RunCommand | None, route: ResolvedRoute) -> bool:
     )
 
 
-def _command(
+def pinned_run_command(
     bundle: Bundle,
     route: ResolvedRoute,
     stated: Mapping[str, Mapping[str, str]],
@@ -503,7 +510,9 @@ def _command(
 ) -> RunCommand:
     """A new pin's command (D109): `stated` judged against the pinned route,
     with CP-2G's unstated scope derived by the owner's rule; each name checked
-    against the stage fields of the verified `SKILL.md` it belongs to."""
+    against the stage fields of the verified `SKILL.md` it belongs to. Public
+    so a qualification set is judged by it before anything is written
+    (`harness.assert_admissible`, F526)."""
     modules = frozenset(node.module_id for node in route.nodes)
     stage_fields = {
         module_id: ux_stage_fields(verified_bytes(bundle, module_id, "SKILL.md"))
@@ -627,7 +636,7 @@ def pin_run_input_in(  # noqa: PLR0913 -- pin_run_input's arguments
     pinned = route_pin(conn, run_id)
     if source is None or pinned is None:
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
-    command = _command(bundle, pinned[0], stated, subject)
+    command = pinned_run_command(bundle, pinned[0], stated, subject)
     candidate = RunInput(
         run_id,
         owner[0],
