@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import httpx
 import pytest
@@ -319,3 +320,36 @@ def test_a_stream_without_its_finish_or_usage_is_not_an_answer(
     completion = _complete(frames)
     assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
     assert completion.content is None and completion.charge is None
+
+
+# The raw SSE body of one live streamed call (5 October 2026, `openai/gpt-6-luna`
+# pinned to `openai`, effort low, JSON mode): synthetic prompt, no key.
+REAL_SAMPLE = Path(__file__).parent / "fixtures" / "openrouter_sse_sample.txt"
+REAL_ID = "gen-1791224618-E6l1ZYiIUACmmPituFit"
+
+
+def test_a_real_openrouter_stream_reads_whole() -> None:
+    """F512 on observed bytes: the live sample repeats `role` on every delta
+    and carries its usage in a frame that repeats the finish in one choice,
+    as the references say; the adapter reads it as one answer, one finish,
+    the stated usage and the stream's id, and the seam bills it exactly."""
+    frames = [REAL_SAMPLE.read_text(encoding="utf-8")]
+    chat = openrouter_chat_model(MODEL, http_client=_transport(frames))
+    message = chat.invoke("hi", response_format={"type": "json_object"})
+    assert isinstance(message, AIMessage)
+    assert message.content == '{"ok": true}'
+    assert message.response_metadata["finish_reason"] == "stop"
+    assert message.response_metadata["id"] == REAL_ID
+    usage = message.usage_metadata
+    assert usage is not None
+    assert (usage["input_tokens"], usage["output_tokens"]) == (20, 12)
+    assert usage["total_tokens"] == 32
+    assert usage.get("output_token_details") == {"reasoning": 0}
+    price = ModelPrice(MODEL, Decimal("2E-7"), Decimal("0.000001"), date(2026, 10, 2))
+    chat = openrouter_chat_model(MODEL, http_client=_transport(frames))
+    completion = ChatCompletions(chat, MODEL, price).complete(
+        "q" * 200, json_object=True
+    )
+    assert completion.refusal is None
+    assert completion.charge == Decimal("0.0000160")
+    assert completion.generation_id == REAL_ID

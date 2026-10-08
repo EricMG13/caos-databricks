@@ -24,11 +24,14 @@ tokens>`, with `none` as the effort when none is sent, and `openrouter/<model>@
 pinned names joined by `,`. For example `openrouter/openai/gpt-6-luna/high/65536`
 and `openrouter/openai/gpt-6-luna-pro@openai/flex/none/65536`.
 
-The call streams (F511). A long call sent whole sent no byte until the answer
-was done, and three live runs were cut after about 195 to 299 s with no
-generation and no charge, short of `TIMEOUT_SECONDS`. Streamed, the provider
-sends keep-alives and tokens as it works; `invoke` still returns one message
-with the whole text, the usage and the completion id `caos.models` reads.
+The call streams (F511). Four live runs stopped PROVIDER_UNAVAILABLE after 138
+to 300 s with no charge, short of `TIMEOUT_SECONDS`. An idle cut on a call
+that sends no byte until it is done was one candidate, unconfirmed: calls of
+334 to 358 s completed whole, and what the wire did is not known (F513 now
+names it). Streamed, the provider sends keep-alives and tokens as it works,
+and a provider error arrives as an SSE `error` event; `invoke` still returns
+one message with the whole text, the usage and the completion id
+`caos.models` reads.
 
 The stream is read here, not by `ChatOpenAI`'s own streaming (F512). OpenRouter
 repeats `role` on every delta and sends its usage in a frame that repeats the
