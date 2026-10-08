@@ -17,8 +17,10 @@ from openrouter_adapter import (
     EFFORT_ENV,
     KEY_ENV,
     PROVIDER_ENV,
+    CutAfterContentError,
     effort_from_environment,
     extra_body_from_environment,
+    generating,
     openrouter_chat_model,
     provider_order_from_environment,
     qualification_identity,
@@ -26,7 +28,7 @@ from openrouter_adapter import (
 
 from caos.models import ChatCompletions
 from caos.pricing import ModelPrice
-from caos.provider import MAX_COMPLETION_TOKENS, Completion
+from caos.provider import MAX_COMPLETION_TOKENS, Completion, DropKind
 from caos.refusals import RefusalCode
 
 MODEL = "openai/gpt-6-luna"
@@ -299,23 +301,55 @@ def test_a_streamed_answer_is_one_assistant_message() -> None:
 
 
 @pytest.mark.parametrize(
-    "frames",
+    ("frames", "drop", "said"),
     [
-        pytest.param(MID_STREAM_ERROR, id="after-partial-output"),
-        pytest.param(ERROR_ONLY, id="first-and-only-event"),
+        pytest.param(
+            MID_STREAM_ERROR,
+            DropKind.RAISED,
+            "call=raised class=CutAfterContentError cause=APIError ",
+            id="after-partial-output",
+        ),
+        pytest.param(
+            ERROR_ONLY,
+            DropKind.DECLARED,
+            "call=vendor class=APIError cause=- ",
+            id="first-and-only-event",
+        ),
     ],
 )
 def test_a_mid_stream_error_is_unavailable_and_carries_no_text(
-    frames: list[str], capsys: pytest.CaptureFixture[str]
+    frames: list[str],
+    drop: DropKind,
+    said: str,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A provider error after the `200` is committed arrives as an SSE `error`
-    event: no answer, no charge, no partial content, and none of its words."""
+    event: no answer, no charge, no partial content, and none of its words.
+    Before anything was generated it is a drop the provider declared; after,
+    it is not (D110), and neither the seam nor the node re-attempts it."""
     completion = _complete(frames)
-    assert completion == Completion(None, None, None, RefusalCode.PROVIDER_UNAVAILABLE)
+    assert completion == Completion(
+        None, None, None, RefusalCode.PROVIDER_UNAVAILABLE, drop
+    )
     unanswered = capsys.readouterr().err
+    assert said in unanswered
     assert "error_code=502" in unanswered
     assert "error_type=provider_unavailable" in unanswered
     assert "private" not in unanswered and "private" not in repr(completion)
+
+
+def test_only_a_frame_carrying_something_generated_has_begun() -> None:
+    """D110: a role, an empty string or a keep-alive is not an answer begun;
+    content, reasoning or a tool call is, and an error after it keeps the
+    provider's error object for F513's line but is no declared drop."""
+    role_only = {"choices": [{"index": 0, "delta": {"role": "assistant"}}]}
+    empty = {"choices": [{"index": 0, "delta": {"content": "", "refusal": None}}]}
+    assert not generating(role_only) and not generating(empty)
+    assert not generating({"choices": []}) and not generating({})
+    assert generating({"choices": [{"delta": {"role": "assistant", "reasoning": "x"}}]})
+    assert generating({"choices": [{"delta": {"content": "{"}}]})
+    assert generating({"choices": [{"delta": {"tool_calls": [{"index": 0}]}}]})
+    assert CutAfterContentError(_ERROR).body == _ERROR
 
 
 @pytest.mark.parametrize(
