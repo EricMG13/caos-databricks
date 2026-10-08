@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 from fake_chat import MODEL, PRICE, ScriptedChat, StatusError, answer, fake_completions
 from langchain_core.language_models import BaseChatModel
+from openai import OpenAIError
 
 from caos import models
 from caos.models import (
@@ -693,3 +694,120 @@ def test_only_the_list_content_serializer_warning_is_contained() -> None:
     assert not [m for m in messages if "serializer warnings" in m], messages
     assert not [m for m in messages if "from the model" in m], messages
     assert "another warning, not contained" in messages
+
+
+class _Body(OpenAIError):
+    """A vendor error carrying an OpenRouter-shaped error body, as the client's
+    `APIError` does for an SSE `error` event; its words never travel."""
+
+    def __init__(self, body: object, status_code: int | None = None) -> None:
+        super().__init__("private")
+        self.body = body
+        if status_code is not None:
+            self.status_code = status_code
+
+
+_ROUTER_ERROR = {
+    "code": 502,
+    "message": "private upstream words",
+    "metadata": {"error_type": "provider_unavailable", "provider_code": "private"},
+}
+
+
+def _cut() -> Exception:
+    """A connection error caused by the transport's reset, as the client wraps
+    one: no status, the reset as its cause."""
+    wrapped = StatusError(0)
+    del wrapped.status_code
+    wrapped.__cause__ = ConnectionResetError("private")
+    return wrapped
+
+
+@pytest.mark.parametrize(
+    ("failure", "said"),
+    [
+        pytest.param(
+            _Body(_ROUTER_ERROR),
+            (
+                "call=vendor",
+                "class=_Body",
+                "status=-",
+                "error_code=502",
+                "error_type=provider_unavailable",
+            ),
+            id="mid-stream-error-event",
+        ),
+        pytest.param(
+            _Body({"error": _ROUTER_ERROR}, status_code=503),
+            ("call=vendor", "status=503", "error_code=502"),
+            id="status-error-with-a-wrapped-body",
+        ),
+        pytest.param(
+            TypeError(_ROUTER_ERROR),
+            (
+                "call=raised",
+                "class=TypeError",
+                "error_code=502",
+                "error_type=provider_unavailable",
+            ),
+            id="a-200-error-body-the-client-could-not-parse",
+        ),
+        pytest.param(
+            _cut(),
+            ("call=vendor", "class=StatusError", "cause=ConnectionResetError"),
+            id="a-reset-mid-body",
+        ),
+        pytest.param(
+            ValueError("private"),
+            ("call=raised", "class=ValueError", "error_code=-", "error_type=-"),
+            id="no-body",
+        ),
+    ],
+)
+def test_an_unanswered_call_names_its_class_on_stderr_and_no_text(
+    failure: Exception, said: tuple[str, ...], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F513: four live runs stopped PROVIDER_UNAVAILABLE with nothing to tell
+    a 200 carrying an error body from a reset, a 5xx or the deadline: the
+    seam swallowed every class into one code and kept no trace. One stderr
+    line now names the kind, the class and its cause, the status, the
+    provider's error code and type, and the seconds spent -- tokens only,
+    never the message, the body or the prompt."""
+    completion = fake_completions(ScriptedChat(answer=failure)).complete(PROMPT)
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    line = capsys.readouterr().err
+    assert line.startswith("PROVIDER_UNAVAILABLE ") and line.count("\n") == 1
+    for fact in (*said, "elapsed="):
+        assert fact in line, (fact, line)
+    assert "private" not in line and PROMPT not in line
+
+
+def test_a_call_abandoned_at_its_deadline_says_so_on_stderr(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F513: the deadline is told apart from a failure the client raised."""
+    import threading
+
+    monkeypatch.setattr(models, "TIMEOUT_SECONDS", 0.2)
+    released = threading.Event()
+
+    def dripping(prompt: str) -> object:
+        released.wait(10)
+        return answer(finish="stop")
+
+    completion = fake_completions(ScriptedChat(answer=dripping)).complete(PROMPT)
+    released.set()
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    line = capsys.readouterr().err
+    assert "call=deadline" in line and "class=-" in line
+
+
+def test_a_refused_status_says_its_code_and_an_answer_says_nothing(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A status the seam refuses as invalid is named under its own code; an
+    answered call writes nothing to stderr."""
+    fake_completions(ScriptedChat(answer=StatusError(402))).complete(PROMPT)
+    assert capsys.readouterr().err.startswith("PROVIDER_CALL_INVALID call=vendor ")
+    fake_completions(ScriptedChat(answer=answer(finish="stop"))).complete(PROMPT)
+    assert capsys.readouterr().err == ""
