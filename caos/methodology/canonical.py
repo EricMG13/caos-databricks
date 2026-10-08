@@ -139,6 +139,7 @@ from caos.methodology.verification import (
 )
 from caos.provider import (
     MAX_REQUEST_BYTES,
+    Completion,
     CompletionProvider,
     reported_charge,
     resend_checked,
@@ -149,6 +150,7 @@ from caos.store.budget import Reservation, remaining, reserved_for
 from caos.store.lakebase import store_url
 from caos.store.outcomes import (
     CallOutcome,
+    DropKind,
     NodeAttempt,
     accepted_rows,
     call_hold,
@@ -317,8 +319,9 @@ def execute_handoff(
         generation = producer_identifier(completion.generation_id, limit=512)
         content = completion.content if completion.refusal is None else None
         diagnostic, unstored = _diagnostic(blobs, content)
+        drop = _drop_kind(completion, (charge, generation, diagnostic))
         require_idle(conn)
-        bill(conn, attempt, CallOutcome(charge, model, generation, diagnostic))
+        bill(conn, attempt, CallOutcome(charge, model, generation, diagnostic, drop))
     if unstored:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
     if completion.refusal is not None:
@@ -354,6 +357,21 @@ def execute_handoff(
         generation_id=generation,
         diagnostic_sha256=diagnostic,
     )
+
+
+def _drop_kind(completion: Completion, said: tuple[object, ...]) -> DropKind | None:
+    """How the call ended, for the ledger (D110): the provider's own word,
+    kept only for a refused call that left nothing -- no charge, generation
+    or body. A provider that states a drop beside any of them is believed
+    on the money, never on the drop: the bill commits, no re-attempt."""
+    stated = completion.drop_kind
+    if (
+        completion.refusal is None
+        or not isinstance(stated, DropKind)
+        or any(fact is not None for fact in said)
+    ):
+        return None
+    return stated
 
 
 def _run_still_holds(
@@ -1117,7 +1135,10 @@ def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
     `SECOND_ATTEMPT_CODES`, while the node holds at most `GUIDED_RETRIES` such
     refusals -- so its 2nd, 3rd and 4th attempts are told of the 1st, 2nd and 3rd, and
     every later attempt is an ordinary one. Read from the ledger, so a crash
-    between a refusal and its retry changes nothing."""
+    between a refusal and its retry changes nothing. A drop the provider
+    declared is passed over (D110): it answered nothing, so the attempt
+    after it repeats the guided retry it replaced and spends none."""
+    attempts = [a for a in attempts if a.drop_kind != DropKind.DECLARED]
     refused = [a for a in attempts if a.refusal in SECOND_ATTEMPT_CODES]
     if not refused or len(refused) > GUIDED_RETRIES or attempts[-1] != refused[-1]:
         return None
@@ -1130,6 +1151,37 @@ def second_attempt_due(
     """Whether this node's next attempt is a guided retry (D30, D82)."""
     with execution_reads(conn):
         return _feedback_source(node_attempts(conn, run_id, route_node_id)) is not None
+
+
+# How many automatic re-attempts of a provider-declared drop one node gets in
+# all (D110, the owner's decision of 6 October 2026 on N148).
+DROP_REATTEMPTS = 1
+
+
+def reattempts_a_drop(attempts: Sequence[NodeAttempt]) -> bool:
+    """Whether a node with these attempts, oldest first, is owed its
+    automatic re-attempt of a drop (D110): its latest attempt is a drop the
+    provider declared, unexplained or explained `PROVIDER_UNAVAILABLE`, and
+    the node holds at most `DROP_REATTEMPTS` such drops in all. Counted on
+    the call outcome, not its explanation, so a crash between the two
+    changes nothing; a guided retry neither spends one nor is spent."""
+    if not attempts:
+        return False
+    latest = attempts[-1]
+    drops = sum(1 for a in attempts if a.drop_kind == DropKind.DECLARED)
+    return (
+        latest.drop_kind == DropKind.DECLARED
+        and latest.refusal in (None, RefusalCode.PROVIDER_UNAVAILABLE)
+        and drops <= DROP_REATTEMPTS
+    )
+
+
+def drop_reattempt_due(
+    conn: StoreConnection, *, run_id: UUID, route_node_id: str
+) -> bool:
+    """Whether the ledger owes this node its re-attempt of a drop (D110)."""
+    with execution_reads(conn):
+        return reattempts_a_drop(node_attempts(conn, run_id, route_node_id))
 
 
 def _feedback_body(
