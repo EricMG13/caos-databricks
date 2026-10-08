@@ -8,8 +8,15 @@ The key is read from the environment at call time and never stored; only
 synthetic or public fixtures may travel through it (never client data); and
 nothing here counts as gateway coverage.
 
+Every request turns OpenRouter's prompt caching off (F545, D113):
+`prompt_cache_options: {"mode": "explicit"}` with no breakpoint. Live probes on
+6 October found automatic caching wrote every prompt to the cache, billed at
+1.25x input, and read none back; explicit mode without a breakpoint writes
+nothing and cost 20% less on input.
+
 Two optional names, read at call time, shape the request (F479). With neither
-set the request is the one this module always sent. `OPENROUTER_REASONING_EFFORT`
+set the request is the one this module always sent, with the cache switch.
+`OPENROUTER_REASONING_EFFORT`
 (`minimal`, `low`, `medium`, `high` or `xhigh`) sends `reasoning: {"effort": ...}`;
 `OPENROUTER_PROVIDER` (a comma-separated list of provider names or endpoint
 tags such as `openai/flex`) sends `provider: {"order": [...], "allow_fallbacks":
@@ -95,6 +102,10 @@ def provider_order_from_environment() -> tuple[str, ...]:
     """The pinned provider names or endpoint tags, in order; empty when unpinned."""
     listed = os.environ.get(PROVIDER_ENV, "").split(",")
     return tuple(name.strip() for name in listed if name.strip())
+
+
+# Caching off (F545): explicit mode, no breakpoint, so no call pays a write.
+CACHE_OFF: dict[str, object] = {"prompt_cache_options": {"mode": "explicit"}}
 
 
 def extra_body_from_environment() -> dict[str, object]:
@@ -217,7 +228,7 @@ def openrouter_chat_model(
     if not key:
         unset = f"{KEY_ENV} is unset: live tests cannot run"
         raise RuntimeError(unset)
-    extra_body = extra_body_from_environment()
+    extra_body = {**extra_body_from_environment(), **CACHE_OFF}
 
     # The same deadline and no retry below the seam as the production model
     # (F40): the library's defaults (600 s, two retries) held a live run on
@@ -229,7 +240,7 @@ def openrouter_chat_model(
         max_completion_tokens=MAX_COMPLETION_TOKENS,
         timeout=TIMEOUT_SECONDS,
         max_retries=0,
-        extra_body=extra_body or None,
+        extra_body=extra_body,
         # `_generate` streams itself; the library's own stream never runs.
         disable_streaming=True,
         http_client=http_client,

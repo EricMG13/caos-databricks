@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -82,6 +83,7 @@ from caos.methodology.invocation import (
     _carried_objects,
     allowed_uses,
     build_handoff_prompt,
+    evidence_tag,
     host_identity,
     lite_object_requirement,
     named_objects,
@@ -149,7 +151,8 @@ def _prompt(
 
 
 def _tag(prompt: str) -> str:
-    found = re.search(r"--- EVIDENCE ([0-9a-f]{16}) ---", prompt)
+    """The tag every section but the evidence carries (D113)."""
+    found = re.search(r"--- HOST-OWNED FRONT MATTER ([0-9a-f]{16}) ", prompt)
     assert found is not None
     return found.group(1)
 
@@ -351,8 +354,11 @@ def _changed(value: object) -> object:
 
 
 def _front_matter(prompt: str) -> str:
-    start = prompt.index("\n", prompt.index(BEGIN)) + 1
-    return prompt[start : prompt.index(END)].rstrip("\n")
+    """The block between the markers carrying the prompt's tag: the evidence,
+    which opens the prompt since D113, may quote either marker untagged."""
+    tag = _tag(prompt)
+    start = prompt.index("\n", prompt.index(f"{BEGIN} {tag} ")) + 1
+    return prompt[start : prompt.index(f"{END} {tag} ---", start)].rstrip("\n")
 
 
 def _delivered() -> list[Delivery]:
@@ -410,7 +416,9 @@ def test_cp0_source_preparation_is_tagged_context_not_evidence() -> None:
         f'"original_root": "blob://sha256/{source_set.members[0].document_sha256}'
     )
     assert expected_root in prompt
-    assert prompt.index(section) < prompt.index(f"--- EVIDENCE {tag} ---")
+    # D113: the evidence opens the prompt, under its own tag.
+    assert prompt.index(f"--- EVIDENCE {_evidence_tag(prompt)} ---") == 0
+    assert prompt.index(section) > len(_evidence_block(prompt))
 
 
 def test_a_filename_the_host_renders_can_always_be_quoted_back() -> None:
@@ -645,8 +653,8 @@ def test_the_prompt_carries_exact_upstream_bytes_and_every_block(
             f"source_id: {item.source_id}\npage: {item.page}\n\n{item.text.value}"
             in prompt
         )
+    assert prompt.index("--- EVIDENCE ") == 0  # D113: the evidence opens it
     assert prompt.index("--- AUTHORITY ") < prompt.index("--- UPSTREAM")
-    assert prompt.index("--- UPSTREAM") < prompt.index("--- EVIDENCE ")
     with pytest.raises(Refusal) as unreadable:
         upstream_markdown(harness.blobs, (*final.upstream[:1], _missing(final)))
     assert unreadable.value.code is RefusalCode.ORCHESTRATION_ARTIFACT_UNREADABLE
@@ -663,8 +671,8 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     of = identity(module_id, tuple(r for r, _ in upstream))
     delivered = _delivered()
     prompt = _prompt(of, delivered=delivered, upstream=upstream)
-    tag = _tag(prompt)
-    reminder = prompt.split(f"--- END EVIDENCE {tag} ---\n", 1)[1]
+    # The checks after the evidence and every other section (D113).
+    reminder = prompt[prompt.index(f"--- FINAL RESPONSE CHECK {_tag(prompt)} ---") :]
     compact = " ".join(reminder.split())
 
     assert "Return exactly one JSON object" in reminder
@@ -1133,7 +1141,7 @@ def test_an_over_ceiling_context_refuses_without_truncation_or_call() -> None:
     # paid for are the same bytes. Named directly rather than only through its
     # wrapper, because a reservation now depends on what it returns.
     assert request_size(provider, prompt) == MAX_REQUEST_BYTES
-    tag = _tag(prompt)
+    tag = _evidence_tag(prompt)
     assert f"\n{whole[0].text.value}\n--- END EVIDENCE {tag} ---\n" in prompt
     over = _prompt(gate, evidence(fits + 1))
     # Its JSON encoding alone fits with room to spare; the request does not.
@@ -1237,12 +1245,14 @@ def test_section_markers_cannot_be_forged_by_evidence() -> None:
     delivered = [Delivery(uuid4(), "000001", 1, BoundaryText.of(forged))]
     gate = identity("CP-0")
     prompt = _prompt(gate, delivered)
-    tag = _tag(prompt)
+    tag, evidence_tag = _tag(prompt), _evidence_tag(prompt)
     files = len(delivered_authority(BUNDLE, "CP-0").files)
     # The tag rule (2), front matter (2), host steps (2), each file (2), the
-    # payload schemas' withheld note (2, D93), source prep (2), evidence (2),
-    # final check (2), CP-0 final check (2).
-    assert prompt.count(tag) == 16 + 2 * files and tag not in forged
+    # payload schemas' withheld note (2, D93), source prep (2), final check
+    # (2), CP-0 final check (2); the evidence carries its own (D113): its two
+    # markers and the tag rule that names it.
+    assert prompt.count(tag) == 14 + 2 * files and tag not in forged
+    assert prompt.count(evidence_tag) == 3 and evidence_tag not in forged
     assert _front_matter(prompt).count("issuer_name") == 1
 
 
@@ -1383,6 +1393,111 @@ def test_evidence_is_grouped_by_source_page_with_one_header() -> None:
     assert evidence.count("source_id: ") == 2
     assert evidence.count("page: ") == 2
     assert "citation_candidate" not in prompt
+
+
+def _evidence_tag(prompt: str) -> str:
+    found = re.match(r"--- EVIDENCE ([0-9a-f]{16}) ---\n", prompt)
+    assert found is not None, "the prompt does not open with its evidence"
+    return found.group(1)
+
+
+def _evidence_block(prompt: str) -> str:
+    """The prompt's opening evidence section, both markers included."""
+    end = f"\n--- END EVIDENCE {_evidence_tag(prompt)} ---\n"
+    return prompt[: prompt.index(end) + len(end)]
+
+
+def _shared(one: str, other: str) -> int:
+    return len(os.path.commonprefix([one.encode("utf-8"), other.encode("utf-8")]))
+
+
+def test_the_evidence_opens_the_prompt_under_a_tag_of_its_own() -> None:
+    """D113: the evidence comes first, before every module- and
+    attempt-specific block, under a tag derived from the evidence alone, so
+    a run's calls over the same evidence open with the same bytes. Every
+    other section keeps the tag derived from the whole prompt."""
+    delivered = _two_pages_three_lines()
+    prompt = prompt_for(delivered=delivered)
+    etag, tag = _evidence_tag(prompt), _tag(prompt)
+    body = prompt[len(f"--- EVIDENCE {etag} ---\n") :].split(
+        f"\n--- END EVIDENCE {etag} ---\n"
+    )[0]
+    assert etag == hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
+    assert etag == evidence_tag(delivered)
+    assert etag != tag
+    assert prompt.count(f"--- EVIDENCE {etag} ---") == 1
+    assert prompt.count(f"--- END EVIDENCE {etag} ---") == 1
+    assert f"EVIDENCE {tag}" not in prompt
+    rest = prompt[len(_evidence_block(prompt)) :]
+    assert rest.startswith("\nYou are executing methodology module CP-0 ")
+    # The tag rule names the evidence's own tag, so its two markers are
+    # host markers and a copy of them anywhere below is content.
+    compact = " ".join(rest.split())
+    assert (
+        f"the EVIDENCE section above opens this prompt under its own tag, {etag}"
+        in (compact)
+    )
+    assert "The evidence you have been delivered opens this prompt, above." in compact
+
+
+def test_calls_over_the_same_evidence_share_it_as_their_prefix() -> None:
+    """D113 (N153): a node's second attempt, its guided retry and another
+    node handed the same evidence each repeat the first call's bytes through
+    the end of the evidence, which a provider's prompt cache can then read;
+    before D113 they parted at the tag, inside the first two hundred bytes."""
+    delivered = _two_pages_three_lines()
+    gate_markdown = handoff_markdown(identity("CP-0"))
+    ref = upstream_ref(identity("CP-0"), gate_markdown)
+    upstream = ((ref, gate_markdown),)
+    first = _prompt(identity("CP-L10", (ref,)), delivered, upstream)
+    block = _evidence_block(first)
+    second = _prompt(identity("CP-L10", (ref,), ordinal=2), delivered, upstream)
+    retry = build_handoff_prompt(
+        CONTRACT,
+        identity=identity("CP-L10", (ref,), ordinal=2),
+        authority=delivered_authority(BUNDLE, "CP-L10"),
+        catalog=CATALOG,
+        delivered=delivered,
+        upstream=upstream,
+        upstream_citations={ref.route_node_id: ANCHORED},
+        route=LITE_ROUTE,
+        retry_feedback=("host check: a line the refused answer failed",),
+        refused_answer="{}",
+    )
+    other = _prompt(identity("CP-5", (ref,)), delivered, upstream)
+    gate = prompt_for(delivered=delivered)
+    for later in (second, retry, other, gate):
+        assert later != first
+        assert later.startswith(block)
+        assert _shared(first, later) >= len(block.encode("utf-8"))
+    # Other evidence is another prefix: nothing is shared past what differs.
+    moved = [*delivered[:-1], replace(delivered[-1], page=3)]
+    assert not _prompt(identity("CP-L10", (ref,)), moved, upstream).startswith(block)
+
+
+def test_a_pack_tag_opens_and_closes_the_evidence_in_place_of_its_own() -> None:
+    """D113: the executor tags a node's evidence with the tag of the run's
+    whole pin, so a node handed part of it opens like every other node."""
+    delivered = _two_pages_three_lines()
+    pack = evidence_tag([*delivered, replace(delivered[-1], block_id="000004")])
+    prompt = build_handoff_prompt(
+        CONTRACT,
+        identity=identity("CP-0"),
+        authority=delivered_authority(BUNDLE, "CP-0"),
+        catalog=CATALOG,
+        delivered=delivered,
+        upstream=(),
+        upstream_citations={},
+        route=LITE_ROUTE,
+        source_set=_source_set(*(item.source_id for item in delivered)),
+        pack_tag=pack,
+    )
+    assert pack != evidence_tag(delivered)
+    assert _evidence_tag(prompt) == pack
+    assert prompt.count(pack) == 3  # both markers and the tag rule
+    assert _evidence_block(prompt) == _evidence_block(
+        prompt_for(delivered=delivered)
+    ).replace(evidence_tag(delivered), pack)
 
 
 def _paired_markers(prompt: str) -> tuple[list[str], list[str]]:

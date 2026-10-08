@@ -19,7 +19,13 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
-from canonical_fixtures import QUOTE, RUN_PRICE, UNANCHORED, CanonicalCompletions
+from canonical_fixtures import (
+    QUOTE,
+    RUN_PRICE,
+    UNANCHORED,
+    CanonicalCompletions,
+    fields_from_prompt,
+)
 from conftest import priced, recorded_statements, tamper
 from test_canonical_execution import (
     _accept,
@@ -226,7 +232,7 @@ def _run_one_lite_node(harness: _Harness) -> None:
     """
     answers = CanonicalCompletions(harness.source_id, readiness={"CP-L10": "BLOCKED"})
     assert _run_route(harness, _module_provider(harness, answers)) is None
-    called = [prompt.split(maxsplit=6)[5] for prompt in answers.prompts]
+    called = [fields_from_prompt(prompt)["module_id"] for prompt in answers.prompts]
     assert called == ["CP-0"]
     assert _counts(harness) == (1, [REPORTED], 1, 1, 1)
 
@@ -441,6 +447,15 @@ def test_a_crash_before_the_block_commits_resumes_blocked_without_a_second_call(
     assert _run_route(harness, provider) is RefusalCode.STORE_UNAVAILABLE
     _still_running(harness)
     screen = _node(harness, "CP-5").route_node_id
+    # The verdict and the replay build no prompt, so they never render the
+    # pin's evidence for its tag (D113's review, Q3).
+    rendered = invocation.evidence_tag
+
+    def unwanted(*_args: object) -> str:
+        message = "a reader rendered the evidence for its tag"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(canonical, "evidence_tag", unwanted)
     with recorded_statements(harness.conn) as statements:
         verdict = blocked_verdict(
             harness.conn,
@@ -466,6 +481,7 @@ def test_a_crash_before_the_block_commits_resumes_blocked_without_a_second_call(
         route_node_ids=[screen],
     )
     harness.conn.rollback()
+    monkeypatch.setattr(canonical, "evidence_tag", rendered)
     assert isinstance(replayed, Replayed)
     assert (replayed.verdict, replayed.outcome, replayed.code) == (
         Verdict.BLOCKED,
