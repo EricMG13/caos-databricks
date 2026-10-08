@@ -7,10 +7,11 @@
 @layer components {
   :root {
     --hairline: color-mix(in oklab, var(--border) 70%, transparent);
-    --ring-card: 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent);
-    --shadow-float:
-      0 1px 2px rgb(0 0 0 / 0.06), 0 12px 32px -8px rgb(0 0 0 / 0.18),
-      0 0 0 1px color-mix(in oklab, var(--foreground) 8%, transparent);
+    /* A card's edge and its lift off the canvas (D122): a ring, not a border,
+       so the edge takes no layout. */
+    --ring-card: 0 0 0 1px var(--card-border), var(--card-shadow);
+    /* A well is set into its card: its edge and an inner shadow. */
+    --ring-well: 0 0 0 1px var(--well-border), var(--recessed-shadow);
   }
 
   /* ---- layout ---- */
@@ -97,6 +98,7 @@
     min-height: 2.75rem;
     padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--border);
+    background: var(--card-header);
   }
   .pnl > header h2,
   .pnl > header h3 {
@@ -126,13 +128,19 @@
     min-height: 0;
   }
   .pnl.ok {
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--success) 40%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--success) 40%, transparent),
+      var(--card-shadow);
   }
   .pnl.warn {
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--warning) 45%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--warning) 45%, transparent),
+      var(--card-shadow);
   }
   .pnl.crit {
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--destructive) 45%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--destructive) 45%, transparent),
+      var(--card-shadow);
   }
   .pnl.warn > header {
     background: color-mix(in oklab, var(--warning) var(--tint), transparent);
@@ -220,6 +228,7 @@
     border: 1px solid var(--input);
     border-radius: var(--radius-lg);
     background: var(--field-bg);
+    box-shadow: var(--recessed-shadow);
     transition:
       border-color 150ms var(--ease-out),
       box-shadow 150ms var(--ease-out);
@@ -234,7 +243,7 @@
     border-top: 1px solid var(--border);
   }
   /* Save, sign, freeze, file as the sequence it is (brief 6.11): each step
-     under a rule that is the success hue once done and ink while current,
+     under a rule that is the success hue once done and primary while current,
      its control beneath, the current one the section's one primary. */
   .filing-steps {
     display: grid;
@@ -363,11 +372,14 @@
       background: var(--card);
       box-shadow: inset -1px 0 0 var(--hairline);
     }
+    .tscroll > table.pin-first > thead > tr > :first-child {
+      background: var(--table-head);
+    }
     .tscroll > table.pin-first > tbody > tr:hover > :first-child {
-      background: color-mix(in oklab, var(--muted) 60%, var(--card));
+      background: var(--table-hover);
     }
     .tscroll > table.pin-first > tbody > tr.on > :first-child {
-      background: color-mix(in oklab, var(--info) 8%, var(--card));
+      background: var(--selected);
     }
   }
   /* Report's saved artifact is a keyboard-focusable scroll region (WCAG 2.5.8);
@@ -459,22 +471,22 @@
   .tag.ok {
     border-color: transparent;
     color: var(--success);
-    background: color-mix(in oklab, var(--success) var(--tint), transparent);
+    background: var(--success-tint);
   }
   .tag.warn {
     border-color: transparent;
     color: var(--warning);
-    background: color-mix(in oklab, var(--warning) var(--tint), transparent);
+    background: var(--warning-tint);
   }
   .tag.crit {
     border-color: transparent;
     color: var(--destructive);
-    background: color-mix(in oklab, var(--destructive) var(--tint), transparent);
+    background: var(--destructive-tint);
   }
   .tag.acc {
     border-color: transparent;
     color: var(--info);
-    background: color-mix(in oklab, var(--info) var(--tint), transparent);
+    background: var(--info-tint);
   }
 
   /* ---- severity: disc, triangle, rounded square, flat dot (DESIGN.md) ---- */
@@ -523,7 +535,7 @@
     padding: 0 0.5rem;
     border: 1px solid color-mix(in oklab, var(--info) 30%, transparent);
     border-radius: 999px;
-    background: color-mix(in oklab, var(--info) var(--tint), transparent);
+    background: var(--info-tint);
     color: var(--info);
     font: 500 0.75rem/1 var(--font-mono);
     white-space: nowrap;
@@ -568,6 +580,7 @@
     height: 2.5rem;
     padding: 0 0.75rem;
     border-bottom: 1px solid var(--border);
+    background: var(--table-head);
     font-size: 0.75rem;
     font-weight: 500;
     color: var(--muted-foreground);
@@ -615,7 +628,7 @@
   table.reg tbody tr:hover,
   table.tbl tbody tr:hover,
   table.dense tbody tr:hover {
-    background: color-mix(in oklab, var(--muted) 60%, transparent);
+    background: var(--table-hover);
   }
   /* A label cell may wrap; the numbers never do. */
   table.cases td.wrap {
@@ -646,8 +659,25 @@
   table.reg td.r {
     text-align: right;
   }
+  /* The selected row: its fill and a 1px ring drawn on its cells, top and
+     bottom on each, the sides on the first and last (D122). */
   table.reg tr.on td {
-    background: color-mix(in oklab, var(--info) 8%, transparent);
+    background: var(--selected);
+    box-shadow:
+      inset 0 1px 0 var(--selected-border),
+      inset 0 -1px 0 var(--selected-border);
+  }
+  table.reg tr.on td:first-child {
+    box-shadow:
+      inset 1px 0 0 var(--selected-border),
+      inset 0 1px 0 var(--selected-border),
+      inset 0 -1px 0 var(--selected-border);
+  }
+  table.reg tr.on td:last-child {
+    box-shadow:
+      inset -1px 0 0 var(--selected-border),
+      inset 0 1px 0 var(--selected-border),
+      inset 0 -1px 0 var(--selected-border);
   }
   table.reg tr.wd td {
     color: var(--muted-foreground);
@@ -941,6 +971,7 @@
     border-color: transparent;
     background: var(--primary);
     color: var(--primary-foreground);
+    box-shadow: var(--primary-shadow);
   }
   .reslink {
     display: flex;
@@ -1023,7 +1054,8 @@
     border-bottom: 0;
   }
   .setrow.on {
-    background: color-mix(in oklab, var(--info) 8%, transparent);
+    background: var(--selected);
+    box-shadow: inset 0 0 0 1px var(--selected-border);
   }
   .setrow .nm {
     font: 600 0.8125rem var(--font-mono);
@@ -1052,7 +1084,8 @@
     color: var(--foreground);
   }
   .att.sel {
-    background: color-mix(in oklab, var(--info) 8%, transparent);
+    background: var(--selected);
+    box-shadow: inset 0 0 0 1px var(--selected-border);
   }
   /* An attempt in the narrow right column: its number and verdict on one
      line, when it started on the next, never broken inside the timestamp. */
@@ -1208,7 +1241,7 @@
     border-left: 1px solid var(--border);
     background: var(--popover);
     color: var(--popover-foreground);
-    box-shadow: var(--shadow-float);
+    box-shadow: var(--float-shadow);
     transition:
       translate 300ms var(--ease-drawer),
       opacity 300ms var(--ease-drawer);
@@ -1228,7 +1261,7 @@
     border-radius: var(--radius-xl);
     background: var(--popover);
     color: var(--popover-foreground);
-    box-shadow: var(--shadow-float);
+    box-shadow: var(--float-shadow);
     translate: -50% 0;
     transition:
       opacity 200ms var(--ease-out),
@@ -1307,9 +1340,7 @@
     border-radius: var(--radius-md);
     background: var(--paper-bg);
     color: var(--paper-ink);
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 0.08),
-      0 12px 32px -12px rgb(0 0 0 / 0.25);
+    box-shadow: var(--paper-shadow);
   }
   /* A fixed page width, centred: the paper and the links that open and
      download it, under the summary's full width (brief 5, Committee). */
@@ -1540,11 +1571,11 @@
     min-height: 368px;
     overflow: auto;
     border-radius: var(--radius-xl);
+    /* A well set into its panel, on a dot grid (D122). */
     background:
-      radial-gradient(color-mix(in oklab, var(--foreground) 9%, transparent) 1px, transparent 1px) 0
-        0 / 16px 16px,
-      var(--card);
-    box-shadow: var(--ring-card);
+      radial-gradient(var(--route-dot) 1px, transparent 1.2px) 0 0 / 16px 16px,
+      var(--well);
+    box-shadow: var(--ring-well);
     /* Overlay scrollbars hid that the route continues: keep the bar visible. */
     scrollbar-gutter: stable;
   }
@@ -1561,7 +1592,7 @@
   /* Square edges (RouteGraph.tsx `routeOf`), drawn as paths. */
   .dag .edges path {
     fill: none;
-    stroke: color-mix(in oklab, var(--foreground) 22%, transparent);
+    stroke: var(--route-edge);
     stroke-width: 1.5;
   }
   .dag .edges path.req {
@@ -1610,7 +1641,7 @@
     color: inherit;
     font-family: inherit;
     text-align: left;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+    box-shadow: var(--control-shadow);
     cursor: pointer;
     transition:
       border-color 150ms var(--ease-out),
@@ -1676,9 +1707,10 @@
     color: var(--destructive);
   }
   /* A gate is amber on its edge and its diamond, never on the node it holds:
-     selection is the one ring a node wears, and it is blue (brief 6.6). */
+     selection is the one ring a node wears, and it is the primary (brief 6.6,
+     D122). */
   .dag .node[aria-pressed="true"] {
-    border-color: var(--info);
+    border-color: var(--primary);
     box-shadow: 0 0 0 2px var(--ring);
   }
   .dag .gatemark {
@@ -1768,7 +1800,7 @@
   }
 
   .dag .route-flow .edges path[data-connected="true"]:not(.gate) {
-    stroke: var(--info);
+    stroke: var(--primary);
   }
   .dag .route-flow .edges path[data-connected="true"] {
     stroke-width: 3;
@@ -1875,6 +1907,7 @@
     background: var(--field-bg);
     color: var(--foreground);
     font: 400 0.875rem var(--font-sans);
+    box-shadow: var(--recessed-shadow);
     transition:
       border-color 150ms var(--ease-out),
       box-shadow 150ms var(--ease-out);
@@ -3011,9 +3044,11 @@
 .module-workbench .analysis .modfacts {
   row-gap: 0.5rem;
 }
+/* The section on screen is raised off the sidebar (D122). */
 .module-workbench [data-sidebar="menu-button"][aria-current="page"] {
-  background: color-mix(in oklab, var(--info) 10%, var(--sidebar));
-  color: var(--info);
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+  box-shadow: var(--raised-shadow);
 }
 @media (max-width: 767px) {
   .module-workbench main {
@@ -3053,6 +3088,7 @@
     grid-column: 1 / -1;
     min-width: 0;
   }
+  /* The module index is a card of its own beside the view (D122). */
   .module-workbench main > [data-section-tabs] {
     grid-column: 1;
     grid-row: auto / span 2;
@@ -3061,8 +3097,10 @@
     align-self: start;
     max-height: calc(100svh - 6rem);
     overflow-y: auto;
-    padding-right: 1rem;
-    border-right: 1px solid var(--border);
+    padding: 0.375rem;
+    border-radius: var(--radius-xl);
+    background: var(--card);
+    box-shadow: var(--ring-card);
   }
   .module-workbench main > [role="tabpanel"] {
     grid-column: 2;
@@ -3079,9 +3117,8 @@
   .module-workbench [data-section-tabs] [role="tab"] > span {
     text-align: left;
   }
+  /* At the head of the index card, in line with the tabs under it. */
   .module-workbench [data-section-tabs] [data-selected-view] {
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border);
+    padding: 0.25rem 0.5rem 0.5rem;
   }
 }
