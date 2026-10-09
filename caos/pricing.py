@@ -74,6 +74,16 @@ class ModelPrice:
     as_of: date
 
 
+@dataclass(frozen=True, slots=True)
+class CreditPrice:
+    """A dated price of one AI credit in US dollars (D77, addendum 2; R2.2):
+    what a Copilot call's AI units are settled at. A reservation stores the
+    one it was taken under, so a redeploy cannot change a live run's charge."""
+
+    per_credit: Decimal
+    as_of: date
+
+
 def priced_request(
     price: ModelPrice,
     request_bytes: int,

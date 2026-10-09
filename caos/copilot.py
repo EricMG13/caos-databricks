@@ -29,11 +29,16 @@ The SDK itself is imported only by the transport (Task 3), never here.
 
 from __future__ import annotations
 
+import logging
 import math
+import os
 import re
+import shutil
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal
+from datetime import UTC, date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any, TypeIs
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -43,7 +48,7 @@ from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import ChatGeneration, ChatResult
 from openai import OpenAIError
 
-from caos.pricing import exact_context
+from caos.pricing import CreditPrice, exact_context
 from caos.provider import MAX_COMPLETION_TOKENS, TIMEOUT_SECONDS, reported_charge
 from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
@@ -61,6 +66,13 @@ _NAME = re.compile(
     r"(copilot|copilot-cli):([a-z0-9][a-z0-9.-]{0,127})"
     r"(?:@(low|medium|high|xhigh|max))?"
 )
+# The operator's dated price of one AI credit, `<usd>,<YYYY-MM-DD>` (R2.2):
+# GitHub publishes $0.01, which the operator pins with the date it was read.
+CREDIT_PRICE_ENV = "CAOS_COPILOT_CREDIT_PRICE"
+# As a per-token rate is written (`caos.pricing`, DF-10): ASCII digits, an
+# optional fraction, no sign, exponent or other script's digits; an ISO day.
+_RATE = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+_DAY = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 # One AI credit in nano-AIU: `creditsUsedNanoAiu` is "exact window
 # consumption in non-negative integer nano-AIU" beside fractional credits.
 # An assumption until the firm-seat spike measures it (R2, N177).
@@ -226,6 +238,115 @@ def parsed(model: str) -> CopilotModel | None:
     if matched is None:
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     return CopilotModel(matched.group(1), matched.group(2), matched.group(3))
+
+
+def credit_price(value: str | None = None) -> CreditPrice:
+    """The operator's dated price of one AI credit (R2.2), from `value` or
+    `CREDIT_PRICE_ENV`, or `PROVIDER_NOT_CONFIGURED`.
+
+    Read for a Copilot model only. The rate is written as a per-token rate is
+    (DF-10), above zero and exact spend (`validate_spend`); the date is ISO and
+    no later than today in UTC, since a price dated ahead is not in force. The
+    value is never printed; the refusal names only the code.
+    """
+    raw = os.environ.get(CREDIT_PRICE_ENV, "") if value is None else value
+    rate, comma, day = raw.partition(",")
+    if not (comma and _RATE.fullmatch(rate) and _DAY.fullmatch(day)):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    try:
+        price = CreditPrice(Decimal(rate), date.fromisoformat(day))
+        validate_spend(price.per_credit)
+    except (ValueError, InvalidOperation, Refusal):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED) from None
+    if not price.per_credit or price.as_of > datetime.now(UTC).date():
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return price
+
+
+# The child's whole environment is built from these names (R3): nothing else
+# the worker holds is inherited. `COPILOT_GITHUB_TOKEN` is the one credential
+# the runtime may hold, and its value is copied, never read or compared; the
+# platform's process needs and the firm's proxy are copied when set.
+_SEAT_CREDENTIAL = "COPILOT_GITHUB_TOKEN"
+_FIXED = {
+    "COPILOT_DISABLE_KEYTAR": "1",
+    "COPILOT_AUTO_UPDATE": "false",
+    "NO_COLOR": "1",
+}
+_POSIX_NEEDS = ("HOME", "TMPDIR", "LANG")
+_WINDOWS_NEEDS = (
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "USERPROFILE",
+    "TEMP",
+    "TMP",
+    "LOCALAPPDATA",
+)
+_PROXY = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "SSL_CERT_FILE",
+    "NODE_EXTRA_CA_CERTS",
+)
+
+
+def child_environment(home: str, executable: str) -> dict[str, str]:
+    """The runtime's whole environment (R3): an allow-list, nothing inherited.
+
+    `COPILOT_HOME` is the call's private directory; `COPILOT_GITHUB_TOKEN` is
+    copied when the worker has it; the keychain probe, auto-update and colour
+    are off; `PATH` is the directory of `executable` alone, and of `node` when
+    the runtime entry is a script, so `gh` is not findable and auto-login has
+    nothing to run. Every other name -- the GitHub CLI's and Actions' tokens,
+    askpass programs, BYOK provider settings, telemetry export, a redirected
+    host, a runtime path, a model or tier override -- is absent because it is
+    not listed. A script entry with no `node` on the worker's `PATH` refuses
+    `PROVIDER_NOT_CONFIGURED`.
+    """
+    needs = _WINDOWS_NEEDS if sys.platform == "win32" else _POSIX_NEEDS
+    child = {"COPILOT_HOME": home}
+    for name in (_SEAT_CREDENTIAL, *needs, *_PROXY):
+        value = os.environ.get(name)
+        if value is not None:
+            child[name] = value
+    child.update(_FIXED)
+    found = [os.path.dirname(executable)]
+    if executable.endswith(".js"):
+        node = shutil.which("node", path=os.environ.get("PATH", ""))
+        if node is None:
+            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+        found.append(os.path.dirname(node))
+    child["PATH"] = os.pathsep.join(found)
+    return child
+
+
+# The SDK's own logger: its reader thread logs every line the runtime writes
+# to stderr at WARNING (`copilot._jsonrpc`), and a line can quote a prompt.
+_SDK_LOGGER = "copilot"
+
+
+def _silenced() -> None:
+    """Keep every record of the SDK's logger off every handler (R7): one
+    `NullHandler`, no propagation, level CRITICAL. Called before each client
+    starts; idempotent, and it undoes a handler attached since."""
+    sdk = logging.getLogger(_SDK_LOGGER)
+    sdk.handlers = [logging.NullHandler()]
+    sdk.propagate = False
+    sdk.setLevel(logging.CRITICAL)
+
+
+def output_cap(model: str) -> int:
+    """The most output tokens a call to `model` can return, which its
+    reservation is priced on (R2.5): the session's own cap,
+    `MAX_COMPLETION_TOKENS`, for an SDK model and a gateway endpoint alike.
+    A `copilot-cli:` model, which the CLI caps at the model's own limit, has
+    no cap until the CLI transport is built (owner decision (a), 2026-10-06),
+    so it is refused `PROVIDER_NOT_CONFIGURED`."""
+    target = parsed(model)
+    if target is not None and target.platform == CLI_PLATFORM:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return MAX_COMPLETION_TOKENS
 
 
 class CopilotStatusError(OpenAIError):
