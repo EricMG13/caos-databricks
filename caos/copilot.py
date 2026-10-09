@@ -416,12 +416,20 @@ def _admitted(event: Event, target: CopilotModel) -> bool:
 
 def _condition_holds(kind: str, data: Mapping[str, Any]) -> bool:
     """R1.0's conditions by type: a server status only for no server; a
-    dispatch failure only of the top-level agent's own call (F575); a load of
+    dispatch failure only of the top-level agent's own call (F575); a model
+    change only from a source that is no runtime, agent or plan-mode choice, a
+    session start and a dispatch only naming their model (F580); a load of
     MCP servers, skills, extensions or custom agents only of none."""
     if kind == "session.mcp_server_status_changed":
         return not data.get("serverName")
     if kind == "model.call_failure":
         return data.get("source") == "top_level"
+    if kind == "session.model_change":
+        source = data.get("source")
+        return (source is None or isinstance(source, str)) and source in _CHOSEN
+    named = _NAMING.get(kind)
+    if named is not None:
+        return data.get(named) is not None
     loaded = _LOADS.get(kind)
     return loaded is None or _loaded_nothing(data.get(loaded))
 
@@ -430,9 +438,9 @@ def _fields_agree(data: Mapping[str, Any], target: CopilotModel) -> bool:
     """F569: every field, at any depth, that names a model, an effort, an auto
     tier, an agent, a tool or an initiator agrees with the call asked for. The
     rule is read from the field's name, so a field the SDK adds later in one of
-    these families is held to it too. A field about the past (`previous*`, and
-    `modelFrom`, which no family's name matches) states what changed, and is
-    not held."""
+    these families is held to it too, a field about the past (`previous*`,
+    `modelFrom`) among them: a model the session moved from may have answered
+    part of the call (F580)."""
     for key, value in data.items():
         rule = _FIELD_RULES.get(_family(key))
         if rule is not None:
@@ -453,8 +461,6 @@ def _nested_agree(value: object, target: CopilotModel) -> bool:
 
 def _family(key: str) -> str | None:
     """The family a field's name puts it in, or None for any other field."""
-    if key.startswith("previous"):
-        return None
     named = _NAMED_FIELDS.get(key)
     if named is not None:
         return named
@@ -471,16 +477,15 @@ def _family(key: str) -> str | None:
     return None
 
 
-# Fields held by their exact name (F569, F575). `interactionType` is a free
-# string whose expected value no source states, so any stated one refuses
-# until the firm-seat spike records it (N182). `modelFrom` is not held: the
-# dispatches themselves -- start, failure, usage, settled result, answer --
-# name the model that answered, so a model named only as the one a cache or a
-# change moved from cannot have answered this call (F576).
+# Fields held by their exact name (F569, F575, F580). `interactionType` is a
+# free string whose expected value no source states, so any stated one refuses
+# until the firm-seat spike records it (N182). `modelFrom` is held to the pin:
+# an unnamed dispatch before the cache broke may have run on it (F580).
 _NAMED_FIELDS = {
     "model": "model",
     "modelId": "model",
     "modelTo": "model",
+    "modelFrom": "model",
     "models": "models",
     "effort": "effort",
     "agentMode": "mode",
@@ -534,6 +539,32 @@ _FIELD_RULES: Mapping[str | None, Callable[[object, CopilotModel], bool]] = {
     "absent": _absent,
 }
 
+
+# F580: the `ModelChangeSource` values a model change may state -- a user's, a
+# policy's, startup's or the SDK caller's (this host's) choice -- or none.
+# Refused: `automatic` ("rate-limit recovery or refusal fallback"), `agent` (an
+# agent's configured model), `plan_mode`, `auto_tier_recommendation` (a
+# CAPI-issued Auto tier), and any value the SDK adds later.
+_CHOSEN = frozenset(
+    {
+        None,
+        "model_command",
+        "settings_command",
+        "config_command",
+        "model_picker",
+        "changeboarding_shortcut",
+        "managed_settings",
+        "repo_settings",
+        "startup",
+        "sdk",
+    }
+)
+# F580: the events that must name their model, not merely not contradict the
+# pin. A start that selects none "resolves a default as though the user had
+# never chosen a model" (`session.model_deselected`), and a dispatch is the unit
+# that spends, which the settled result alone does not witness: one "may include
+# internal reconnect or fallback work".
+_NAMING = {"session.start": "selectedModel", "model.call_start": "model"}
 
 # The loads R1.0 admits only when they loaded nothing, by the field they list.
 _LOADS = {
@@ -766,15 +797,15 @@ def _dispatch_open(seen: Sequence[Event]) -> bool:
 
 
 def _figures_agree(seen: Sequence[Event], total: int, premium: object) -> bool:
-    """F558, F562, F572: no sub-agent's spend anywhere; the per-request
-    figures sum to no more than `total`; every spend figure any other event
-    states (`_unit`), at any depth, is no more than `total` -- premium requests
-    no more than the checkpoint's `premium`; and a shutdown's session total,
-    when stated, is exactly `total`, its per-model figures summing to no more."""
+    """F558, F562, F572, F579: no sub-agent's spend anywhere; the per-request
+    figures of every event (`_requests`) sum to no more than `total`; every
+    spend figure any event states (`_unit`), at any depth, is no more than
+    `total` -- premium requests no more than the checkpoint's `premium`; and a
+    shutdown's session total, when stated, is exactly `total`, its per-model
+    figures summing to no more."""
     if any(_sub_agent(event) for event in seen):
         return False
-    blocks = [usage.get("copilotUsage") for usage in _data(seen, "assistant.usage")]
-    requested = _summed([block for block in blocks if block is not None])
+    requested = _summed(_requests(seen))
     if requested is None or requested > total:
         return False
     # The checkpoints are walked too: being cumulative, none states more than
@@ -787,6 +818,27 @@ def _figures_agree(seen: Sequence[Event], total: int, premium: object) -> bool:
     return all(
         _shutdown_figures_agree(data, total) for data in _data(seen, "session.shutdown")
     )
+
+
+def _requests(seen: Sequence[Event]) -> list[object]:
+    """F579: every per-request spend block the session states, each a separate
+    request, so they are summed: each CAPI `copilotUsage` ("per-request cost and
+    usage data") at any depth of any event -- an answer's usage, a compaction's
+    -- and each fusion phase's `usage` ("concrete-model usage for one
+    HydraFusion phase"). Aggregates of these (a fusion turn's total, the
+    shutdown's) are held alone (`_within`), never added to them."""
+    blocks: list[object] = []
+    for event in seen:
+        data = event.get("data")
+        blocks += [item for key, item in _pairs(data) if key == "copilotUsage"]
+        if _kind(event) in _PHASES and isinstance(data, Mapping):
+            blocks.append(data.get("usage"))
+    return [block for block in blocks if block is not None]
+
+
+_PHASES = frozenset(
+    {"assistant.fusion_phase_completed", "assistant.fusion_phase_failed"}
+)
 
 
 def _pairs(value: object) -> list[tuple[str, object]]:
@@ -933,8 +985,11 @@ def _failed_result(data: Mapping[str, Any]) -> bool:
 
 
 def _failed_finish(data: Mapping[str, Any]) -> bool:
-    outcome = data.get("outcome")
-    return isinstance(outcome, str) and outcome != "success"
+    """F578: only `error` -- "a provider or transport error" -- may close a
+    dispatch with nothing spent. `rejected` follows a provider response ("rejected
+    during post-response acceptance processing") and `cancelled` may follow a
+    streamed one, so either is spend."""
+    return data.get("outcome") == "error"
 
 
 def _own_failure(data: Mapping[str, Any]) -> bool:
@@ -960,8 +1015,8 @@ def _none_or_zero(value: object) -> bool:
     return value is None or _stated_zero(value)
 
 
-# The types quiet only on a condition (F567, F574): a settled result naming a
-# failure; a dispatch's finish that is not a success (it closes the dispatch);
+# The types quiet only on a condition (F567, F574, F578): a settled result naming
+# a failure; a dispatch's finish in `error` (it closes the dispatch);
 # the top-level agent's own failed attempt; a checkpoint stating zero AI units
 # and no premium request; a shutdown that metered no model and no agent and
 # states no spend.
