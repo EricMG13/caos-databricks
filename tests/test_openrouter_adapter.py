@@ -305,10 +305,11 @@ def test_a_streamed_answer_is_one_assistant_message() -> None:
     ("frames", "drop", "said"),
     [
         # D118: LCR10-dec's stop -- an upstream 502 after content -- is a
-        # drop the provider declared; F513's line still says the client raised.
+        # drop the provider declared after content (its own kind since fix
+        # round 1); F513's line still says the client raised.
         pytest.param(
             MID_STREAM_ERROR,
-            DropKind.DECLARED,
+            DropKind.DECLARED_AFTER_CONTENT,
             "call=raised class=CutAfterContentError cause=APIError ",
             id="after-partial-output",
         ),
@@ -332,14 +333,131 @@ def test_a_mid_stream_error_is_unavailable_and_carries_no_text(
     after, it is one too when its error object states a 5xx, a 429 or a
     transient type (D118), and the seam never sends it again itself."""
     completion = _complete(frames)
+    # A cut after content keeps the stream's generation id, so its partial
+    # bill can be reconciled (D118 fix round 1); a drop before content has
+    # nothing generated to reconcile.
+    generation = "gen-f512" if drop is DropKind.DECLARED_AFTER_CONTENT else None
     assert completion == Completion(
-        None, None, None, RefusalCode.PROVIDER_UNAVAILABLE, drop
+        None, None, generation, RefusalCode.PROVIDER_UNAVAILABLE, drop
     )
     unanswered = capsys.readouterr().err
     assert said in unanswered
     assert "error_code=502" in unanswered
     assert "error_type=provider_unavailable" in unanswered
     assert "private" not in unanswered and "private" not in repr(completion)
+
+
+def _error_frame(error: object, content: str = "") -> str:
+    """An SSE error frame whose delta carries `content`, as a provider may
+    send its last words and its error in one frame."""
+    delta = {"content": content}
+    return _frame(
+        {
+            "error": error,
+            "choices": [{"index": 0, "delta": delta, "finish_reason": "error"}],
+        }
+    )
+
+
+_INVALID_TYPE = {"error_type": "invalid_request"}
+_INVALID = {
+    "code": 400,
+    "message": "private",
+    "metadata": {"error_type": "invalid_request"},
+}
+
+
+@pytest.mark.parametrize(
+    ("frames", "drop", "said"),
+    [
+        # L1: a 4xx is never declared, before content or after.
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame(_INVALID)], DropKind.VENDOR, "", id="400-before"
+        ),
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame({"code": 402, "message": "private"})],
+            DropKind.VENDOR,
+            "",
+            id="402-before",
+        ),
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame({"code": 429, "message": "private"})],
+            DropKind.DECLARED,
+            "",
+            id="429-before",
+        ),
+        # F566: positive evidence only, before content as after.
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame({"code": 400.0, "metadata": _INVALID_TYPE})],
+            DropKind.VENDOR,
+            "",
+            id="400-float-before",
+        ),
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame({"code": "invalid_request_error"})],
+            DropKind.VENDOR,
+            "",
+            id="code-word-before",
+        ),
+        pytest.param(
+            [
+                _KEEP_ALIVE,
+                _error_frame({"metadata": {"error_type": "payment_required"}}),
+            ],
+            DropKind.VENDOR,
+            "",
+            id="payment-type-before",
+        ),
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame({"metadata": {"error_type": "timeout"}})],
+            DropKind.DECLARED,
+            "",
+            id="timeout-type-before",
+        ),
+        # L1: content in the error frame itself is content: the 400 is a cut
+        # after content, and a 502 there is declared after content.
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame(_INVALID, '{"x": 1')],
+            DropKind.RAISED,
+            "",
+            id="400-with-content-in-the-error-frame",
+        ),
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame(_ERROR, '{"x": 1')],
+            DropKind.DECLARED_AFTER_CONTENT,
+            "",
+            id="502-with-content-in-the-error-frame",
+        ),
+        # L2: the outer error object's own code is read, never an inner one.
+        pytest.param(
+            [*_ANSWER[:5], _error_frame({"code": 400, "error": {"code": 502}})],
+            DropKind.RAISED,
+            " error_code=400 ",
+            id="outer-400-inner-502",
+        ),
+    ],
+)
+def test_an_error_frame_is_read_whole_and_by_its_own_code(
+    frames: list[str], drop: DropKind, said: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sent: list[dict[str, object]] = []
+    completion = _complete(frames, sent)
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    assert completion.drop_kind is drop
+    assert completion.content is None and completion.charge is None
+    assert len(sent) == 1
+    line = capsys.readouterr().err
+    assert said in line and "private" not in line
+
+
+def test_a_cut_keeps_the_id_its_content_was_generated_under() -> None:
+    """The first id the stream named is the generation that streamed the
+    content; an error frame that names another does not replace it."""
+    choice = {"index": 0, "delta": {"content": ""}, "finish_reason": "error"}
+    later = _frame({"id": "gen-later", "error": _ERROR, "choices": [choice]})
+    completion = _complete([*_ANSWER[:5], later])
+    assert completion.drop_kind is DropKind.DECLARED_AFTER_CONTENT
+    assert completion.generation_id == "gen-f512"
 
 
 def _reset_after_content(sent: list[dict[str, object]]) -> httpx.Client:
@@ -394,6 +512,11 @@ def test_only_a_frame_carrying_something_generated_has_begun() -> None:
     assert generating({"choices": [{"delta": {"content": "{"}}]})
     assert generating({"choices": [{"delta": {"tool_calls": [{"index": 0}]}}]})
     assert CutAfterContentError(_ERROR).body == _ERROR
+    assert CutAfterContentError(_ERROR).generation_id is None
+    assert CutAfterContentError(_ERROR, generation_id="gen-1").generation_id == "gen-1"
+    # A malformed frame says nothing generated, and raises nothing.
+    assert not generating({"choices": ["x", {"delta": "y"}, None]})
+    assert not generating({"choices": "x"})
 
 
 @pytest.mark.parametrize(

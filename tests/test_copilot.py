@@ -978,6 +978,13 @@ UNSPENT = [started(), turn_start()]
 FAILED_DISPATCH = [call_start(), failure("api", 500), call_finished("error")]
 
 
+# The body a runtime-declared 5xx with no status carries: its own result, and
+# the provider error type D118's `_declares` reads as the provider's failure.
+FIVE_XX = {
+    "error": {"result": "http_5xx", "metadata": {"error_type": "provider_unavailable"}}
+}
+
+
 @pytest.mark.parametrize(
     ("ending", "status", "body"),
     [
@@ -992,13 +999,10 @@ FAILED_DISPATCH = [call_start(), failure("api", 500), call_finished("error")]
         (
             [failure("api"), final_result(result="http_5xx")],
             None,
-            {"error": {"result": "http_5xx"}},
+            FIVE_XX,
         ),
-        (
-            [error(None), final_result(result="http_4xx")],
-            None,
-            {"error": {"result": "http_4xx"}},
-        ),
+        # A 4xx however stated is never declared (D118, F566).
+        ([error(None), final_result(result="http_4xx")], None, None),
         ([failure("api"), final_result(result="http_400")], 400, None),
         ([failure("api"), final_result(result="http_413")], 413, None),
         ([failure("api"), final_result(result="http_429")], 429, None),
@@ -1007,7 +1011,7 @@ FAILED_DISPATCH = [call_start(), failure("api", 500), call_finished("error")]
         (
             [final_result(result="http_5xx"), idle()],
             None,
-            {"error": {"result": "http_5xx"}},
+            FIVE_XX,
         ),
         ([checkpoint(0), error(502)], 502, None),
         ([failure("api", 503), error(429)], 429, None),
@@ -1096,13 +1100,15 @@ def test_a_status_error_carries_its_status_and_no_text() -> None:
     raised = CopilotStatusError(503)
     assert (raised.status_code, raised.body, str(raised)) == (503, None, "copilot")
     declared = CopilotStatusError(None, declared="http_5xx")
-    assert declared.body == {"error": {"result": "http_5xx"}}
-    # A declaration only stands for a failure with no status, and only as one
-    # of the two declared results: anything else is undeclared.
+    assert declared.body == FIVE_XX
+    # A declaration only stands for a failure with no status, and only as a
+    # 5xx: a 4xx is never declared (D118, F566), nor anything else.
     assert CopilotStatusError(500, declared="http_5xx").body is None
+    assert CopilotStatusError(None, declared="http_4xx").body is None
     assert CopilotStatusError(None, declared="transport_error").body is None
     assert models._declared(declared)
     assert not models._declared(CopilotStatusError(None))
+    assert not models._declared(CopilotStatusError(None, declared="http_4xx"))
 
 
 # -- ChatCopilot (the seam `ChatCompletions` calls). --------------------------

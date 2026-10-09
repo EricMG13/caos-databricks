@@ -60,8 +60,9 @@ declares a 5xx, a 429 or a transient `error_type` (D118).
 
 from __future__ import annotations
 
+import json
 import os
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import AsyncIterator, Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.language_models import BaseChatModel
@@ -70,6 +71,7 @@ from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_openai import ChatOpenAI
 from openai import APIError
+from openai._streaming import ServerSentEvent, SSEBytesDecoder
 from pydantic import SecretStr
 
 from caos.provider import MAX_COMPLETION_TOKENS, TIMEOUT_SECONDS
@@ -211,12 +213,52 @@ def streamed_message(frames: Iterable[Mapping[str, Any]]) -> AIMessage:
 def generating(frame: Mapping[str, Any]) -> bool:
     """Whether a frame carries anything generated: a delta holding a value
     under any key but its `role` -- content, reasoning or a tool call. A
-    reasoning delta counts: the provider had begun, and may bill it."""
-    for choice in frame.get("choices") or ():
-        delta = choice.get("delta") or {}
-        if any(value for key, value in delta.items() if key != "role"):
+    reasoning delta counts: the provider had begun, and may bill it. A
+    malformed frame says nothing generated and raises nothing."""
+    choices = frame.get("choices")
+    for choice in choices if isinstance(choices, list) else ():
+        delta = choice.get("delta") if isinstance(choice, Mapping) else None
+        if isinstance(delta, Mapping) and any(
+            value for key, value in delta.items() if key != "role"
+        ):
             return True
     return False
+
+
+class _Watched:
+    """The stream's own SSE decoder, noting each event before the client
+    reads it (D118 fix round 1): whether any event -- the error event among
+    them -- carried anything generated, and the first generation id the
+    stream named. The client raises on an error event before it yields that
+    frame, so only the decoder sees what the error frame itself carried."""
+
+    def __init__(self, decoder: SSEBytesDecoder) -> None:
+        self._decoder = decoder
+        self.began = False
+        self.generation_id: str | None = None
+
+    def iter_bytes(self, iterator: Iterator[bytes]) -> Iterator[ServerSentEvent]:
+        for event in self._decoder.iter_bytes(iterator):
+            self._note(event.data)
+            yield event
+
+    def aiter_bytes(
+        self, iterator: AsyncIterator[bytes]
+    ) -> AsyncIterator[ServerSentEvent]:
+        return self._decoder.aiter_bytes(iterator)
+
+    def _note(self, data: str) -> None:
+        try:
+            frame = json.loads(data)
+        except ValueError:
+            return  # `[DONE]`, or a frame the client refuses itself
+        if not isinstance(frame, Mapping):
+            return
+        stated = frame.get("id")
+        if self.generation_id is None and isinstance(stated, str):
+            self.generation_id = stated
+        if generating(frame):
+            self.began = True
 
 
 class OpenRouterChat(ChatOpenAI):
@@ -234,22 +276,24 @@ class OpenRouterChat(ChatOpenAI):
         payload = self._get_request_payload(messages, stop=stop, **kwargs)
         payload["stream"] = True
         payload["stream_options"] = {"include_usage": True}
-        began: list[bool] = []
 
         def frames(stream: Iterable[Any]) -> Iterator[dict[str, Any]]:
             for frame in stream:
                 dumped: dict[str, Any] = frame.model_dump()
-                if not began and generating(dumped):
-                    began.append(True)
                 yield dumped
 
         with self.client.create(**payload) as stream:
+            # Every event, the error event included, is seen as it is decoded.
+            watched = _Watched(stream._decoder)
+            stream._decoder = watched
             try:
                 message = streamed_message(frames(stream))
             except APIError as failed:
-                if not began:
+                if not watched.began:
                     raise
-                raise CutAfterContentError(failed.body) from failed
+                raise CutAfterContentError(
+                    failed.body, generation_id=watched.generation_id
+                ) from failed
         return ChatResult(generations=[ChatGeneration(message=message)])
 
 

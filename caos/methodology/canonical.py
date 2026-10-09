@@ -152,6 +152,7 @@ from caos.store import StoreConnection, connect
 from caos.store.budget import Reservation, remaining, reserved_for
 from caos.store.lakebase import store_url
 from caos.store.outcomes import (
+    DECLARED_KINDS,
     DROP_REATTEMPTS,
     CallOutcome,
     DropKind,
@@ -369,17 +370,22 @@ def execute_handoff(
 def _drop_kind(completion: Completion, said: tuple[object, ...]) -> DropKind | None:
     """How the call ended, for the ledger (D110): the provider's own word,
     kept only for a refused call that left nothing -- no charge, generation
-    or body. A provider that states a drop beside any of them is believed
-    on the money, never on the drop: the bill commits, no re-attempt."""
+    or body (`said`, in that order). A provider that states a drop beside
+    any of them is believed on the money, never on the drop: the bill
+    commits, no re-attempt. A cut declared after content alone may name its
+    generation (D118 fix round 1): its bill is unknown, not absent."""
     stated = completion.drop_kind
+    charge, generation, body = said
+    if stated is DropKind.DECLARED_AFTER_CONTENT:
+        generation = None
     if (
         completion.refusal is None
         or not isinstance(stated, DropKind)
-        or any(fact is not None for fact in said)
+        or any(fact is not None for fact in (charge, generation, body))
     ):
         return None
     # F530: a drop is declared only beside the code a drop is refused with.
-    if stated is DropKind.DECLARED and (
+    if stated in DECLARED_KINDS and (
         completion.refusal is not RefusalCode.PROVIDER_UNAVAILABLE
     ):
         return None
