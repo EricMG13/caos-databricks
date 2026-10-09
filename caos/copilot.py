@@ -281,7 +281,7 @@ def credit_price(value: str | None = None) -> CreditPrice:
 # the worker holds is inherited. `COPILOT_GITHUB_TOKEN` is the one credential
 # the runtime may hold, and its value is copied, never read or compared; the
 # platform's process needs and the firm's proxy are copied when set.
-_TOKEN = "COPILOT_GITHUB_TOKEN"
+_SEAT_CREDENTIAL = "COPILOT_GITHUB_TOKEN"
 _FIXED = {
     "COPILOT_DISABLE_KEYTAR": "1",
     "COPILOT_AUTO_UPDATE": "false",
@@ -320,7 +320,7 @@ def child_environment(home: str, executable: str) -> dict[str, str]:
     """
     needs = _WINDOWS_NEEDS if sys.platform == "win32" else _POSIX_NEEDS
     child = {"COPILOT_HOME": home}
-    for name in (_TOKEN, *needs, *_PROXY):
+    for name in (_SEAT_CREDENTIAL, *needs, *_PROXY):
         value = os.environ.get(name)
         if value is not None:
             child[name] = value
