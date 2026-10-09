@@ -72,15 +72,37 @@ def test_the_bound_is_the_declared_context_at_three_bytes_a_token() -> None:
         "openai/gpt-6-luna": 1_050_000,
         "openai/gpt-6-luna-pro": 1_050_000,
         "openai/gpt-6-sol": 1_050_000,
+        **dict.fromkeys(WORKSPACE, 1_000_000),
     }
     assert request_ceiling(LUNA) == (1_050_000 - MAX_COMPLETION_TOKENS) * 3
     assert request_ceiling(LUNA) == 2_953_392 < FCA3_REQUEST
 
 
-# Approved workspace endpoints, a Copilot model (D77), a routed variant: each
-# ran under the transport ceiling before D116, and still does.
-UNDECLARED: tuple[str, ...] = ("claude-sonnet-5-5", "gpt-6-luna", "copilot:gpt-6-luna")
-UNDECLARED += ("openai/gpt-6-luna:nitro", "databricks-claude-opus-5", SUITE_ENDPOINT)
+# D119: the ten approved workspace endpoints and the bundle default, declared
+# by the owner on 2026-10-06 at 1,000,000 tokens.
+APPROVED = (
+    "grok-4-7 claude-sonnet-5-5 gpt-6-luna claude-opus-5-5 gpt-6-sol"
+    " deepseek-v4-1-flash gpt-6-astra gemini-3-8-flash glm-5-3 glm-5-3-flash"
+).split()
+WORKSPACE = (*APPROVED, "databricks-claude-opus-5")
+DECLARED_BOUND = 2_803_392
+
+
+@pytest.mark.parametrize("model", WORKSPACE)
+def test_a_workspace_endpoint_resolves_to_the_owner_declared_context(
+    model: str,
+) -> None:
+    assert CONTEXT_TOKENS[model] == 1_000_000
+    assert request_ceiling(model) == DECLARED_BOUND
+    assert DECLARED_BOUND == (1_000_000 - MAX_COMPLETION_TOKENS) * 3
+    assert DECLARED_BOUND < MAX_REQUEST_BYTES
+    assert context_notice(model) is None
+
+
+# A Copilot model (D77), a routed variant and the suite's own endpoint: each
+# runs under the transport ceiling, as before D116.
+UNDECLARED: tuple[str, ...] = ("copilot:gpt-6-luna", "copilot:claude-opus-5-5")
+UNDECLARED += ("openai/gpt-6-luna:nitro", SUITE_ENDPOINT)
 
 
 @pytest.mark.parametrize("model", UNDECLARED)
@@ -110,8 +132,12 @@ def test_preflight_warns_of_each_endpoint_without_a_declared_context() -> None:
     assert context_warnings(("claude-opus-5-5", LUNA, "copilot:gpt-6-sol")) == [
         f"WARNING {name}: no declared context; its requests are bounded by the"
         " transport ceiling alone (D116)"
-        for name in ("claude-opus-5-5", "copilot:gpt-6-sol")
+        for name in ("copilot:gpt-6-sol",)
     ]
+
+
+def test_preflight_is_clean_for_a_configured_approved_endpoint() -> None:
+    assert context_warnings(("databricks-claude-opus-5", *APPROVED)) == []
 
 
 # --- the fit, pure ------------------------------------------------------------
@@ -348,7 +374,7 @@ def test_a_pack_that_cannot_fit_is_refused_with_no_attempt_or_reservation(
     _still_running(harness)
 
 
-@pytest.mark.parametrize("model", ["claude-opus-5-5", "copilot:gpt-6-luna"])
+@pytest.mark.parametrize("model", ["copilot:claude-opus-5-5", "copilot:gpt-6-luna"])
 def test_an_undeclared_endpoint_runs_under_the_fallback_with_one_notice(
     harness: _Harness, model: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -377,7 +403,7 @@ def test_the_notice_never_fails_a_run(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch, broken: object
 ) -> None:
     """A stderr that cannot take the notice is passed over (F513's fail-open)."""
-    model = "claude-opus-5-5"
+    model = "copilot:claude-opus-5-5"
     price = priced(ESTIMATE, model=model)
     answers = replace(_answers(harness), model=model, price=price)
     monkeypatch.setattr("sys.stderr", broken)
