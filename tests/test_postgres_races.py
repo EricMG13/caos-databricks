@@ -1469,6 +1469,58 @@ def test_a_call_in_flight_past_its_lease_keeps_its_node_from_a_second_call(
     _paid_once_per_node(run.conn, run.run_id, completions)
 
 
+def test_a_held_call_outlives_an_idle_session_bound_on_the_database(
+    case: tuple[StoreConnection, UUID],
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D117, D120 (the review's probe B): `call_hold` is a session-level lock
+    on a connection that sits idle, outside any transaction, for the whole
+    call. With the database set to end idle sessions after 300 ms, A's call
+    runs a second, its lease lapses and B drives the run. The store's own
+    `SET idle_session_timeout = 0`, the session's first statement, wins over
+    the database's setting, so A's hold survives: B is refused
+    `ATTEMPT_UNSETTLED` and pays for nothing, and A's bill lands. Without it
+    the server ended A's session mid-call, the hold went with it, and B paid
+    for the node again."""
+    import time
+
+    import psycopg
+    from psycopg import sql
+    from psycopg.conninfo import conninfo_to_dict
+    from test_worker import queued_run
+
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)  # the bill's reconnect
+    run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
+    database = str(conninfo_to_dict(empty_database)["dbname"])
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("ALTER DATABASE {} SET idle_session_timeout = 300").format(
+                sql.Identifier(database)
+            )
+        )
+    claimed_meanwhile: list[str] = []
+
+    def reclaimed_after_the_bound() -> None:
+        if not claimed_meanwhile:
+            claimed_meanwhile.append("pending")
+            time.sleep(1.0)  # the call outlives the server's idle bound
+            _lapsed(empty_database, run.run_id)
+            claimed_meanwhile[0] = _outcome(
+                lambda: _drive(empty_database, run, completions)
+            )
+
+    completions = _PricedCompletions(run.source_id, during=reclaimed_after_the_bound)
+    a_said = _outcome(lambda: _drive(empty_database, run, completions))
+    assert claimed_meanwhile == [RefusalCode.ATTEMPT_UNSETTLED.value]
+    assert len(completions.prompts) == 1, "B paid for nothing"
+    assert a_said == str(run.run_id), "A's session lived through its call"
+    with connect(empty_database) as conn:
+        assert _count(conn, "run_attempts", run.run_id) == 1
+        assert _count(conn, "budget_ledger", run.run_id) == 1, "A's bill landed"
+
+
 def test_a_held_call_keeps_its_node_only_while_a_live_session_holds_it(
     empty_database: str,
     prepared_run: tuple[UUID, UUID],
