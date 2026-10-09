@@ -321,7 +321,7 @@ def _guard_disabled(
     table: str,
     trigger: str,
 ) -> Iterator[None]:
-    assert re.fullmatch(r"caos_test_[0-9a-f]{32}", conn.info.dbname)
+    assert re.fullmatch(r"caos_test_(\d{10}_)?[0-9a-f]{32}", conn.info.dbname)
     enabled = conn.execute(
         "SELECT tgenabled FROM pg_trigger WHERE tgrelid=%s::regclass AND tgname=%s",
         (table, trigger),
@@ -1077,7 +1077,7 @@ def test_outcome_persistence_failure_accepts_nothing_and_keeps_the_reservation(
 ) -> None:
     def hide_outcomes() -> None:
         with connect(harness.url) as other:
-            assert re.fullmatch(r"caos_test_[0-9a-f]{32}", other.info.dbname)
+            assert re.fullmatch(r"caos_test_(\d{10}_)?[0-9a-f]{32}", other.info.dbname)
             other.execute("ALTER TABLE call_outcomes RENAME TO call_outcomes_hidden")
             other.commit()
 

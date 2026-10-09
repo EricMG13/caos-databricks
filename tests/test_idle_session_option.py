@@ -44,23 +44,26 @@ _WOULD_FAIL = "SELECT 1/0"
 
 @pytest.fixture(autouse=True)
 def _fresh_process(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Each test is a process that has not yet found a refusal, and leaves
-    `PGOPTIONS` as it found it."""
-    before = os.environ.get("PGOPTIONS")
+    """Each test is a process that has not yet found a refusal, with no
+    `PGOPTIONS`; a test that leaves it changed fails here. The ambient value is
+    restored by `monkeypatch` after this check, which does not undo first."""
     monkeypatch.setattr(store, "_IDLE_SESSION_REFUSED", threading.Event())
     monkeypatch.delenv("PGOPTIONS", raising=False)
+    established = os.environ.get("PGOPTIONS")
     yield
-    monkeypatch.undo()
-    assert os.environ.get("PGOPTIONS") == before
+    assert os.environ.get("PGOPTIONS") == established
 
 
-def _operator_options(request: pytest.FixtureRequest, value: str) -> None:
-    """Set `PGOPTIONS` for the test body only. The finalizer is registered
-    after `empty_database` is set up, so it runs before that fixture's
-    teardown: the admin connection that drops the database never sees it."""
-    scoped = pytest.MonkeyPatch()
-    scoped.setenv("PGOPTIONS", value)
-    request.addfinalizer(scoped.undo)
+@pytest.fixture
+def operator_options(request: pytest.FixtureRequest) -> Iterator[None]:
+    """`PGOPTIONS` as the parametrization gives it (indirect), for the test
+    body only. Name it after `empty_database` in a signature: it is then torn
+    down first, so the admin connection that drops the database never sees it."""
+    value = getattr(request, "param", None)
+    with pytest.MonkeyPatch.context() as scoped:
+        if value is not None:
+            scoped.setenv("PGOPTIONS", value)
+        yield
 
 
 def _connects(monkeypatch: pytest.MonkeyPatch) -> list[psycopg.Connection[Any]]:
@@ -80,16 +83,18 @@ def _shown(conn: psycopg.Connection[Any], *names: str) -> list[object]:
     return [conn.execute(f"SHOW {name}").fetchone() for name in names]
 
 
+@pytest.mark.parametrize(
+    "operator_options", ["-c idle_session_timeout=5min"], indirect=True
+)
 def test_a_store_session_turns_its_idle_bound_off_with_its_first_statement(
     empty_database: str,
+    operator_options: None,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    request: pytest.FixtureRequest,
 ) -> None:
     """One connect, no idle startup option, and the `SET` committed: the
     session is idle, outside any transaction, as `call_hold` requires, and a
     caller's rollback does not undo it."""
-    _operator_options(request, "-c idle_session_timeout=5min")
     opened = _connects(monkeypatch)
     with store.connect(empty_database) as conn:
         assert conn.info.transaction_status is TransactionStatus.IDLE
@@ -203,21 +208,19 @@ def test_only_the_four_refusals_of_the_set_degrade(
     ("statement", "operator_options"),
     [(_WOULD_FAIL, None), ("SELECT pg_sleep(1)", "-c statement_timeout=50")],
     ids=["22012-another-error", "57014-statement-timeout"],
+    indirect=["operator_options"],
 )
 def test_another_set_error_closes_the_session_and_refuses_unavailable(
     empty_database: str,
+    operator_options: None,
     monkeypatch: pytest.MonkeyPatch,
-    request: pytest.FixtureRequest,
+    capsys: pytest.CaptureFixture[str],
     statement: str,
-    operator_options: str | None,
 ) -> None:
     """A first statement the server fails for any other reason closes the
     session and refuses `STORE_UNAVAILABLE`, through the request edge too, on
     one connect each; nothing is remembered and nothing printed."""
-    capsys: pytest.CaptureFixture[str] = request.getfixturevalue("capsys")
     monkeypatch.setattr(store, "IDLE_SESSION_SET", statement)
-    if operator_options is not None:
-        _operator_options(request, operator_options)
     opened = _connects(monkeypatch)
     with pytest.raises(Refusal) as refused:
         store.connect(empty_database)
