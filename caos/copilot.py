@@ -29,11 +29,12 @@ The SDK itself is imported only by the transport (Task 3), never here.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, DecimalException
-from typing import Any
+from typing import Any, TypeIs
 
 from langchain_core.messages import AIMessage
 from langchain_core.messages.ai import UsageMetadata
@@ -144,6 +145,17 @@ _REFUSING = (
     "command.",
     "unknown",
 )
+# Events that can carry spend: a usage checkpoint must follow every one of them
+# to be the session's whole bill, or the charge is unknown.
+_BILLED = frozenset(
+    {
+        "assistant.message",
+        "assistant.usage",
+        "model.call_final_result",
+        "model.call_failure",
+        "model.call_finished",
+    }
+)
 
 # One session event as the runtime writes it: `{"type": ..., "data": {...}}`.
 Event = Mapping[str, Any]
@@ -187,6 +199,7 @@ def reply_message(seen: Sequence[Event], target: CopilotModel) -> AIMessage:
         finish = _finish_reason(usages, answers[0])
         if finish is not None:
             metadata["finish_reason"] = finish
+    metadata.update(_bill(seen, answered=bool(answers)))
     content = answers[-1].get("content") if answers else None
     return AIMessage(
         content=content if isinstance(content, str) else "",
@@ -407,6 +420,88 @@ def _derived_finish(answer: Mapping[str, Any]) -> str:
     if type(output) is int and output >= MAX_COMPLETION_TOKENS:
         return "length"
     return "stop"
+
+
+def _bill(seen: Sequence[Event], *, answered: bool) -> dict[str, Any]:
+    """R2.3 and R2.4: `nano_aiu` when the checkpoint states a whole count the
+    call can be charged on -- above zero once anything was answered -- and
+    `premium_requests` as a decimal string or None. No checkpoint, no bill."""
+    marks = _indexed(seen, "session.usage_checkpoint")
+    if not marks:
+        return {}
+    bill: dict[str, Any] = {}
+    units = _ai_units(seen, marks)
+    if units is not None and (units > 0 or not answered):
+        bill["nano_aiu"] = units
+    bill["premium_requests"] = _premium(marks[-1][1].get("totalPremiumRequests"))
+    return bill
+
+
+def _ai_units(
+    seen: Sequence[Event], marks: Sequence[tuple[int, Mapping[str, Any]]]
+) -> int | None:
+    """The session's AI units: its last checkpoint, which is cumulative. Every
+    checkpoint must be a whole count, none below the one before it, the last
+    after every event that can carry spend, and no smaller than the sum of the
+    per-request figures; anything else is an unknown charge."""
+    totals: list[int] = []
+    for _at, data in marks:
+        total = _whole_units(data.get("totalNanoAiu"))
+        if total is None or (totals and total < totals[-1]):
+            return None
+        totals.append(total)
+    if any(_kind(event) in _BILLED for event in seen[marks[-1][0] + 1 :]):
+        return None
+    requested = _per_request_units(_data(seen, "assistant.usage"))
+    if requested is None or requested > totals[-1]:
+        return None
+    return totals[-1]
+
+
+def _whole_units(value: object) -> int | None:
+    """A whole, non-negative count below 2**53, from an int or an integral
+    float; None for anything else (R2.3, R2.9)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        if not value.is_integer():
+            return None
+        value = int(value)
+    if isinstance(value, int) and 0 <= value < _MOST_UNITS:
+        return value
+    return None
+
+
+def _per_request_units(usages: Sequence[Mapping[str, Any]]) -> Decimal | None:
+    """The sum of the per-request `copilotUsage.totalNanoAiu` figures, exactly,
+    or None when one is stated and is not a finite, non-negative number."""
+    total = Decimal(0)
+    for usage in usages:
+        capi = usage.get("copilotUsage")
+        if capi is None:
+            continue
+        figure = capi.get("totalNanoAiu") if isinstance(capi, Mapping) else None
+        if not _finite_count(figure):
+            return None
+        total += Decimal(figure)  # exact: a float converts without rounding
+    return total
+
+
+def _finite_count(value: object) -> TypeIs[int | float]:
+    return (
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    )
+
+
+def _premium(value: object) -> str | None:
+    """`totalPremiumRequests` as a decimal string (it can be fractional), never
+    money: it goes on the bill line, and N123 reconciles it."""
+    if not _finite_count(value):
+        return None
+    return str(Decimal(str(value)))
 
 
 def _usage(usages: Sequence[Mapping[str, Any]]) -> UsageMetadata | None:
