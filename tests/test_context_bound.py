@@ -10,7 +10,6 @@ import shutil
 from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -20,15 +19,24 @@ from full_assessment_route_fixtures import ROUTE as FULL_ROUTE
 from preflight import context_warnings
 from test_canonical_execution import route
 from test_canonical_runtime import _answers, _module_provider, _run_route
+from test_copilot import (
+    LONG_TIER,
+    MODEL,
+    PRICE,
+    FakeRuntime,
+    billed,
+    listed,
+    ready,
+    runtime,
+)
 from test_execution_freshness import _counts, _Harness, _still_running, harness
 from test_loop_charges import ESTIMATE, VENDORED
 from test_loop_charges import MODEL as SUITE_ENDPOINT
 
 import caos.provider
-from caos import copilot
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.copilot import CREDIT_PRICE_ENV, context_tokens, declare_listed
+from caos.copilot import CREDIT_PRICE_ENV, context_tokens, require_ready
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.runtime import Execution, run_route
 from caos.methodology import canonical
@@ -41,6 +49,7 @@ from caos.provider import (
     BYTES_PER_TOKEN_FLOOR,
     CONTEXT_NOT_DECLARED,
     CONTEXT_TOKENS,
+    COPILOT_CONTEXT_TOKENS,
     MAX_COMPLETION_TOKENS,
     MAX_REQUEST_BYTES,
     context_notice,
@@ -50,7 +59,7 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.runs import start_run
 
-__all__ = ["harness", "route"]
+__all__ = ["harness", "ready", "route", "runtime"]
 
 REPO = Path(__file__).resolve().parents[1]
 FCA = REPO / "qualification/czr-2026q2-full-credit-assessment"
@@ -102,10 +111,9 @@ def test_a_workspace_endpoint_resolves_to_the_owner_declared_context(
     assert context_notice(model) is None
 
 
-# A Copilot model (D77), a routed variant and the suite's own endpoint: each
-# runs under the transport ceiling, as before D116.
-UNDECLARED: tuple[str, ...] = ("copilot:gpt-6-luna", "copilot:claude-opus-5-5")
-UNDECLARED += ("openai/gpt-6-luna:nitro", SUITE_ENDPOINT)
+# A routed variant and the suite's own endpoint: each runs under the transport
+# ceiling, as before D116.
+UNDECLARED: tuple[str, ...] = ("openai/gpt-6-luna:nitro", SUITE_ENDPOINT)
 
 
 @pytest.mark.parametrize("model", UNDECLARED)
@@ -132,10 +140,11 @@ def test_a_context_no_wider_than_the_completion_is_refused(
 
 def test_preflight_warns_of_each_endpoint_without_a_declared_context() -> None:
     """E1 warns, never fails, per endpoint without a declared context."""
-    assert context_warnings(("claude-opus-5-5", LUNA, "copilot:gpt-6-sol")) == [
+    nitro = "openai/gpt-6-luna:nitro"
+    assert context_warnings(("claude-opus-5-5", LUNA, "copilot:gpt-6-sol", nitro)) == [
         f"WARNING {name}: no declared context; its requests are bounded by the"
         " transport ceiling alone (D116)"
-        for name in ("copilot:gpt-6-sol",)
+        for name in (nitro,)
     ]
 
 
@@ -384,11 +393,15 @@ def credit_pinned(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.usefixtures("credit_pinned")
-@pytest.mark.parametrize("model", ["copilot:claude-opus-5-5", "copilot:gpt-6-luna"])
-def test_an_undeclared_endpoint_runs_under_the_fallback_with_one_notice(
-    harness: _Harness, model: str, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    ("model", "notices"),
+    [("openai/gpt-6-luna:nitro", 1), ("copilot:claude-opus-5-5", 0)],
+)
+def test_a_route_runs_to_its_end_with_a_notice_only_when_undeclared(
+    harness: _Harness, model: str, notices: int, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """They run to the end, as before D116, with one stderr notice."""
+    """An undeclared endpoint runs, as before D116, with one stderr notice; a
+    Copilot model is declared (MEDIUM-1) and prints none."""
     price = priced(ESTIMATE, model=model)
     answers = replace(_answers(harness), model=model, price=price)
     run_route(
@@ -400,7 +413,7 @@ def test_an_undeclared_endpoint_runs_under_the_fallback_with_one_notice(
     )
     assert answers.calls == len(harness.route.nodes)
     notice = f"{CONTEXT_NOT_DECLARED} endpoint={model}"
-    assert capsys.readouterr().err.splitlines().count(notice) == 1
+    assert capsys.readouterr().err.splitlines().count(notice) == notices
 
 
 class _BrokenStderr:
@@ -414,7 +427,7 @@ def test_the_notice_never_fails_a_run(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch, broken: object
 ) -> None:
     """A stderr that cannot take the notice is passed over (F513's fail-open)."""
-    model = "copilot:claude-opus-5-5"
+    model = "openai/gpt-6-luna:nitro"
     price = priced(ESTIMATE, model=model)
     answers = replace(_answers(harness), model=model, price=price)
     monkeypatch.setattr("sys.stderr", broken)
@@ -428,116 +441,64 @@ def test_the_notice_never_fails_a_run(
     assert answers.calls == len(harness.route.nodes)
 
 
-# --- a Copilot model's context (R4, D77 addendum 2) -------------------------
+# --- a Copilot model's context (R4, D77 addendum 2; MEDIUM-1) --------------
 
 
-@pytest.fixture
-def unlisted(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A process whose readiness has declared no listing yet."""
-    monkeypatch.setattr(copilot, "CONTEXT_LISTED", copilot._Listed())
+@pytest.mark.parametrize(
+    "model", ["copilot:gpt-6-luna", "copilot:claude-opus-5.5@high", MODEL]
+)
+def test_a_copilot_model_is_declared_at_the_owner_context(model: str) -> None:
+    """Every `copilot:` model at the long-context tier the session asks for,
+    1,000,000 tokens (owner, 2026-10-06): a host constant, never a listing."""
+    assert COPILOT_CONTEXT_TOKENS == 1_000_000
+    assert context_tokens(model) == COPILOT_CONTEXT_TOKENS
+    assert request_ceiling(model) == DECLARED_BOUND
+    assert context_notice(model) is None
+    # The gateway's names are the pinned table's, as before.
+    assert context_tokens("openai/gpt-6-luna") == 1_050_000
+
+
+def test_a_pinned_copilot_entry_is_read_under_its_full_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _declare(monkeypatch, "copilot:gpt-6-luna", 300_000)
+    assert context_tokens("copilot:gpt-6-luna") == 300_000
+    assert request_ceiling("copilot:gpt-6-luna") == _bound(300_000)
+    # Another effort is another name, at the declared default.
+    assert context_tokens("copilot:gpt-6-luna@high") == COPILOT_CONTEXT_TOKENS
+
+
+def test_a_pinned_copilot_context_of_one_token_leaves_no_room(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _declare(monkeypatch, "copilot:gpt-6-luna", 1)
+    with pytest.raises(Refusal) as refused:
+        request_ceiling("copilot:gpt-6-luna")
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
 
 
 def _bound(tokens: int) -> int:
     return min(MAX_REQUEST_BYTES, (tokens - MAX_COMPLETION_TOKENS) * 3)
 
 
-@pytest.mark.usefixtures("unlisted")
-def test_a_listed_copilot_model_is_bounded_by_its_listing() -> None:
-    declare_listed({"gpt-6-luna": 400_000, "claude-opus-5.5": 2_000_000})
-    assert copilot.CONTEXT_LISTED == {
-        "gpt-6-luna": 400_000,
-        "claude-opus-5.5": 2_000_000,
-    }
-    for model in ("copilot:gpt-6-luna", "copilot:gpt-6-luna@high"):
-        assert context_tokens(model) == 400_000
-        assert request_ceiling(model) == _bound(400_000) == 1_003_392
-        assert context_notice(model) is None
-    # Never past the transport's own ceiling.
-    assert request_ceiling("copilot:claude-opus-5.5") == MAX_REQUEST_BYTES
-    # An approved model the seat did not list keeps the fallback and notice.
-    assert context_tokens("copilot:gpt-6-sol") is None
-    assert request_ceiling("copilot:gpt-6-sol") == MAX_REQUEST_BYTES
-    assert context_notice("copilot:gpt-6-sol") is not None
-    # The gateway's names are the pinned table's, as before.
-    assert context_tokens("openai/gpt-6-luna") == 1_050_000
-    # Read-only to its readers (invariant 10).
-    assert not hasattr(copilot.CONTEXT_LISTED, "__setitem__")
-
-
-@pytest.mark.usefixtures("unlisted")
-def test_a_pinned_copilot_entry_answers_until_a_listing_does(
-    monkeypatch: pytest.MonkeyPatch,
+def test_two_workers_with_different_listings_fit_a_replay_alike(
+    fca: _Harness, ready: type[FakeRuntime]
 ) -> None:
-    _declare(monkeypatch, "copilot:gpt-6-luna", 300_000)
-    assert context_tokens("copilot:gpt-6-luna") == 300_000
-    assert request_ceiling("copilot:gpt-6-luna") == _bound(300_000)
-    # Pinned under its full name: another effort is another name.
-    assert context_tokens("copilot:gpt-6-luna@high") is None
-    declare_listed({"gpt-6-luna": 400_000})
-    assert context_tokens("copilot:gpt-6-luna") == 400_000
-
-
-@pytest.mark.usefixtures("unlisted")
-def test_a_pinned_copilot_entry_above_the_listing_refuses_at_start(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _declare(monkeypatch, "copilot:gpt-6-luna@high", 500_000)
-    with pytest.raises(Refusal) as refused:
-        declare_listed({"gpt-6-luna": 400_000})
-    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
-    assert copilot.CONTEXT_LISTED == {}
-    # Equal is no excess, a pinned model the seat did not list is held to
-    # nothing, and the listing is then declared.
-    _declare(monkeypatch, "copilot:gpt-6-luna@high", 400_000)
-    _declare(monkeypatch, "copilot:gpt-6-sol", 900_000)
-    declare_listed({"gpt-6-luna": 400_000})
-    assert copilot.CONTEXT_LISTED == {"gpt-6-luna": 400_000}
-    assert context_tokens("copilot:gpt-6-sol") == 900_000
-
-
-@pytest.mark.usefixtures("unlisted")
-def test_a_listed_count_of_one_token_is_declared_and_leaves_no_room() -> None:
-    declare_listed({"gpt-6-luna": 1})
-    assert context_tokens("copilot:gpt-6-luna") == 1
-    with pytest.raises(Refusal) as refused:
-        request_ceiling("copilot:gpt-6-luna")
-    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
-
-
-@pytest.mark.usefixtures("unlisted")
-def test_the_listing_is_declared_once_per_process() -> None:
-    declare_listed({"gpt-6-luna": 400_000})
-    for again in ({"gpt-6-luna": 300_000}, {}):
-        with pytest.raises(Refusal) as refused:
-            declare_listed(again)
-        assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
-    assert copilot.CONTEXT_LISTED == {"gpt-6-luna": 400_000}
-    # The same listing again is no second pin (F598).
-    declare_listed({"gpt-6-luna": 400_000})
-    assert copilot.CONTEXT_LISTED == {"gpt-6-luna": 400_000}
-
-
-@pytest.mark.usefixtures("unlisted")
-@pytest.mark.parametrize(
-    "listed",
-    [
-        {"gpt-6-luna": 0},
-        {"gpt-6-luna": -1},
-        {"gpt-6-luna": True},
-        {"gpt-6-luna": 400_000.0},
-        {"gpt-6-luna": "400000"},
-        {"Not A Model": 400_000},
-        {"": 400_000},
-    ],
-)
-def test_a_listing_that_is_no_context_is_refused_and_nothing_declared(
-    listed: dict[str, object],
-) -> None:
-    with pytest.raises(Refusal) as refused:
-        declare_listed(cast(dict[str, int], listed))
-    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
-    assert copilot.CONTEXT_LISTED == {}
-    declare_listed({"gpt-6-luna": 400_000})
+    """MEDIUM-1: a billed answer is replayed by whichever worker reclaims its
+    run, and `_replayed_answer` rebuilds the context through `_context`, as
+    `_gate` does. Two worker starts whose seats list different long-context
+    budgets, each at or above the declared one, fit the same lines: the
+    ceiling is the host's, the listing only its floor."""
+    fitted = []
+    for tokens in (1_000_000, 1_500_000):
+        tier = dict(LONG_TIER, maxPromptTokens=tokens)
+        ready.offered = [listed(billing=billed(long_context=tier))]
+        require_ready({MODEL: PRICE})
+        fitted.append(_gate(fca, MODEL))
+    first, second = fitted
+    assert first == second
+    # The bound bit: FCA's CP-0 pack is past 2,803,392 bytes whole.
+    assert first.selection.page_maps
 
 
 def test_a_cli_copilot_model_has_no_ceiling_until_its_transport_is_built() -> None:

@@ -92,7 +92,7 @@ Name each model `copilot:<model id>[@<effort>]`, the effort one of `low`, `mediu
 
 - `CAOS_MODEL_ENDPOINT` is the model a run gets when it names none; `CAOS_MODEL_PRICE` prices it (section 4).
 - `CAOS_MODEL_CHOICES` is the approved list a run may be pinned to, each entry a dated price in `CAOS_MODEL_PRICE`'s form, joined by `;` (D75, at most 16). Approve only models the firm's policy enables and Compliance cleared. The API must approve the same list.
-- Choose by prompt limit: the worker prints each model's `max_prompt_tokens` and `context=` from the listing. CP-0 sends whole filings, so a large 10-K needs a long-context model. A prompt past the limit is refused after the call (what it bills is unmeasured: N185).
+- Every `copilot:` model is declared at 1,000,000 tokens of context (owner, 2026-10-06; `COPILOT_CONTEXT_TOKENS`), at the long-context tier each session asks for, and its requests are fitted to that, the same in every worker process. The worker prints the seat's long-context `maxPromptTokens` as `context=` and refuses to start when it is below the declared figure or not listed (`context_check=low|unlisted`). A prompt past the seat's real limit is refused after the call (what it bills is unmeasured: N185).
 - Every approved model must be offered to the seat, enabled by policy, usable at its pinned effort and priced at or above its listing, or the whole worker refuses (including any gateway model in the same list).
 - Never mix: CAOS does not switch a run between transports or models. A run stays on the model it was pinned to.
 
@@ -125,13 +125,13 @@ $env:CAOS_MODEL_ENDPOINT = "copilot:<model>[@<effort>]"
 $env:CAOS_MODEL_PRICE = "copilot:<model>[@<effort>],<in>,<out>,<YYYY-MM-DD>"
 $env:CAOS_MODEL_CHOICES = "<more priced entries joined by ;>"   # optional
 $env:CAOS_RUN_CEILING = "<above one worst-case call>"
-uv run --no-sync python scripts/gateway_smoke.py     # one paid call of a few tokens
+uv run --no-sync python scripts/gateway_smoke.py     # two paid calls of a few tokens each
 uv run --no-sync python -m caos.graph.worker
 ```
 
-The smoke must print `model=ChatCopilot` and `json_mode=accepted` with the plain call's AI units and charge. Run it once per approved model you rely on.
+The smoke must print `model=ChatCopilot` and `json_mode=accepted` with the plain call's AI units and charge. It makes two paid calls, each a fresh session: the plain call, then the same model in JSON mode, the seam every module call uses (F27). Neither is a ledger reservation and nothing is recorded in Lakebase: the smoke only sets the in-process amount and credit price a session needs, so each session's cap is the SDK's 30-credit floor ($0.30 at $0.01 a credit, and the cap is soft, R2.7). What bounds its spend is the seat's GitHub budget, not `CAOS_RUN_CEILING`. Run it once per approved model you rely on.
 
-At start the worker prints on stderr one runtime line, `copilot runtime=<version> host=<host> login=<login>`, then one line per approved model: `copilot <name> offered=y|n policy=<state> usable=y|n efforts=<list> max_prompt_tokens=<n> max_context_window_tokens=<n> context=<n> price_check=ok|low|unpriced price_floor=<in>,<out> credit_price=<usd>@<date>`. A field it cannot state safely prints `-`. It exits 2 with `PROVIDER_NOT_CONFIGURED` before claiming any run when readiness fails; the stderr line before it says why:
+At start the worker prints on stderr one runtime line, `copilot runtime=<version> host=<host> login=<login>`, then one line per approved model: `copilot <name> offered=y|n policy=<state> usable=y|n efforts=<list> max_prompt_tokens=<n> max_context_window_tokens=<n> context=<n> context_check=ok|low|unlisted price_check=ok|low|unpriced price_floor=<in>,<out> credit_price=<usd>@<date>`. A field it cannot state safely prints `-`. It exits 2 with `PROVIDER_NOT_CONFIGURED` before claiming any run when readiness fails; the stderr line before it says why:
 
 | What you see | What it means and what to do |
 |---|---|
@@ -141,6 +141,7 @@ At start the worker prints on stderr one runtime line, `copilot runtime=<version
 | `reason=runtime_unready class=<Name>` | The runtime would not start, timed out (60 s) or answered something the SDK could not parse. The class names what failed; the runtime's own text is never printed. Check the token, the network to GitHub and the policy enabling Copilot CLI |
 | model line `offered=n` | The seat does not offer that model id: correct the name or have the organisation enable it. An unoffered approved model refuses the whole worker (N184 asks the owner whether that stays) |
 | `usable=n` | The model is disabled by policy, or the effort in its name is not one it takes (`efforts=` lists what it takes; `-` takes none, so name it without `@effort`) |
+| `context_check=low` or `unlisted` | The seat lists a long-context prompt budget below the declared 1,000,000 tokens, or none: that model cannot carry the requests CAOS fits to it. Remove it from the approved list or report it (N185) |
 | `price_check=low` | The pin is below the listing's floor: raise `CAOS_MODEL_PRICE` to at least `price_floor` (and re-check the run ceiling) |
 | `price_check=unpriced` | The listing lacks a batch size, a tier or a rate, so no pin can be checked: report it (N185); do not guess a pin |
 | `STORE_UNAVAILABLE` | Lakebase unreachable or the role lacks the grants (section 6) |
@@ -160,7 +161,7 @@ If a call's charge exceeds what the run reserved, the run parks `BUDGET_CHARGE_O
 
 - No run advances while no worker runs, and one worker spends one Copilot seat. Two analysts' workers may run at once (leases); each spends its own seat.
 - No in-app chat (Query) until RAI is onboarded.
-- Hosting the API and UI with Copilot models is a separate step (N124).
+- Hosting the API and UI with Copilot models is a separate step (N124). Copilot answers on this PC worker only: the App's in-process worker (`CAOS_WORKER_IN_PROCESS=1`) runs readiness at start and refuses `PROVIDER_NOT_CONFIGURED` whenever `CAOS_MODEL_CHOICES` names a `copilot:` model, since the App has no seat or runtime, and its worker thread ends while the API keeps serving. With the same approved list on both sides, `/api/health` `workers` then rests on the PC worker alone.
 - No `copilot-cli:` models (D78, N188).
 
 ## 9. Measure on the firm's seat first (N177, N184, N185)
