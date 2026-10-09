@@ -37,7 +37,7 @@ export function AppShell({
           <aside
             aria-label="Demonstration mode"
             data-demo-banner
-            className="flex items-center justify-center gap-1.5 border-b bg-background px-4 py-1 text-xs font-medium text-warning md:rounded-t-xl"
+            className="flex items-center justify-center gap-1.5 border-b bg-header px-4 py-1 text-xs font-medium text-warning md:rounded-t-xl"
           >
             <SeverityMark severity="WARNING" decorative />
             Read-only demonstration · sample decisions · nothing is persisted
