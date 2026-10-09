@@ -1087,7 +1087,7 @@ CI_ACTIONS: tuple[dict[object, object], ...] = (
     {"uses": _CHECKOUT, "with": {"fetch-depth": 0}},
     {"uses": _SETUP_UV, "with": {"version": "0.12.5", "enable-cache": True}},
     {
-        "uses": "databricks/setup-cli@d76f84cea9893ce68311a1f33fb0c95af6c963b7",
+        "uses": "databricks/setup-cli@9230f12203ef173d0b901846f62a55ce997efef7",
         "with": {"version": "1.17.0"},
     },
     {
