@@ -150,16 +150,40 @@ _REFUSING = (
     "command.",
     "unknown",
 )
-# Events that can carry spend: a usage checkpoint must follow every one of them
-# to be the session's whole bill, or the charge is unknown.
+# Events that are, or start, model work that can carry spend: the last usage
+# checkpoint must follow every one of them to be the session's whole bill, and
+# none may follow the end of the turn (F559).
 _BILLED = frozenset(
     {
+        "user.message",
+        "assistant.turn_start",
+        "assistant.turn_retry",
+        "assistant.reasoning",
         "assistant.message",
         "assistant.usage",
+        "model.call_start",
         "model.call_final_result",
         "model.call_failure",
         "model.call_finished",
     }
+)
+# Events that show the model did work, whatever any figure says (R2.10, F559).
+_WORK = frozenset({"assistant.message", "assistant.usage", "assistant.reasoning"})
+# The field naming a model on each event that names one: when stated, it must
+# be the pin, or a dispatch, turn or session ran on another model (F560).
+_MODEL_FIELDS = {
+    "session.start": "selectedModel",
+    "session.shutdown": "currentModel",
+    "assistant.turn_start": "model",
+    "assistant.turn_end": "model",
+    "assistant.turn_retry": "model",
+    "model.call_start": "model",
+    "model.call_failure": "model",
+}
+# The witnesses of the answer: a sub-agent (an `agentId` on the envelope) must
+# have written none of them (F560).
+_WITNESSES = frozenset(
+    {"assistant.message", "assistant.usage", "model.call_final_result"}
 )
 # `model.call_final_result.result` values that state an HTTP status (R1).
 _RESULT_STATUS = {"http_400": 400, "http_413": 413, "http_429": 429}
@@ -269,7 +293,7 @@ def reply_message(seen: Sequence[Event], target: CopilotModel) -> AIMessage:
         finish = _finish_reason(usages, answers[0])
         if finish is not None:
             metadata["finish_reason"] = finish
-    metadata.update(_bill(seen, answered=bool(answers)))
+    metadata.update(_bill(seen, worked=_worked(seen)))
     content = answers[-1].get("content") if answers else None
     return AIMessage(
         content=content if isinstance(content, str) else "",
@@ -354,12 +378,14 @@ def _witnessed(
     target: CopilotModel,
 ) -> bool:
     """R1.0 to R1.7: every event admitted, one answer and one settled
-    operation naming the pin, any usage agreeing, and the session ended."""
+    operation naming the pin, any usage agreeing, the session's own statements
+    agreeing, and the session ended."""
     return (
         all(_admitted(event, target) for event in seen)
         and _one_answer(answers, target)
         and _one_operation(seen, target)
         and _usage_agrees(usages, target)
+        and _session_agrees(seen, usages, target)
         and _ended(seen)
     )
 
@@ -374,7 +400,9 @@ def _admitted(event: Event, target: CopilotModel) -> bool:
         return False
     if kind.startswith(_REFUSING) or kind not in _ALLOWED:
         return False
-    if data.get("fusion") is not None:
+    if data.get("fusion") is not None or not _names_the_pin(kind, data, target):
+        return False
+    if kind in _WITNESSES and event.get("agentId") is not None:
         return False
     if kind == "session.model_change":
         return data.get("newModel") == target.name
@@ -382,6 +410,12 @@ def _admitted(event: Event, target: CopilotModel) -> bool:
         return not data.get("serverName")
     loaded = _LOADS.get(kind)
     return loaded is None or _loaded_nothing(data.get(loaded))
+
+
+def _names_the_pin(kind: str, data: Mapping[str, Any], target: CopilotModel) -> bool:
+    """F560: an event that names a model names the pin, or names none."""
+    field = _MODEL_FIELDS.get(kind)
+    return field is None or data.get(field) in (None, target.name)
 
 
 # The loads R1.0 admits only when they loaded nothing, by the field they list.
@@ -398,8 +432,9 @@ def _loaded_nothing(loaded: object) -> bool:
 
 
 def _one_answer(answers: Sequence[Mapping[str, Any]], target: CopilotModel) -> bool:
-    """R1.1 and R1.5: exactly one answer, naming the pin, with no tool request
-    and no server tool (which can mean a second, advisor model)."""
+    """R1.1 and R1.5: exactly one answer, naming the pin, with no tool request,
+    no server tool (which can mean a second, advisor model), not a tool's
+    child, and whole: one chunk of one, if chunked at all (F562)."""
     if len(answers) != 1:
         return False
     answer = answers[0]
@@ -407,6 +442,9 @@ def _one_answer(answers: Sequence[Mapping[str, Any]], target: CopilotModel) -> b
         answer.get("model") == target.name
         and not answer.get("toolRequests")
         and answer.get("serverTools") is None
+        and answer.get("parentToolCallId") is None
+        and answer.get("chunkCount") in (None, 1)
+        and answer.get("chunkIndex") in (None, 0)
     )
 
 
@@ -435,8 +473,8 @@ def _one_operation(seen: Sequence[Event], target: CopilotModel) -> bool:
 
 def _usage_agrees(usages: Sequence[Mapping[str, Any]], target: CopilotModel) -> bool:
     """R1.3: at most one usage; when present it and its CAPI witness name the
-    pin, at the pinned effort, not auto-routed, stated not BYOK, offering no
-    tool, and no content filter triggered."""
+    pin, at the pinned effort, not auto-routed, stated not BYOK, with no tool
+    offered or called, and no content filter triggered."""
     if not usages:
         return True
     if len(usages) != 1:
@@ -451,19 +489,71 @@ def _usage_agrees(usages: Sequence[Mapping[str, Any]], target: CopilotModel) -> 
         )
         and not usage.get("isAuto")
         and usage.get("isByok") is False
-        and not usage.get("availableToolCount")
         and _effort(usage.get("reasoningEffort")) == target.reasoning_effort
         and usage.get("contentFilterTriggered") is not True
+        and _no_tool(usage)
+    )
+
+
+def _no_tool(usage: Mapping[str, Any]) -> bool:
+    """F560: a usage that offered or called no tool, made by the user's own
+    turn rather than a tool's or another initiator's."""
+    return (
+        not usage.get("availableToolCount")
+        and not usage.get("numToolCalls")
+        and not usage.get("toolCounts")
+        and usage.get("parentToolCallId") is None
+        and usage.get("initiator") in (None, "user")
+    )
+
+
+def _session_agrees(
+    seen: Sequence[Event], usages: Sequence[Mapping[str, Any]], target: CopilotModel
+) -> bool:
+    """F560, F561, F562 (AR-15): every effort the session states -- at its start
+    and at any model change -- is the pinned one, and no auto tier is set; with
+    no usage to witness the effort, the session's start must. One prompt only:
+    a single user message, no autopilot continuation. Any shutdown is routine,
+    on the pin alone."""
+    stated = [*_data(seen, "session.start"), *_data(seen, "session.model_change")]
+    if not usages and not _data(seen, "session.start"):
+        return False
+    if any(
+        data.get("autoTier") is not None
+        or _effort(data.get("reasoningEffort")) != target.reasoning_effort
+        for data in stated
+    ):
+        return False
+    prompts = _data(seen, "user.message")
+    if len(prompts) > 1 or any(data.get("isAutopilotContinuation") for data in prompts):
+        return False
+    return all(
+        _shutdown_agrees(data, target) for data in _data(seen, "session.shutdown")
+    )
+
+
+def _shutdown_agrees(data: Mapping[str, Any], target: CopilotModel) -> bool:
+    """F561: a routine shutdown whose model metrics name only the pin."""
+    metrics = data.get("modelMetrics")
+    return (
+        data.get("shutdownType") == "routine"
+        and isinstance(metrics, Mapping)
+        and all(model == target.name for model in metrics)
     )
 
 
 def _ended(seen: Sequence[Event]) -> bool:
-    """R1.7: the turn ended and then the session idled, never aborted."""
+    """R1.7: the turn ended, nothing billable followed it -- no reasoning, no
+    dispatch, no answer after the end or after an idle (F559, F562) -- and then
+    the session idled, never aborted."""
     idles = _indexed(seen, "session.idle")
-    if not idles or any(data.get("aborted") is True for _at, data in idles):
+    ends = _indexed(seen, "assistant.turn_end")
+    if not idles or not ends or any(data.get("aborted") is True for _at, data in idles):
         return False
-    last_idle = idles[-1][0]
-    return any(at < last_idle for at, _data_ in _indexed(seen, "assistant.turn_end"))
+    last_end = ends[-1][0]
+    return last_end < idles[-1][0] and not any(
+        _kind(event) in _BILLED for event in seen[last_end + 1 :]
+    )
 
 
 def _effort(reported: object) -> str | None:
@@ -495,16 +585,17 @@ def _derived_finish(answer: Mapping[str, Any]) -> str:
     return "stop"
 
 
-def _bill(seen: Sequence[Event], *, answered: bool) -> dict[str, Any]:
+def _bill(seen: Sequence[Event], *, worked: bool) -> dict[str, Any]:
     """R2.3 and R2.4: `nano_aiu` when the checkpoint states a whole count the
-    call can be charged on -- above zero once anything was answered -- and
-    `premium_requests` as a decimal string or None. No checkpoint, no bill."""
+    call can be charged on -- above zero once the model did any work (F559) --
+    and `premium_requests` as a decimal string or None. No checkpoint, no
+    bill."""
     marks = _indexed(seen, "session.usage_checkpoint")
     if not marks:
         return {}
     bill: dict[str, Any] = {}
     units = _ai_units(seen, marks)
-    if units is not None and (units > 0 or not answered):
+    if units is not None and (units > 0 or not worked):
         bill["nano_aiu"] = units
     bill["premium_requests"] = _premium(marks[-1][1].get("totalPremiumRequests"))
     return bill
@@ -514,21 +605,53 @@ def _ai_units(
     seen: Sequence[Event], marks: Sequence[tuple[int, Mapping[str, Any]]]
 ) -> int | None:
     """The session's AI units: its last checkpoint, which is cumulative. Every
-    checkpoint must be a whole count, none below the one before it, the last
-    after every event that can carry spend, and no smaller than the sum of the
-    per-request figures; anything else is an unknown charge."""
+    checkpoint must be a whole count, none below the one before it; the last
+    must be settled -- no work after it, the session ended after it, nothing
+    aborted (F559) -- and agree with every other figure the session states
+    (F558, F561). Anything else is an unknown charge."""
     totals: list[int] = []
     for _at, data in marks:
         total = _whole_units(data.get("totalNanoAiu"))
         if total is None or (totals and total < totals[-1]):
             return None
         totals.append(total)
-    if any(_kind(event) in _BILLED for event in seen[marks[-1][0] + 1 :]):
-        return None
-    requested = _per_request_units(_data(seen, "assistant.usage"))
-    if requested is None or requested > totals[-1]:
+    if not _settled_after(seen, marks[-1][0]) or not _figures_agree(seen, totals[-1]):
         return None
     return totals[-1]
+
+
+def _settled_after(seen: Sequence[Event], at: int) -> bool:
+    """F559: nothing billable after `at`, and the session ended after it -- a
+    `session.idle` or a `session.error` -- with no idle anywhere aborted, so
+    no dispatch can still be running past the figure."""
+    after = seen[at + 1 :]
+    if any(_kind(event) in _BILLED for event in after):
+        return False
+    if any(data.get("aborted") is True for data in _data(seen, "session.idle")):
+        return False
+    return any(_kind(event) in ("session.idle", "session.error") for event in after)
+
+
+def _figures_agree(seen: Sequence[Event], total: int) -> bool:
+    """F558, F561: the per-request figures sum to no more than `total`; a
+    shutdown's session total, when stated, is exactly `total`, and its
+    per-model figures sum to no more than it."""
+    blocks = [usage.get("copilotUsage") for usage in _data(seen, "assistant.usage")]
+    requested = _summed([block for block in blocks if block is not None])
+    if requested is None or requested > total:
+        return False
+    return all(
+        _shutdown_figures_agree(data, total) for data in _data(seen, "session.shutdown")
+    )
+
+
+def _shutdown_figures_agree(data: Mapping[str, Any], total: int) -> bool:
+    stated = data.get("totalNanoAiu")
+    if stated is not None and _whole_units(stated) != total:
+        return False
+    metrics = data.get("modelMetrics")
+    metered = _summed(list(metrics.values())) if isinstance(metrics, Mapping) else None
+    return metered is not None and metered <= total
 
 
 def _whole_units(value: object) -> int | None:
@@ -545,15 +668,18 @@ def _whole_units(value: object) -> int | None:
     return None
 
 
-def _per_request_units(usages: Sequence[Mapping[str, Any]]) -> Decimal | None:
-    """The sum of the per-request `copilotUsage.totalNanoAiu` figures, exactly,
-    or None when one is stated and is not a finite, non-negative number."""
+def _summed(blocks: Sequence[object]) -> Decimal | None:
+    """The sum of the `totalNanoAiu` figures of these blocks (per-request CAPI
+    usage, or a shutdown's per-model metrics), exactly; a block that states
+    none adds nothing. None when a block is not an object, or its figure is
+    not a finite, non-negative number."""
     total = Decimal(0)
-    for usage in usages:
-        capi = usage.get("copilotUsage")
-        if capi is None:
+    for block in blocks:
+        if not isinstance(block, Mapping):
+            return None
+        figure = block.get("totalNanoAiu")
+        if figure is None:
             continue
-        figure = capi.get("totalNanoAiu") if isinstance(capi, Mapping) else None
         if not _finite_count(figure):
             return None
         total += Decimal(figure)  # exact: a float converts without rounding
@@ -578,15 +704,50 @@ def _premium(value: object) -> str | None:
 
 
 def _spent(seen: Sequence[Event]) -> bool:
-    """R2.10: whether the session can have cost anything -- any answer, or any
-    checkpoint that does not state exactly zero. Such a call is returned and
-    billed, never raised: it is no drop, so it is never re-attempted or
-    re-sent (invariants 6 and 8; D110)."""
-    if _data(seen, "assistant.message"):
+    """R2.10: whether the session can have cost anything -- any sign of model
+    work (`_worked`), any checkpoint that does not state exactly zero (an
+    unreadable one included), or any shutdown figure stated and not zero. Such
+    a call is returned and billed, never raised: it is no drop, so it is never
+    re-attempted or re-sent (invariants 6 and 8; D110; F559)."""
+    if _worked(seen):
         return True
-    return any(
-        not _stated_zero(data.get("totalNanoAiu"))
-        for data in _data(seen, "session.usage_checkpoint")
+    figures = [
+        data.get("totalNanoAiu") for data in _data(seen, "session.usage_checkpoint")
+    ]
+    figures += [figure for figure in _shutdown_figures(seen) if figure is not None]
+    return any(not _stated_zero(figure) for figure in figures)
+
+
+def _shutdown_figures(seen: Sequence[Event]) -> list[object]:
+    """Every AI-unit figure the shutdowns state, session and per model, None
+    where one states none; a per-model block that is not an object is its own
+    figure, unreadable, so it counts as spend."""
+    figures: list[object] = []
+    for data in _data(seen, "session.shutdown"):
+        metrics = data.get("modelMetrics")
+        blocks = list(metrics.values()) if isinstance(metrics, Mapping) else [metrics]
+        figures.append(data.get("totalNanoAiu"))
+        figures += [
+            block.get("totalNanoAiu") if isinstance(block, Mapping) else block
+            for block in blocks
+        ]
+    return figures
+
+
+def _worked(seen: Sequence[Event]) -> bool:
+    """F559: whether the model did any work -- an answer, a usage, reasoning, a
+    successful settled operation or a successful finished dispatch. A call that
+    worked was billed for it, so a zero figure beside it is no figure."""
+    return (
+        any(_kind(event) in _WORK for event in seen)
+        or any(
+            data.get("result") == "success"
+            for data in _data(seen, "model.call_final_result")
+        )
+        or any(
+            data.get("outcome") == "success"
+            for data in _data(seen, "model.call_finished")
+        )
     )
 
 
@@ -595,7 +756,8 @@ def _stated_zero(value: object) -> bool:
 
 
 def _failure(seen: Sequence[Event]) -> Exception | None:
-    """R1's errors, for a call with no spend and no answer: an aborted session
+    """R1's errors, for a call with no spend and no work (`_spent` is False, so
+    no settled result or dispatch succeeded): an aborted session
     or one that never ended is indeterminate (`TimeoutError`); otherwise the
     status a session error states, else an API failure's, else the settled
     result's. A transport failure declares nothing. A session that idled with
@@ -612,25 +774,16 @@ def _failure(seen: Sequence[Event]) -> Exception | None:
     if stated is not None:
         return CopilotStatusError(stated)
     settled = _settled_result(seen)
-    if errors or failure is not None or settled not in (None, "success"):
+    if errors or failure is not None or settled is not None:
         return _from_result(settled)
     return None if _data(seen, "session.idle") else TimeoutError()
 
 
 def _open_failure(seen: Sequence[Event]) -> Mapping[str, Any] | None:
-    """The last `model.call_failure` that no successful settled result
-    followed: a failure the runtime did not recover from."""
-    recovered = [
-        at
-        for at, data in _indexed(seen, "model.call_final_result")
-        if data.get("result") == "success"
-    ]
-    open_failures = [
-        data
-        for at, data in _indexed(seen, "model.call_failure")
-        if not any(later > at for later in recovered)
-    ]
-    return open_failures[-1] if open_failures else None
+    """The last `model.call_failure`. On a call with no spend, no settled
+    result succeeded, so none was recovered from."""
+    failures = _data(seen, "model.call_failure")
+    return failures[-1] if failures else None
 
 
 def _settled_result(seen: Sequence[Event]) -> object:
