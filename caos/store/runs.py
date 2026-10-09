@@ -26,7 +26,7 @@ from caos import methodology
 from caos.boundary_text import BoundaryText
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, committed_unit, rollback_or_close
-from caos.store.budget import CEILING, validate_spend
+from caos.store.budget import CEILING, overspent, validate_spend
 from caos.store.cases import lock_case
 from caos.store.events import RunEvent, append, lock_run
 from caos.store.gates import approved_run_input, require_adapter_route
@@ -235,6 +235,12 @@ def _start(
     conn: StoreConnection, run_id: UUID, route_node_id: str, lease: Lease | None
 ) -> UUID:
     """The attempt row and its event, under the caller's run lock."""
+    # R2.6 (F589): a run whose AI-unit bill overshot its reservation starts
+    # no attempt on any node, under the lock and ahead of every other check:
+    # the ledger holds the charge even when the park after its refusal was
+    # lost to a crash or a store fault.
+    if overspent(conn, run_id):
+        raise Refusal(RefusalCode.BUDGET_CHARGE_OVER_RESERVATION)
     if (
         conn.execute(
             _UNSETTLED,

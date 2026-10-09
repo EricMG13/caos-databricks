@@ -9,14 +9,16 @@ fails the fake and not the adapter.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import inspect
+import io
 import logging
 import math
 import os
 import re
 from collections.abc import Callable, Mapping, Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, tzinfo
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
@@ -57,6 +59,7 @@ from caos.copilot import (
     session_options,
     settled_charge,
 )
+from caos.methodology import canonical
 from caos.models import ChatCompletions, completions
 from caos.pricing import CreditPrice, ModelPrice
 from caos.provider import (
@@ -68,6 +71,7 @@ from caos.provider import (
     reserving,
 )
 from caos.refusals import Refusal, RefusalCode
+from caos.store.budget import Reservation
 
 PIN = "claude-opus-5.5"
 OTHER = "claude-sonnet-5.5"
@@ -3191,9 +3195,25 @@ def test_the_credit_price_is_a_dated_decimal_or_not_configured(
         assert refused.value.args == (RefusalCode.PROVIDER_NOT_CONFIGURED,)
 
 
-def test_the_credit_price_is_never_later_than_today_in_utc() -> None:
+def test_the_credit_price_is_never_later_than_today_in_utc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     today = datetime.now(UTC).date()
     assert credit_price(f"0.01,{today.isoformat()}").as_of == today
+
+    class Clock(datetime):
+        """Half past midnight in UTC, still the evening before locally."""
+
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> Clock:
+            if tz is UTC:
+                return cls(2026, 10, 7, 0, 30, tzinfo=UTC)
+            return cls(2026, 10, 6, 20, 30)
+
+    monkeypatch.setattr(copilot_module, "datetime", Clock)
+    assert credit_price("0.01,2026-10-07").as_of == date(2026, 10, 7)
+    with pytest.raises(Refusal):
+        credit_price("0.01,2026-10-08")
 
 
 def test_the_output_cap_is_the_sessions_cap_and_the_cli_is_deferred() -> None:
@@ -3331,6 +3351,31 @@ def test_a_script_runtime_finds_node_and_nothing_else_on_its_path(
     with pytest.raises(Refusal) as refused:
         child_environment("home", "/runtime/index.js")
     assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+def test_node_is_searched_on_the_workers_path_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exactly `node`, on the worker's `PATH` and nowhere else: with none
+    set, nowhere -- never the platform's default search path."""
+    searched: list[tuple[str, str | None]] = []
+
+    def which(
+        command: str, mode: int = os.F_OK | os.X_OK, path: str | None = None
+    ) -> str:
+        searched.append((command, path))
+        return os.path.join(os.sep, "opt", "node", "bin", "node")
+
+    parent_environment(monkeypatch)
+    monkeypatch.setattr("shutil.which", which)
+    monkeypatch.setattr("sys.platform", "linux")
+    child_environment("home", "/runtime/index.js")
+    monkeypatch.setenv("PATH", os.pathsep.join(("/a", "/b")))
+    child = child_environment("home", "/runtime/index.js")
+    assert searched == [("node", ""), ("node", os.pathsep.join(("/a", "/b")))]
+    assert child["PATH"] == os.pathsep.join(
+        ("/runtime", os.path.join(os.sep, "opt", "node", "bin"))
+    )
 
 
 def test_the_sdk_logger_reaches_no_handler(
@@ -3537,6 +3582,35 @@ def test_one_call_is_one_fresh_runtime_and_session_and_leaves_nothing_on_disk(
     assert first.home != second.home
 
 
+def test_every_call_silences_the_sdk_logger_before_its_runtime_starts(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Whatever state an earlier call or a host's logging setup left the SDK's
+    logger in, the call puts it back before the runtime can write (R7)."""
+    sdk = logging.getLogger("copilot")
+    monkeypatch.setattr(sdk, "handlers", [logging.StreamHandler()])
+    monkeypatch.setattr(sdk, "propagate", True)
+    monkeypatch.setattr(sdk, "level", logging.NOTSET)
+    caught: list[logging.LogRecord] = []
+
+    class Caught(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            caught.append(record)
+
+    root = logging.getLogger()
+    held = Caught()
+    root.addHandler(held)
+    try:
+        ask_copilot(PROMPT, TARGET, 5.0)
+    finally:
+        root.removeHandler(held)
+    assert caught == []
+    assert capsys.readouterr() == ("", "")
+    assert [type(handler) for handler in sdk.handlers] == [logging.NullHandler]
+
+
 def test_the_runtime_never_auto_logs_in_and_sees_only_the_allow_listed_environment(
     runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3607,6 +3681,25 @@ def test_a_call_that_does_not_end_in_time_is_aborted_and_raises(
     assert not made.home.exists()
 
 
+class StuckSession(FakeSession):
+    """A session whose abort never returns."""
+
+    async def abort(self) -> None:
+        self.aborted = True
+        await asyncio.Event().wait()
+
+
+def test_an_abort_that_never_returns_is_waited_for_only_so_long(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(copilot_module, "_ABORT_SECONDS", 0.05)
+    runtime.session = StuckSession([], ends=False)
+    with pytest.raises(TimeoutError):
+        ask_copilot(PROMPT, TARGET, 0.01)
+    assert runtime.session.aborted
+    assert runtime.session.closed
+
+
 def test_a_session_error_ends_the_wait_and_is_returned_as_data(
     runtime: type[FakeRuntime],
 ) -> None:
@@ -3660,6 +3753,8 @@ def test_a_permission_request_during_a_call_is_denied_and_refuses_the_call(
         (Decimal("2.5"), Decimal("0.0125"), 200),
         (Decimal("0"), CREDIT, 30),
         (Decimal("1.00"), None, None),
+        # A free credit prices no cap: there is no division by it.
+        (Decimal("1.00"), Decimal(0), None),
     ],
 )
 def test_a_session_is_capped_at_its_reservation_in_credits_never_below_thirty(
@@ -3677,6 +3772,13 @@ def test_a_call_with_no_reservation_in_scope_sends_no_cap(
     runtime: type[FakeRuntime],
 ) -> None:
     ask_copilot(PROMPT, TARGET, 5.0)
+    assert "session_limits" not in runtime.made[-1].created
+    # A credit price with no amount in scope is no reservation either.
+    named = reserved_credit.set(CREDIT)
+    try:
+        ask_copilot(PROMPT, TARGET, 5.0)
+    finally:
+        reserved_credit.reset(named)
     assert "session_limits" not in runtime.made[-1].created
 
 
@@ -3843,6 +3945,8 @@ def test_a_reservation_with_no_credit_price_cannot_settle_a_copilot_call() -> No
         {"inputTokens": 10**7},
         {"outputTokens": MAX_COMPLETION_TOKENS + 1},
         {"inputTokens": 0, "cacheReadTokens": 0, "cacheWriteTokens": 0},
+        # An answer that states it wrote nothing is a count never stated.
+        {"outputTokens": 0},
     ],
 )
 def test_token_counts_past_their_bound_leave_a_copilot_charge_unknown(
@@ -3853,3 +3957,93 @@ def test_token_counts_past_their_bound_leave_a_copilot_charge_unknown(
         completion = provider(replying(*seen)).complete(PROMPT)
     assert completion.charge is None
     assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+
+
+# -- Properties (D121): settlement against the reservation (R2.6, R2.7) -------
+
+AMOUNTS = st.decimals(
+    min_value=Decimal(0),
+    max_value=Decimal(10_000),
+    places=10,
+    allow_nan=False,
+    allow_infinity=False,
+)
+
+
+@EXAMPLES
+@given(UNITS.filter(bool), CREDITS, AMOUNTS)
+def test_property_a_settled_charge_is_within_its_reservation_or_named_exactly(
+    units: int, credit: Decimal, amount: Decimal
+) -> None:
+    charge = charged(units, credit)
+    assert charge is not None
+    taken = Reservation(amount, PRICE, CreditPrice(credit, date(2026, 10, 1)))
+    said = io.StringIO()
+    with contextlib.redirect_stderr(said):
+        within = canonical._settled_within(taken, charge)
+    assert within is (charge <= amount)
+    if within:
+        assert said.getvalue() == ""
+    else:
+        # The line names the reservation, the charge and the very AI units
+        # that settled it: the arithmetic round-trips exactly.
+        assert said.getvalue() == (
+            f"BUDGET_CHARGE_OVER_RESERVATION reserved={amount} charged={charge}"
+            f" nano_aiu={units}\n"
+        )
+
+
+def test_a_charge_that_is_no_whole_count_of_ai_units_names_none() -> None:
+    """A charge the reservation's credit price does not divide into whole
+    nano-AIU came from no AI-unit bill: the line says `-`, never a guess."""
+    taken = Reservation(
+        Decimal("0.0000000001"), PRICE, CreditPrice(CREDIT, date(2026, 10, 1))
+    )
+    said = io.StringIO()
+    with contextlib.redirect_stderr(said):
+        assert not canonical._settled_within(taken, Decimal("0.000000000101"))
+    assert said.getvalue() == (
+        "BUDGET_CHARGE_OVER_RESERVATION reserved=1E-10 charged=1.01E-10 nano_aiu=-\n"
+    )
+
+
+@EXAMPLES
+@given(AMOUNTS, AMOUNTS)
+def test_property_a_token_priced_reservation_bounds_no_charge(
+    amount: Decimal, charge: Decimal
+) -> None:
+    """With no credit price the bill is the gateway's tokens, whose overrun
+    the run's capacity absorbs (Phase 2's budget exit): never refused here."""
+    said = io.StringIO()
+    with contextlib.redirect_stderr(said):
+        assert canonical._settled_within(Reservation(amount, PRICE), charge)
+    assert said.getvalue() == ""
+
+
+@EXAMPLES
+@given(AMOUNTS, CREDITS)
+def test_property_the_session_cap_covers_its_reservation_tightly(
+    amount: Decimal, credit: Decimal
+) -> None:
+    with reserving(amount, credit=credit):
+        cap = copilot_module._credit_cap()
+    assert cap is not None
+    assert cap >= copilot_module.MIN_CREDIT_CAP
+    # Never below the reservation in credits, and never a whole credit above
+    # it unless the floor holds it up.
+    assert cap * Fraction(credit) >= Fraction(amount)
+    assert cap == copilot_module.MIN_CREDIT_CAP or (cap - 1) * Fraction(
+        credit
+    ) < Fraction(amount)
+
+
+@EXAMPLES
+@given(UNITS.filter(bool), CREDITS, AMOUNTS)
+def test_property_a_copilot_charge_is_its_reservations_credit_never_another(
+    units: int, credit: Decimal, amount: Decimal
+) -> None:
+    # No per-request figure to hold against the checkpoint (F579).
+    seen = sdk_call(usage=None, checkpoint=checkpoint(units, 1))
+    with reserving(amount, credit=credit):
+        completion = provider(replying(*seen)).complete(PROMPT)
+    assert completion.charge == charged(units, credit)
