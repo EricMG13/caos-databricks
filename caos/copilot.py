@@ -31,16 +31,20 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, DecimalException
 from typing import Any, TypeIs
 
-from langchain_core.messages import AIMessage
+from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.messages.ai import UsageMetadata
+from langchain_core.outputs import ChatGeneration, ChatResult
+from openai import OpenAIError
 
 from caos.pricing import exact_context
-from caos.provider import MAX_COMPLETION_TOKENS, reported_charge
+from caos.provider import MAX_COMPLETION_TOKENS, TIMEOUT_SECONDS, reported_charge
 from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
 
@@ -64,6 +68,7 @@ NANO_PER_CREDIT = 10**9
 # A float from the wire is a whole count only below 2**53, where every integer
 # is exactly representable (R2.3).
 _MOST_UNITS = 2**53
+_COUNT_DIGITS = len(str(_MOST_UNITS))
 # The finish reasons model families report, read in the one vocabulary
 # `provider.finish_refusal` knows. Any other passes through unchanged and is
 # refused there as an invalid response.
@@ -156,6 +161,11 @@ _BILLED = frozenset(
         "model.call_finished",
     }
 )
+# `model.call_final_result.result` values that state an HTTP status (R1).
+_RESULT_STATUS = {"http_400": 400, "http_413": 413, "http_429": 429}
+# The values that declare a failure with no status (D110): a provider-stated
+# 4xx or 5xx class. `transport_error` and `other_error` declare nothing.
+_DECLARED_RESULTS = frozenset({"http_4xx", "http_5xx"})
 
 # One session event as the runtime writes it: `{"type": ..., "data": {...}}`.
 Event = Mapping[str, Any]
@@ -182,6 +192,66 @@ def parsed(model: str) -> CopilotModel | None:
     if matched is None:
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     return CopilotModel(matched.group(1), matched.group(2), matched.group(3))
+
+
+class CopilotStatusError(OpenAIError):
+    """A failed call with no spend and no answer, by its status alone, so
+    `ChatCompletions` maps it as it maps a gateway status (`NEVER_RETRIED`, the
+    429 re-send under the same reservation, D110's `DropKind`). A failure the
+    runtime declared with no status carries `{"error": {"result": <value>}}`
+    as its body, which `models._declared` reads as declared; no other failure
+    carries a body. Its message is the platform's name and nothing else."""
+
+    def __init__(self, status_code: int | None, *, declared: str | None = None) -> None:
+        super().__init__(PLATFORM)
+        self.status_code = status_code
+        self.body: Mapping[str, Any] | None = (
+            {"error": {"result": declared}}
+            if status_code is None and declared in _DECLARED_RESULTS
+            else None
+        )
+
+
+Ask = Callable[[str, CopilotModel, float], Sequence[Event]]
+
+
+class ChatCopilot(BaseChatModel):
+    """The chat model a Copilot name is answered by: one prompt, one call, one
+    reply. `ask` is the transport: it sends the prompt to the pinned model
+    within the deadline and returns the session's events."""
+
+    model: str
+    timeout: float = TIMEOUT_SECONDS
+    ask: Ask
+
+    @property
+    def _llm_type(self) -> str:
+        return PLATFORM
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: object,
+    ) -> ChatResult:
+        # `response_format` arrives in `kwargs` and is not sent (D77): the
+        # canonical executor validates the envelope it asked for (invariant 9),
+        # and the request is still priced as though it carried it. A stop
+        # sequence cannot be sent, so a call asking for one is refused unsent.
+        target = parsed(self.model)
+        if target is None:
+            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+        prompt = messages[-1].content if len(messages) == 1 else None
+        if stop or not isinstance(prompt, str):
+            raise Refusal(RefusalCode.PROVIDER_CALL_INVALID)
+        seen = self.ask(prompt, target, self.timeout)
+        if not _spent(seen):
+            failed = _failure(seen)
+            if failed is not None:
+                raise failed
+        message = reply_message(seen, target)
+        return ChatResult(generations=[ChatGeneration(message=message)])
 
 
 def reply_message(seen: Sequence[Event], target: CopilotModel) -> AIMessage:
@@ -223,9 +293,12 @@ def settled_charge(message: AIMessage, credit: Decimal | None) -> Decimal | None
         validate_spend(credit)
     except Refusal:
         return None
-    if not credit:
-        return None
     exact = exact_context()
+    # A price must charge every count exactly, or it prices none: one too
+    # precise to multiply the largest count in the exact context would settle
+    # a zero count and refuse every other (F563).
+    if not credit or len(credit.as_tuple().digits) + _COUNT_DIGITS > exact.prec:
+        return None
     try:
         amount = exact.divide(
             exact.multiply(Decimal(units), credit), Decimal(NANO_PER_CREDIT)
@@ -502,6 +575,83 @@ def _premium(value: object) -> str | None:
     if not _finite_count(value):
         return None
     return str(Decimal(str(value)))
+
+
+def _spent(seen: Sequence[Event]) -> bool:
+    """R2.10: whether the session can have cost anything -- any answer, or any
+    checkpoint that does not state exactly zero. Such a call is returned and
+    billed, never raised: it is no drop, so it is never re-attempted or
+    re-sent (invariants 6 and 8; D110)."""
+    if _data(seen, "assistant.message"):
+        return True
+    return any(
+        not _stated_zero(data.get("totalNanoAiu"))
+        for data in _data(seen, "session.usage_checkpoint")
+    )
+
+
+def _stated_zero(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and value == 0
+
+
+def _failure(seen: Sequence[Event]) -> Exception | None:
+    """R1's errors, for a call with no spend and no answer: an aborted session
+    or one that never ended is indeterminate (`TimeoutError`); otherwise the
+    status a session error states, else an API failure's, else the settled
+    result's. A transport failure declares nothing. A session that idled with
+    no error is None: it is refused as an invalid response, not raised."""
+    if any(data.get("aborted") is True for data in _data(seen, "session.idle")):
+        return TimeoutError()
+    errors = _data(seen, "session.error")
+    failure = _open_failure(seen)
+    stated = _status_of(errors[-1]) if errors else None
+    if stated is None and failure is not None:
+        if failure.get("failureKind") != "api":
+            return CopilotStatusError(None)
+        stated = _status_of(failure)
+    if stated is not None:
+        return CopilotStatusError(stated)
+    settled = _settled_result(seen)
+    if errors or failure is not None or settled not in (None, "success"):
+        return _from_result(settled)
+    return None if _data(seen, "session.idle") else TimeoutError()
+
+
+def _open_failure(seen: Sequence[Event]) -> Mapping[str, Any] | None:
+    """The last `model.call_failure` that no successful settled result
+    followed: a failure the runtime did not recover from."""
+    recovered = [
+        at
+        for at, data in _indexed(seen, "model.call_final_result")
+        if data.get("result") == "success"
+    ]
+    open_failures = [
+        data
+        for at, data in _indexed(seen, "model.call_failure")
+        if not any(later > at for later in recovered)
+    ]
+    return open_failures[-1] if open_failures else None
+
+
+def _settled_result(seen: Sequence[Event]) -> object:
+    finals = _data(seen, "model.call_final_result")
+    return finals[-1].get("result") if finals else None
+
+
+def _status_of(data: Mapping[str, Any]) -> int | None:
+    status = data.get("statusCode")
+    return status if type(status) is int else None
+
+
+def _from_result(settled: object) -> CopilotStatusError:
+    """A settled result with no status from any event: the status it names, a
+    declared class with none, or undeclared."""
+    status = _RESULT_STATUS.get(settled) if isinstance(settled, str) else None
+    if status is not None:
+        return CopilotStatusError(status)
+    return CopilotStatusError(
+        None, declared=settled if isinstance(settled, str) else None
+    )
 
 
 def _usage(usages: Sequence[Mapping[str, Any]]) -> UsageMetadata | None:

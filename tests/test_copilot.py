@@ -9,26 +9,38 @@ fails the fake and not the adapter.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from datetime import date
 from decimal import Decimal
+from fractions import Fraction
 from typing import Any, cast
 from uuid import uuid4
 
 import pytest
 from copilot import SessionEvent
 from copilot.generated.session_events import SessionEventType
-from langchain_core.messages import AIMessage
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
+from langchain_core.messages import AIMessage, HumanMessage
 
 from caos import copilot as copilot_module
+from caos import models
 from caos.copilot import (
+    NANO_PER_CREDIT,
+    ChatCopilot,
     CopilotModel,
+    CopilotStatusError,
     Event,
     parsed,
     reply_message,
     settled_charge,
 )
+from caos.models import ChatCompletions, completions
+from caos.pricing import ModelPrice
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
+    TIMEOUT_SECONDS,
+    DropKind,
     reserved_amount,
     reserving,
 )
@@ -38,6 +50,7 @@ PIN = "claude-opus-5.5"
 OTHER = "claude-sonnet-5.5"
 MODEL = f"copilot:{PIN}@high"
 TARGET = CopilotModel("copilot", PIN, "high")
+PRICE = ModelPrice(MODEL, Decimal("0.000005"), Decimal("0.00002"), date(2026, 10, 1))
 PROMPT = "q" * 1000
 # GitHub's published rate, one AI credit in US dollars (D77).
 CREDIT = Decimal("0.01")
@@ -49,15 +62,39 @@ SECRET = "private text the runtime wrote"
 
 def wire(kind: str, /, **data: object) -> Event:
     """One session event exactly as the pinned SDK writes it."""
-    written: dict[str, object] = SessionEvent.from_dict(
+    return enveloped(
         {
             "type": kind,
             "data": {key: value for key, value in data.items() if value is not None},
             "id": str(uuid4()),
             "timestamp": "2026-10-06T00:00:00Z",
         }
-    ).to_dict()
+    )
+
+
+def enveloped(event: Mapping[str, object], **envelope: object) -> Event:
+    """`event` with these envelope fields (`agentId`, `parentId`), through the
+    SDK. `from_dict` drops a key it does not know without a word, so every key
+    sent must come back from `to_dict`: a fake can only say what the SDK says."""
+    sent = {**event, **envelope}
+    written: dict[str, object] = SessionEvent.from_dict(sent).to_dict()
+    _survived(sent, written, "event")
     return written
+
+
+def _survived(sent: object, written: object, where: str) -> None:
+    """Every non-None key of `sent` is in `written`, at every depth."""
+    if isinstance(sent, Mapping):
+        assert isinstance(written, Mapping), where
+        for key, value in sent.items():
+            if value is None:
+                continue
+            assert key in written, f"{where}.{key} was dropped by the SDK"
+            _survived(value, written[key], f"{where}.{key}")
+    elif isinstance(sent, list):
+        assert isinstance(written, list) and len(written) == len(sent), where
+        for index, (item, kept) in enumerate(zip(sent, written, strict=True)):
+            _survived(item, kept, f"{where}[{index}]")
 
 
 def started(model: str = PIN, version: str = "1.0.90") -> Event:
@@ -384,6 +421,38 @@ RECOVERED = [
     checkpoint(300_000_000, 1),
     idle(),
 ]
+SPENT_FAILURE = [
+    started(),
+    turn_start(),
+    call_start(),
+    failure("api", 500),
+    checkpoint(100_000_000, 1),
+    error(500),
+]
+
+Ask = Callable[[str, CopilotModel, float], Sequence[Event]]
+
+
+def replying(*seen: Event) -> Ask:
+    """An `ask` that answers every prompt with exactly these events."""
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+        return list(seen)
+
+    return ask
+
+
+def provider(ask: Ask) -> ChatCompletions:
+    """The production provider over `ChatCopilot` with a scripted transport."""
+    return completions(PRICE, chat=ChatCopilot(model=MODEL, ask=ask), endpoint=MODEL)
+
+
+def invoked(seen: Sequence[Event]) -> AIMessage:
+    message = ChatCopilot(model=MODEL, ask=replying(*seen)).invoke(
+        [HumanMessage(content=PROMPT)]
+    )
+    assert isinstance(message, AIMessage)
+    return message
 
 
 # -- Names (Design 1). -------------------------------------------------------
@@ -813,7 +882,255 @@ def test_premium_requests_are_read_as_a_decimal(
 # -- Spend on a failed call (R2.10) and the errors (R1). ---------------------
 
 
+def test_a_runtime_recovered_answer_is_one_billed_call_never_raised() -> None:
+    asked: list[str] = []
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+        asked.append(prompt)
+        return RECOVERED
+
+    message = ChatCopilot(model=MODEL, ask=ask).invoke([HumanMessage(content=PROMPT)])
+    assert isinstance(message, AIMessage)
+    assert message.response_metadata["finish_reason"] == "stop"
+    assert settled_charge(message, CREDIT) == Decimal("0.003")
+    completion = provider(ask).complete(PROMPT)
+    assert completion.drop_kind is None
+    assert asked == [PROMPT, PROMPT]
+
+
+@pytest.mark.parametrize("status", [500, 429])
+def test_a_failed_call_with_spend_is_billed_and_refused_never_a_drop(
+    status: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(models, "_sleep", lambda _seconds: None)
+    seen = [*SPENT_FAILURE[:-1], error(status)]
+    message = invoked(seen)
+    assert message.response_metadata["nano_aiu"] == 100_000_000
+    assert "finish_reason" not in message.response_metadata
+    assert settled_charge(message, CREDIT) == Decimal("0.001")
+    asked: list[str] = []
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+        asked.append(prompt)
+        return seen
+
+    completion = provider(ask).complete(PROMPT)
+    assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+    assert completion.drop_kind is None
+    assert completion.content is None
+    # Spent, so never re-sent: a 429 that carried spend is not asked again.
+    assert asked == [PROMPT]
+
+
+def test_an_answer_with_no_checkpoint_is_never_a_drop() -> None:
+    seen = [started(), turn_start(), call_start(), answer(), error(503)]
+    message = invoked(seen)
+    assert "nano_aiu" not in message.response_metadata
+    completion = provider(replying(*seen)).complete(PROMPT)
+    assert (completion.refusal, completion.drop_kind) == (
+        RefusalCode.PROVIDER_RESPONSE_INVALID,
+        None,
+    )
+
+
+def test_a_checkpoint_whose_figure_is_unreadable_is_spend() -> None:
+    unreadable: Event = {"type": "session.usage_checkpoint", "data": {}}
+    seen = [started(), failure("api", 500), unreadable, error(500)]
+    message = invoked(seen)
+    assert "nano_aiu" not in message.response_metadata
+
+
+UNSPENT = [started(), turn_start(), call_start()]
+
+
+@pytest.mark.parametrize(
+    ("ending", "status", "body"),
+    [
+        ([failure("api", 500), checkpoint(0), error(500)], 500, None),
+        ([error(None)], None, None),
+        ([failure("api", 503), error(None)], 503, None),
+        ([failure("transport"), error(None)], None, None),
+        ([failure("api", 400, "bodyless")], 400, None),
+        ([failure("api", 400, "structured_error"), idle()], 400, None),
+        ([failure("transport")], None, None),
+        ([failure("transport"), final_result(result="http_5xx")], None, None),
+        (
+            [failure("api"), final_result(result="http_5xx")],
+            None,
+            {"error": {"result": "http_5xx"}},
+        ),
+        (
+            [error(None), final_result(result="http_4xx")],
+            None,
+            {"error": {"result": "http_4xx"}},
+        ),
+        ([failure("api"), final_result(result="http_400")], 400, None),
+        ([failure("api"), final_result(result="http_413")], 413, None),
+        ([failure("api"), final_result(result="http_429")], 429, None),
+        ([failure("api"), final_result(result="transport_error")], None, None),
+        ([failure("api"), final_result(result="other_error")], None, None),
+        (
+            [final_result(result="http_5xx"), idle()],
+            None,
+            {"error": {"result": "http_5xx"}},
+        ),
+        ([checkpoint(0), error(502)], 502, None),
+        ([failure("api", 503), error(429)], 429, None),
+    ],
+)
+def test_a_failure_event_maps_to_its_status_class_and_declaration(
+    ending: list[Event], status: int | None, body: object
+) -> None:
+    with pytest.raises(CopilotStatusError) as raised:
+        invoked([*UNSPENT, *ending])
+    assert raised.value.status_code == status
+    assert raised.value.body == body
+    assert SECRET not in str(raised.value)
+    assert SECRET not in repr(raised.value.args)
+
+
+@pytest.mark.parametrize(
+    "ending",
+    [[idle(aborted=True)], [failure("api", 500), idle(aborted=True), error(500)], []],
+    ids=["aborted", "aborted-beside-an-error", "never-ended"],
+)
+def test_a_session_aborted_or_never_ended_is_indeterminate(ending: list[Event]) -> None:
+    with pytest.raises(TimeoutError):
+        invoked([*UNSPENT, *ending])
+
+
+def test_a_session_that_idles_with_no_answer_and_no_spend_is_refused_not_raised() -> (
+    None
+):
+    for ending in (
+        [checkpoint(0), idle()],
+        [final_result(), checkpoint(0), idle()],
+        # A failure the settled result recovered from is no failure.
+        [failure("api", 503), final_result(), checkpoint(0), idle()],
+    ):
+        message = invoked([*UNSPENT, *ending])
+        assert message.content == ""
+        assert "finish_reason" not in message.response_metadata
+
+
+@pytest.mark.parametrize(
+    ("ending", "code", "drop"),
+    [
+        ([error(500)], RefusalCode.PROVIDER_UNAVAILABLE, DropKind.DECLARED),
+        ([error(400)], RefusalCode.PROVIDER_CALL_INVALID, DropKind.VENDOR),
+        ([error(None)], RefusalCode.PROVIDER_UNAVAILABLE, DropKind.VENDOR),
+        ([failure("transport")], RefusalCode.PROVIDER_UNAVAILABLE, DropKind.VENDOR),
+        (
+            [failure("api"), final_result(result="http_5xx")],
+            RefusalCode.PROVIDER_UNAVAILABLE,
+            DropKind.DECLARED,
+        ),
+        ([idle(aborted=True)], RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED),
+    ],
+)
+def test_a_failed_call_with_no_spend_and_no_answer_is_a_drop_by_its_status(
+    ending: list[Event], code: RefusalCode, drop: DropKind
+) -> None:
+    completion = provider(replying(*UNSPENT, *ending)).complete(PROMPT)
+    assert (completion.content, completion.charge, completion.refusal) == (
+        None,
+        None,
+        code,
+    )
+    assert completion.drop_kind is drop
+    assert SECRET not in repr(completion)
+
+
+def test_a_rate_limit_with_no_spend_is_asked_again_under_the_same_reservation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(models, "_sleep", lambda _seconds: None)
+    answers = iter([[*UNSPENT, error(429)], SDK_HAPPY])
+    calls: list[str] = []
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> Sequence[Event]:
+        calls.append(prompt)
+        return next(answers)
+
+    completion = provider(ask).complete(PROMPT)
+    assert completion.refusal is None
+    assert calls == [PROMPT, PROMPT]
+
+
+def test_a_status_error_carries_its_status_and_no_text() -> None:
+    raised = CopilotStatusError(503)
+    assert (raised.status_code, raised.body, str(raised)) == (503, None, "copilot")
+    declared = CopilotStatusError(None, declared="http_5xx")
+    assert declared.body == {"error": {"result": "http_5xx"}}
+    # A declaration only stands for a failure with no status, and only as one
+    # of the two declared results: anything else is undeclared.
+    assert CopilotStatusError(500, declared="http_5xx").body is None
+    assert CopilotStatusError(None, declared="transport_error").body is None
+    assert models._declared(declared)
+    assert not models._declared(CopilotStatusError(None))
+
+
 # -- ChatCopilot (the seam `ChatCompletions` calls). --------------------------
+
+
+def test_chat_copilot_asks_once_with_the_prompt_its_pinned_model_and_deadline() -> None:
+    asked: list[tuple[str, CopilotModel, float]] = []
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+        asked.append((prompt, target, seconds))
+        return SDK_HAPPY
+
+    message = ChatCopilot(model=MODEL, ask=ask).invoke([HumanMessage(content=PROMPT)])
+    assert message.content == "answer"
+    assert asked == [(PROMPT, TARGET, TIMEOUT_SECONDS)]
+
+
+def test_through_the_factory_the_exact_call_completes_with_its_call_id() -> None:
+    completion = provider(replying(*SDK_HAPPY)).complete(PROMPT, json_object=True)
+    assert completion.refusal is None
+    assert completion.content == "answer"
+    assert completion.generation_id == "provider-call-1"
+
+
+def test_a_call_that_was_not_the_one_asked_for_is_refused_and_never_a_drop() -> None:
+    seen = REFUSED["other-model-in-final-result"]
+    completion = provider(replying(*seen)).complete(PROMPT)
+    assert completion.content is None
+    assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+    assert completion.drop_kind is None
+
+
+@pytest.mark.parametrize(
+    ("model", "messages", "stop"),
+    [
+        ("databricks-claude-opus-5", [HumanMessage(content=PROMPT)], None),
+        (MODEL, [HumanMessage(content=[{"type": "text", "text": PROMPT}])], None),
+        (MODEL, [HumanMessage(content=PROMPT)], ["\n"]),
+        (MODEL, [HumanMessage(content="first"), HumanMessage(content=PROMPT)], None),
+    ],
+    ids=["not-copilot", "not-text", "stop-sequence", "two-messages"],
+)
+def test_chat_copilot_refuses_a_call_it_cannot_send_as_asked(
+    model: str, messages: list[HumanMessage], stop: list[str] | None
+) -> None:
+    asked: list[str] = []
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+        asked.append(prompt)
+        return SDK_HAPPY
+
+    with pytest.raises(Refusal):
+        ChatCopilot(model=model, ask=ask).invoke(messages, stop=stop)
+    assert asked == []
+
+
+def test_a_call_that_does_not_end_in_time_is_indeterminate() -> None:
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+        raise TimeoutError
+
+    completion = provider(ask).complete(PROMPT)
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    assert completion.charge is None
 
 
 # -- The reservation in scope (R2.7's input; `caos.provider`). ---------------
@@ -847,6 +1164,21 @@ def test_reserving_refuses_an_amount_that_is_no_spend(
         pytest.fail("entered")
     assert refused.value.code is code
     assert reserved_amount.get() is None
+
+
+def test_the_reservation_in_scope_reaches_the_call_on_its_own_thread() -> None:
+    """`ChatCompletions` makes the call on a helper thread with a copy of the
+    caller's context, so the transport sees the reservation it runs under."""
+    seen: list[Decimal | None] = []
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+        seen.append(reserved_amount.get())
+        return SDK_HAPPY
+
+    with reserving(Decimal("0.42")):
+        provider(ask).complete(PROMPT)
+    provider(ask).complete(PROMPT)
+    assert seen == [Decimal("0.42"), None]
 
 
 # -- What mutation testing found the suite did not pin. ----------------------
@@ -920,6 +1252,19 @@ def test_a_per_request_figure_that_is_not_an_object_is_an_unknown_charge() -> No
     assert "finish_reason" not in message.response_metadata
 
 
+def test_a_status_that_is_not_a_number_is_no_status() -> None:
+    with pytest.raises(CopilotStatusError) as raised:
+        invoked([*UNSPENT, _malformed(error(500), statusCode="500")])
+    assert raised.value.status_code is None
+
+
+def test_a_settled_result_that_is_not_a_name_declares_nothing() -> None:
+    odd = _malformed(final_result(result="http_5xx"), result=["http_5xx"])
+    with pytest.raises(CopilotStatusError) as raised:
+        invoked([*UNSPENT, error(None), odd])
+    assert (raised.value.status_code, raised.value.body) == (None, None)
+
+
 def test_every_usages_tokens_are_counted_and_an_absent_cache_count_is_zero() -> None:
     message = reply_message(sdk_call(usage=[half, half]), TARGET)
     assert message.usage_metadata == {
@@ -939,3 +1284,127 @@ def test_every_usages_tokens_are_counted_and_an_absent_cache_count_is_zero() -> 
         "output_tokens": 40,
         "total_tokens": 940,
     }
+
+
+def test_a_credit_price_too_precise_to_multiply_exactly_is_an_unknown_charge() -> None:
+    """Within the ledger's envelope, but past the exact context's precision:
+    refused rather than rounded (invariant 7)."""
+    message = AIMessage(content="answer", response_metadata={"nano_aiu": 251_164_000})
+    assert settled_charge(message, Decimal("0." + "1" * 1200)) is None
+
+
+def test_a_checkpoint_stating_a_boolean_is_spend_and_an_unknown_charge() -> None:
+    stated = _malformed(checkpoint(251_164_000, 1), totalNanoAiu=True)
+    message = reply_message(sdk_call(checkpoint=stated), TARGET)
+    assert "nano_aiu" not in message.response_metadata
+    assert "nano_aiu" not in invoked([*UNSPENT, stated, error(500)]).response_metadata
+
+
+# -- Fix round 1: the adversarial audit's probes, as tests. ------------------
+
+
+def test_a_fake_carrying_a_key_the_sdk_does_not_know_fails() -> None:
+    with pytest.raises(AssertionError, match="dropped by the SDK"):
+        wire("session.idle", notAField=1)
+    with pytest.raises(AssertionError, match="dropped by the SDK"):
+        usage(copilotUsage={"totalNanoAiu": 1, "model": PIN, "notAField": 1})
+
+
+# -- Properties (D121): the money arithmetic and the mapping's rules. --------
+
+UNITS = st.integers(min_value=0, max_value=2**53 - 1)
+CREDITS = st.decimals(
+    min_value=Decimal("0.00000001"),
+    max_value=Decimal(1000),
+    places=8,
+    allow_nan=False,
+    allow_infinity=False,
+)
+INVALID_UNITS = st.one_of(
+    st.integers(max_value=-1),
+    st.integers(min_value=2**53),
+    st.floats(),
+    st.booleans(),
+    st.none(),
+    st.text(max_size=4),
+)
+INVALID_CREDITS = st.one_of(
+    st.decimals(max_value=Decimal(0)),
+    st.decimals(allow_nan=True).filter(lambda value: not value.is_finite()),
+    st.just(Decimal("0." + "1" * 1200)),
+    st.floats(),
+    st.integers(),
+    st.booleans(),
+    st.none(),
+)
+EXAMPLES = settings(deadline=None, max_examples=200)
+
+
+def charged(units: object, credit: object) -> Decimal | None:
+    message = AIMessage(content="", response_metadata={"nano_aiu": units})
+    return settled_charge(message, cast(Decimal, credit))
+
+
+@EXAMPLES
+@given(UNITS, CREDITS)
+def test_property_the_charge_is_exactly_the_units_at_the_credit_price(
+    units: int, credit: Decimal
+) -> None:
+    charge = charged(units, credit)
+    assert isinstance(charge, Decimal)
+    assert Fraction(charge) * NANO_PER_CREDIT == units * Fraction(credit)
+
+
+@EXAMPLES
+@given(UNITS, UNITS, CREDITS)
+def test_property_the_charge_is_additive_in_the_units(
+    first: int, second: int, credit: Decimal
+) -> None:
+    assume(first + second < 2**53)
+    whole, part, rest = (
+        charged(first + second, credit),
+        charged(first, credit),
+        charged(second, credit),
+    )
+    assert whole is not None and part is not None and rest is not None
+    assert Fraction(whole) == Fraction(part) + Fraction(rest)
+
+
+@EXAMPLES
+@given(UNITS, UNITS, CREDITS, CREDITS)
+def test_property_the_charge_never_falls_as_units_or_the_credit_price_rise(
+    first: int, second: int, low: Decimal, high: Decimal
+) -> None:
+    less, more = sorted((first, second))
+    cheap, dear = sorted((low, high))
+    assert cast(Decimal, charged(less, cheap)) <= cast(Decimal, charged(more, cheap))
+    assert cast(Decimal, charged(less, cheap)) <= cast(Decimal, charged(less, dear))
+
+
+@EXAMPLES
+@given(INVALID_UNITS, CREDITS)
+def test_property_a_count_that_is_no_whole_figure_charges_nothing(
+    units: object, credit: Decimal
+) -> None:
+    assert charged(units, credit) is None
+
+
+@EXAMPLES
+@given(UNITS, INVALID_CREDITS)
+def test_property_a_credit_price_that_is_no_positive_decimal_charges_nothing(
+    units: int, credit: object
+) -> None:
+    assert charged(units, credit) is None
+
+
+def test_a_credit_price_too_precise_for_any_count_charges_not_even_zero() -> None:
+    """F563, found by the property above: a price that cannot charge the
+    largest count exactly prices no count, zero included."""
+    precise = Decimal("0." + "1" * 1200)
+    assert charged(0, precise) is None
+    # The most digits a price may carry still charges the largest count.
+    widest = Decimal("0." + "1" * (1000 - len(str(2**53))))
+    assert charged(2**53 - 1, widest) is not None
+    too_wide = Decimal("0." + "1" * (1001 - len(str(2**53))))
+    assert charged(2**53 - 1, too_wide) is None
+    assert charged(0, too_wide) is None

@@ -12,12 +12,15 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
+from fractions import Fraction
 from typing import cast
 from uuid import UUID
 
 import pytest
 from canonical_fixtures import CanonicalCompletions
 from conftest import reserve_at
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 from test_runtime import _approved_run, blobs, bundle, route
 
 from caos.blobs import BlobStore
@@ -114,6 +117,43 @@ def test_priced_request_refuses_an_output_cap_that_is_no_count(
     with pytest.raises(Refusal) as caught:
         priced_request(PRICE, 1000, output_tokens=cast(int, output_tokens))
     assert caught.value.code is code
+
+
+RATES = st.decimals(
+    min_value=Decimal(0),
+    max_value=Decimal("0.01"),
+    places=12,
+    allow_nan=False,
+    allow_infinity=False,
+)
+OUTPUTS = st.integers(min_value=1, max_value=10**7)
+
+
+@settings(deadline=None, max_examples=200)
+@given(RATES, RATES, st.integers(min_value=0, max_value=MAX_REQUEST_BYTES), OUTPUTS)
+def test_property_a_request_is_priced_exactly(
+    input_rate: Decimal, output_rate: Decimal, request_bytes: int, output_tokens: int
+) -> None:
+    """D121: `bytes x input + output cap x output`, with no rounding."""
+    expected = (
+        Fraction(input_rate) * request_bytes + Fraction(output_rate) * output_tokens
+    )
+    assume(expected > 0)
+    price = ModelPrice(MODEL, input_rate, output_rate, date(2026, 9, 13))
+    priced = priced_request(price, request_bytes, output_tokens=output_tokens)
+    assert Fraction(priced) == expected
+
+
+@settings(deadline=None, max_examples=200)
+@given(RATES.filter(bool), OUTPUTS, OUTPUTS)
+def test_property_a_higher_output_cap_never_reserves_less(
+    output_rate: Decimal, first: int, second: int
+) -> None:
+    price = replace(PRICE, output_per_token=output_rate)
+    less, more = sorted((first, second))
+    assert priced_request(price, 1000, output_tokens=less) <= priced_request(
+        price, 1000, output_tokens=more
+    )
 
 
 def test_price_from_environment_refuses_a_price_for_another_model() -> None:
