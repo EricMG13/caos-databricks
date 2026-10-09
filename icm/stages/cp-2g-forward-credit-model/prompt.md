@@ -1,7 +1,7 @@
 ---
 module: CP-2G
 blocks: [instruction, tagged, host_steps, final_check]
-conditional: [forecast_extension, validator_feedback, validator_repair]
+conditional: [current_command, forecast_extension, validator_feedback, validator_repair]
 ---
 
 # Prompt for CP-2G

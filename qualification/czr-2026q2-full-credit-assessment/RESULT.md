@@ -2,15 +2,33 @@
 
 Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (stopped at CP-2G; citation keys)**. Prepared offline; the live results are in the last section.
 
+Corpus changed 2026-10-06, D115; earlier runs were on the old corpus. See "Corpus changed 2026-10-06 (D115)" below.
+
 This immutable set prepares `FULL_CREDIT_32 / FULL_CREDIT_ASSESSMENT` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark", with a proposed position
-in the CZR 6.50% Senior Secured Notes due 2032 held against a **SYNTHETIC**
-test mandate. Its qualification-set digest is
-`5e0a1f7d45f61cf66ab435da206caa4f9acabc3589ed51ff880e7a019c9670e5`.
+in the CZR 6.50% Senior Secured Notes due 2032 held against a real fund's
+holdings and policies (D115; the synthetic test mandate of D80 is unused). Its qualification-set digest is
+`dd7e23561abb23e220ba1948428b28acd74a9a14a4f0b6bc498c2b694389fecc`.
 
-## The mandate is synthetic (D80)
+## Corpus changed 2026-10-06 (D115)
+
+On the owner's approval of 6 October 2026 (D115) exactly three files were downloaded from sec.gov (User-Agent declared on every request; the SEC's 111-byte script tag removed, so each size equals the filing index's) and admitted. They were converted with the F498 converter (sentence per line, F492; clause split for the Merger Agreement, F498). **Every live run, verdict and snapshot recorded below was made on the old corpus and is not comparable with a run of this set as it now stands**; the set digest above is the new one.
+
+| document | source | accession | text SHA-256 | raw HTML SHA-256 |
+|---|---|---|---|---|
+| `CZR_2026_Merger_Agreement.txt` (Ex. 2.1 to the 8-K of 28 May 2026, Agreement and Plan of Merger, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm | 0001193125-26-242995 | `e01077c1ed37c5b08c4d2dbfc15da19b78d50b4b38a42e3da22c3cf0e4c3038c` | `fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b` |
+| `FHSUHY_NPORT_Schedule_of_Investments_2026-06-30.txt` (NPORT-EX, schedule of investments of the Federated Hermes Sustainable High Yield Bond Fund, Inc. at 30 June 2026 (filed 25 August 2026)) | https://www.sec.gov/Archives/edgar/data/225318/000022531826000020/poi_fhsushybondfund.htm | 0000225318-26-000020 | `e2490912d9cc688135e15732e0fcf4aafd715e91e4d580edd577483535507bab` | `45dbee32a946cf9b582e22e97461735def3b5b8447f77d193ca0b08d92437df5` |
+| `FHSUHY_Prospectus_and_SAI_2026-05-26.txt` (485BPOS, the same fund's prospectus and SAI (filed 26 May 2026)) | https://www.sec.gov/Archives/edgar/data/225318/000162363226000742/fhsuhy2481-form.htm | 0001623632-26-000742 | `10455d54958421c56b4902f2fa41bfc08873bb9d16ee9fb22ab31ded215846ea` | `ace0ea46f895f93d9fa863dc43a7d5f402e689cf0b6fdb3c8c71f6893821f9cc` |
+
+Text bytes: `CZR_2026_Merger_Agreement.txt` 411,229; `FHSUHY_NPORT_Schedule_of_Investments_2026-06-30.txt` 49,398; `FHSUHY_Prospectus_and_SAI_2026-05-26.txt` 501,405. None is over 500 KiB as text, so no large-file pin moves; none is near the 1.5 MiB page-map threshold. The set's CP-0 request, encoded with CP-0's delivered authority, is 4,003,072 bytes (95.4% of `MAX_REQUEST_BYTES`); no source is shown as a page map.
+
+The Merger Agreement is the full agreement beside the 8-K's summary where the set carries it. Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit, so a claim about commitment-letter terms stays unsupported. No key is added: every existing key binds its own document and is unchanged.
+
+The Federated Hermes Sustainable High Yield Bond Fund's N-PORT schedule and its prospectus and SAI replace the SYNTHETIC Test CLO I mandate (D80) in this set. The synthetic file stays on disk and in the register, unused. The schedule lists four Caesars positions (6.500% 2/15/2032 secured notes, `550,000` principal, `536,927` value; 6.000% 10/15/2032 notes, `1,650,000`, `1,496,434`; 7.000% 2/15/2030; 4.625% 10/15/2029); the prospectus carries the fund's 80% policy, investment limitations and concentration restriction. What the real documents do not carry: a proposed position, a CLO's compliance monitor, or a single-name limit. The three keys that bound the synthetic mandate (position, weight on NAV, C-01) are re-keyed to one whole unique line each of the new documents (below); the set's other expectations (readiness, projections, register) do not depend on the mandate's text and are unchanged, but no run has measured them over the new corpus.
+
+## The synthetic mandate (D80), unused since D115 (historical)
 
 The "Test CLO I Ltd" mandate, exposure report and compliance monitor are
 synthetic. The owner adopted them on 2 October 2026 as test input (D80): the
@@ -170,9 +188,7 @@ Keys authored from the documents; material figures pending owner confirmation.
   the peer notes, `6.722997%` (MGM 6.125% 2029) and `6.644415%` (PENN 4.125%
   2029).
 - CP-5: the 10-Q's Note 6 total debt (`11,807` face, `11,705` book).
-- CP-6: the mandate's proposed position (`USD 5,000,000` par, CUSIP
-  12769GAC4); its weight on par (`0.7925%` of NAV); the compliance monitor's
-  C-01 row (`≤ 2.5% NAV`, hard, `2.37%`, `Watch` at 29 May 2026).
+- CP-6, position: the fund's schedule line for the CZR 6.50% 2032 notes (`550,000` principal, `536,927` value at 30 June 2026), its net-assets line (`NET ASSETS—100% | $491,554,960`, the weight denominator) and the prospectus's 80% policy line (`at least 80% of its net assets … in sustainable lower-rated fixed-income investments`), which replace the synthetic mandate's three keys (D115). The schedule and the prospectus are the real fund's, not a CLO mandate: there is no proposed position size and no single-name limit to key, and no key claims one. The prospectus line is fragile: the summary prospectus words the policy `sustainable, lower-rated` (twice, not unique), so an answer citing that wording misses the key, and that wording cannot be a D101 alternative.
 
 CP-1D, CP-2A and CP-2G carry no key: none of their outputs is a single fact a
 document states. The conformed credit agreement's commitment, margins and
@@ -293,11 +309,15 @@ readiness key. No CP-4C register or projection key is set.
 No register key is set: no figure here is a single unambiguous register cell.
 The mandate's arithmetic is checked in `czr-2026q2-portfolio/RESULT.md`.
 
+## CP-2G forecast scope (D109)
+
+The case states no forecast scope, and needs none. Since D109 (6 October 2026) the host derives CP-2G's forecast horizon and base period from the pinned reporting period by the owner's rule and pins them with the run input, marked as derived: this case's `Q2 2026` yields forecast horizon **FY2026–FY2028** (`FY2026-FY2028`) and base period **Q2 2026 LTM**. CP-2G receives them as its current command (`Run CP-2G [forecast horizon: FY2026-FY2028] [base period: Q2 2026 LTM]`), each labelled as derived by the host under the owner's rule. No `cases` qualifier is stated; CP-2G resolves its cases by its own entry protocol. The set's manifest and digest are unchanged.
+
 ## Stated facts the assessment must not misread
 
 The documents state the following; this set draws no conclusion from them.
 
-- **Synthetic, not a holding.** The mandate says "Existing Caesars
+- **Synthetic, not a holding (historical; superseded by D115, which replaced the mandate: the fund now holds four Caesars positions).** The mandate says "Existing Caesars
   Entertainment exposure: none." and that the position is synthetic.
 - **The pending take-private.** The merger would make Caesars a direct wholly
   owned subsidiary of Fertitta Gaming Holdco, LLC; the press release states
@@ -321,9 +341,13 @@ verdict, or qualification claim existed; the live runs follow.
 |---|---|---|---|---|---|---|---|---|---|
 | FCA1 (`FCA1-czr-full-credit-assessment.json`) | 9043ba7f / ~14b9bec | STOPPED | 4/19 | 11 | 122 (121 anch., 5 unver.) | not scored | — | CP-1B attempt 3 dropped, PROVIDER_UNAVAILABLE (re-run once per the owner's ruling) | +0.76 / $0.79 |
 | FCA2 (`FCA2-czr-full-credit-assessment.json`) | 9043ba7f / ~14b9bec | BLOCKED | 11 of 19 accepted; CP-2G Blocked; 7 not run | 22 | 295 (294 anch., 15 unver.) | 8/35 | met / missed / — | CP-2G answered Blocked (forecast scope); 7 modules not run | +1.79 / $2.05 |
+| FCA3 (`FCA3-dec.json`) | n/r / claude/dec | STOPPED | 0/19 | 1 | n/r | not scored | — | CP-0 refused by the router, HTTP 400 (`PROVIDER_CALL_INVALID call=vendor class=BadRequestError status=400`) after 2 s: the 4,033,648-byte request was about 1,003,400 router tokens (4.02 bytes a token) plus 65,536 completion tokens over Luna's 1,050,000 context; nothing billed (D116) | n/l / $0.00 |
+| FCA4 (`FCA4-dec.json`) | d8a307a9 / claude/dec | STOPPED | 17/19 | 34 | 454 (446 anch., 8 unver.) | 19/35 (12 not cited; 4 CP-5 not run) | — | CP-5 refused 4 times (HANDOFF_INCOMPLETE x3, HANDOFF_MALFORMED x1): register rows a cell short, then a missing register; a model fault (`PROVIDER_RUNBOOK.md`, "Owner decisions, 6 October 2026") | n/l / $3.7485 |
 
 Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
 
 Verdict: The set is **NOT QUALIFIED**. FCA2 reached CP-2G and stopped there with a Blocked answer (QA and committee Blocked, confidence 0): "Forecast horizon and base-period choice are not established by the current command or accepted upstream handoffs". The ready key was met and the projection key missed. Of 35 keys 8 were met; 15 are not run (the modules after CP-2G) and the other 12 are "not cited". The 14 Blocked quotes persisted as anchored (D106); 295 citations, 15 of them unverified. 11 modules were accepted (CP-0 to CP-2D, 11 artifacts); CP-2G's single attempt answered Blocked and 7 route modules were not run.
 
-Owner-decision stops and provider limits: **CP-2G forecast-scope gate (owner input):** the case supplies no forecast horizon and no base period, so the module cannot establish its scope; this is an owner input, recorded as N144. FCA1's CP-1B drop is the provider limit: Provider drops: PROVIDER_UNAVAILABLE after about 195 to 299 s on large non-streamed calls, never billed; the owner ruled on 5 October to run without streaming and re-run a dropped module once (L9, streaming in the test adapter, stays unmerged: `PROVIDER_RUNBOOK.md` and N145).
+Owner-decision stops and provider limits: **CP-2G forecast-scope gate (owner input):** the case supplies no forecast horizon and no base period, so the module cannot establish its scope; this is an owner input, recorded as N144. Resolved by D109 (6 October): the scope is now derived from the reporting period (see "CP-2G forecast scope (D109)"); a fresh run (FCA3) has not been made; FCA2 cannot resume, because its input was pinned before D109 and carries no command. FCA1's CP-1B drop is the provider limit: Provider drops: PROVIDER_UNAVAILABLE after about 195 to 299 s on large non-streamed calls, never billed; the owner ruled on 5 October to run without streaming and re-run a dropped module once (L9, streaming in the test adapter, stays unmerged: `PROVIDER_RUNBOOK.md` and N145).
+
+**FCA3 and FCA4, 6 October 2026 (D109, D115, D116).** FCA3 sent the first CP-0 call over the new corpus (the full Merger Agreement and the fund's two files, D115) and was refused by the router before generation; D116 now fits every node to its model's context, and FCA4 ran on that fit (N157's fitted CP-0 request, 2,866,967 bytes, returned 200 live). FCA4 accepted 17 of 19 modules over 34 attempts with 454 citations (446 anchored, 8 unverified) and stopped at CP-5, the 18th of 19 modules. **CP-2G, the stop of FCA2, was accepted on attempt 3, Restricted / Requires More Work, and is no longer Blocked** (D109, N144 resolved): it applies FY2026 to FY2028 and a Q2 2026 LTM base (FY2025 + H1 2026 - H1 2025), gives sourced debt service for FY2026 to FY2028 and remaining-2026 capex, and marks operating forecasts "no sourced numerical forecast". Scored by `q9/classify.py` on the run database: 19 of 35 keys met, 12 not cited, 4 not run (all CP-5). Ready, projection and register keys are not scored because the run stopped. CP-5: see `PROVIDER_RUNBOOK.md`, "Owner decisions, 6 October 2026". The set remains **NOT QUALIFIED**.

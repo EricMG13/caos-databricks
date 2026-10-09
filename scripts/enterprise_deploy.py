@@ -129,9 +129,15 @@ MODEL_CALL_SUBJECT = {
     "reporting_period": "FY2025",
     "analysis_date": "2026-09-22",
 }
-# `caos.provider.TIMEOUT_SECONDS` (420) is the model call's own deadline;
-# E10 waits comfortably past it rather than racing it.
-MODEL_CALL_SECONDS = 440.0
+# `caos.provider.TIMEOUT_SECONDS` (720, D117) is the model call's own deadline;
+# E10 waits comfortably past it rather than racing it. The wait spans more
+# than one event-stream tail: the app closes every tail at
+# `caos.api.app.TAIL_DEADLINE` (300 s), so a closed tail is reopened from its
+# last event id, as a browser does, until this wait runs out (D117).
+MODEL_CALL_SECONDS = 740.0
+# The pause before a closed tail is reopened: the app's own `retry` hint
+# (`caos.api.app.POLL_INTERVAL`), so a reconnect is as quick as the browser's.
+RECONNECT_PAUSE_SECONDS = 0.5
 # What ends a run without an answered call (`caos.store.RunStatus`): an
 # outcome is recorded for a refused call too, and a park is a progress frame
 # like any other (W1), so E10 reads the run itself, never counts frames.
@@ -891,7 +897,13 @@ def _prepared_run(url: str, case_id: str, headers: dict[str, str]) -> _Prepared:
         "POST",
         f"{base}/input",
         headers,
-        {"subject": MODEL_CALL_SUBJECT, "research": None},
+        # D109: every request field is stated; E10 states no command.
+        {
+            "subject": MODEL_CALL_SUBJECT,
+            "research": None,
+            "qualifiers": [],
+            "objective": None,
+        },
     )
     if status not in (200, 201):
         return _Prepared(False, "POST .../input", status, run_id)
@@ -953,31 +965,116 @@ def call_verdict(document: object) -> tuple[int, str] | None:
     return None
 
 
+# Reopens the run's event stream after the given `Last-Event-ID` (None for
+# none seen), waiting on its socket no longer than the seconds given: its
+# lines, or None and what answered instead of a stream.
+type _Reopen = Callable[[str | None, float], tuple[queue.Queue[bytes] | None, str]]
+
+
+def _event_id(ended: str, frame: str, seen: str | None) -> str | None:
+    """A whole frame's own `id`, else the last one seen: the cursor a reopened
+    tail resumes after. A frame the tail cut before its blank line was never
+    dispatched, so its `id` is not one to resume after."""
+    if ended != FRAME:
+        return seen
+    for line in frame.splitlines():
+        if line.startswith("id:"):
+            seen = line[3:].strip()
+    return seen
+
+
+def _verdict(
+    url: str, read: str, headers: dict[str, str]
+) -> tuple[int, tuple[int, str] | None]:
+    """The run read once: its status, and `call_verdict` on it or None."""
+    status, document = _json_call(url, "GET", read, headers)
+    return status, call_verdict(document) if status == 200 else None
+
+
 def _answered(
     url: str,
     read: str,
     headers: dict[str, str],
     lines: queue.Queue[bytes],
+    reopen: _Reopen,
 ) -> tuple[int, str]:
     """The run read once per event frame (a heartbeat changes nothing) until
-    `call_verdict` decides, the stream closes or `MODEL_CALL_SECONDS` pass;
-    read once more at the end, so a decision the last frame announced is
-    never missed."""
+    `call_verdict` decides or `MODEL_CALL_SECONDS` pass; read once more
+    whenever a tail ends, so a decision the last frame announced is never
+    missed. A tail the app closed (every one, at `TAIL_DEADLINE`) is reopened
+    after its last whole frame's id while the wait lasts (D117), each reopen
+    bounded by the time left; one that fails or is not an event stream is
+    followed by a last run read, then fails the row naming what happened."""
     until = time.monotonic() + MODEL_CALL_SECONDS
-    last = 0
+    seen = None
     while True:
         ended, frame = _next_frame(lines, until)
+        seen = _event_id(ended, frame, seen)
         if ended == FRAME and "event: " not in frame:
             continue
-        last, document = _json_call(url, "GET", read, headers)
-        verdict = call_verdict(document) if last == 200 else None
+        last, verdict = _verdict(url, read, headers)
         if verdict is not None:
             return verdict
-        if ended != FRAME:
-            return 1, (
-                f"no model call answered within {MODEL_CALL_SECONDS}s "
-                f"(the run read answered {last})"
-            )
+        if ended == FRAME:
+            continue
+        reopened, note = _reopened(ended, seen, until, reopen)
+        if reopened is not None:
+            lines = reopened
+            continue
+        return _last_word(url, read, headers, note, last)
+
+
+def _last_word(
+    url: str, read: str, headers: dict[str, str], note: str, last: int
+) -> tuple[int, str]:
+    """The row once no tail is left. After a reopen that failed (`note`) the
+    run is read once more, since it may have decided meanwhile; else the wait
+    ran out on the read just made."""
+    if note:
+        last, verdict = _verdict(url, read, headers)
+        if verdict is not None:
+            return verdict
+    return 1, note or (
+        f"no model call answered within {MODEL_CALL_SECONDS}s "
+        f"(the run read answered {last})"
+    )
+
+
+def _reopened(
+    ended: str, seen: str | None, until: float, reopen: _Reopen
+) -> tuple[queue.Queue[bytes] | None, str]:
+    """The next tail, when this one closed with time left to wait; else
+    None, with the row's note when a reopen failed or answered something
+    else. The reopen waits on its socket only for the time left."""
+    if ended != CLOSED or time.monotonic() + RECONNECT_PAUSE_SECONDS >= until:
+        return None, ""
+    time.sleep(RECONNECT_PAUSE_SECONDS)
+    left = until - time.monotonic()
+    if left <= 0:
+        return None, ""
+    try:
+        lines, note = reopen(seen, left)
+    except READ_FAILURES as failed:
+        return None, f"the event stream could not be reopened: {type(failed).__name__}"
+    return lines, "" if lines is not None else f"the event stream reopened as {note}"
+
+
+def _tail(
+    url: str,
+    events: str,
+    headers: dict[str, str],
+    after: str | None,
+    seconds: float = MODEL_CALL_SECONDS,
+) -> tuple[queue.Queue[bytes] | None, str]:
+    """The run's event stream opened, resuming after `after` when given and
+    waiting on its socket for `seconds`: its lines, or None and what answered
+    instead of a stream."""
+    sent = headers if after is None else {**headers, "last-event-id": after}
+    status, response, _ = _open(url + events, "GET", sent, timeout=seconds)
+    kind = response.getheader("content-type") or ""
+    if status != 200 or not kind.startswith("text/event-stream"):
+        return None, f"status {status}, content-type {kind!r}: not an event stream"
+    return _lines(response), ""
 
 
 def _started_and_watched(
@@ -995,20 +1092,21 @@ def _started_and_watched(
     events = f"/api/v1/cases/{case_id}/events?run={run_id}"
     read = f"/api/v1/cases/{case_id}/run?run={run_id}"
     try:
-        status, response, _ = _open(
-            url + events, "GET", headers, timeout=MODEL_CALL_SECONDS
-        )
-        kind = response.getheader("content-type") or ""
-        if status != 200 or not kind.startswith("text/event-stream"):
-            note = f"status {status}, content-type {kind!r}: not an event stream"
+        lines, note = _tail(url, events, headers, None)
+        if lines is None:
             return evidence.record(step, f"GET {events}", 1, note)
-        lines = _lines(response)
         base = f"/api/v1/cases/{case_id}/runs/{run_id}"
         pin = {"input_fingerprint": prepared.fingerprint}
         status, _ = _json_call(url, "POST", f"{base}/start", headers, pin)
         if status != 202:
             return evidence.record(step, f"POST {base}/start", 1, f"answered {status}")
-        code, note = _answered(url, read, headers, lines)
+        code, note = _answered(
+            url,
+            read,
+            headers,
+            lines,
+            lambda after, left: _tail(url, events, headers, after, left),
+        )
     except READ_FAILURES as failed:
         return evidence.record(step, f"GET {events}", 1, type(failed).__name__)
     return evidence.record(step, f"GET {read}", code, note)

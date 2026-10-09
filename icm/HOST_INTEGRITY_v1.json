@@ -4,6 +4,10 @@
       "bytes": 1103,
       "sha256": "a0fa1a673230e24f29bde743b3bd9ea866aa39a3380878cb91926db929401451"
     },
+    "current_command.md": {
+      "bytes": 325,
+      "sha256": "3584effed3240f54f203d8a9db9bc7203657be0f0f6126695f885ea159c16185"
+    },
     "final_check.md": {
       "bytes": 2720,
       "sha256": "dfd5f9b5ab971963479fc75b050061d8f11b9fdf5dcb77377c81cc1a84a8ba1d"
@@ -21,12 +25,12 @@
       "sha256": "bccd22678bc3dba3122637926a3a89c5435e7bb729102e111a6b664cce92729f"
     },
     "instruction.md": {
-      "bytes": 1578,
-      "sha256": "163423ac7845e82fa7c055f6b7d52b9f4b95d9ad53cac6a843abfcc45e094783"
+      "bytes": 1585,
+      "sha256": "30301934b5c317a9d7f7d52115cb21503291f5852f902c37d803944f2dea3b97"
     },
     "tagged.md": {
-      "bytes": 554,
-      "sha256": "dc43f730c947a4887a1be250ff30adc04402325df2b11da0e0f8afdd1bd48f43"
+      "bytes": 689,
+      "sha256": "589d7bf640a9a84006087fe416545702f3c3770882b8c5ace070cde1630bab9a"
     },
     "validator_feedback.md": {
       "bytes": 260,

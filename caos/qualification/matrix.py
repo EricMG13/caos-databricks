@@ -299,6 +299,12 @@ class QualificationCase:
     # (`run_inputs.research_text`). An input like the documents: pinned by the
     # harness, compared at eligibility, and covered by the digest.
     research_brief: str | None = None
+    # D109: the run's command as the case states it -- each (module id, name,
+    # value) qualifier and CP-0's objective. Pinned by the harness, compared
+    # at eligibility, covered by the digest. CP-2G's unstated forecast scope
+    # is derived at the pin from the subject's reporting period, not here.
+    qualifiers: tuple[tuple[str, str, str], ...] = ()
+    objective: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -453,6 +459,7 @@ def _digested(case: QualificationCase) -> list[object]:
         )
     if case.research_brief is not None:
         entry.append(["research_brief", case.research_brief])
+    entry.extend(_digested_command(case))
     if case.expects_register:
         entry.append(
             [
@@ -473,6 +480,17 @@ def _digested(case: QualificationCase) -> list[object]:
                 ),
             ]
         )
+    return entry
+
+
+def _digested_command(case: QualificationCase) -> list[object]:
+    """A case's command (D109), each part tagged as every optional field is,
+    and nothing when it states none, so no earlier set's digest moves."""
+    entry: list[object] = []
+    if case.qualifiers:
+        entry.append(["qualifiers", sorted(list(item) for item in case.qualifiers)])
+    if case.objective is not None:
+        entry.append(["objective", case.objective])
     return entry
 
 

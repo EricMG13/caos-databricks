@@ -75,7 +75,12 @@ SUBJECT = {
     "reporting_period": "FY2025",
     "analysis_date": "2026-09-08",
 }
-PIN = {"subject": SUBJECT, "research": None}
+PIN: dict[str, object] = {
+    "subject": SUBJECT,
+    "research": None,
+    "qualifiers": [],
+    "objective": None,
+}
 # One of the two advertised research routes (R24-01): CP-0 -> CP-DR,
 # anchored, so the vendor's own placement is consumer `NONE` after `CP-0`
 # (`CP_DR_RESEARCH_BRIEF_V1.md`). The caller-authored fields only -- `schema`,
@@ -465,7 +470,12 @@ def test_the_subject_pin_snapshots_live_sources_once(
     foreign = start_run(conn, create_case(conn, BoundaryText.of("Other 2026")))
     conn.commit()
     before = _effects(conn)
-    invalid = {"subject": {**SUBJECT, "analysis_date": "2026-02-30"}, "research": None}
+    invalid: dict[str, object] = {
+        "subject": {**SUBJECT, "analysis_date": "2026-02-30"},
+        "research": None,
+        "qualifiers": [],
+        "objective": None,
+    }
     for run, body, outcome in [
         (run_id, invalid, "400 REQUEST_INVALID"),
         (foreign, PIN, "404 RUN_NOT_FOUND"),
@@ -524,7 +534,12 @@ def test_a_research_route_requires_and_accepts_a_bound_brief(
         client,
         _path(case_id, run_id, "input"),
         writer,
-        {"subject": SUBJECT, "research": RESEARCH_BRIEF},
+        {
+            "subject": SUBJECT,
+            "research": RESEARCH_BRIEF,
+            "qualifiers": [],
+            "objective": None,
+        },
     )
     assert pinned.status_code == 200, pinned.text
     stored = load_run_input(conn, run_id)
@@ -541,6 +556,61 @@ def test_a_research_route_requires_and_accepts_a_bound_brief(
         )
         assert approved.status_code == 200, approved.text
     assert {gate_state(conn, run_id, gate) for gate in Gate} == {GateState.RELEASED}
+
+
+def test_the_pin_takes_a_command_and_answers_its_mistakes_as_the_callers(
+    client: TestClient, case: tuple[StoreConnection, UUID], sourced: UUID
+) -> None:
+    """D109: qualifiers and a CP-0 objective are pinned with the input, shown
+    in its preview beside CP-2G's derived scope; the caller's own mistakes
+    answer 400 with their own code, before anything is spent."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    full = {**ROUTE, "profile_id": "FULL_CREDIT_32", "selection_id": "RELATIVE_VALUE"}
+
+    def pin(route: object, body: object) -> Response:
+        created = _send(client, _path(case_id), writer, route)
+        assert created.status_code == 201, created.text
+        run_id = created.json()["run_id"]
+        return _send(client, _path(case_id, run_id, "input"), writer, body)
+
+    cases = {"module_id": "CP-2G", "name": "cases", "value": "base/upside/downside"}
+    refused = {
+        "unknown": pin(
+            full, {**PIN, "qualifiers": [{**cases, "name": "discount_rate"}]}
+        ),
+        "repeated": pin(full, {**PIN, "qualifiers": [cases, cases]}),
+        "off_route": pin(ROUTE, {**PIN, "qualifiers": [cases]}),
+        "period": pin(
+            full, {**PIN, "subject": {**SUBJECT, "reporting_period": "H1 2026"}}
+        ),
+        "hidden": pin(full, {**PIN, "objective": "Relative value\u200b decision"}),
+    }
+    assert {name: _outcome(answer) for name, answer in refused.items()} == {
+        "unknown": "400 RUN_QUALIFIER_INVALID",
+        "repeated": "400 RUN_QUALIFIER_INVALID",
+        "off_route": "400 RUN_QUALIFIER_INVALID",
+        "period": "400 REPORTING_PERIOD_UNREADABLE",
+        "hidden": "400 RUN_QUALIFIER_INVALID",
+    }
+    # F524: decomposed text is composed at the edge, as a brief is (W4).
+    decomposed = unicodedata.normalize("NFD", "Relative value décision")
+    body = {**PIN, "qualifiers": [cases], "objective": decomposed}
+    created = _send(client, _path(case_id), writer, full)
+    run_id = UUID(created.json()["run_id"])
+    pinned = _send(client, _path(case_id, run_id, "input"), writer, body)
+    assert pinned.status_code == 200, pinned.text
+    preview = _send(client, _path(case_id, run_id, SOURCE_SET + "preview"), writer)
+    content = json.loads(preview.json()["content"])
+    assert content["format_version"] == 3
+    assert json.loads(content["input"]["command_json"]) == {
+        "CP-0": {"objective": {"basis": "pinned", "value": "Relative value décision"}},
+        "CP-2G": {
+            "base_period": {"basis": "derived", "value": "FY2025"},
+            "cases": {"basis": "pinned", "value": "base/upside/downside"},
+            "forecast_horizon": {"basis": "derived", "value": "FY2026-FY2028"},
+        },
+    }
 
 
 def _research_run(client: TestClient, case_id: UUID, writer: UUID) -> UUID:
@@ -580,7 +650,12 @@ def test_a_callers_own_brief_mistakes_are_answered_as_the_callers(
             client,
             _path(case_id, _research_run(client, case_id, writer), "input"),
             writer,
-            {"subject": SUBJECT, "research": brief},
+            {
+                "subject": SUBJECT,
+                "research": brief,
+                "qualifiers": [],
+                "objective": None,
+            },
         )
         for name, brief in mistakes.items()
     }
@@ -590,7 +665,12 @@ def test_a_callers_own_brief_mistakes_are_answered_as_the_callers(
         client,
         _path(case_id, lite, "input"),
         writer,
-        {"subject": SUBJECT, "research": RESEARCH_BRIEF},
+        {
+            "subject": SUBJECT,
+            "research": RESEARCH_BRIEF,
+            "qualifiers": [],
+            "objective": None,
+        },
     )
     refused["no_brief"] = _send(
         client,
@@ -671,6 +751,8 @@ def test_the_pin_carries_every_brief_the_store_admits(
         body = {
             "subject": SUBJECT,
             "research": {**RESEARCH_BRIEF, "questions": questions},
+            "qualifiers": [],
+            "objective": None,
         }
         assert PinRunInput.model_validate(body)
         run = _research_run(client, case_id, writer)
@@ -707,6 +789,8 @@ def test_a_decomposed_brief_is_pinned_as_its_composed_text(
         {
             "subject": SUBJECT,
             "research": {**RESEARCH_BRIEF, "decision_context": decomposed},
+            "qualifiers": [],
+            "objective": None,
         },
     )
     assert pinned.status_code == 200, pinned.text

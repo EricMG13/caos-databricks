@@ -19,18 +19,22 @@ anchored ones.
 from __future__ import annotations
 
 import hashlib
+import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
+from fractions import Fraction
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import psycopg
 
 from caos import methodology
 from caos.blobs import BlobStore
+from caos.copilot import NANO_PER_CREDIT
 from caos.evidence.citations import (
     EXCERPT,
     MIN_EXCERPT_WORDS,
@@ -46,6 +50,7 @@ from caos.evidence.citations import (
     whole_line_of,
 )
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
+from caos.methodology import selection as evidence_selection
 from caos.methodology.bundle import (
     Bundle,
     DeliveredAuthority,
@@ -53,6 +58,13 @@ from caos.methodology.bundle import (
     authority_digest,
     delivered_authority,
     delivered_authority_digest,
+)
+from caos.methodology.coverage import (
+    CoverageFault,
+    coverage_faults,
+    coverage_message,
+    heading_pages,
+    last_heading,
 )
 from caos.methodology.executor import (
     SKILL,
@@ -96,8 +108,10 @@ from caos.methodology.handoff import (
 )
 from caos.methodology.invocation import (
     MAX_UPSTREAM_HANDOFF_BYTES,
+    _printable,
     build_handoff_prompt,
     call_time_identity,
+    evidence_tag,
     host_identity,
     prospective_identity,
     request_size,
@@ -112,6 +126,7 @@ from caos.methodology.selection import (
     demand_fault,
     demand_items,
     gate_view,
+    pack_view,
     select_sources,
 )
 from caos.methodology.vendor import VendorContract, cached_contract, catalog
@@ -129,22 +144,29 @@ from caos.methodology.verification import (
     verify_owner_restrictions,
 )
 from caos.provider import (
-    MAX_REQUEST_BYTES,
+    Completion,
     CompletionProvider,
+    encode_request,
     reported_charge,
+    request_ceiling,
     resend_checked,
+    reserving,
 )
 from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import StoreConnection, connect
 from caos.store.budget import Reservation, remaining, reserved_for
 from caos.store.lakebase import store_url
 from caos.store.outcomes import (
+    DECLARED_KINDS,
+    DROP_REATTEMPTS,
     CallOutcome,
+    DropKind,
     NodeAttempt,
     accepted_rows,
     call_hold,
     check_attempt,
     check_call,
+    declared_drop,
     execution_reads,
     node_attempts,
     producer_identifier,
@@ -155,6 +177,9 @@ from caos.store.run_inputs import load_run_input
 from caos.store.runs import attempt_ordinal
 from caos.store.source_sets import SourceSet, load_source_set
 from caos.store.work import require_resendable
+
+if TYPE_CHECKING:
+    from caos.pricing import CreditPrice
 
 # The bill of an answer already paid for is written this many times at most,
 # a pause apart, before the store fault is let through (ST-12): a failover
@@ -216,8 +241,9 @@ def _within_reservation(
     prompt: str,
     *,
     attempt_id: UUID,
-) -> None:
-    """Refuse a request this attempt's reservation does not cover (Task 8.2).
+) -> Reservation:
+    """Refuse a request this attempt's reservation does not cover (Task 8.2),
+    or answer the reservation that covers it.
 
     The loop priced the prompt `check_context` built and reserved for it; this
     unit builds its own under the attempt's own identity. A rebuilt prompt that
@@ -243,6 +269,43 @@ def _within_reservation(
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     if priced_request(taken.price, measured) > taken.amount:
         raise Refusal(RefusalCode.RESERVATION_BELOW_REQUEST)
+    return taken
+
+
+def _settled_within(taken: Reservation | None, charge: Decimal | None) -> bool:
+    """Whether a known AI-unit charge is within the reservation its call ran
+    under (R2.6). A reservation that names a credit price settles its call in
+    AI units, which the pinned per-token price no longer bounds, so a charge
+    above it is possible: it is named on stderr by its figures alone --
+    `BUDGET_CHARGE_OVER_RESERVATION reserved=<d> charged=<d> nano_aiu=<n>` --
+    and the caller refuses the answer after the ledger holds all of it. A
+    token-priced charge keeps the budget exit it always had: its overrun is
+    accepted and consumes the run's capacity. An unknown charge or a missing
+    reservation is decided elsewhere."""
+    if taken is None or taken.credit is None or charge is None:
+        return True
+    if charge <= taken.amount:
+        return True
+    print(
+        f"{RefusalCode.BUDGET_CHARGE_OVER_RESERVATION.value}"
+        f" reserved={taken.amount} charged={charge}"
+        f" nano_aiu={_nano_aiu(taken.credit, charge)}",
+        file=sys.stderr,
+    )
+    return False
+
+
+def _nano_aiu(credit: CreditPrice, charge: Decimal) -> str:
+    """The AI units a charge settled at its reservation's credit price (0048
+    holds it above zero), as a whole count, exactly; `-` when the charge is no
+    whole count of them."""
+    units = Fraction(charge) * NANO_PER_CREDIT / Fraction(credit.per_credit)
+    return str(units.numerator) if units.denominator == 1 else "-"
+
+
+def _per_credit(taken: Reservation) -> Decimal | None:
+    """The credit price a reservation was taken under, or None (0048)."""
+    return None if taken.credit is None else taken.credit.per_credit
 
 
 def execute_handoff(
@@ -266,6 +329,8 @@ def execute_handoff(
     """
     adapter = methodology.CANONICAL_ADAPTER_VERSION
     attempt, route_node_id = assignment.attempt_id, assignment.node.route_node_id
+    # The node's evidence is fitted to the model this call goes to (D116).
+    assignment = replace(assignment, model=provider.model)
     with call_hold(conn, attempt):
         with execution_reads(conn):
             check_call(
@@ -291,7 +356,7 @@ def execute_handoff(
             lambda built: _prompt(bundle, assignment, identity, built, carried),
             lambda size: _covered(provider, taken, size),
         )
-        _within_reservation(conn, provider, prompt, attempt_id=attempt)
+        covered = _within_reservation(conn, provider, prompt, attempt_id=attempt)
 
         bundle.verify_manifest()
         model = producer_identifier(provider.model, limit=256)
@@ -300,7 +365,12 @@ def execute_handoff(
         require_idle(conn)
         # A transport that asks again after a rate limit re-reads the fence
         # first (ST-7): a lost lease or a recorded cancel sends nothing more.
-        with resend_checked(lambda: _still_resendable(conn, assignment)):
+        # The call runs inside its reservation: a Copilot call caps its session
+        # in credits by it (R2.7) and is settled at its credit price (R2.2).
+        with (
+            reserving(covered.amount, credit=_per_credit(covered)),
+            resend_checked(lambda: _still_resendable(conn, assignment)),
+        ):
             completion = provider.complete(prompt, json_object=True)
         charge = reported_charge(
             completion.charge if isinstance(completion.charge, Decimal) else None
@@ -308,8 +378,17 @@ def execute_handoff(
         generation = producer_identifier(completion.generation_id, limit=512)
         content = completion.content if completion.refusal is None else None
         diagnostic, unstored = _diagnostic(blobs, content)
+        drop = _drop_kind(completion, (charge, generation, diagnostic))
         require_idle(conn)
-        bill(conn, attempt, CallOutcome(charge, model, generation, diagnostic))
+        bill(conn, attempt, CallOutcome(charge, model, generation, diagnostic, drop))
+    # Recorded in full above, then refused: the answer is not accepted and
+    # the run parks, terminal for its pin (R2.6). `bill` returned, so the
+    # ledger holds the whole charge; a bill no retry could write raised
+    # `STORE_UNAVAILABLE` there, before any park. `unstored` is the body's
+    # blob alone (F42): the bill committed without its address, and an
+    # overrun refuses ahead of it because the answer is refused either way.
+    if not _settled_within(covered, charge):
+        raise Refusal(RefusalCode.BUDGET_CHARGE_OVER_RESERVATION)
     if unstored:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
     if completion.refusal is not None:
@@ -345,6 +424,31 @@ def execute_handoff(
         generation_id=generation,
         diagnostic_sha256=diagnostic,
     )
+
+
+def _drop_kind(completion: Completion, said: tuple[object, ...]) -> DropKind | None:
+    """How the call ended, for the ledger (D110): the provider's own word,
+    kept only for a refused call that left nothing -- no charge, generation
+    or body (`said`, in that order). A provider that states a drop beside
+    any of them is believed on the money, never on the drop: the bill
+    commits, no re-attempt. A cut declared after content alone may name its
+    generation (D118 fix round 1): its bill is unknown, not absent."""
+    stated = completion.drop_kind
+    charge, generation, body = said
+    if stated is DropKind.DECLARED_AFTER_CONTENT:
+        generation = None
+    if (
+        completion.refusal is None
+        or not isinstance(stated, DropKind)
+        or any(fact is not None for fact in (charge, generation, body))
+    ):
+        return None
+    # F530: a drop is declared only beside the code a drop is refused with.
+    if stated in DECLARED_KINDS and (
+        completion.refusal is not RefusalCode.PROVIDER_UNAVAILABLE
+    ):
+        return None
+    return stated
 
 
 def _run_still_holds(
@@ -476,6 +580,11 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     # a guided retry told the item (`_demand_lines`).
     if _demand_faults(bundle, assignment, context, markdown):
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    # D112, the same shape for P5: a wholly delivered source the gate says it
+    # was shown fewer pages of than it was (LCR7, N156), refused here as a
+    # guided retry told the pages delivered (`_coverage_lines`).
+    if _coverage_faults(assignment, context, markdown):
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     # D106's one exception, the same producer-guard shape: a citation CP-CF
     # will bind as a calculation input must anchor and be named by a marker
     # in this body (D107), or CP-CF cannot bind it and the run wedges there;
@@ -563,7 +672,9 @@ def check_context(  # noqa: PLR0913 -- one node of one run, keyword-only
     read unit, and the reservation this measurement produced is what that
     rebuild is then checked against (Task 8.2).
     """
-    assignment = Assignment(node.module_id, run_id, node, route, _NO_ATTEMPT)
+    assignment = Assignment(
+        node.module_id, run_id, node, route, _NO_ATTEMPT, model=provider.model
+    )
     with execution_reads(conn):
         _stored_identity(
             conn, assignment, bundle, adapter=methodology.CANONICAL_ADAPTER_VERSION
@@ -607,6 +718,13 @@ class _Context:
     # Each direct upstream's unverified citations (D106), whose markers the
     # register names as unlocated (D107).
     unverified: dict[str, tuple[UnverifiedCitation, ...]] = field(default_factory=dict)
+    # The run's whole pin, whatever part of it `delivered` is: the evidence's
+    # tag is derived from it (D113), by `_prompt` alone, so a reader that
+    # builds no prompt never renders it. Empty is the tag of `delivered`.
+    pin: Sequence[Delivery] = ()
+    # The tag a prompt built only to be measured carries in its place (D116):
+    # `_MEASURED`, as long as any; None on every prompt that is sent.
+    measured_tag: str | None = None
 
 
 def _source_preparation(
@@ -708,7 +826,14 @@ def _context(
     and its citation register, read inside the caller's unit after it checked
     the stored pin. Only accepted rows reach any part: a Blocked or refused
     attempt's diagnostic body is never read here (a guided retry's lines are
-    read beside it, by the two prompt builders alone: `_prompt_context`)."""
+    read beside it, by the two prompt builders alone: `_prompt_context`).
+
+    `assignment.model` is the endpoint the node's call is (or was) made to:
+    its delivery is fitted to that model's request ceiling (`_fitted`, D116),
+    so the pre-call check, the call, its verdict and a replay show the node
+    the same lines. None only for a reader of the upstream alone, which
+    neither builds a prompt nor judges a quote (`_forecast_inputs` on an
+    accepted read)."""
     delivered = _delivered(conn, assignment.run_id)
     source_set = _source_preparation(conn, blobs, assignment, delivered)
     # Records first: what binds and re-validates is then read as context.
@@ -717,8 +842,9 @@ def _context(
     )
     upstream = upstream_markdown(blobs, identity.upstream)
     # The gate's verified record is what the selection is read from (§95).
-    delivered, selection = _selected(conn, bundle, assignment, upstream, delivered)
-    return _Context(
+    pin = delivered
+    delivered, selection = _selected(conn, bundle, assignment, upstream, pin)
+    context = _Context(
         delivered=delivered,
         upstream=upstream,
         lineage=lineage,
@@ -726,7 +852,65 @@ def _context(
         source_set=source_set,
         selection=selection,
         unverified={node: record.unverified for node, record in records.items()},
+        pin=pin,
     )
+    if assignment.model is None:
+        return context
+    return _fitted(bundle, assignment, identity, context, assignment.model)
+
+
+# D116: room kept under the ceiling for a guided retry's check lines, so a
+# fitted node's retry still fits; its refused answer is dropped instead (D104).
+RETRY_RESERVE_BYTES = 65_536
+# A measured prompt's evidence tag: as long as any, so the pin is never
+# rendered for its digest by a reader of a verdict (D113).
+_MEASURED = "0" * 16
+
+
+def _fitted(
+    bundle: Bundle,
+    assignment: Assignment,
+    identity: HostIdentity,
+    context: _Context,
+    model: str,
+) -> _Context:
+    """`context` with its delivery fitted to `model`'s request ceiling
+    (D116, N157), less `RETRY_RESERVE_BYTES`: `selection.pack_view` over the
+    node's first-attempt prompt, measured as the request `model` is sent.
+
+    The gate starts from its pin under `GATE_SOURCE_BYTES` (§98), a consumer
+    from its T8 selection; a pack that cannot fit refuses
+    `CONTEXT_OVER_CEILING` before any attempt or reservation. Measured at
+    ordinal 1, so every attempt, its pre-call check and its replay fit alike;
+    a pack that already fits is unchanged."""
+    gate = assignment.module_id == GATE_MODULE
+    authority = delivered_authority(bundle, assignment.module_id)
+    measured_as = replace(identity, ordinal=1)
+
+    def measure(shown: list[Delivery], maps: dict[UUID, dict[str, int]]) -> int:
+        view = replace(
+            context,
+            delivered=shown,
+            selection=replace(context.selection, page_maps=maps),
+            measured_tag=_MEASURED,
+        )
+        prompt = _prompt(bundle, assignment, measured_as, view, authority)
+        return len(encode_request(model, prompt, json_object=True))
+
+    shown, maps = pack_view(
+        context.pin if gate else context.delivered,
+        measure,
+        request_ceiling(model) - RETRY_RESERVE_BYTES,
+        # Read at the call, as `gate_view` reads it.
+        source_bound=evidence_selection.GATE_SOURCE_BYTES if gate else None,
+    )
+    basis = (Basis.PAGE_MAP if maps else Basis.WHOLE_NO_DEMAND) if gate else None
+    selection = replace(
+        context.selection,
+        basis=basis or context.selection.basis,
+        page_maps=maps,
+    )
+    return replace(context, delivered=shown, selection=selection)
 
 
 def _prompt_context(
@@ -739,6 +923,9 @@ def _prompt_context(
     """`_context` for a prompt about to be priced or sent: with the lines a
     node's guided retry carries (D30, D82). Replay and the readers never
     build a prompt, so they never pay for the ledger read this adds."""
+    if assignment.model is None:
+        # A prompt is built for a call, and a call has a model (D116).
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     context = _context(conn, blobs, bundle, assignment, identity)
     fed = _feedback_body(conn, blobs, assignment)
     if fed is None:
@@ -748,6 +935,7 @@ def _prompt_context(
     contract, pathways = _contract(bundle), catalog(bundle)
     host = (
         *_demand_lines(bundle, assignment, context, body),
+        *_coverage_lines(assignment, context, body),
         *_owner_lines(bundle, assignment, context, body),
         _anchoring_line(conn, context.delivered, answer_citations(body)),
         readiness_set_line(
@@ -796,6 +984,52 @@ def _demand_faults(
         if module in consumers
         and (fault := demand_fault(members, cell, last_pages=last_pages)) is not None
     ]
+
+
+def _coverage_faults(
+    assignment: Assignment, context: _Context, markdown: bytes
+) -> list[CoverageFault]:
+    """The gate's P5 claims that give a wholly delivered source fewer pages
+    than the host delivered of it (D112): `coverage_faults` over each source
+    not shown as a page map, by its last delivered page. Empty for every
+    other module. Pure over the pin and the answer, so the live call and
+    `replay_billed` agree."""
+    if assignment.module_id != GATE_MODULE or context.source_set is None:
+        return []
+    maps = context.selection.page_maps
+    lines_of: dict[UUID, list[tuple[int, str]]] = {}
+    for item in context.delivered:
+        if item.source_id not in maps:
+            lines_of.setdefault(item.source_id, []).append((item.page, item.text.value))
+    last_pages = {s: max(page for page, _ in lines) for s, lines in lines_of.items()}
+    headed = {s: heading_pages(lines) for s, lines in lines_of.items()}
+    return coverage_faults(markdown.decode("utf-8", "replace"), last_pages, headed)
+
+
+def _coverage_lines(assignment: Assignment, context: _Context, body: str) -> list[str]:
+    """The gate retry's lines for its refused answer's short P5 claims (D112):
+    the source by id and filename, the pages delivered and the last heading
+    line delivered, bounded like a vendor message (`coverage_message` keeps
+    it within the cut); without the heading where the boundary refuses it."""
+    markdown = answer_markdown(body)
+    if markdown is None or context.source_set is None:
+        return []
+    names = {m.source_id: _printable(m.filename) for m in context.source_set.members}
+    lines: list[str] = []
+    for fault in _coverage_faults(assignment, context, markdown):
+        heading = last_heading(
+            (d.page, d.text.value)
+            for d in context.delivered
+            if d.source_id == fault.source_id
+        )
+        name = names.get(fault.source_id, "")
+        # A heading the boundary refuses (`hides_text`) costs only itself.
+        line = _bounded(
+            "host coverage check", coverage_message(fault, name, heading)
+        ) or _bounded("host coverage check", coverage_message(fault, name, None))
+        if line:
+            lines.append(line)
+    return lines
 
 
 # What a retry is told of each T8 item at fault (F497), after the row and the
@@ -1050,7 +1284,10 @@ def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
     `SECOND_ATTEMPT_CODES`, while the node holds at most `GUIDED_RETRIES` such
     refusals -- so its 2nd, 3rd and 4th attempts are told of the 1st, 2nd and 3rd, and
     every later attempt is an ordinary one. Read from the ledger, so a crash
-    between a refusal and its retry changes nothing."""
+    between a refusal and its retry changes nothing. A drop the provider
+    declared is passed over (D110): it answered nothing, so the attempt
+    after it repeats the guided retry it replaced and spends none."""
+    attempts = [a for a in attempts if not declared_drop(a)]
     refused = [a for a in attempts if a.refusal in SECOND_ATTEMPT_CODES]
     if not refused or len(refused) > GUIDED_RETRIES or attempts[-1] != refused[-1]:
         return None
@@ -1063,6 +1300,27 @@ def second_attempt_due(
     """Whether this node's next attempt is a guided retry (D30, D82)."""
     with execution_reads(conn):
         return _feedback_source(node_attempts(conn, run_id, route_node_id)) is not None
+
+
+def reattempts_a_drop(attempts: Sequence[NodeAttempt]) -> bool:
+    """Whether a node with these attempts, oldest first, is owed its
+    automatic re-attempt of a drop (D110): its latest attempt is a drop the
+    provider declared, unexplained or explained `PROVIDER_UNAVAILABLE`, and
+    the node holds at most `DROP_REATTEMPTS` such drops in all. Counted on
+    the call outcome, not its explanation, so a crash between the two
+    changes nothing; a guided retry neither spends one nor is spent."""
+    if not attempts:
+        return False
+    drops = sum(1 for a in attempts if declared_drop(a))
+    return declared_drop(attempts[-1]) and drops <= DROP_REATTEMPTS
+
+
+def drop_reattempt_due(
+    conn: StoreConnection, *, run_id: UUID, route_node_id: str
+) -> bool:
+    """Whether the ledger owes this node its re-attempt of a drop (D110)."""
+    with execution_reads(conn):
+        return reattempts_a_drop(node_attempts(conn, run_id, route_node_id))
 
 
 def _feedback_body(
@@ -1326,6 +1584,7 @@ def _prompt(
         page_maps=context.selection.page_maps,
         retry_feedback=context.feedback,
         refused_answer=context.refused_answer,
+        pack_tag=context.measured_tag or evidence_tag(context.pin or context.delivered),
     )
 
 
@@ -1337,7 +1596,8 @@ def _sent_prompt(
 ) -> str:
     """The prompt `prompt_of` builds, less the refused answer a guided retry
     would carry when carrying it puts the request `provider` sends past
-    `MAX_REQUEST_BYTES`, the transport ceiling a reservation is priced under,
+    its model's `request_ceiling` (D116; at most `MAX_REQUEST_BYTES`, the
+    transport ceiling a reservation is priced under),
     or past what `affords` says the run can pay for that many bytes (D104):
     that retry asks for the whole answer again instead, which the ceiling may
     still cover, rather than being lost to `BUDGET_CEILING_REACHED`. The
@@ -1350,7 +1610,7 @@ def _sent_prompt(
     if context.refused_answer is None:
         return prompt
     size = len(provider.request_bytes(prompt, json_object=True))
-    if size <= MAX_REQUEST_BYTES and affords(size):
+    if size <= request_ceiling(provider.model) and affords(size):
         return prompt
     return prompt_of(replace(context, refused_answer=None))
 
@@ -1522,7 +1782,10 @@ def replay_billed(  # noqa: PLR0913 -- one run's nodes, keyword-only
             continue
         attempt_id = UUID(str(attempt))
         body = _stored_body(blobs, str(diagnostic))
-        assignment = Assignment(node.module_id, run_id, node, route, attempt_id)
+        # Fitted to the model the call went to, as its call was (D116).
+        assignment = Assignment(
+            node.module_id, run_id, node, route, attempt_id, model=str(model)
+        )
         check_attempt(
             conn,
             attempt_id=attempt_id,
@@ -1532,6 +1795,14 @@ def replay_billed(  # noqa: PLR0913 -- one run's nodes, keyword-only
         _stored_identity(
             conn, assignment, bundle, adapter=methodology.CANONICAL_ADAPTER_VERSION
         )
+        # Refused as the live call was, never accepted: a crash between the
+        # bill and its explanation leaves it here (R2.6).
+        if not _settled_within(reserved_for(conn, attempt_id), charge):
+            return Replayed(
+                attempt_id,
+                Verdict.REFUSED,
+                code=RefusalCode.BUDGET_CHARGE_OVER_RESERVATION,
+            )
         try:
             judged = _replayed_answer(conn, blobs, bundle, assignment, body)
         except Refusal as refusal:
@@ -1607,7 +1878,8 @@ def _replayed_answer(
     assignment: Assignment,
     body: str | None,
 ) -> tuple[bytes, bytes] | BlockedAnswer:
-    """`_answer` over a stored body, with the context its call was built from."""
+    """`_answer` over a stored body, with the context its call was built from:
+    fitted to the model the call outcome names, the one it was sent to."""
     if body is None:
         raise Refusal(RefusalCode.PROVIDER_RESPONSE_INVALID)
     # An unaccepted attempt has no record, so its call named its blocking

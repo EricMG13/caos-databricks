@@ -839,15 +839,17 @@ completeness and machine use. Moving a table to the appendix never authorizes
 summarisation, deletion, recalculation, or analytical rewriting.
 
 Register binding (what `completeness_check.py` reads): a register table is
-found by the nearest of the four non-blank lines directly above its header
-row that names a register ID (`#### T6 — Evidence Trace`), headings before
-captions. Failing that, the nearest heading above the table finds it at any
+found by the four non-blank lines directly above its header row: the nearest
+that opens with a register ID (`#### T6 — Evidence Trace`,
+`**T6 — Evidence Trace**`), else the nearest that names one, headings before
+captions each time.
+Failing that, the nearest heading above the table finds it at any
 distance, when that heading names the ID, no other table lies between them
 and no table is found for the ID the first way. The first table found keeps
-the ID, except that a table under a heading opening with the ID takes it
-from one found only by a caption that mentions the ID without opening with
-it. Write the heading, at most the table-id comment, then the table, and put
-any note below the table.
+the ID, except that a table under a heading or caption opening with the ID
+takes it from one found only by a line that mentions the ID without opening
+with it. Write the heading, at most the table-id comment, then the table,
+and put any note below the table.
 
 #### Required analytical table fields
 (Inherited from CP_REASONING_STANDARD_v2.0.txt and CP_CORE_SYSTEM_PROMPT_v2.1.txt)

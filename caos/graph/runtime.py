@@ -19,8 +19,9 @@ lived to record it (`caos/store/budget.py`).
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -48,6 +49,7 @@ from caos.methodology.canonical import (
     Replayed,
     Verdict,
     accepted_projections,
+    drop_reattempt_due,
     replay_billed,
     second_attempt_due,
     unexplained_charge,
@@ -55,6 +57,7 @@ from caos.methodology.canonical import (
 from caos.methodology.invocation import named_objects
 from caos.methodology.verification import AcceptedRow
 from caos.pricing import ModelPrice, bills_at, priced_request, worst_case
+from caos.provider import context_notice
 from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import StoreConnection
 from caos.store.budget import ceiling_of, reserve
@@ -62,6 +65,7 @@ from caos.store.gates import execution_input
 
 # `artifact_digests` is re-exported: it now lives in the store (no import cycle).
 from caos.store.outcomes import (
+    DROP_REATTEMPTS,
     accepted_rows,
     execution_reads,
     record_refusal,
@@ -180,6 +184,12 @@ def run_route(
     if not bills_at(execution.provider, execution.price):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     _affordable(conn, run_id, execution.price)
+    # D116: a model with no declared context runs under the transport
+    # ceiling alone, and the run says so once, by the endpoint's name. One
+    # write; a stderr that cannot take it is passed over (F513's fail-open).
+    if (notice := context_notice(execution.provider.model)) is not None:
+        with suppress(Exception):  # fail-open, as F513's line (D116)
+            sys.stderr.write(notice + "\n")
     route = _execution_route(conn, run_id, route, execution.bundle)
     # Read once from verified bundle bytes, handed to the pure engine (§46.1).
     named = named_objects(execution.bundle, route)
@@ -385,25 +395,39 @@ def _with_second_attempt(
     `GUIDED_RETRIES` of them (D82): the node's pass runs once more, and the
     ledger, not this frame, says the attempt it makes is one -- reserved and
     priced like any other, carrying what the checks reported on the attempt
-    before it. A refusal the ledger gives no retry, or any other code, is
-    raised; a retry the ceiling cannot pay for leaves the refusal before it
-    standing, since that is what the answer was. The passes are bounded here
-    too, so a refusal that wrote no attempt cannot loop.
+    before it. A call the provider declared failed before it answered
+    (`PROVIDER_UNAVAILABLE`, a declared drop) earns the node one automatic
+    re-attempt in all (D110), gated the same way: a fresh attempt and a
+    fresh reservation beside the dropped one's, which is never released.
+    A refusal the ledger gives nothing, or any other code, is raised; a
+    retry the ceiling cannot pay for leaves the refusal before it standing,
+    since that is what the call was. The passes are bounded here too, so a
+    refusal that wrote no attempt cannot loop.
     """
     standing: list[RefusalCode] = []
-    for _pass in range(1 + GUIDED_RETRIES):
+    for _pass in range(1 + GUIDED_RETRIES + DROP_REATTEMPTS):
         try:
             return one_pass(route_node_id)
         except Refusal as refused:
             unpaid = refused.code is RefusalCode.BUDGET_CEILING_REACHED
             if standing and unpaid:
                 break
-            if refused.code not in SECOND_ATTEMPT_CODES or not _second_due(
-                conn, run_id, route_node_id
-            ):
+            if not _again(conn, run_id, route_node_id, refused.code):
                 raise
             standing.append(refused.code)
     raise Refusal(standing[-1])
+
+
+def _again(
+    conn: StoreConnection, run_id: UUID, route_node_id: str, code: RefusalCode
+) -> bool:
+    """Whether the ledger runs this node's pass once more after `code`: a
+    guided retry (D30, D82) or the re-attempt of a declared drop (D110)."""
+    if code in SECOND_ATTEMPT_CODES:
+        return _second_due(conn, run_id, route_node_id)
+    if code is RefusalCode.PROVIDER_UNAVAILABLE:
+        return _drop_due(conn, run_id, route_node_id)
+    return False
 
 
 def _second_due(conn: StoreConnection, run_id: UUID, route_node_id: str) -> bool:
@@ -411,6 +435,16 @@ def _second_due(conn: StoreConnection, run_id: UUID, route_node_id: str) -> bool
     store that cannot say leaves the original refusal standing."""
     try:
         return second_attempt_due(conn, run_id=run_id, route_node_id=route_node_id)
+    except Refusal:
+        return False
+
+
+def _drop_due(conn: StoreConnection, run_id: UUID, route_node_id: str) -> bool:
+    """Whether the ledger owes this node its re-attempt of a declared drop
+    (D110). A store that cannot say leaves the drop standing: no call is
+    made that the ledger did not give."""
+    try:
+        return drop_reattempt_due(conn, run_id=run_id, route_node_id=route_node_id)
     except Refusal:
         return False
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import http.server
 import json
 import os
+import queue
 import re
 import subprocess
 import threading
@@ -380,6 +381,194 @@ def test_e10_passes_only_on_a_call_the_gateway_answered() -> None:
     assert enterprise_deploy.call_verdict(run(work={"state": "CLAIMED"})) is None
     assert enterprise_deploy.call_verdict({"body": {"run": None}}) is None
     assert enterprise_deploy.call_verdict("not a document") is None
+
+
+_RUNNING = {"body": {"run": {"status": "RUNNING", "work": {"state": "CLAIMED"}}}}
+_ACCEPTED = {"body": {"run": {"status": "RUNNING", "attempts": [{"accepted": True}]}}}
+
+
+type _Reopened = tuple[queue.Queue[bytes] | None, str]
+
+
+def _lines_of(*lines: bytes) -> queue.Queue[bytes]:
+    """A tail's lines as `_lines` hands them over, `b""` where it closed."""
+    tail: queue.Queue[bytes] = queue.Queue()
+    for line in lines:
+        tail.put(line)
+    return tail
+
+
+def test_e10_reopens_a_tail_the_server_closed_from_its_last_event_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D117: the app closes every event-stream tail at `TAIL_DEADLINE` (300 s)
+    and a call may run `TIMEOUT_SECONDS` (720 s), so E10 took the first
+    tail's close as its answer and failed at about 300 s naming a 740 s wait.
+    A closed tail is reopened with `Last-Event-ID`, as a browser does, and the
+    run is read again on the next tail's event."""
+    from caos.api.app import TAIL_DEADLINE
+
+    assert TAIL_DEADLINE < enterprise_deploy.MODEL_CALL_SECONDS, "E10 spans tails"
+    reads = iter([_RUNNING, _RUNNING, _ACCEPTED])
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, next(reads))
+    )
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.0)
+    first = _lines_of(
+        b"retry: 500\n", b"id: 4\n", b"\n", b":\n", b"\n",
+        b"id: 5\n", b"event: progress\n", b"data: {}\n", b"\n", b"",
+    )  # fmt: skip
+    second = _lines_of(b"id: 6\n", b"event: progress\n", b"data: {}\n", b"\n")
+    reopened: list[str | None] = []
+
+    def reopen(after: str | None, seconds: float) -> _Reopened:
+        reopened.append(after)
+        return second, ""
+
+    verdict = enterprise_deploy._answered("http://x", "/r", {}, first, reopen)
+    assert verdict[0] == 0, verdict
+    assert reopened == ["5"]
+
+
+def test_e10_waits_its_own_budget_across_tails_and_no_longer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tails that keep closing are reopened until `MODEL_CALL_SECONDS` runs
+    out, not answered at the first close; then the row fails naming it."""
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, _RUNNING)
+    )
+    monkeypatch.setattr(enterprise_deploy, "MODEL_CALL_SECONDS", 0.4)
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.05)
+    reopened: list[str | None] = []
+
+    def reopen(after: str | None, seconds: float) -> _Reopened:
+        reopened.append(after)
+        return _lines_of(b""), ""
+
+    started = time.monotonic()
+    verdict = enterprise_deploy._answered("http://x", "/r", {}, _lines_of(b""), reopen)
+    took = time.monotonic() - started
+    assert verdict == (
+        1,
+        "no model call answered within 0.4s (the run read answered 200)",
+    )
+    assert took >= 0.4 - enterprise_deploy.RECONNECT_PAUSE_SECONDS
+    assert len(reopened) >= 2 and set(reopened) == {None}
+    assert took < 2.0
+
+
+def test_e10_fails_when_a_reopened_tail_is_not_an_event_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reconnect the proxy answers with a sign-in redirect is a failed row
+    naming what came back, never a silent wait."""
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, _RUNNING)
+    )
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.0)
+    note = "status 302, content-type 'text/html': not an event stream"
+    verdict = enterprise_deploy._answered(
+        "http://x", "/r", {}, _lines_of(b""), lambda _after, _left: (None, note)
+    )
+    assert verdict == (1, f"the event stream reopened as {note}")
+
+
+def test_e10_reads_the_run_once_more_after_a_reopen_that_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D117 round 2: the run may decide while a reopen is paused or refused,
+    so a failed reopen is followed by one last run read before the verdict."""
+    reads = iter([_RUNNING, _ACCEPTED])
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, next(reads))
+    )
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.0)
+    verdict = enterprise_deploy._answered(
+        "http://x", "/r", {}, _lines_of(b""), lambda _after, _left: (None, "302")
+    )
+    assert verdict[0] == 0, verdict
+
+
+def test_e10_bounds_each_reopen_by_the_time_left(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D117 round 2: a reopen once waited up to the whole `MODEL_CALL_SECONDS`
+    on its socket, whatever was left of E10's wait. Each is given only the
+    time left, so the row ends within the wait."""
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, _RUNNING)
+    )
+    monkeypatch.setattr(enterprise_deploy, "MODEL_CALL_SECONDS", 0.5)
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.05)
+    given: list[float] = []
+
+    def reopen(after: str | None, seconds: float) -> _Reopened:
+        given.append(seconds)
+        return _lines_of(b""), ""
+
+    enterprise_deploy._answered("http://x", "/r", {}, _lines_of(b""), reopen)
+    assert len(given) >= 2
+    assert all(0 < left <= 0.5 - 0.05 for left in given), given
+    assert given == sorted(given, reverse=True), "the time left only falls"
+
+
+def test_e10_a_reopen_that_hangs_ends_with_the_wait_and_reads_the_run_last(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A proxy that accepts the reconnect and never answers: the reopen's
+    socket gives up when E10's wait does, not `MODEL_CALL_SECONDS` later,
+    and the run is still read once more, so a call answered meanwhile passes."""
+    import socket
+
+    reads = iter([_RUNNING, _ACCEPTED])
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, next(reads))
+    )
+    monkeypatch.setattr(enterprise_deploy, "MODEL_CALL_SECONDS", 1.5)
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.1)
+    with socket.socket() as hung:
+        hung.bind(("127.0.0.1", 0))
+        hung.listen(4)
+        url = f"http://127.0.0.1:{hung.getsockname()[1]}"
+        first: queue.Queue[bytes] = queue.Queue()
+        closer = threading.Timer(0.8, lambda: first.put(b""))
+        closer.start()
+        started = time.monotonic()
+        verdict = enterprise_deploy._answered(
+            url,
+            "/r",
+            {},
+            first,
+            lambda after, left: enterprise_deploy._tail(url, "/e", {}, after, left),
+        )
+        took = time.monotonic() - started
+    closer.join()
+    assert verdict[0] == 0, verdict
+    assert took < 1.5 + 0.5, took
+
+
+def test_e10_resumes_after_the_last_complete_frame_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An `id` line the tail closed before its frame ended was never
+    dispatched; resuming after it would skip that event."""
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, _RUNNING)
+    )
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.0)
+    after: list[str | None] = []
+
+    def reopen(cursor: str | None, seconds: float) -> _Reopened:
+        after.append(cursor)
+        return None, "stop"
+
+    cut = _lines_of(
+        b"id: 7.8\n", b"event: run_progress\n", b"data: {}\n", b"\n",
+        b"id: 7.9\n", b"",
+    )  # fmt: skip
+    enterprise_deploy._answered("http://x", "/r", {}, cut, reopen)
+    assert after == ["7.8"]
 
 
 def _only_the_kind_s_own(
@@ -906,3 +1095,43 @@ def test_open_forwards_the_query_string() -> None:
         server.server_close()
     assert status == 200
     assert seen == ["/api/v1/cases/x/events?run=abc"]
+
+
+def test_a_reopened_tail_resumes_after_the_last_event_id() -> None:
+    """D117: E10's reconnect sends `Last-Event-ID`, so the app's tail resumes
+    after the last event E10 saw rather than replaying the run from its start;
+    the first open sends none, and an answer that is not an event stream is
+    named, never read as one."""
+    seen: list[str | None] = []
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
+
+        def do_GET(self) -> None:
+            seen.append(self.headers.get("last-event-id"))
+            stream = len(seen) < 3
+            self.send_response(200 if stream else 302)
+            kind = "text/event-stream" if stream else "text/html"
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url, events = f"http://127.0.0.1:{server.server_port}", "/e?run=r"
+        first = enterprise_deploy._tail(url, events, {}, None)
+        again = enterprise_deploy._tail(url, events, {}, "5")
+        refused = enterprise_deploy._tail(url, events, {}, "6")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert seen == [None, "5", "6"]
+    assert first[0] is not None and again[0] is not None
+    assert first[0].get(timeout=5) == b"", "an empty tail is a closed one"
+    assert refused == (
+        None,
+        "status 302, content-type 'text/html': not an event stream",
+    )

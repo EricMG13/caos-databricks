@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 from fake_chat import MODEL, PRICE, ScriptedChat, StatusError, answer, fake_completions
 from langchain_core.language_models import BaseChatModel
+from openai import OpenAIError
 
 from caos import models
 from caos.models import (
@@ -22,6 +23,7 @@ from caos.pricing import ModelPrice, price_from_environment
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
     MAX_REQUEST_BYTES,
+    DropKind,
     finish_refusal,
     reported_charge,
 )
@@ -68,21 +70,22 @@ def test_a_finish_reason_other_than_stop_is_a_refusal_with_its_bill(
 
 
 @pytest.mark.parametrize(
-    "failure,code",
+    "failure,code,drop",
     [
-        (StatusError(402), RefusalCode.PROVIDER_CALL_INVALID),
-        (StatusError(429), RefusalCode.PROVIDER_UNAVAILABLE),
-        (StatusError(503), RefusalCode.PROVIDER_UNAVAILABLE),
-        (TimeoutError("private"), RefusalCode.PROVIDER_UNAVAILABLE),
-        (ValueError("private"), RefusalCode.PROVIDER_UNAVAILABLE),
+        (StatusError(402), RefusalCode.PROVIDER_CALL_INVALID, DropKind.VENDOR),
+        (StatusError(429), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.DECLARED),
+        (StatusError(503), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.DECLARED),
+        (TimeoutError("private"), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED),
+        (ValueError("private"), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED),
     ],
 )
 def test_a_vendor_failure_maps_to_its_status_class_and_carries_no_text(
-    failure: Exception, code: RefusalCode
+    failure: Exception, code: RefusalCode, drop: DropKind
 ) -> None:
+    """...and says how it ended (D110): a status is the provider's own word."""
     provider = fake_completions(ScriptedChat(answer=failure))
     completion = provider.complete(PROMPT)
-    assert completion == completion.__class__(None, None, None, code)
+    assert completion == completion.__class__(None, None, None, code, drop)
     assert "private" not in repr(completion)
 
 
@@ -192,7 +195,7 @@ def test_the_production_model_is_chat_databricks_on_the_endpoint(
     assert seen == {
         "endpoint": "databricks-claude-opus-5",
         "max_tokens": 65536,
-        "timeout": 420.0,
+        "timeout": 720.0,
         "max_retries": 0,
         # The process's bounded client (CR-6), not the library's default one
         # with the SDK's five-minute discovery budget.
@@ -273,7 +276,11 @@ def test_the_chat_model_carries_the_socket_deadline_and_never_retries(
     from caos.models import chat_model
     from caos.provider import TIMEOUT_SECONDS
 
-    assert TIMEOUT_SECONDS == 420.0, "a generation budget inside the lease (D83)"
+    assert TIMEOUT_SECONDS == 720.0, "a generation budget inside the lease (D117)"
+    # databricks-sdk 0.140 probes `/.well-known/databricks-config` in
+    # `Config.__init__` and retries for its default budget (about 300 s) against
+    # a host nobody serves; this test is about the chat model, not discovery.
+    monkeypatch.setattr(Config, "_resolve_host_metadata", lambda _self: None)
     client = WorkspaceClient(config=Config(host="http://127.0.0.1:9", token="t"))
     monkeypatch.setattr("caos.workspace.workspace_client", lambda: client)
     chat = chat_model(endpoint="databricks-x")
@@ -390,7 +397,7 @@ def test_whatever_the_client_raises_once_sent_is_indeterminate_not_untyped() -> 
     ):
         completion = fake_completions(ScriptedChat(answer=raised)).complete(PROMPT)
         assert completion == completion.__class__(
-            None, None, None, RefusalCode.PROVIDER_UNAVAILABLE
+            None, None, None, RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED
         )
         assert "private" not in repr(completion)
 
@@ -412,28 +419,42 @@ def test_one_deadline_bounds_the_whole_call_and_the_lease_outlives_it(
         clock["t"] += seconds
 
     monkeypatch.setattr(models, "_sleep", waited)
+    # Each 429 arrives a quarter of the deadline late (100 s of 420 before
+    # D117): one capped wait leaves the re-send floor, two do not, so the
+    # deadline rather than `RATE_LIMIT_TRIES` is what stops the third try.
+    late = TIMEOUT_SECONDS / 4
+    cap = models.RETRY_AFTER_CAP_SECONDS
+    assert late + cap <= TIMEOUT_SECONDS - models.MIN_RESEND_SECONDS
+    assert 2 * (late + cap) > TIMEOUT_SECONDS - models.MIN_RESEND_SECONDS
 
     def slow_limit(prompt: str) -> object:
-        clock["t"] += 100.0  # each 429 arrives late
+        clock["t"] += late
         return _Limited(str(models.RETRY_AFTER_CAP_SECONDS))
 
     chat = ScriptedChat(answer=slow_limit)
     completion = fake_completions(chat).complete(PROMPT)
     assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
-    assert chat.calls == 2, "the third try would have outlived the deadline"
+    assert chat.calls == 2, "the re-send floor stops the third try"
     worst = clock["t"]
     assert worst <= TIMEOUT_SECONDS
-    assert LEASE_SECONDS - TIMEOUT_SECONDS >= 180.0, "the liveness budget (D83)"
+    assert LEASE_SECONDS - TIMEOUT_SECONDS >= 180.0, "the margin (D83, F485, D117)"
     assert WORKER_STALE_AFTER >= TIMEOUT_SECONDS + 60.0
 
 
 def test_the_deploy_waits_longer_than_the_provider_call() -> None:
-    """D83: E10's wait for a model call outlasts the call's own deadline."""
+    """D83: E10's wait for a model call outlasts the call's own deadline.
+    D117: it also outlasts the app's event-stream tail, which closes at
+    `TAIL_DEADLINE`, so E10 reopens a closed tail until its own wait ends
+    (`tests/test_enterprise_deploy.py`
+    `::test_e10_reopens_a_tail_the_server_closed_from_its_last_event_id`)."""
     import enterprise_deploy
 
+    from caos.api.app import TAIL_DEADLINE
     from caos.provider import TIMEOUT_SECONDS
 
     assert enterprise_deploy.MODEL_CALL_SECONDS > TIMEOUT_SECONDS
+    assert enterprise_deploy.MODEL_CALL_SECONDS > TAIL_DEADLINE, "spans tails"
+    assert enterprise_deploy.RECONNECT_PAUSE_SECONDS < TAIL_DEADLINE
 
 
 def test_no_re_send_starts_once_the_wait_and_the_fence_spent_the_deadline(
@@ -477,10 +498,10 @@ def test_no_re_send_starts_once_the_wait_and_the_fence_spent_the_deadline(
 @pytest.mark.parametrize(
     ("limited_at", "wait", "sent"),
     [
-        pytest.param(330.0, "2", 1, id="ninety-seconds-left"),
-        pytest.param(417.0, "2", 1, id="three-seconds-left"),
-        pytest.param(208.0, "2", 2, id="exactly-the-floor-left-after-the-wait"),
-        pytest.param(208.5, "2", 1, id="just-short-of-the-floor"),
+        pytest.param(630.0, "2", 1, id="ninety-seconds-left"),
+        pytest.param(717.0, "2", 1, id="three-seconds-left"),
+        pytest.param(358.0, "2", 2, id="exactly-the-floor-left-after-the-wait"),
+        pytest.param(358.5, "2", 1, id="just-short-of-the-floor"),
         pytest.param(1.0, "20", 2, id="a-prompt-429-and-a-capped-wait"),
     ],
 )
@@ -491,13 +512,13 @@ def test_a_re_send_starts_only_with_the_time_a_generation_needs(
     deadline -- a 429 at second 150 and a two-second wait sent the request
     again with 88 s left, to be abandoned mid-generation at the deadline while
     the provider may still bill it. A re-send now needs `MIN_RESEND_SECONDS`
-    left after the wait, half the deadline (210 s of 420 since D83); the 120 s
+    left after the wait, half the deadline (360 s of 720 since D117); the 120 s
     whole-call deadline F89 measured as too short to deliver a few thousand
     tokens was half of the 240 before it. A wait that could
     not be followed by a re-send is not waited at all."""
     from caos.provider import TIMEOUT_SECONDS
 
-    assert models.MIN_RESEND_SECONDS == TIMEOUT_SECONDS / 2 == 210.0
+    assert models.MIN_RESEND_SECONDS == TIMEOUT_SECONDS / 2 == 360.0
     # Two capped waits leave more than the floor: a rate limit answered
     # promptly is still asked again every time it is allowed to be.
     waits = (models.RATE_LIMIT_TRIES - 1) * models.RETRY_AFTER_CAP_SECONDS
@@ -553,7 +574,7 @@ def test_an_answer_that_never_finishes_arriving_is_abandoned_at_the_deadline(
     assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
     assert completion.charge is None, "possibly billed: the reservation is kept"
     assert elapsed < 5
-    assert seam.TIMEOUT_SECONDS == 420.0
+    assert seam.TIMEOUT_SECONDS == 720.0
 
 
 def test_a_re_send_asks_every_installed_check_first() -> None:
@@ -693,3 +714,377 @@ def test_only_the_list_content_serializer_warning_is_contained() -> None:
     assert not [m for m in messages if "serializer warnings" in m], messages
     assert not [m for m in messages if "from the model" in m], messages
     assert "another warning, not contained" in messages
+
+
+class _Body(OpenAIError):
+    """A vendor error carrying an OpenRouter-shaped error body, as the client's
+    `APIError` does for an SSE `error` event; its words never travel."""
+
+    def __init__(self, body: object, status_code: int | None = None) -> None:
+        super().__init__("private")
+        self.body = body
+        if status_code is not None:
+            self.status_code = status_code
+
+
+_ROUTER_ERROR = {
+    "code": 502,
+    "message": "private upstream words",
+    "metadata": {"error_type": "provider_unavailable", "provider_code": "private"},
+}
+
+
+def _cut() -> Exception:
+    """The client's connection error for a reset mid-body: an
+    `APIConnectionError` caused by the transport's `RemoteProtocolError`
+    (httpx2, the transport the client builds by default)."""
+    import httpx2
+    from openai import APIConnectionError
+
+    failed = APIConnectionError(request=httpx2.Request("POST", "https://x.invalid"))
+    failed.__cause__ = httpx2.RemoteProtocolError("private")
+    return failed
+
+
+@pytest.mark.parametrize(
+    ("failure", "said"),
+    [
+        pytest.param(
+            _Body(_ROUTER_ERROR),
+            (
+                "call=vendor",
+                "class=_Body",
+                "status=-",
+                "error_code=502",
+                "error_type=provider_unavailable",
+            ),
+            id="mid-stream-error-event",
+        ),
+        pytest.param(
+            _Body({"error": _ROUTER_ERROR}, status_code=503),
+            ("call=vendor", "status=503", "error_code=502"),
+            id="status-error-with-a-wrapped-body",
+        ),
+        pytest.param(
+            TypeError(_ROUTER_ERROR),
+            (
+                "call=raised",
+                "class=TypeError",
+                "error_code=502",
+                "error_type=provider_unavailable",
+            ),
+            id="a-200-error-body-the-client-could-not-parse",
+        ),
+        pytest.param(
+            _cut(),
+            ("call=vendor", "class=APIConnectionError", "cause=RemoteProtocolError"),
+            id="a-reset-mid-body",
+        ),
+        pytest.param(
+            ValueError("private"),
+            ("call=raised", "class=ValueError", "error_code=-", "error_type=-"),
+            id="no-body",
+        ),
+    ],
+)
+def test_an_unanswered_call_names_its_class_on_stderr_and_no_text(
+    failure: Exception, said: tuple[str, ...], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F513: four live runs stopped PROVIDER_UNAVAILABLE with nothing to tell
+    a 200 carrying an error body from a reset, a 5xx or the deadline: the
+    seam swallowed every class into one code and kept no trace. One stderr
+    line now names the kind, the class and its cause, the status, the
+    provider's error code and type, and the seconds spent -- tokens only,
+    never the message, the body or the prompt."""
+    completion = fake_completions(ScriptedChat(answer=failure)).complete(PROMPT)
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    line = capsys.readouterr().err
+    assert line.startswith("PROVIDER_UNAVAILABLE ") and line.count("\n") == 1
+    for fact in (*said, "elapsed="):
+        assert fact in line, (fact, line)
+    assert "private" not in line and PROMPT not in line
+
+
+def test_a_call_abandoned_at_its_deadline_says_so_on_stderr(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F513: the deadline is told apart from a failure the client raised."""
+    import threading
+
+    monkeypatch.setattr(models, "TIMEOUT_SECONDS", 0.2)
+    released = threading.Event()
+
+    def dripping(prompt: str) -> object:
+        released.wait(10)
+        return answer(finish="stop")
+
+    completion = fake_completions(ScriptedChat(answer=dripping)).complete(PROMPT)
+    released.set()
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    line = capsys.readouterr().err
+    assert "call=deadline" in line and "class=-" in line
+
+
+def test_a_refused_status_says_its_code_and_an_answer_says_nothing(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A status the seam refuses as invalid is named under its own code; an
+    answered call writes nothing to stderr."""
+    fake_completions(ScriptedChat(answer=StatusError(402))).complete(PROMPT)
+    assert capsys.readouterr().err.startswith("PROVIDER_CALL_INVALID call=vendor ")
+    fake_completions(ScriptedChat(answer=answer(finish="stop"))).complete(PROMPT)
+    assert capsys.readouterr().err == ""
+
+
+def _said(failure: BaseException, capsys: pytest.CaptureFixture[str]) -> str:
+    """The stderr line one unanswered call writes, its refusal checked."""
+    chat = ScriptedChat(answer=_raising(failure))
+    completion = fake_completions(chat).complete(PROMPT)
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    return capsys.readouterr().err
+
+
+def _raising(failure: BaseException) -> object:
+    def raised(prompt: str) -> object:
+        raise failure
+
+    return raised
+
+
+@pytest.mark.parametrize(
+    ("code", "kind", "said"),
+    [
+        (502, None, "error_code=502 error_type=-"),
+        ("502", "timeout", "error_code=502 error_type=timeout"),
+        (
+            "Caesars-Entertainment-Senior-Secured-Notes-2031",
+            "Senior_Secured_Notes",
+            "error_code=? error_type=?",
+        ),
+        (10**5000, "server", "error_code=? error_type=server"),
+        (True, "provider_overloaded", "error_code=? error_type=provider_overloaded"),
+        (42, "error_type", "error_code=? error_type=?"),
+    ],
+    ids=["int", "str-and-type", "echoed-words", "huge-int", "bool", "header-word"],
+)
+def test_only_a_status_number_and_a_documented_error_type_are_written(
+    code: object, kind: object, said: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F513 audit: a provider that echoes input into `code` or `type` put
+    document words on stderr. `error_code` is three or four digits and
+    `error_type` one of OpenRouter's documented types; anything else is `?`."""
+    body: dict[str, object] = {"code": code, "message": "private"}
+    if kind is not None:
+        body["metadata"] = {"error_type": kind}
+    line = _said(ValueError(body), capsys)
+    assert said in line and "Caesars" not in line and "Senior" not in line
+
+
+def test_a_class_name_cannot_forge_or_garble_a_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """F513 audit: class and cause names pass the same token rule."""
+    forged = type("Boom\nPROVIDER_RESPONSE_INVALID call=forged", (Exception,), {})
+    escape = type("X\x1b[2Jcleared", (Exception,), {})
+    failure = forged("private")
+    failure.__cause__ = escape("private")
+    line = _said(failure, capsys)
+    assert line.count("\n") == 1 and "\x1b" not in line and "forged" not in line
+    assert "class=? cause=?" in line
+
+
+def test_the_line_is_one_write() -> None:
+    """F513 audit: `print` wrote the text and its newline separately, so two
+    threads' lines could interleave; the line is now one `write`."""
+    import io
+    import sys
+
+    class Writes(io.StringIO):
+        calls: list[str]
+
+        def write(self, text: str) -> int:
+            self.calls.append(text)
+            return len(text)
+
+    sink = Writes()
+    sink.calls = []
+    saved, sys.stderr = sys.stderr, sink
+    try:
+        fake_completions(ScriptedChat(answer=ValueError("private"))).complete(PROMPT)
+    finally:
+        sys.stderr = saved
+    assert len(sink.calls) == 1 and sink.calls[0].endswith("\n")
+    assert sink.calls[0].count("\n") == 1
+
+
+def test_the_held_failure_is_its_facts_not_the_exception() -> None:
+    """F513 audit: holding the exception tied the raising frame -- and the
+    prompt it holds -- into a cycle that outlived `complete` until a
+    collection. Only its facts are kept, so the frame goes with the call."""
+    import gc
+    import weakref
+
+    class Marker:
+        pass
+
+    held: list[weakref.ref[Marker]] = []
+
+    def raised(prompt: str) -> object:
+        marker = Marker()
+        held.append(weakref.ref(marker))
+        raise ValueError("private")
+
+    gc.collect()
+    gc.disable()
+    try:
+        fake_completions(ScriptedChat(answer=raised)).complete(PROMPT)
+        assert held[0]() is None, "the raising frame outlived the call"
+    finally:
+        gc.enable()
+
+
+class _OnlyExceptions(BaseExceptionGroup):
+    """A `BaseExceptionGroup` subclass holding only `Exception`s: not itself
+    an `Exception`, but what `suppress(Exception)` splits and swallows."""
+
+
+@pytest.mark.parametrize(
+    ("make", "kind", "escapes"),
+    [
+        pytest.param(
+            lambda: _OnlyExceptions("g", [ValueError("private")]),
+            "raised",
+            False,
+            id="a-base-group-of-exceptions",
+        ),
+        pytest.param(
+            lambda: ExceptionGroup("g", [ValueError("private")]),
+            "raised",
+            False,
+            id="an-exception-group",
+        ),
+        pytest.param(
+            lambda: BaseExceptionGroup("g", [ValueError("p"), KeyboardInterrupt()]),
+            "escaped",
+            True,
+            id="a-mixed-group",
+        ),
+        pytest.param(
+            lambda: __import__("asyncio").CancelledError("private"),
+            "escaped",
+            True,
+            id="a-cancel",
+        ),
+    ],
+)
+def test_what_is_held_back_is_what_suppress_exception_held_back(
+    make: object,
+    kind: str,
+    escapes: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """F513 audit: the sender holds back exactly what `suppress(Exception)`
+    did on 3.13, an exception group's split included; whatever it does not
+    hold back still ends the sender thread as before, and is named
+    `escaped`, never `deadline`."""
+    import threading
+
+    hooked: list[str] = []
+    monkeypatch.setattr(
+        threading,
+        "excepthook",
+        lambda args: hooked.append(type(args.exc_value).__name__),
+    )
+    assert callable(make)
+    failure = make()
+    line = _said(failure, capsys)
+    assert f"call={kind} class={type(failure).__name__} " in line
+    assert bool(hooked) is escapes
+
+
+@pytest.mark.parametrize(
+    ("stated", "shown"),
+    [
+        (None, "-"),
+        (100, "100"),
+        (99, "?"),
+        (9999, "9999"),
+        (10000, "?"),
+        ("502", "502"),
+        ("1000", "1000"),
+        ("01000", "?"),
+        ("00000502", "?"),
+        ("5O2", "?"),
+        ("\u0665\u0660\u0662", "?"),
+    ],
+)
+def test_a_status_is_three_or_four_digits(stated: object, shown: str) -> None:
+    """F513 audit: what `status` and `error_code` may show, at each bound."""
+    assert models._status(stated) == shown
+
+
+def test_the_causes_are_the_first_three_links_of_the_chain(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Explicit causes and implicit contexts are both followed, three deep."""
+    first, second, third, fourth, fifth = (
+        KeyError("private"),
+        OSError("private"),
+        LookupError("private"),
+        EOFError("private"),
+        MemoryError("private"),
+    )
+    first.__cause__ = second
+    second.__context__ = third
+    third.__cause__ = fourth
+    fourth.__cause__ = fifth
+    line = _said(first, capsys)
+    assert "class=KeyError cause=OSError<LookupError<EOFError status=" in line
+    assert "MemoryError" not in line
+    assert "cause=- " in _said(ValueError("private"), capsys)
+
+
+def test_an_unreadable_failure_is_written_as_unknown(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failure whose facts raise when read is written as all `?`."""
+
+    class Unreadable(Exception):
+        @property
+        def body(self) -> object:
+            raise RuntimeError("private")
+
+    line = _said(Unreadable("private"), capsys)
+    assert "call=raised class=? cause=? status=? error_code=? error_type=? " in line
+
+
+def test_an_unwritable_stderr_drops_the_line_not_the_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The write is a fail-open: the refusal stands whatever stderr does."""
+    import io
+    import sys
+
+    class Unwritable(io.StringIO):
+        def write(self, text: str) -> int:
+            raise BrokenPipeError(32, "private")
+
+    monkeypatch.setattr(sys, "stderr", Unwritable())
+    for failure in (ValueError("private"), StatusError(503)):
+        completion = fake_completions(ScriptedChat(answer=failure)).complete(PROMPT)
+        assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+
+
+def test_the_seconds_are_those_since_the_first_send(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    clock = {"t": 100.0}
+    monkeypatch.setattr(models, "_clock", lambda: clock["t"])
+
+    def slow(prompt: str) -> object:
+        clock["t"] += 3.5
+        raise ValueError("private")
+
+    fake_completions(ScriptedChat(answer=slow)).complete(PROMPT)
+    assert capsys.readouterr().err.endswith(" elapsed=3.5\n")

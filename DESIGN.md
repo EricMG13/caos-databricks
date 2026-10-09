@@ -27,14 +27,25 @@ labels. Dense is allowed. Disorganised is not.
 The theme lives in `frontend/src/styles/tokens.css` (D35–D37): shadcn's
 semantic tokens (`--background`, `--foreground`, `--card`, `--popover`,
 `--primary`, `--secondary`, `--muted`, `--accent`, `--destructive`,
-`--border`, `--input`, `--ring`, `--sidebar-*`, `--radius` 0.625rem) plus the
-workspace's own. Each is defined once for light on `:root` and once for dark
-in `@variant dark`, which matches `.dark` and a system dark with no pick.
+`--border`, `--input`, `--ring`, `--sidebar-*`, `--radius` 0.536rem, so a
+card's radius-xl is 12px) plus the workspace's own. Each is defined once for
+light on `:root` and once for dark in `@variant dark`, which matches `.dark`
+and a system dark with no pick. Depth (D122) adds surfaces and one elevation
+scale, each registered in `@theme inline` so a component names a utility
+(`bg-header`, `shadow-card`), never an arbitrary value.
 
 ```
 status    --success --warning --destructive --info --idle   (text-safe, 4.5:1)
 tint      --tint 10% light, 15% dark                          (status washes)
+          --success-tint --warning-tint --destructive-tint --info-tint
+                                     (a badge's fill: its tint over the card, opaque)
 field     --input  3:1 on its card; --field-bg                (WCAG 1.4.11)
+surface   --header --card-border --card-header --card-footer --well --well-border
+          --table-head --table-hover --selected --selected-border --segment
+          --segment-active --button --button-border --sidebar-hover
+          --route-edge --route-dot
+elevation --recessed-shadow (inset) --control-shadow --raised-shadow --card-shadow
+          --header-shadow --main-shadow; --paper-shadow, --float-shadow the largest
 seniority --tranche-1l --tranche-2l --tranche-unsec --tranche-sub --tranche-eq
 charts    --chart-1..5 --chart-neutral --chart-zero           (per theme)
 paper     --paper-bg --paper-ink --paper-rule --paper-cite …  (both themes)
@@ -51,9 +62,20 @@ reads below 11px.
 
 ## Named rules
 
-**Signal-only colour.** Primary is ink (near black in light, near white in
-dark). Hue means status, selection, seniority, lineage or a link — never
-decoration. Blue (`--info`) is running, selected and focused.
+**Signal-only colour.** Primary is cobalt (D122): `oklch(0.5 0.19 262)` in
+light, `oklch(0.7 0.14 262)` in dark, for the one primary action, the section
+on screen, focus and the selected route node. Hue means status, selection,
+seniority, lineage or a link — never decoration. Blue (`--info`) is running;
+a state is always its mark and its word, so running never rests on a hue the
+primary shares.
+
+**Depth.** Three tiers (D122): the sidebar lowest, the canvas, and cards
+raised off it by `--card-shadow` on a `--card-border` edge. A well is set into
+its card (the route canvas); fields and a tab track are recessed; the active
+section, the case switcher and the active tab are raised; a primary button is
+lifted. A larger shadow means the object floats above the workflow: the
+paper, menus, the drawer and the passport take the largest. Nothing inside a
+plot takes a shadow or a gradient.
 
 **Measured, not eyeballed.** Text is 4.5:1 on every surface it sits on,
 tinted status chips included; fields and every chart hue 3:1; the chart ramp
@@ -135,7 +157,8 @@ A shadcn app shell (D37), inset variant:
   full-width summary, a 13rem vertical index sits beside the selected view
   at every desk width, 1024px and above (D74). It stays below the sticky header, scrolls
   vertically when needed, and keeps the selected name and review reason
-  above the list. The active view has an edge and fill; Up/Down arrows move
+  above the list, in a card of its own (D122). The active view has the
+  selected fill inside its edge; Up/Down arrows move
   and select. At 1024px the view is about 540px beside the open sidebar: the
   prose keeps its measure and the figures take one column, and the sidebar's
   icon rail (⌘/Ctrl-B) is the reader's way to widen it. Below 1024px, which
@@ -147,9 +170,11 @@ A section with no document says its state in the header badge and in the
 region (shadcn's empty pattern: mark, title, sentence, the one action that
 helps), and draws no summary.
 
-Panels are shadcn cards (`.pnl`): radius-xl, a 1px ring, a 44px header with a
-sentence-case title and a muted caption. A larger shadow means the object
-floats above the workflow (menus, the drawer, the passport). A table wider
+Panels are shadcn cards (`.pnl`): radius-xl, a 1px `--card-border` ring with
+the card shadow, a 44px header on the `--card-header` band with a
+sentence-case title and a muted caption. A table's head row is the
+`--table-head` band; the selected row is `--selected` inside a
+`--selected-border` ring. A table wider
 than its card scrolls inside it and fades at the edge it continues past; the
 page never scrolls sideways. Counts by state are one badge per state, each
 with its mark.

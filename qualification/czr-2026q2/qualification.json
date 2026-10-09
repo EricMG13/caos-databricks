@@ -13,7 +13,8 @@
       "documents": [
         "documents/CZR_FY2025_10K.txt",
         "documents/CZR_Q2_2026_10Q.txt",
-        "documents/CZR_Q2_2026_Earnings_Release.txt"
+        "documents/CZR_Q2_2026_Earnings_Release.txt",
+        "documents/CZR_2026_Merger_Agreement.txt"
       ],
       "expects": [
         {

@@ -75,7 +75,7 @@ VENDOR_LINE = "validate_handoff: a MATERIAL finding requires qa_status Restricte
 
 
 def _module(prompt: str) -> str:
-    return prompt.split(maxsplit=6)[5]
+    return str(fields_from_prompt(prompt)["module_id"])
 
 
 def _with_material(body: str) -> str:
@@ -1843,6 +1843,8 @@ def test_the_answer_is_dropped_only_past_the_transport_ceiling() -> None:
     ceiling = MAX_REQUEST_BYTES
 
     class Measured:
+        model = "a-model/for-the-test"
+
         def __init__(self, size: int) -> None:
             self.size = size
 

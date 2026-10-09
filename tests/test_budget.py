@@ -35,8 +35,9 @@ from test_case_ordering import _blocked, _wait_for_blocking
 from test_run_events import RECORD, approved_nodes
 
 from caos.boundary_text import BoundaryText
+from caos.copilot import CREDIT_PRICE_ENV
 from caos.graph.route import resolve_route
-from caos.pricing import ModelPrice
+from caos.pricing import CreditPrice, ModelPrice
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, budget, connect
 from caos.store.budget import (
@@ -741,3 +742,132 @@ def test_a_reservation_under_a_non_date_as_of_is_refused(
 
         assert caught.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED, bad_as_of
         assert reserved_for(conn, attempt_id) is None
+
+
+# -- The credit price a Copilot reservation was taken under (0048, R2.2) ------
+
+COPILOT = "copilot:claude-opus-5.5@high"
+COPILOT_PRICE = ModelPrice(
+    COPILOT, Decimal("0.000005"), Decimal("0.00002"), date(2026, 10, 1)
+)
+CREDIT = CreditPrice(Decimal("0.01"), date(2026, 10, 1))
+
+
+def _attempt(case: tuple[StoreConnection, UUID]) -> tuple[StoreConnection, UUID]:
+    conn, case_id = case
+    run_id = _run_with_ceiling(conn, case_id)
+    conn.commit()
+    return conn, start_attempt(conn, run_id, "CP-1")
+
+
+def test_a_copilot_reservation_stores_its_credit_price_and_reads_it_back(
+    case: tuple[StoreConnection, UUID], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn, attempt_id = _attempt(case)
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
+    reserve(conn, attempt_id, Decimal("0.25"), price=COPILOT_PRICE)
+    # A later pin changes nothing already reserved (F468's rule, R2.2).
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.02,2026-10-02")
+    assert reserved_for(conn, attempt_id) == Reservation(
+        Decimal("0.25"), COPILOT_PRICE, CREDIT
+    )
+    assert conn.execute(
+        "SELECT credit_price, credit_as_of FROM budget_reservations"
+        " WHERE attempt_id = %s",
+        (attempt_id,),
+    ).fetchone() == (Decimal("0.01"), date(2026, 10, 1))
+
+
+def test_a_gateway_reservation_names_no_credit_price(
+    case: tuple[StoreConnection, UUID], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn, attempt_id = _attempt(case)
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
+    reserve(conn, attempt_id, Decimal("0.25"), price=RESERVED_AT)
+    taken = reserved_for(conn, attempt_id)
+    assert taken == Reservation(Decimal("0.25"), RESERVED_AT, None)
+    assert taken is not None and taken.credit is None
+
+
+@pytest.mark.parametrize("pinned", [None, "", "0.01", "0,2026-10-01", "x,2026-10-01"])
+def test_a_copilot_reservation_with_no_credit_price_pinned_is_never_taken(
+    case: tuple[StoreConnection, UUID],
+    monkeypatch: pytest.MonkeyPatch,
+    pinned: str | None,
+) -> None:
+    conn, attempt_id = _attempt(case)
+    if pinned is None:
+        monkeypatch.delenv(CREDIT_PRICE_ENV, raising=False)
+    else:
+        monkeypatch.setenv(CREDIT_PRICE_ENV, pinned)
+    with pytest.raises(Refusal) as refused:
+        reserve(conn, attempt_id, Decimal("0.25"), price=COPILOT_PRICE)
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+    assert conn.info.transaction_status is TransactionStatus.IDLE
+    assert reserved_for(conn, attempt_id) is None
+
+
+@pytest.mark.parametrize(
+    ("price", "as_of"),
+    [
+        (Decimal("0.01"), None),
+        (None, date(2026, 10, 1)),
+        (Decimal(0), date(2026, 10, 1)),
+        (Decimal("-0.01"), date(2026, 10, 1)),
+        (Decimal("Infinity"), date(2026, 10, 1)),
+        (Decimal("NaN"), date(2026, 10, 1)),
+    ],
+)
+def test_the_store_holds_a_reservations_credit_price_whole_and_positive(
+    case: tuple[StoreConnection, UUID], price: Decimal | None, as_of: date | None
+) -> None:
+    """0048: both columns or neither, and a price above zero and finite,
+    whoever writes the row."""
+    conn, attempt_id = _attempt(case)
+    run_id = conn.execute(
+        "SELECT run_id FROM run_attempts WHERE attempt_id = %s", (attempt_id,)
+    ).fetchone()
+    conn.commit()
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(
+            "INSERT INTO budget_reservations (attempt_id, run_id, amount,"
+            " price_model, price_input, price_output, price_as_of,"
+            " credit_price, credit_as_of)"
+            " VALUES (%s, %s, 0.25, %s, 0.000005, 0.00002, '2026-10-01', %s, %s)",
+            (attempt_id, run_id[0] if run_id else None, COPILOT, price, as_of),
+        )
+    conn.rollback()
+
+
+def test_a_runs_first_copilot_reservation_pins_its_credit_price_for_the_run(
+    case: tuple[StoreConnection, UUID], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F468's rule for the per-token price, applied to the credit (R2.2,
+    F592): a redeploy that moves the pin mid-run settles no later node of
+    that run at the new price; a new run takes the pin in force."""
+    conn, case_id = case
+    run_id = _run_with_ceiling(conn, case_id)
+    conn.commit()
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
+    first = start_attempt(conn, run_id, "CP-1")
+    reserve(conn, first, Decimal("0.10"), price=COPILOT_PRICE)
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.05,2026-10-02")
+    second = start_attempt(conn, run_id, "CP-2")
+    reserve(conn, second, Decimal("0.10"), price=COPILOT_PRICE)
+    # The run's pin holds even with the environment's gone.
+    monkeypatch.delenv(CREDIT_PRICE_ENV)
+    third = start_attempt(conn, run_id, "CP-3")
+    reserve(conn, third, Decimal("0.10"), price=COPILOT_PRICE)
+    for attempt in (first, second, third):
+        taken = reserved_for(conn, attempt)
+        assert taken is not None
+        assert taken.credit == CREDIT
+    conn.rollback()
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.05,2026-10-02")
+    successor = _run_with_ceiling(conn, case_id)
+    conn.commit()
+    later = start_attempt(conn, successor, "CP-1")
+    reserve(conn, later, Decimal("0.10"), price=COPILOT_PRICE)
+    taken = reserved_for(conn, later)
+    assert taken is not None
+    assert taken.credit == CreditPrice(Decimal("0.05"), date(2026, 10, 2))

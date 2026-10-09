@@ -49,7 +49,7 @@ from caos.graph.worker import (
 )
 from caos.methodology.bundle import Bundle
 from caos.pricing import ModelPrice
-from caos.provider import CompletionProvider
+from caos.provider import CONTEXT_NOT_DECLARED, CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import (
     SEARCH_PATH_OPTION,
@@ -194,7 +194,9 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     assert run_status(run.conn, run.run_id) is RunStatus.RUNNING
     # CF-044: a park otherwise left nothing on stderr for an operator watching
     # the process to notice by.
-    assert capsys.readouterr().err.strip() == code
+    # The suite's endpoint declares no context, so the run says so first (D116).
+    said = capsys.readouterr().err.splitlines()
+    assert said == [f"{CONTEXT_NOT_DECLARED} endpoint={completions.model}", code]
     run.conn.rollback()
     assert drive(run, completions) is None, "a stopped run waits for a retry"
     assert len(completions.prompts) == 4
@@ -455,9 +457,26 @@ def test_the_lease_outlives_the_provider_timeout() -> None:
     """D83 (amending brief D5's two deadlines): a lease renewed by the
     reservation outlives the call's one deadline by a 180 s liveness budget
     shared with the work before the call and after it (bill, checks, accept);
-    exactly-once does not rest on it (`call_hold`, `replay_billed`)."""
+    while the call's session lives, exactly-once rests on `call_hold` and
+    `replay_billed`, and after a session cut released the hold the 180 s are
+    the safety margin. D117 raised both by 300 s (720 s and 900 s), keeping
+    the 180 s."""
+    assert LEASE_SECONDS == 900, "the owner's lease (D117)"
     assert LEASE_SECONDS - provider_module.TIMEOUT_SECONDS >= 180.0
     assert WorkerConfig(BoundaryText.of("w")).lease_seconds == LEASE_SECONDS
+
+
+def test_a_call_hold_outlives_the_lease_and_a_whole_call_past_it() -> None:
+    """D117: `_UNSETTLED` keeps a node from a second worker for
+    `CALL_HOLD_SECONDS` past the reservation while a live session may still
+    bill it. The hold is two leases, so it scales with `LEASE_SECONDS`; it
+    must leave at least one whole lease past the call's own deadline, or a
+    holder whose bill waits behind a case lock (W1) after a call that ran to
+    the deadline loses the node to a re-claim that would pay for it again."""
+    from caos.store.runs import CALL_HOLD_SECONDS
+
+    assert CALL_HOLD_SECONDS == 2 * LEASE_SECONDS == 1800
+    assert CALL_HOLD_SECONDS - provider_module.TIMEOUT_SECONDS >= LEASE_SECONDS
 
 
 FORBIDDEN_MODULES = frozenset(

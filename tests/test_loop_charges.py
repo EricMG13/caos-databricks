@@ -234,7 +234,7 @@ def test_the_artifact_is_the_handoff_and_the_record_the_host_built(
 
     assert stored.identity.module_id == "CP-0", "the host's module id, not the module's"
     assert stored.artifact_sha256 == artifact
-    assert stored.build_id.startswith("9043ba7f")
+    assert stored.build_id.startswith("d8a307a9")
     assert len(stored.authority_digest) == 64
     [citation] = stored.citations
     assert citation.matched_text == QUOTE and citation.bboxes, "anchored by the host"
@@ -471,8 +471,12 @@ def test_a_prompt_rebuilt_larger_than_the_one_priced_is_refused_before_the_call(
 
     def padded(*args: object, **kwargs: object) -> str:
         nonlocal builds
-        builds += 1
         prompt = real(*args, **kwargs)  # type: ignore[arg-type]
+        # A prompt built only to be measured, to fit the node (D116), is
+        # never sent or priced: only the sent builds count.
+        if getattr(args[3], "measured_tag", None) is not None:
+            return prompt
+        builds += 1
         # Every build after the priced one grows. A byte would do; a kilobyte
         # makes the refusal unambiguous at any price this fixture could carry.
         return prompt if builds == 1 else prompt + ("\n# padding" * 128)

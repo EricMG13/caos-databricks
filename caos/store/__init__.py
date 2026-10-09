@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from enum import StrEnum
@@ -239,6 +240,26 @@ MIGRATIONS = (
         .with_name("0044_blocking_citations.sql")
         .read_text(encoding="utf-8"),
     ),
+    (
+        "0045_run_command",
+        Path(__file__).with_name("0045_run_command.sql").read_text(encoding="utf-8"),
+    ),
+    (
+        "0046_call_drop_kind",
+        Path(__file__).with_name("0046_call_drop_kind.sql").read_text(encoding="utf-8"),
+    ),
+    (
+        "0047_call_cut_after_content",
+        Path(__file__)
+        .with_name("0047_call_cut_after_content.sql")
+        .read_text(encoding="utf-8"),
+    ),
+    (
+        "0048_reservation_credit_price",
+        Path(__file__)
+        .with_name("0048_reservation_credit_price.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # DL-1: the store's own schema, beside LangGraph's `caos_graph`
@@ -252,6 +273,32 @@ MIGRATIONS = (
 # session, not written into the SQL.
 STORE_SCHEMA = "caos_store"
 SEARCH_PATH_OPTION = f"-c search_path={STORE_SCHEMA}"
+# D117: no store session -- `connect`'s, or the checkpointer pool's
+# (`caos.graph.checkpoint`) -- is ended by the server for sitting idle. `call_hold`
+# is a session-level lock on a connection that waits, outside any
+# transaction, for the whole model call (up to `caos.provider.TIMEOUT_SECONDS`);
+# an `idle_session_timeout` set on the database or the role would end that
+# session mid-call and let the hold go with nothing said, and once the lease
+# lapsed too a second worker could pay for the node again. A cut this cannot
+# stop (a failover, a scale-to-zero suspend, a lost socket) still ends the
+# hold; then the lease's 180 s past the call deadline is the margin.
+# D120 (amends D117): the bound is turned off by the session's first statement
+# (`idle_session_off`), a session-level `SET` that wins over the database's and
+# the role's settings as the startup option did, rather than as a startup
+# option: a refused option arrives with no SQLSTATE, and a `SET` refused says
+# why. Like `call_hold`, it needs a session-mode connection: a transaction
+# pooler would run it on one server session and the call on another.
+IDLE_SESSION_SET = "SET idle_session_timeout = 0"
+# The SQLSTATEs with which a server refuses that `SET` itself: a parameter it
+# does not know, a value it will not take, a feature it does not support, a
+# right the role lacks. On these the session carries on without it (D120).
+IDLE_SESSION_SET_REFUSALS = frozenset({"42704", "22023", "0A000", "42501"})
+# The stderr line a process prints, once, when its server refuses the `SET`:
+# the code alone, never the server's message.
+IDLE_SESSION_REFUSED = "IDLE_SESSION_OPTION_REFUSED"
+# Whether this process has found that refusal; set once, never cleared.
+_IDLE_SESSION_REFUSED = threading.Event()
+_IDLE_SESSION_NOTICE = threading.Lock()
 # LangGraph's own schema (`caos.graph.checkpoint.SCHEMA`), named here rather
 # than imported: the store does not depend on the graph package. The store
 # writes to it too, forgetting a cancelled run's thread (`work._forget_threads`).
@@ -395,6 +442,10 @@ def connect(
     A connection that fails drops the cached Lakebase credential, so the next
     one mints (ST-2): the API, the health probes and the lifespan open theirs
     here, and a token revoked early would otherwise be sent until it aged out.
+
+    Every session's first statement turns the server's idle bound off for it
+    (`idle_session_off`, D117, D120); a fault there closes it and refuses
+    `STORE_UNAVAILABLE`.
     """
     from caos.store.lakebase import note_connect_failure
 
@@ -406,10 +457,55 @@ def connect(
         options.append(f"-c statement_timeout={statement_timeout_ms}")
     kwargs["options"] = startup_options(url, options)
     try:
-        return psycopg.connect(url, autocommit=False, **kwargs)
+        conn = psycopg.connect(url, autocommit=False, **kwargs)
     except psycopg.OperationalError as failed:
         note_connect_failure(failed)
         raise
+    try:
+        idle_session_off(conn)
+    except BaseException:
+        conn.close()
+        raise
+    return conn
+
+
+def idle_session_off(conn: psycopg.Connection[Any]) -> None:
+    """Turn the server's idle-session bound off for this session, as its first
+    statement (D117, D120), committed so no rollback of the caller's undoes it.
+
+    A server that refuses the `SET` itself (`IDLE_SESSION_SET_REFUSALS`, read
+    from the SQLSTATE, never the text) leaves the session usable without it:
+    the process prints `IDLE_SESSION_REFUSED` once and skips the `SET` from
+    then on, and the lease's 180 s margin alone covers an idle cut. Any other
+    fault is the store not answering: the session is closed and refused
+    `STORE_UNAVAILABLE`. Nothing here connects again.
+    """
+    if _IDLE_SESSION_REFUSED.is_set():
+        return
+    try:
+        conn.execute(IDLE_SESSION_SET)
+        if not conn.autocommit:
+            conn.commit()
+    except psycopg.Error as fault:
+        if fault.sqlstate not in IDLE_SESSION_SET_REFUSALS:
+            conn.close()
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+        try:
+            conn.rollback()
+        except psycopg.Error:
+            conn.close()
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+        _idle_session_refused()
+
+
+def _idle_session_refused() -> None:
+    """Remember, for the process, that the server refuses the idle `SET`, and
+    say so once on stderr, the code alone (D120)."""
+    with _IDLE_SESSION_NOTICE:
+        if _IDLE_SESSION_REFUSED.is_set():
+            return
+        _IDLE_SESSION_REFUSED.set()
+    print(IDLE_SESSION_REFUSED, file=sys.stderr)
 
 
 def owned_schema(conn: psycopg.Connection[Any], schema: str) -> bool:
