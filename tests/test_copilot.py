@@ -17,7 +17,11 @@ import io
 import logging
 import math
 import os
+import platform
 import re
+import shutil
+import stat
+import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, tzinfo
@@ -52,6 +56,7 @@ from caos.copilot import (
     ChatCopilot,
     CopilotModel,
     CopilotStatusError,
+    CopilotUnsettledError,
     Event,
     ask_copilot,
     child_environment,
@@ -3336,54 +3341,6 @@ def test_the_child_environment_copies_only_what_is_set(
     }
 
 
-def test_a_script_runtime_finds_node_and_nothing_else_on_its_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    node_home = tmp_path / "node" / "bin"
-    node_home.mkdir(parents=True)
-    node = node_home / "node"
-    node.write_text("#!/bin/sh\n", encoding="utf-8")
-    node.chmod(0o755)
-    gh = tmp_path / "gh" / "bin"
-    gh.mkdir(parents=True)
-    (gh / "gh").write_text("#!/bin/sh\n", encoding="utf-8")
-    (gh / "gh").chmod(0o755)
-    parent_environment(monkeypatch)
-    monkeypatch.setenv("PATH", os.pathsep.join((str(gh), str(node_home))))
-    monkeypatch.setattr("sys.platform", "linux")
-    child = child_environment("home", "/runtime/index.js")
-    assert child["PATH"] == os.pathsep.join(("/runtime", str(node_home)))
-    monkeypatch.setenv("PATH", str(gh))
-    with pytest.raises(Refusal) as refused:
-        child_environment("home", "/runtime/index.js")
-    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
-
-
-def test_node_is_searched_on_the_workers_path_alone(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Exactly `node`, on the worker's `PATH` and nowhere else: with none
-    set, nowhere -- never the platform's default search path."""
-    searched: list[tuple[str, str | None]] = []
-
-    def which(
-        command: str, mode: int = os.F_OK | os.X_OK, path: str | None = None
-    ) -> str:
-        searched.append((command, path))
-        return os.path.join(os.sep, "opt", "node", "bin", "node")
-
-    parent_environment(monkeypatch)
-    monkeypatch.setattr("shutil.which", which)
-    monkeypatch.setattr("sys.platform", "linux")
-    child_environment("home", "/runtime/index.js")
-    monkeypatch.setenv("PATH", os.pathsep.join(("/a", "/b")))
-    child = child_environment("home", "/runtime/index.js")
-    assert searched == [("node", ""), ("node", os.pathsep.join(("/a", "/b")))]
-    assert child["PATH"] == os.pathsep.join(
-        ("/runtime", os.path.join(os.sep, "opt", "node", "bin"))
-    )
-
-
 def test_the_sdk_logger_reaches_no_handler(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -3420,11 +3377,86 @@ def test_the_sdk_logger_reaches_no_handler(
 # -- The SDK transport (Task 3; R3, R7, R2.7) ---------------------------------
 
 
+# Executable headers as each host's loader reads them (F597).
+ARM64, X86_64 = 0x0100000C, 0x01000007  # Mach-O CPU types
+MH_EXECUTE, MH_DYLIB = 2, 6
+
+
+def mach_o(
+    cpu: int = ARM64, filetype: int = MH_EXECUTE, magic: bytes = b"", subtype: int = 0
+) -> bytes:
+    """A thin 64-bit Mach-O header, little-endian, as the 1.0.90 runtime's."""
+    return (
+        (magic or b"\xcf\xfa\xed\xfe")
+        + cpu.to_bytes(4, "little")
+        + subtype.to_bytes(4, "little")
+        + filetype.to_bytes(4, "little")
+        + bytes(16)
+    )
+
+
+def fat(*slices: tuple[int, bytes], count: int | None = None) -> bytes:
+    """A universal binary: its big-endian arch table, then each slice;
+    `count` states another slice count than the table holds."""
+    offset = 8 + 20 * len(slices)
+    table, body = b"", b""
+    for cpu, image in slices:
+        table += (
+            cpu.to_bytes(4, "big")
+            + bytes(4)
+            + (offset + len(body)).to_bytes(4, "big")
+            + len(image).to_bytes(4, "big")
+            + bytes(4)
+        )
+        body += image
+    stated = len(slices) if count is None else count
+    return b"\xca\xfe\xba\xbe" + stated.to_bytes(4, "big") + table + body
+
+
+def elf(machine: int = 62, kind: int = 2, width: int = 2, order: int = 1) -> bytes:
+    """An ELF header: class, byte order, type and machine (62 x86-64, 183
+    AArch64)."""
+    return (
+        b"\x7fELF"
+        + bytes([width, order, 1])
+        + bytes(9)
+        + kind.to_bytes(2, "little")
+        + machine.to_bytes(2, "little")
+        + bytes(44)
+    )
+
+
+def pe(
+    machine: int = 0x8664,
+    traits: int = 0x0022,
+    at: int = 0x80,
+    stub: bytes = b"MZ",
+    signature: bytes = b"PE\0\0",
+) -> bytes:
+    """A DOS stub whose `e_lfanew` points at a PE signature and COFF header,
+    with the three sections a small image has."""
+    head = stub + bytes(58) + at.to_bytes(4, "little")
+    return (
+        head
+        + bytes(at - len(head))
+        + signature
+        + machine.to_bytes(2, "little")
+        + (3).to_bytes(2, "little")
+        + bytes(14)
+        + traits.to_bytes(2, "little")
+    )
+
+
+# The fixture's host and its runtime: an arm64 Mac, as the owner's.
+MAC_ARM = ("darwin", "arm64")
+MACH_O = mach_o()
+
+
 def provisioned(root: Path) -> str:
     """A runtime directory as the SDK materialises one: the entry, its native
     library and an asset; the entry's path."""
     (root / "assets").mkdir(parents=True)
-    (root / "copilot-runtime").write_bytes(b"#!/bin/sh\nexit 0\n")
+    (root / "copilot-runtime").write_bytes(MACH_O + b" native runtime")
     (root / "runtime.node").write_bytes(b"\x7fELF native")
     (root / "assets" / "index.js").write_bytes(b"// asset")
     return str(root / "copilot-runtime")
@@ -3523,11 +3555,16 @@ class FakeRuntime:
     session: ClassVar[FakeSession] = FakeSession([])
     # The pinned runtime's entry, set by the `runtime` fixture.
     entry: ClassVar[str] = ""
+    # What the "runtime" does as it starts, after CAOS staged it.
+    on_start: ClassVar[Callable[[], None] | None] = None
 
     def __init__(self, **options: object) -> None:
         self.options: dict[str, Any] = dict(options)
         self.home = Path(str(options["base_directory"]))
         self.home_existed = self.home.is_dir()
+        # The tree of the runtime CAOS hands the SDK to start, as it is then.
+        started = getattr(options.get("connection"), "path", None)
+        self.started_digest = expected_digest(Path(started).parent) if started else None
         self.created: dict[str, Any] = {}
         self.entered = False
         self.exited = False
@@ -3535,6 +3572,9 @@ class FakeRuntime:
 
     async def __aenter__(self) -> FakeRuntime:
         self.entered = True
+        started = type(self).on_start
+        if started is not None:
+            started()
         logging.getLogger("copilot._jsonrpc").warning("[CLI] %s", SECRET)
         return self
 
@@ -3556,6 +3596,7 @@ def runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[FakeRuntime
         entry: ClassVar[str] = provisioned(tmp_path / "runtime")
 
     monkeypatch.setattr("copilot.CopilotClient", Runtime)
+    monkeypatch.setattr(copilot_module, "_host", lambda: MAC_ARM)
     # A short grace after an error, so a test of one never waits 2 s.
     monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.2)
     # Never the SDK's own resolution: only the pinned runtime runs (F591).
@@ -3566,6 +3607,11 @@ def runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[FakeRuntime
     monkeypatch.setenv(RUNTIME_ENV, Runtime.entry)
     monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(tmp_path / "runtime"))
     return Runtime
+
+
+def staged(made: FakeRuntime) -> str:
+    """The runtime entry a call starts: the copy in its own directory."""
+    return str(made.home / "caos-runtime" / "copilot-runtime")
 
 
 def sent_options(made: FakeRuntime) -> dict[str, Any]:
@@ -3675,7 +3721,7 @@ def test_the_runtime_never_auto_logs_in_and_sees_only_the_allow_listed_environme
     connection = made.options.pop("connection")
     assert isinstance(connection, StdioRuntimeConnection)
     assert (connection.path, tuple(connection.args), connection.env) == (
-        runtime.entry,
+        staged(made),
         (),
         None,
     )
@@ -3687,8 +3733,8 @@ def test_the_runtime_never_auto_logs_in_and_sees_only_the_allow_listed_environme
         "log_level": "none",
         "use_logged_in_user": False,
     }
-    assert environment == child_environment(str(made.home), runtime.entry)
-    assert environment["PATH"] == os.path.dirname(runtime.entry)
+    assert environment == child_environment(str(made.home), staged(made))
+    assert environment["PATH"] == os.path.dirname(staged(made))
     assert environment["COPILOT_GITHUB_TOKEN"] == "parent-token"
     for name in ("GH_TOKEN", "GITHUB_TOKEN", "COPILOT_PROVIDER_API_KEY", "GH_HOST"):
         assert name not in environment
@@ -3736,8 +3782,9 @@ def test_only_the_pinned_runtime_runs_and_the_environment_cannot_choose_it(
     monkeypatch.setenv("COPILOT_CLI_EXTRACT_DIR", str(tmp_path / "planted"))
     monkeypatch.setenv("COPILOT_CLI_PATH", str(planted / "copilot-runtime"))
     ask_copilot(PROMPT, TARGET, 5.0)
-    assert runtime.made[-1].options["connection"].path == runtime.entry
+    assert runtime.made[-1].options["connection"].path == staged(runtime.made[-1])
     pinned = os.environ[RUNTIME_DIGEST_ENV]
+    assert runtime.made[-1].started_digest == pinned
     for name, value in (
         (RUNTIME_ENV, ""),
         (RUNTIME_ENV, "copilot-runtime"),
@@ -3776,23 +3823,329 @@ def test_a_relative_runtime_path_is_refused_even_where_it_resolves(
     _refused_before_any_client(runtime)
 
 
-def test_an_unchanged_runtime_is_read_once_per_process(
+def test_every_call_reads_the_whole_runtime_again(
     runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """No stat-keyed trust (F594): size, mtime and inode are the owner's to
+    set back, so each call copies and hashes the whole runtime it starts
+    (F596)."""
     read: list[str] = []
-    digest = copilot_module._file_digest
+    copied = copilot_module._copied
 
-    def counted(path: str) -> str:
-        read.append(path)
-        return digest(path)
+    def counted(source: str, target: str) -> str:
+        read.append(source)
+        return copied(source, target)
 
-    monkeypatch.setattr(copilot_module, "_file_digest", counted)
-    monkeypatch.setattr(copilot_module, "_VERIFIED", {})
+    monkeypatch.setattr(copilot_module, "_copied", counted)
+    for calls in (1, 2, 3):
+        ask_copilot(PROMPT, TARGET, 5.0)
+        assert len(read) == 3 * calls
+
+
+def test_a_runtime_swapped_with_its_mtime_put_back_is_refused(
+    runtime: type[FakeRuntime], tmp_path: Path
+) -> None:
+    """The re-audit's probe (`r2_l1_digest_cache.py`, case 1)."""
     ask_copilot(PROMPT, TARGET, 5.0)
-    assert len(read) == 3
+    library = tmp_path / "runtime" / "runtime.node"
+    kept = library.stat()
+    swapped = bytes(reversed(library.read_bytes()))
+    library.write_bytes(swapped)
+    os.utime(library, ns=(kept.st_atime_ns, kept.st_mtime_ns))
+    assert library.stat().st_size == kept.st_size
+    _refused_before_any_client(runtime)
+
+
+def test_a_runtime_reached_through_a_retargeted_link_is_never_started(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The probe's case 2: the entry's directory through a symlinked parent,
+    retargeted to a twin with the same names, sizes and mtimes. What is
+    hashed is what is started: the resolved path, read on every call."""
+    good = Path(provisioned(tmp_path / "v1")).parent
+    twin = Path(provisioned(tmp_path / "v2")).parent
+    (twin / "runtime.node").write_bytes(
+        bytes(reversed((good / "runtime.node").read_bytes()))
+    )
+    for name in ("copilot-runtime", "runtime.node", "assets/index.js"):
+        moment = (good / name).stat().st_mtime_ns
+        os.utime(twin / name, ns=(moment, moment))
+    current = tmp_path / "current"
+    current.symlink_to(good)
+    monkeypatch.setenv(RUNTIME_ENV, str(current / "copilot-runtime"))
+    monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(good))
     ask_copilot(PROMPT, TARGET, 5.0)
+    started = runtime.made[-1].options["connection"].path
+    assert started == staged(runtime.made[-1])
+    assert runtime.made[-1].started_digest == expected_digest(good)
+    assert runtime.made[-1].options["env"]["PATH"] == os.path.dirname(started)
+    current.unlink()
+    current.symlink_to(twin)
+    _refused_before_any_client(runtime)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        ("copilot-runtime", b"#!/bin/sh\nexec node index.js\n"),
+        ("index.js", b"require('./runtime')\n"),
+        ("index.js", MACH_O + b" named as a script"),
+        ("copilot-runtime.mjs", MACH_O),
+        ("copilot-runtime", b"\x00\x00\x00\x00 data"),
+        ("copilot-runtime", b""),
+    ],
+)
+def test_an_entry_that_is_no_native_executable_is_refused_with_its_reason(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    entry: tuple[str, bytes],
+) -> None:
+    """The re-audit's probe (`r2_l1_js_node.py`): a script entry runs an
+    interpreter found on `PATH`, which no digest covers. Only a native
+    runtime executable inside the digested directory is started (F595)."""
+    name, content = entry
+    root = tmp_path / "scripted"
+    root.mkdir()
+    (root / name).write_bytes(content)
+    monkeypatch.setenv(RUNTIME_ENV, str(root / name))
+    monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(root))
+    capsys.readouterr()
+    _refused_before_any_client(runtime)
+    assert capsys.readouterr().err == (
+        "PROVIDER_NOT_CONFIGURED reason=runtime_not_native\n"
+    )
+
+
+MZ_SCRIPT = b"MZ\n/usr/bin/touch /tmp/caos-evil\n"
+# (host, entry name, entry bytes, whether it is the host's own executable).
+FORMATS = {
+    "mac-arm-thin": (MAC_ARM, "copilot", mach_o(ARM64), True),
+    "mac-x86-thin": (("darwin", "x86_64"), "copilot", mach_o(X86_64), True),
+    "mac-arm-other-arch": (MAC_ARM, "copilot", mach_o(X86_64), False),
+    "mac-arm-dylib": (MAC_ARM, "copilot", mach_o(ARM64, MH_DYLIB), False),
+    "mac-32-bit": (MAC_ARM, "copilot", mach_o(magic=b"\xce\xfa\xed\xfe"), False),
+    "mac-big-endian": (MAC_ARM, "copilot", mach_o(magic=b"\xfe\xed\xfa\xcf"), False),
+    "mac-fat-with-host": (
+        MAC_ARM,
+        "copilot",
+        fat((X86_64, mach_o(X86_64)), (ARM64, mach_o(ARM64))),
+        True,
+    ),
+    "mac-fat-without-host": (MAC_ARM, "copilot", fat((X86_64, mach_o(X86_64))), False),
+    "mac-arm64e-subtype": (MAC_ARM, "copilot", mach_o(subtype=0x80000002), True),
+    "mac-fat-eight-slices": (
+        MAC_ARM,
+        "copilot",
+        fat(*[(X86_64, mach_o(X86_64))] * 7, (ARM64, mach_o(ARM64))),
+        True,
+    ),
+    "mac-fat-absurd-count": (
+        MAC_ARM,
+        "copilot",
+        fat((ARM64, mach_o(ARM64)), count=0x01000001),
+        False,
+    ),
+    "mac-fat-nine-slices": (
+        MAC_ARM,
+        "copilot",
+        fat(*[(ARM64, mach_o(ARM64))] * 9),
+        False,
+    ),
+    "mac-fat-host-dylib": (
+        MAC_ARM,
+        "copilot",
+        fat((ARM64, mach_o(ARM64, MH_DYLIB))),
+        False,
+    ),
+    "mac-fat-lying-slice": (MAC_ARM, "copilot", fat((ARM64, mach_o(X86_64))), False),
+    "mac-cafebabe-script": (MAC_ARM, "copilot", b"\xca\xfe\xba\xbe\ntouch x\n", False),
+    "mac-mz-script": (MAC_ARM, "copilot", MZ_SCRIPT, False),
+    "mac-elf": (MAC_ARM, "copilot", elf(), False),
+    "mac-unknown-arch": (("darwin", "ppc"), "copilot", mach_o(ARM64), False),
+    "linux-x86-exec": (("linux", "x86_64"), "copilot", elf(62, 2), True),
+    "linux-x86-pie": (("linux", "x86_64"), "copilot", elf(62, 3), True),
+    "linux-arm": (("linux", "aarch64"), "copilot", elf(183), True),
+    "linux-other-arch": (("linux", "x86_64"), "copilot", elf(183), False),
+    "linux-32-bit": (("linux", "x86_64"), "copilot", elf(width=1), False),
+    "linux-big-endian": (("linux", "x86_64"), "copilot", elf(order=2), False),
+    "linux-relocatable": (("linux", "x86_64"), "copilot", elf(kind=1), False),
+    "linux-elf-script": (("linux", "x86_64"), "copilot", b"\x7fELF\ntouch x\n", False),
+    "linux-mz-script": (("linux", "x86_64"), "copilot", MZ_SCRIPT, False),
+    "linux-mach-o": (("linux", "x86_64"), "copilot", mach_o(), False),
+    "win-x64-exe": (("win32", "AMD64"), "copilot.exe", pe(), True),
+    "win-arm-exe": (("win32", "ARM64"), "copilot.exe", pe(0xAA64), True),
+    "win-other-arch": (("win32", "AMD64"), "copilot.exe", pe(0xAA64), False),
+    "win-dll": (("win32", "AMD64"), "copilot.exe", pe(traits=0x2022), False),
+    "win-not-executable": (("win32", "AMD64"), "copilot.exe", pe(traits=0x0020), False),
+    "win-mz-script": (("win32", "AMD64"), "copilot.exe", MZ_SCRIPT, False),
+    "win-pe-without-mz": (("win32", "AMD64"), "copilot.exe", pe(stub=b"ZM"), False),
+    "win-no-pe-signature": (
+        ("win32", "AMD64"),
+        "copilot.exe",
+        pe(signature=b"XE\0\0"),
+        False,
+    ),
+    "win-header-past-end": (
+        ("win32", "AMD64"),
+        "copilot.exe",
+        b"MZ" + bytes(58) + (4096).to_bytes(4, "little"),
+        False,
+    ),
+    "win-bat": (("win32", "AMD64"), "copilot.bat", pe(), False),
+    "win-cmd": (("win32", "AMD64"), "copilot.CMD", pe(), False),
+    "win-ps1": (("win32", "AMD64"), "copilot.ps1", pe(), False),
+    "mac-bat": (MAC_ARM, "copilot.bat", mach_o(), False),
+    "linux-ps1": (("linux", "x86_64"), "copilot.ps1", elf(), False),
+    "other-host": (("freebsd14", "amd64"), "copilot", elf(62), False),
+    "empty": (MAC_ARM, "copilot", b"", False),
+}
+
+
+@pytest.mark.parametrize("case", list(FORMATS), ids=list(FORMATS))
+def test_only_the_hosts_own_executable_format_is_native(
+    case: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """F597: Mach-O (thin, or the host's slice of a fat binary) of the host's
+    architecture on macOS; ELF of the host machine on Linux; PE with a valid
+    header at `e_lfanew` on Windows; executables, never libraries; and no
+    `.bat`, `.cmd`, `.ps1` or `.js`-family name anywhere."""
+    host, name, content, native = FORMATS[case]
+    monkeypatch.setattr(copilot_module, "_host", lambda: host)
+    entry = tmp_path / name
+    entry.write_bytes(content)
+    assert copilot_module._native(str(entry)) is native
+
+
+def test_a_host_slice_past_sixteen_mebibytes_is_read_where_it_is(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A universal binary's slice offsets are whole 32-bit fields."""
+    monkeypatch.setattr(copilot_module, "_host", lambda: MAC_ARM)
+    far = (1 << 24) + 0x1000
+    entry = tmp_path / "copilot"
+    with entry.open("wb") as written:
+        written.write(
+            b"\xca\xfe\xba\xbe"
+            + (1).to_bytes(4, "big")
+            + ARM64.to_bytes(4, "big")
+            + bytes(4)
+            + far.to_bytes(4, "big")
+            + (32).to_bytes(4, "big")
+            + bytes(4)
+        )
+        written.seek(far)
+        written.write(mach_o())
+    assert copilot_module._native(str(entry))
+
+
+def test_an_mz_prefixed_script_on_a_mac_is_refused_with_its_reason(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """The re-check's native probe (`r3_native_check.py`): an MZ, ELF or
+    CAFEBABE prefix on a shell script passed F595's first-bytes check."""
+    for prefix in (b"MZ", b"\x7fELF", b"\xca\xfe\xba\xbe"):
+        root = tmp_path / prefix.hex()
+        root.mkdir()
+        (root / "copilot-runtime").write_bytes(prefix + b"\ntouch EVIL\n")
+        monkeypatch.setenv(RUNTIME_ENV, str(root / "copilot-runtime"))
+        monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(root))
+        capsys.readouterr()
+        _refused_before_any_client(runtime)
+        assert capsys.readouterr().err == (
+            "PROVIDER_NOT_CONFIGURED reason=runtime_not_native\n"
+        )
+
+
+def test_the_host_is_this_process_platform_and_machine() -> None:
+    assert copilot_module._host() == (sys.platform, platform.machine())
+
+
+def test_the_runtime_started_is_a_verified_copy_in_the_calls_own_directory(
+    runtime: type[FakeRuntime],
+) -> None:
+    """F596: the pinned directory is copied into the call's private
+    directory, the copy is what is hashed and what is started, and it goes
+    with the call."""
     ask_copilot(PROMPT, TARGET, 5.0)
-    assert len(read) == 3, "an unchanged runtime was read again"
+    [made] = runtime.made
+    assert made.options["connection"].path == staged(made)
+    assert made.started_digest == os.environ[RUNTIME_DIGEST_ENV]
+    assert not made.home.exists()
+
+
+def test_the_staged_copy_is_the_owners_alone(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The copy carries the prompt's runtime: no group or other bits on any
+    directory or file of it, and the entry executable by its owner."""
+    (tmp_path / "runtime" / "copilot-runtime").chmod(0o755)
+    (tmp_path / "runtime" / "runtime.node").chmod(0o644)
+    modes: dict[str, int] = {}
+
+    def recorded() -> None:
+        root = runtime.made[-1].home / "caos-runtime"
+        for path in (root, root / "assets", *root.rglob("*")):
+            modes[str(path.relative_to(root))] = stat.S_IMODE(path.stat().st_mode)
+
+    monkeypatch.setattr(runtime, "on_start", recorded)
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert modes and all(not mode & 0o077 for mode in modes.values()), modes
+    assert modes["copilot-runtime"] == 0o700
+    assert modes["runtime.node"] == 0o600
+
+
+def test_a_runtime_that_changes_while_it_is_copied_is_refused(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A source file gone between the listing and the copy, or an entry
+    the copy does not hold, refuses -- never a raise of another kind."""
+    listed = copilot_module._runtime_files
+
+    def vanished(root: str) -> list[tuple[str, str]]:
+        return [*listed(root), ("gone", str(tmp_path / "runtime" / "gone"))]
+
+    def without_entry(root: str) -> list[tuple[str, str]]:
+        return [
+            (name, path) for name, path in listed(root) if name != "copilot-runtime"
+        ]
+
+    for listing in (vanished, without_entry):
+        with monkeypatch.context() as scoped:
+            scoped.setattr(copilot_module, "_runtime_files", listing)
+            _refused_before_any_client(runtime)
+
+
+def test_a_runtime_swapped_once_it_was_staged_changes_nothing(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The re-check's race (`r3_race.py`): the entry and the library beside
+    it are replaced while the call runs -- the hard-linked or renamed-in
+    kind as well. The copy that runs never sees it."""
+    source = tmp_path / "runtime"
+    kept = {
+        name: (source / name).read_bytes()
+        for name in ("copilot-runtime", "runtime.node")
+    }
+    copies: list[dict[str, bytes]] = []
+
+    def swapped() -> None:
+        for name in kept:
+            replacement = source / f"{name}.evil"
+            replacement.write_bytes(MACH_O + b" EVIL")
+            os.replace(replacement, source / name)
+        home = runtime.made[-1].home / "caos-runtime"
+        copies.append({name: (home / name).read_bytes() for name in kept})
+
+    monkeypatch.setattr(runtime, "on_start", swapped)
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert copies == [kept]
+    assert runtime.made[-1].started_digest == os.environ[RUNTIME_DIGEST_ENV]
+    _refused_before_any_client(runtime)
 
 
 def test_a_runtime_changed_after_it_was_verified_is_refused(
@@ -3839,7 +4192,7 @@ def test_an_abort_that_never_returns_is_waited_for_only_so_long(
 def test_a_session_error_ends_the_wait_and_is_returned_as_data(
     runtime: type[FakeRuntime],
 ) -> None:
-    failed = [*UNSPENT, error(402)]
+    failed = [*UNSPENT, error(402), idle()]
     runtime.session = FakeSession(failed)
     assert ask_copilot(PROMPT, TARGET, 5.0) == failed
     assert not runtime.session.aborted
@@ -3899,17 +4252,39 @@ def test_an_error_the_runtime_may_recover_from_does_not_end_the_call(
     assert runtime.session.aborted
 
 
-def test_after_an_error_the_wait_is_bounded_by_its_grace_not_the_deadline(
-    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+def test_an_error_with_no_idle_in_its_grace_is_indeterminate_never_a_drop(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """The re-audit's probe (`r2_m2_grace.py`): a checkpoint later than the
+    grace, with no idle, is spend nobody read. The grace running out is no
+    settlement: the call is indeterminate, its reservation kept, never a
+    declared drop D110 re-attempts (F593)."""
     monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.05)
-    failed = [*UNSPENT, error(500)]
-    late = [checkpoint(100, 1), idle()]
+    failed = [*UNSPENT, error(503)]
+    late = [checkpoint(900_000_000_000, 1), idle()]
     runtime.session = FakeSession(failed, later=late, delay=1.0)
     started_at = time.monotonic()
-    assert ask_copilot(PROMPT, TARGET, 30.0) == failed
+    with pytest.raises(CopilotUnsettledError) as raised:
+        ask_copilot(PROMPT, TARGET, 30.0)
     assert time.monotonic() - started_at < 1.0
-    assert not runtime.session.aborted
+    assert str(raised.value) == "copilot"
+    assert runtime.session.aborted
+    runtime.session = FakeSession(failed, later=late, delay=1.0)
+    with reserving(Decimal("1.00"), credit=CREDIT):
+        completion = provider(ask_copilot).complete(PROMPT, json_object=True)
+    assert (completion.content, completion.charge, completion.refusal) == (
+        None,
+        None,
+        RefusalCode.PROVIDER_UNAVAILABLE,
+    )
+    assert completion.drop_kind is DropKind.RAISED
+    _out, err = capsys.readouterr()
+    assert err.splitlines()[-1].startswith(
+        "PROVIDER_UNAVAILABLE call=raised class=CopilotUnsettledError "
+    )
+    assert SECRET not in err
 
 
 def test_only_the_main_agents_idle_or_error_ends_the_wait(
@@ -3938,7 +4313,7 @@ def test_a_permission_request_during_a_call_is_denied_and_refuses_the_call(
     assert answered.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
     assert (answered.content, answered.drop_kind) == (None, None)
     # Asked with nothing else spent: still never a drop, so never re-sent.
-    runtime.session = FakeSession([*UNSPENT, error(500)], asks_at=1)
+    runtime.session = FakeSession([*UNSPENT, error(500), idle()], asks_at=1)
     quiet = ask_copilot(PROMPT, TARGET, 5.0)
     unanswered = provider(lambda *_args: quiet).complete(PROMPT)
     assert unanswered.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
@@ -4006,11 +4381,12 @@ def test_a_home_the_runtime_left_behind_is_named_on_stderr_without_its_path(
     def kept(path: object, *_args: object, **_kwargs: object) -> None:
         return None
 
+    removed = shutil.rmtree
     monkeypatch.setattr("shutil.rmtree", kept)
     ask_copilot(PROMPT, TARGET, 5.0)
     [made] = runtime.made
     assert made.home.exists()
-    made.home.rmdir()
+    removed(made.home)
     _out, err = capsys.readouterr()
     assert err == "COPILOT_HOME_NOT_REMOVED\n"
 
