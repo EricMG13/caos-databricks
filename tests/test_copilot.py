@@ -9,7 +9,9 @@ fails the fake and not the adapter.
 
 from __future__ import annotations
 
+import inspect
 import math
+import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
@@ -19,6 +21,7 @@ from uuid import uuid4
 
 import pytest
 from copilot import SessionEvent
+from copilot.generated import session_events
 from copilot.generated.session_events import SessionEventType
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
@@ -415,13 +418,17 @@ def sdk_call(**parts: Part) -> list[Event]:
 # shape); SDK_HAPPY adds the usage the SDK may deliver.
 HAPPY = sdk_call(usage=None)
 SDK_HAPPY = sdk_call()
+# One logical dispatch that recovered inside itself: the SDK's
+# `ModelCallFinishedData` is "the final lifecycle outcome for one logical model
+# dispatch", which "may include internal reconnect or fallback work", and a
+# `model.call_failure` is one attempt's telemetry (F573). So the retry opens no
+# second dispatch, and the one dispatch closes on its `model.call_finished`.
 RECOVERED = [
     started(),
     turn_start(),
     call_start(),
     failure("api", 503),
     turn_retry("provider_error"),
-    call_start(),
     answer(),
     call_finished("success"),
     final_result(),
@@ -429,11 +436,14 @@ RECOVERED = [
     checkpoint(300_000_000, 1),
     idle(),
 ]
+# The failed dispatch closes on its `model.call_finished` with outcome `error`
+# (F573): R5's shape left it open, which no longer settles a checkpoint.
 SPENT_FAILURE = [
     started(),
     turn_start(),
     call_start(),
     failure("api", 500),
+    call_finished("error"),
     checkpoint(100_000_000, 1),
     error(500),
 ]
@@ -611,7 +621,7 @@ REFUSED: dict[str, list[Event]] = {
     "fusion-on-usage": sdk_call(usage=fusion(usage())),
     "fusion-on-call-start": sdk_call(call_start=fusion(call_start())),
     "fusion-on-failure": sdk_call(
-        call_start=[call_start(), fusion(failure("api", 503)), call_start()]
+        call_start=[call_start(), fusion(failure("api", 503))]
     ),
     "auto-resolved-even-naming-the-pin": sdk_call(extra=auto_resolved(PIN)),
     "model-change-other": sdk_call(extra=model_change(OTHER)),
@@ -667,7 +677,22 @@ def test_anything_but_the_call_asked_for_states_no_finish_reason_and_keeps_its_b
 ) -> None:
     message = reply_message(seen, TARGET)
     assert "finish_reason" not in message.response_metadata
-    assert message.response_metadata["nano_aiu"] == 251_164_000
+    assert message.response_metadata.get("nano_aiu") == _bill_kept(seen)
+
+
+def _bill_kept(seen: list[Event]) -> int | None:
+    """The bill a refused call keeps: its checkpoint, unless a sub-agent's work
+    or a spend figure above the checkpoint voids it (F572). An oracle of its
+    own, not the code under test."""
+    if any(
+        event.get("agentId") is not None
+        or str(event["type"]).startswith(("subagent.", "workflow."))
+        for event in seen
+    ):
+        return None
+    if any(event["type"] == "session_limits_exhausted.requested" for event in seen):
+        return None  # 31 credits used, above the checkpoint
+    return 251_164_000
 
 
 ADMITTED: dict[str, Event] = {
@@ -946,7 +971,11 @@ def test_a_checkpoint_whose_figure_is_unreadable_is_spend() -> None:
     assert "nano_aiu" not in message.response_metadata
 
 
-UNSPENT = [started(), turn_start(), call_start()]
+# A session that started and opened no dispatch: an unclosed `model.call_start`
+# is itself possible spend (F574).
+UNSPENT = [started(), turn_start()]
+# One dispatch that failed and closed: still no spend.
+FAILED_DISPATCH = [call_start(), failure("api", 500), call_finished("error")]
 
 
 @pytest.mark.parametrize(
@@ -1577,7 +1606,6 @@ REFUSED_ROUND_1: dict[str, list[Event]] = {
                 statusCode=503,
                 model=OTHER,
             ),
-            call_start(),
         ]
     ),
     "message-chunk-0-of-2": sdk_call(answer=answer(chunkCount=2, chunkIndex=0)),
@@ -1632,7 +1660,7 @@ def test_a_dispatch_turn_effort_or_tool_signal_off_the_pin_is_billed_and_refused
 ) -> None:
     message = reply_message(seen, TARGET)
     assert "finish_reason" not in message.response_metadata
-    assert message.response_metadata["nano_aiu"] == 251_164_000
+    assert message.response_metadata.get("nano_aiu") == _bill_kept(seen)
 
 
 ADMITTED_ROUND_1: dict[str, list[Event]] = {
@@ -1844,7 +1872,7 @@ def test_property_any_event_type_off_the_allow_list_refuses_its_finish(
     message = reply_message(seen, TARGET)
     assert "finish_reason" not in message.response_metadata
     settled_at = len(SDK_HAPPY) - 2  # the checkpoint, before the idle
-    if at <= settled_at:
+    if at <= settled_at and not kind.startswith(("subagent.", "workflow.")):
         assert message.response_metadata["nano_aiu"] == 251_164_000
     else:
         assert "nano_aiu" not in message.response_metadata
@@ -1950,32 +1978,37 @@ def test_property_any_type_off_the_quiet_list_is_spend_never_a_drop(
     assert copilot_module._spent(seen)
 
 
-QUIET_FAKES = [
-    started(),
-    wire("user.message", content=PROMPT),
-    turn_start(),
-    turn_end(),
-    call_start(),
-    failure("api", 500),
-    failure("transport"),
-    final_result(result="http_5xx"),
-    checkpoint(0),
-    error(500),
-    idle(),
-    wire("session.info", infoType="x", message="m"),
-    wire("session.warning", warningType="x", message="m"),
-    shutdown(modelMetrics={}, totalNanoAiu=0),
-    shutdown(modelMetrics={}, totalNanoAiu=None),
+# Quiet parts: a dispatch is quiet only as a closed, failed one (F574).
+QUIET_FAKES: list[list[Event]] = [
+    [started()],
+    [wire("user.message", content=PROMPT)],
+    [turn_start()],
+    [turn_end()],
+    FAILED_DISPATCH,
+    [call_start(), failure("transport"), call_finished("cancelled")],
+    [call_start(), call_finished("rejected")],
+    [failure("api", 500)],
+    [final_result(result="http_5xx")],
+    [checkpoint(0)],
+    [checkpoint(0, 0)],
+    [error(500)],
+    [idle()],
+    [wire("session.info", infoType="x", message="m")],
+    [wire("session.warning", warningType="x", message="m")],
+    [shutdown(modelMetrics={}, totalNanoAiu=0)],
+    [shutdown(modelMetrics={}, totalNanoAiu=None, totalPremiumRequests=0)],
 ]
 
 
 def test_every_quiet_type_has_a_quiet_fake() -> None:
     conditional = {
         "model.call_final_result",
+        "model.call_finished",
+        "model.call_failure",
         "session.usage_checkpoint",
         "session.shutdown",
     }
-    faked = {event["type"] for event in QUIET_FAKES}
+    faked = {event["type"] for part in QUIET_FAKES for event in part}
     assert copilot_module._QUIET | conditional <= faked | {
         "session.managed_settings_resolved",
         "session.managed_settings_enforced",
@@ -1985,9 +2018,9 @@ def test_every_quiet_type_has_a_quiet_fake() -> None:
 @EXAMPLES
 @given(st.lists(st.sampled_from(QUIET_FAKES), max_size=12))
 def test_property_a_call_of_quiet_events_alone_spent_nothing(
-    events: list[Event],
+    parts: list[list[Event]],
 ) -> None:
-    assert not copilot_module._spent(events)
+    assert not copilot_module._spent([event for part in parts for event in part])
 
 
 # -- Fix round 2: the re-audit's probes, as tests. ---------------------------
@@ -2157,8 +2190,18 @@ def test_work_the_old_deny_list_missed_after_the_checkpoint_voids_the_bill(
 
 
 OPEN: dict[str, list[Event]] = {
-    "dispatch-open-then-error": [*UNSPENT, checkpoint(100_000_000, 1), error(500)],
-    "dispatch-open-then-idle": [*UNSPENT, checkpoint(100_000_000, 1), idle()],
+    "dispatch-open-then-error": [
+        *UNSPENT,
+        call_start(),
+        checkpoint(100_000_000, 1),
+        error(500),
+    ],
+    "dispatch-open-then-idle": [
+        *UNSPENT,
+        call_start(),
+        checkpoint(100_000_000, 1),
+        idle(),
+    ],
     "switch-eligible-error": [
         *UNSPENT,
         failure("api", 500),
@@ -2382,3 +2425,367 @@ def test_a_quiet_type_with_unreadable_data_is_spend(kind: str) -> None:
 def test_an_event_not_in_wire_form_before_the_turn_refuses(event: Event) -> None:
     seen = [SDK_HAPPY[0], event, *SDK_HAPPY[1:]]
     assert "finish_reason" not in reply_message(seen, TARGET).response_metadata
+
+
+# -- Fix round 3: the re-audit's probes, as tests. ---------------------------
+
+
+def run_completed_notice(nano_aiu: int) -> Event:
+    return wire(
+        "system.notification",
+        content="c",
+        kind={
+            "type": "workflow_completed",
+            "attempt": 1,
+            "consumedNanoAiu": nano_aiu,
+            "consumedSubagents": 2,
+            "elapsedMs": 1,
+            "runId": "r",
+            "status": "completed",
+            "workflowName": "w",
+        },
+    )
+
+
+def phase_completed(nano_aiu: int) -> Event:
+    return wire(
+        "assistant.fusion_phase_completed",
+        content="c",
+        conversationScope="root",
+        durationMs=1.0,
+        fusionId="f",
+        model=PIN,
+        phaseId="p",
+        phaseKind="primary",
+        role="r",
+        status="succeeded",
+        verdict="v",
+        usage={
+            "cachedTokens": 0,
+            "inputTokens": 1,
+            "outputTokens": 1,
+            "requestCount": 1,
+            "totalNanoAiu": nano_aiu,
+        },
+    )
+
+
+def compaction_complete_at(nano_aiu: int) -> Event:
+    event = compaction_complete()
+    usage_block = {**event["data"]["compactionTokensUsed"]}
+    usage_block["copilotUsage"] = {"totalNanoAiu": nano_aiu, "model": PIN}
+    return wire(event["type"], **{**event["data"], "compactionTokensUsed": usage_block})
+
+
+# Item 1 (F572): a spend figure stated anywhere above the bill leaves it unknown.
+ABOVE: dict[str, Event] = {
+    "fusion-completed": fusion_completed(900_000_000),
+    "fusion-phase-usage": phase_completed(900_000_000),
+    "compaction-copilot-usage": compaction_complete_at(900_000_000),
+    "limits-exhausted-credits": limits_exhausted(31.0, 30.0),
+}
+
+
+@pytest.mark.parametrize("figure", list(ABOVE.values()), ids=list(ABOVE))
+def test_a_spend_figure_above_the_checkpoint_anywhere_leaves_the_charge_unknown(
+    figure: Event,
+) -> None:
+    assert (
+        "nano_aiu"
+        not in reply_message(sdk_call(extra=figure), TARGET).response_metadata
+    )
+
+
+WITHIN: dict[str, Event] = {
+    "fusion-completed": fusion_completed(100_000_000),
+    "compaction-copilot-usage": compaction_complete_at(251_164_000),
+    "limits-exhausted-credits": limits_exhausted(0.1, 30.0),
+}
+
+
+@pytest.mark.parametrize("figure", list(WITHIN.values()), ids=list(WITHIN))
+def test_a_spend_figure_within_the_checkpoint_keeps_the_bill(figure: Event) -> None:
+    message = reply_message(sdk_call(extra=figure), TARGET)
+    assert message.response_metadata["nano_aiu"] == 251_164_000
+
+
+SUB_AGENT_SPEND: dict[str, Event] = {
+    "workflow-settled-below": run_settled(50_000_000),
+    "workflow-notice": run_completed_notice(50_000_000),
+    "subagent-completed": subagent_completed(),
+    "sub-agent-envelope": enveloped(
+        wire("session.info", infoType="x", message="m"), agentId="agent-1"
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "spend", list(SUB_AGENT_SPEND.values()), ids=list(SUB_AGENT_SPEND)
+)
+def test_a_sub_agents_spend_voids_the_bill_wherever_it_is_stated(spend: Event) -> None:
+    """F572: voided everywhere, as `shutdown.agentMetrics` voids it (F568),
+    even below the checkpoint: it cannot be reconciled with it."""
+    seen = sdk_call(extra=spend)
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+@pytest.mark.parametrize(
+    ("premium", "billed"), [(1, True), (2, False)], ids=["equal", "above"]
+)
+def test_premium_requests_stated_elsewhere_may_not_exceed_the_checkpoints(
+    premium: int, billed: bool
+) -> None:
+    seen = sdk_call(idle=[idle(), shutdown(totalPremiumRequests=premium)])
+    assert ("nano_aiu" in reply_message(seen, TARGET).response_metadata) is billed
+
+
+# Item 2 (F573): a dispatch closes only on `model.call_finished`.
+NOT_CLOSED: dict[str, list[Event]] = {
+    "closed-by-an-attempts-failure": [
+        *UNSPENT,
+        call_start(),
+        failure("api", 503),
+        checkpoint(100_000_000, 1),
+        error(500),
+    ],
+    "closed-by-a-sub-agents-failure": [
+        *UNSPENT,
+        call_start(),
+        wire(
+            "model.call_failure",
+            source="subagent",
+            failureKind="api",
+            statusCode=503,
+            model=PIN,
+        ),
+        checkpoint(100_000_000, 1),
+        error(500),
+    ],
+}
+
+
+@pytest.mark.parametrize("seen", list(NOT_CLOSED.values()), ids=list(NOT_CLOSED))
+def test_only_a_finished_dispatch_is_closed(seen: list[Event]) -> None:
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+def test_a_failed_dispatch_closed_by_its_finish_bills_its_checkpoint() -> None:
+    message = reply_message(SPENT_FAILURE, TARGET)
+    assert message.response_metadata["nano_aiu"] == 100_000_000
+
+
+# Item 3 (F574): each is spend, never a declared drop.
+RE_PAY: dict[str, list[Event]] = {
+    "premium-requests-on-a-zero-checkpoint": [
+        *UNSPENT,
+        *FAILED_DISPATCH,
+        checkpoint(0, 1),
+        error(500),
+        idle(),
+    ],
+    "shutdown-stating-premium-requests": [
+        *UNSPENT,
+        *FAILED_DISPATCH,
+        error(500),
+        idle(),
+        shutdown(modelMetrics={}, totalNanoAiu=None, totalPremiumRequests=2),
+    ],
+    "dispatch-never-closed": [*UNSPENT, call_start(), error(500), idle()],
+    "dispatch-never-closed-settled-http-5xx": [
+        *UNSPENT,
+        call_start(),
+        final_result(result="http_5xx"),
+        idle(),
+    ],
+    "a-sub-agents-failure": [
+        *UNSPENT,
+        wire(
+            "model.call_failure",
+            source="subagent",
+            failureKind="api",
+            statusCode=500,
+            model=OTHER,
+        ),
+        error(500),
+        idle(),
+    ],
+    "quiet-events-of-a-sub-agent": [
+        *UNSPENT,
+        enveloped(call_start(OTHER), agentId="agent-1"),
+        enveloped(failure("api", 500), agentId="agent-1"),
+        enveloped(call_finished("error"), agentId="agent-1"),
+        error(500),
+        idle(),
+    ],
+}
+
+
+@pytest.mark.parametrize("seen", list(RE_PAY.values()), ids=list(RE_PAY))
+def test_these_are_spend_never_a_declared_drop(seen: list[Event]) -> None:
+    assert isinstance(invoked(seen), AIMessage)
+    completion = provider(replying(*seen)).complete(PROMPT)
+    assert completion.drop_kind is None
+
+
+def test_a_closed_failed_dispatch_is_still_a_declared_drop() -> None:
+    """The D110 path stays open: no spend, the dispatch closed, a 5xx."""
+    seen = [*UNSPENT, *FAILED_DISPATCH, error(500), idle()]
+    completion = provider(replying(*seen)).complete(PROMPT)
+    assert completion.drop_kind is DropKind.DECLARED
+
+
+# Item 4 (F575): fields that say another agent, mode or provider answered.
+FIELD_GAPS: dict[str, list[Event]] = {
+    "recovered-failure-from-a-sub-agent": recovered_from(
+        failure_with(source="subagent")
+    ),
+    "recovered-failure-from-mcp-sampling": recovered_from(
+        failure_with(source="mcp_sampling")
+    ),
+    "recovered-failure-interaction-type": recovered_from(
+        failure_with(interactionType="conversation-subagent")
+    ),
+    "recovered-failure-byok": recovered_from(failure_with(isByok=True)),
+    "usage-interaction-type": sdk_call(
+        usage=usage(interactionType="conversation-subagent")
+    ),
+    "dispatch-edited-a-file": sdk_call(
+        call_finished=wire(
+            "model.call_finished",
+            dispatchDurationMs=1,
+            editClassifierVersion=1,
+            outcome="success",
+            turnId="turn-1",
+            containsBuiltInFileEditRequest=True,
+        )
+    ),
+    "idle-in-autopilot-mode": sdk_call(idle=wire("session.idle", mode="autopilot")),
+    "idle-in-plan-mode": sdk_call(idle=wire("session.idle", mode="plan")),
+}
+
+
+@pytest.mark.parametrize("seen", list(FIELD_GAPS.values()), ids=list(FIELD_GAPS))
+def test_a_field_naming_another_agent_mode_or_provider_refuses(
+    seen: list[Event],
+) -> None:
+    assert "finish_reason" not in reply_message(seen, TARGET).response_metadata
+
+
+def test_an_idle_in_interactive_mode_is_admitted() -> None:
+    seen = sdk_call(idle=wire("session.idle", mode="interactive"))
+    assert reply_message(seen, TARGET).response_metadata["finish_reason"] == "stop"
+
+
+# Item 5: every spend field name the pinned SDK defines, from its own source.
+def _sdk_field_names() -> set[str]:
+    names: set[str] = set()
+    for _name, cls in inspect.getmembers(session_events, inspect.isclass):
+        source = getattr(cls, "from_dict", None)
+        if source is not None and inspect.isfunction(source):
+            names |= set(re.findall(r'obj\.get\("(\w+)"\)', inspect.getsource(source)))
+    return names
+
+
+SPEND_NAMES = sorted(
+    name
+    for name in _sdk_field_names()
+    if re.search(r"NanoAiu|AiCredits|PremiumRequests", name)
+)
+CAPS = {"maxAiCredits", "declaredMaxAiCredits", "additionalAiCredits"}
+
+
+def test_every_spend_name_in_the_sdk_is_read_as_spend_or_named_a_cap() -> None:
+    for name in SPEND_NAMES:
+        assert (copilot_module._unit(name) is None) == (name in CAPS), name
+    assert {"totalNanoAiu", "consumedNanoAiu", "usedAiCredits"} <= set(SPEND_NAMES)
+
+
+@EXAMPLES
+@given(
+    st.sampled_from(sorted(set(SPEND_NAMES) - CAPS)),
+    st.sampled_from(ALL_TYPES),
+    st.integers(min_value=0, max_value=2),
+    st.integers(min_value=0, max_value=len(SDK_HAPPY) - 2),
+)
+def test_property_a_spend_figure_above_the_checkpoint_anywhere_voids_the_bill(
+    name: str, kind: str, depth: int, at: int
+) -> None:
+    unit = copilot_module._unit(name)
+    above: object = {
+        "nano": 251_164_001,
+        "credits": 0.251164001 * 10,
+        "premium": 2,
+    }[cast(str, unit)]
+    figure: object = {name: above}
+    for _level in range(depth):
+        figure = {"nested": [figure]}
+    event: Event = {"type": kind, "data": cast(dict[str, object], figure)}
+    seen = [*SDK_HAPPY[:at], event, *SDK_HAPPY[at:]]
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+# What the round-3 mutation run found the suite did not pin.
+
+
+@pytest.mark.parametrize(
+    ("credits", "total", "billed"),
+    [(0.5, 251_164_000, False), (0.25, 250_000_000, True), (0.25, 249_999_999, False)],
+    ids=["above", "exactly-equal", "just-above"],
+)
+def test_ai_credits_used_are_read_in_nano_ai_units(
+    credits: float, total: int, billed: bool
+) -> None:
+    seen = sdk_call(
+        usage=None,
+        extra=limits_exhausted(credits, 30.0),
+        checkpoint=checkpoint(total, 1),
+    )
+    assert ("nano_aiu" in reply_message(seen, TARGET).response_metadata) is billed
+
+
+@pytest.mark.parametrize("figure", [float("inf"), float("nan"), -1.0])
+def test_a_stated_spend_figure_that_is_no_count_leaves_the_charge_unknown(
+    figure: float,
+) -> None:
+    stated = _malformed(fusion_completed(1), totalNanoAiu=figure)
+    assert (
+        "nano_aiu"
+        not in reply_message(sdk_call(extra=stated), TARGET).response_metadata
+    )
+
+
+def test_a_completed_runs_spend_voids_the_bill_with_no_sub_agent_named() -> None:
+    notice = run_completed_notice(1)
+    kind = {**notice["data"]["kind"], "consumedSubagents": 0}
+    alone = wire(notice["type"], **{**notice["data"], "kind": kind})
+    assert (
+        "nano_aiu" not in reply_message(sdk_call(extra=alone), TARGET).response_metadata
+    )
+
+
+def test_per_model_figures_after_one_stating_none_still_sum() -> None:
+    metered = shutdown(
+        totalNanoAiu=None,
+        modelMetrics={
+            "a": metric(None),
+            "b": metric(200_000_000),
+            "c": metric(200_000_000),
+        },
+    )
+    seen = sdk_call(idle=[idle(), metered])
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+def test_every_field_is_found_at_every_depth_and_list_position() -> None:
+    pairs = copilot_module._pairs({"a": [{"b": 1}, {"c": [{"d": 2}]}], "e": 3})
+    for pair in (("b", 1), ("d", 2), ("e", 3)):
+        assert pair in pairs
+
+
+def test_an_event_whose_type_is_not_text_is_spend_and_never_raises() -> None:
+    """F577: a malformed type is read as no type -- not quiet, not settling --
+    and no membership test on it raises."""
+    odd: Event = {"type": ["session.idle"], "data": {}}
+    assert isinstance(invoked([*UNSPENT, odd, error(500)]), AIMessage)
+    late = sdk_call(idle=[odd, idle()])
+    assert "nano_aiu" not in reply_message(late, TARGET).response_metadata

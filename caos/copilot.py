@@ -157,11 +157,11 @@ _REFUSING = (
 # R2.10: the event types a call may hold and still be a drop -- one that spent
 # nothing, which D110 may re-attempt. Each is documented by the SDK as metadata,
 # telemetry or display: the session's start, the prompt, a turn's start and end,
-# a dispatch's start and its failure, an error, an idle, an info or a warning,
-# and managed-settings notices. Three more are quiet only as `_quiet` states:
-# a settled result that failed, a checkpoint stating exactly zero, a shutdown
-# that metered nothing. Any other type -- a delta, a sub-agent, a fusion, a
-# compaction, a workflow -- means spend is possible: never a drop.
+# a dispatch's start, an error, an idle, an info or a warning, and
+# managed-settings notices. Five more are quiet only as `_QUIET_WHEN` states
+# (F567, F574). Any other type -- a delta, a sub-agent, a fusion, a compaction,
+# a workflow -- means spend is possible: never a drop. So does any event a
+# sub-agent wrote, and a dispatch that never finished.
 _QUIET = frozenset(
     {
         "session.start",
@@ -169,7 +169,6 @@ _QUIET = frozenset(
         "assistant.turn_start",
         "assistant.turn_end",
         "model.call_start",
-        "model.call_failure",
         "session.error",
         "session.idle",
         "session.info",
@@ -339,8 +338,11 @@ def settled_charge(message: AIMessage, credit: Decimal | None) -> Decimal | None
     return reported_charge(amount)
 
 
-def _kind(event: Event) -> object:
-    return event.get("type")
+def _kind(event: Event) -> str | None:
+    """The event's type, or None when it is not text: so no membership test
+    on a malformed type can raise (F577)."""
+    kind = event.get("type")
+    return kind if isinstance(kind, str) else None
 
 
 def _indexed(seen: Sequence[Event], kind: str) -> list[tuple[int, Mapping[str, Any]]]:
@@ -401,9 +403,7 @@ def _admitted(event: Event, target: CopilotModel) -> bool:
     """R1.0: an allow-listed type, never a refusing one, carrying no fusion
     attribution (a synthetic multi-model turn) and no sub-agent's envelope,
     every field agreeing with the pin (`_fields_agree`; a model change only to
-    the pin among them), and meeting its condition: a server status only for
-    no server, and a load of MCP servers, skills, extensions or custom agents
-    only of none."""
+    the pin among them), and meeting its type's condition (`_condition_holds`)."""
     kind, data = event.get("type"), event.get("data")
     if not isinstance(kind, str) or not isinstance(data, Mapping):
         return False
@@ -411,10 +411,17 @@ def _admitted(event: Event, target: CopilotModel) -> bool:
         return False
     if data.get("fusion") is not None or event.get("agentId") is not None:
         return False
-    if not _fields_agree(data, target):
-        return False
+    return _fields_agree(data, target) and _condition_holds(kind, data)
+
+
+def _condition_holds(kind: str, data: Mapping[str, Any]) -> bool:
+    """R1.0's conditions by type: a server status only for no server; a
+    dispatch failure only of the top-level agent's own call (F575); a load of
+    MCP servers, skills, extensions or custom agents only of none."""
     if kind == "session.mcp_server_status_changed":
         return not data.get("serverName")
+    if kind == "model.call_failure":
+        return data.get("source") == "top_level"
     loaded = _LOADS.get(kind)
     return loaded is None or _loaded_nothing(data.get(loaded))
 
@@ -448,21 +455,43 @@ def _family(key: str) -> str | None:
     """The family a field's name puts it in, or None for any other field."""
     if key.startswith("previous"):
         return None
-    if key in ("model", "modelId", "modelTo") or key.endswith(("Model", "ModelId")):
+    named = _NAMED_FIELDS.get(key)
+    if named is not None:
+        return named
+    if key.endswith(("Model", "ModelId")):
         return "model"
-    if key == "models" or key.endswith("Models"):
+    if key.endswith("Models"):
         return "models"
-    if key == "effort" or key.endswith("Effort"):
+    if key.endswith("Effort"):
         return "effort"
-    if key in ("agentMode", "initiator"):
-        return key
-    if key in ("isAuto", "autoTier") or key.endswith("AutoTier"):
+    if key.endswith("AutoTier") or key.startswith(("agent", "tool")):
         return "absent"
-    if key.startswith(("agent", "tool")) or any(
-        part in key for part in ("Agent", "ubagent", "Tool")
-    ):
+    if any(part in key for part in ("Agent", "ubagent", "Tool")):
         return "absent"
     return None
+
+
+# Fields held by their exact name (F569, F575). `interactionType` is a free
+# string whose expected value no source states, so any stated one refuses
+# until the firm-seat spike records it (N182). `modelFrom` is not held: the
+# dispatches themselves -- start, failure, usage, settled result, answer --
+# name the model that answered, so a model named only as the one a cache or a
+# change moved from cannot have answered this call (F576).
+_NAMED_FIELDS = {
+    "model": "model",
+    "modelId": "model",
+    "modelTo": "model",
+    "models": "models",
+    "effort": "effort",
+    "agentMode": "mode",
+    "mode": "mode",
+    "initiator": "initiator",
+    "isByok": "byok",
+    "isAuto": "absent",
+    "autoTier": "absent",
+    "interactionType": "absent",
+    "containsBuiltInFileEditRequest": "absent",
+}
 
 
 def _is_the_pin(value: object, target: CopilotModel) -> bool:
@@ -491,12 +520,17 @@ def _absent(value: object, target: CopilotModel) -> bool:
     return not value
 
 
+def _not_byok(value: object, target: CopilotModel) -> bool:
+    return value is not True
+
+
 _FIELD_RULES: Mapping[str | None, Callable[[object, CopilotModel], bool]] = {
     "model": _is_the_pin,
     "models": _only_the_pin,
     "effort": _at_the_effort,
-    "agentMode": _interactive,
+    "mode": _interactive,
     "initiator": _by_the_user,
+    "byok": _not_byok,
     "absent": _absent,
 }
 
@@ -676,16 +710,21 @@ def _ai_units(
 ) -> int | None:
     """The session's AI units: its last checkpoint, which is cumulative. Every
     checkpoint must be a whole count, none below the one before it; the last
-    must be settled -- no work after it, the session ended after it, nothing
-    aborted (F560) -- and agree with every other figure the session states
-    (F558, F562). Anything else is an unknown charge."""
+    must be settled -- every dispatch finished, no work after it, the session
+    ended after it, nothing aborted (F560, F568, F573) -- and no spend figure
+    the session states anywhere may exceed it, nor any be a sub-agent's, which
+    cannot be reconciled with it (F558, F562, F572). Anything else is an
+    unknown charge: never the lower figure."""
     totals: list[int] = []
     for _at, data in marks:
         total = _whole_units(data.get("totalNanoAiu"))
         if total is None or (totals and total < totals[-1]):
             return None
         totals.append(total)
-    if not _settled_after(seen, marks[-1][0]) or not _figures_agree(seen, totals[-1]):
+    premium = marks[-1][1].get("totalPremiumRequests")
+    if not _settled_after(seen, marks[-1][0]) or not _figures_agree(
+        seen, totals[-1], premium
+    ):
         return None
     return totals[-1]
 
@@ -712,36 +751,105 @@ def _settles(event: Event) -> bool:
 
 
 def _dispatch_open(seen: Sequence[Event]) -> bool:
-    """Whether a `model.call_start` has no `model.call_finished` or
-    `model.call_failure` closing it: a dispatch still running."""
+    """Whether a `model.call_start` has no `model.call_finished` closing it: a
+    dispatch still running. Only the finish closes one -- "the final lifecycle
+    outcome for one logical model dispatch" -- while a `model.call_failure` is
+    one attempt's telemetry, and a sub-agent's at that (F573)."""
     running = 0
     for event in seen:
         kind = _kind(event)
         if kind == "model.call_start":
             running += 1
-        elif kind in ("model.call_finished", "model.call_failure"):
+        elif kind == "model.call_finished":
             running = max(running - 1, 0)
     return running > 0
 
 
-def _figures_agree(seen: Sequence[Event], total: int) -> bool:
-    """F558, F562: the per-request figures sum to no more than `total`; a
-    shutdown's session total, when stated, is exactly `total`, and its
-    per-model figures sum to no more than it."""
+def _figures_agree(seen: Sequence[Event], total: int, premium: object) -> bool:
+    """F558, F562, F572: no sub-agent's spend anywhere; the per-request
+    figures sum to no more than `total`; every spend figure any other event
+    states (`_unit`), at any depth, is no more than `total` -- premium requests
+    no more than the checkpoint's `premium`; and a shutdown's session total,
+    when stated, is exactly `total`, its per-model figures summing to no more."""
+    if any(_sub_agent(event) for event in seen):
+        return False
     blocks = [usage.get("copilotUsage") for usage in _data(seen, "assistant.usage")]
     requested = _summed([block for block in blocks if block is not None])
     if requested is None or requested > total:
+        return False
+    # The checkpoints are walked too: being cumulative, none states more than
+    # the last, so a premium-request count that falls is no running total.
+    stated = [
+        (key, value) for event in seen for key, value in _pairs(event.get("data"))
+    ]
+    if not all(_within(key, value, total, premium) for key, value in stated):
         return False
     return all(
         _shutdown_figures_agree(data, total) for data in _data(seen, "session.shutdown")
     )
 
 
-def _shutdown_figures_agree(data: Mapping[str, Any], total: int) -> bool:
-    """A sub-agent's spend (`agentMetrics`) cannot be reconciled with the
-    session's checkpoint, so any leaves the charge unknown (F568)."""
-    if data.get("agentMetrics"):
+def _pairs(value: object) -> list[tuple[str, object]]:
+    """Every field of `value`, at any depth, as (name, value)."""
+    found: list[tuple[str, object]] = []
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            found.append((key, item))
+            found += _pairs(item)
+    elif isinstance(value, list):
+        for item in value:
+            found += _pairs(item)
+    return found
+
+
+def _unit(key: str) -> str | None:
+    """The unit a spend figure's name states (F572): nano-AIU, AI credits used,
+    or premium requests. None for any other field, a credit cap (`max*`,
+    `declaredMax*`) or grant (`additional*`) among them; `cost` states no unit
+    (R2 names it experimental) and is not read."""
+    if key.endswith("NanoAiu"):
+        return "nano"
+    if key.endswith("AiCredits") and key.startswith("used"):
+        return "credits"
+    if key.endswith("PremiumRequests"):
+        return "premium"
+    return None
+
+
+def _within(key: str, value: object, total: int, premium: object) -> bool:
+    """A stated figure no more than the bill, in its own unit; any field that
+    is no spend figure holds trivially."""
+    unit = _unit(key)
+    if unit is None:
+        return True
+    if not _finite_count(value):
         return False
+    if unit == "nano":
+        return Decimal(value) <= total
+    if unit == "credits":
+        return Decimal(value) * NANO_PER_CREDIT <= total
+    return not value or (_finite_count(premium) and Decimal(value) <= Decimal(premium))
+
+
+def _sub_agent(event: Event) -> bool:
+    """F568, F572: an event that is or states a sub-agent's work -- written by
+    one (`agentId`), a sub-agent's or a workflow's own event, or one carrying
+    `agentMetrics`, `consumedSubagents` or a workflow's `consumedNanoAiu`."""
+    kind = _kind(event)
+    if event.get("agentId") is not None:
+        return True
+    if kind is not None and kind.startswith(("subagent.", "workflow.")):
+        return True
+    return any(
+        key == "consumedNanoAiu" or (key in _SUB_AGENT_FIELDS and value)
+        for key, value in _pairs(event.get("data"))
+    )
+
+
+_SUB_AGENT_FIELDS = frozenset({"agentMetrics", "consumedSubagents"})
+
+
+def _shutdown_figures_agree(data: Mapping[str, Any], total: int) -> bool:
     stated = data.get("totalNanoAiu")
     if stated is not None and _whole_units(stated) != total:
         return False
@@ -800,35 +908,70 @@ def _premium(value: object) -> str | None:
 
 
 def _spent(seen: Sequence[Event]) -> bool:
-    """R2.10, F567: whether the session can have cost anything -- whether any
-    event is off the quiet allow-list. Such a call is returned and billed,
-    never raised: it is no drop, so it is never re-attempted or re-sent
-    (invariants 6 and 8; D110)."""
-    return not all(_quiet(event) for event in seen)
+    """R2.10, F567, F574: whether the session can have cost anything -- any
+    event off the quiet allow-list, or a dispatch that never finished. Such a
+    call is returned and billed, never raised: it is no drop, so it is never
+    re-attempted or re-sent (invariants 6 and 8; D110)."""
+    return not all(_quiet(event) for event in seen) or _dispatch_open(seen)
 
 
 def _quiet(event: Event) -> bool:
-    """One event on R2.10's allow-list: a `_QUIET` type; a settled result that
-    states a failure; a checkpoint stating exactly zero; a shutdown that
-    metered no model and no agent and states no spend."""
-    kind, data = event.get("type"), event.get("data")
-    if not isinstance(data, Mapping):
+    """One event on R2.10's allow-list: no sub-agent's (`agentId`), readable,
+    and a `_QUIET` type or one `_QUIET_WHEN` admits."""
+    kind, data = _kind(event), event.get("data")
+    if not isinstance(data, Mapping) or event.get("agentId") is not None:
         return False
     if kind in _QUIET:
         return True
-    if kind == "model.call_final_result":
-        result = data.get("result")
-        return isinstance(result, str) and result != "success"
-    if kind == "session.usage_checkpoint":
-        return _stated_zero(data.get("totalNanoAiu"))
-    if kind == "session.shutdown":
-        stated = data.get("totalNanoAiu")
-        return (
-            data.get("modelMetrics") == {}
-            and not data.get("agentMetrics")
-            and (stated is None or _stated_zero(stated))
-        )
-    return False
+    condition = _QUIET_WHEN.get(kind)
+    return condition is not None and condition(data)
+
+
+def _failed_result(data: Mapping[str, Any]) -> bool:
+    result = data.get("result")
+    return isinstance(result, str) and result != "success"
+
+
+def _failed_finish(data: Mapping[str, Any]) -> bool:
+    outcome = data.get("outcome")
+    return isinstance(outcome, str) and outcome != "success"
+
+
+def _own_failure(data: Mapping[str, Any]) -> bool:
+    return data.get("source") == "top_level"
+
+
+def _zero_checkpoint(data: Mapping[str, Any]) -> bool:
+    return _stated_zero(data.get("totalNanoAiu")) and _none_or_zero(
+        data.get("totalPremiumRequests")
+    )
+
+
+def _empty_shutdown(data: Mapping[str, Any]) -> bool:
+    return (
+        data.get("modelMetrics") == {}
+        and not data.get("agentMetrics")
+        and _none_or_zero(data.get("totalNanoAiu"))
+        and _none_or_zero(data.get("totalPremiumRequests"))
+    )
+
+
+def _none_or_zero(value: object) -> bool:
+    return value is None or _stated_zero(value)
+
+
+# The types quiet only on a condition (F567, F574): a settled result naming a
+# failure; a dispatch's finish that is not a success (it closes the dispatch);
+# the top-level agent's own failed attempt; a checkpoint stating zero AI units
+# and no premium request; a shutdown that metered no model and no agent and
+# states no spend.
+_QUIET_WHEN: Mapping[str | None, Callable[[Mapping[str, Any]], bool]] = {
+    "model.call_final_result": _failed_result,
+    "model.call_finished": _failed_finish,
+    "model.call_failure": _own_failure,
+    "session.usage_checkpoint": _zero_checkpoint,
+    "session.shutdown": _empty_shutdown,
+}
 
 
 def _stated_zero(value: object) -> bool:
