@@ -246,7 +246,10 @@ def test_a_connect_failure_is_never_repeated(
         attempts.append(url)
         return real(url, **kwargs)
 
-    wrong = empty_database.replace("local-test-admin-only", "not-the-password")
+    # The URL's own password, whichever database the suite runs against (a
+    # developer's compose database and CI's service container differ).
+    password = str(psycopg.conninfo.conninfo_to_dict(empty_database)["password"])
+    wrong = empty_database.replace(f":{password}@", ":not-the-password@")
     assert wrong != empty_database
     monkeypatch.setattr(psycopg, "connect", counted)
     monkeypatch.setattr(deps, "_database_url", lambda: wrong)
