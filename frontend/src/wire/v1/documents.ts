@@ -118,6 +118,7 @@ const RefusalCode = enumOf([
   "CONTEXT_OVER_CEILING",
   "UPSTREAM_SECTION_OVER_CEILING",
   "RESERVATION_BELOW_REQUEST",
+  "BUDGET_CHARGE_OVER_RESERVATION",
   "PROVIDER_UNAVAILABLE",
   "PROVIDER_OUTPUT_TRUNCATED",
   "PROVIDER_REFUSED",
@@ -190,6 +191,8 @@ const RefusalCode = enumOf([
   "ROUTE_PIN_TOO_LATE",
   "RUN_INPUT_INVALID",
   "RESEARCH_BRIEF_INVALID",
+  "RUN_QUALIFIER_INVALID",
+  "REPORTING_PERIOD_UNREADABLE",
   "RUN_INPUT_ALREADY_PINNED",
   "RUN_INPUT_TOO_LATE",
   "GATE_APPROVAL_MISMATCH",
@@ -290,6 +293,13 @@ const ResearchBrief = object({
   authorization_basis: text,
   exclusions: text,
   questions: array(ResearchBriefQuestion, 32),
+});
+// One command qualifier a pin states for one module (D109,
+// `PinRunInput.qualifiers`).
+const RunQualifier = object({
+  module_id: short,
+  name: short,
+  value: string({ max: 1024 }),
 });
 const GateView = object({ gate: Gate, state: GateState });
 const EdgeView = object({ source: short, type: EdgeType });
@@ -848,6 +858,7 @@ export const V1_SHAPES = {
   QualificationState,
   ResearchBrief,
   ResearchBriefQuestion,
+  RunQualifier,
   RouteChoice,
   ModelChoice,
   RouteEdgeView,

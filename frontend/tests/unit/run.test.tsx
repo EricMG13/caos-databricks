@@ -601,6 +601,8 @@ describe("Run", () => {
       expect(JSON.parse((init as RequestInit).body as string)).toEqual({
         subject: run.subject,
         research: null,
+        qualifiers: [],
+        objective: null,
       });
       expect(
         UUID.test(

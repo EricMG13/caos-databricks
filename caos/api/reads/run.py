@@ -458,6 +458,7 @@ def _run_view(
         adapter_route=route is not None and _adapter_route(route),
         work_state=None if work is None else work.state,
         cancel_requested=work is not None and work.cancel_requested,
+        stop_code=None if work is None else work.stop_code,
     )
     return view, facts, list(dict.fromkeys(notes))
 

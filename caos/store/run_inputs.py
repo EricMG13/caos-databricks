@@ -15,11 +15,21 @@ from uuid import UUID
 import psycopg
 
 from caos import methodology
-from caos.boundary_text import BoundaryText
+from caos.boundary_text import BoundaryText, hides_text
 from caos.digest import canonical_digest, canonical_json
 from caos.graph.route import ResolvedRoute
-from caos.methodology.bundle import Bundle
+from caos.methodology.bundle import Bundle, verified_bytes
 from caos.methodology.handoff import ADAPTER_ROUTES, RESEARCH_MODULE
+from caos.methodology.qualifiers import (
+    BASE_PERIOD,
+    FORECAST_HORIZON,
+    FORECAST_MODULE,
+    STAGE_FIELD_MODULES,
+    pinned_command,
+    read_command,
+    stated_command,
+    ux_stage_fields,
+)
 from caos.methodology.vendor import (
     VendorContract,
     authority_bundle_sha256,
@@ -49,6 +59,16 @@ class RunSubject:
 
 
 @dataclass(frozen=True, slots=True)
+class RunCommand:
+    """Format version 3's pinned command (D109): the canonical JSON
+    `qualifiers.pinned_command` wrote -- module id to qualifier name to its
+    `value` and its `basis`, `pinned` or `derived` -- or None for a version-3
+    pin that carries none."""
+
+    text: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class RunInput:
     run_id: UUID
     case_id: UUID
@@ -63,17 +83,26 @@ class RunInput:
     # Format version 2 only: both present, or both absent for version 1.
     subject: RunSubject | None = None
     cos_run_id: str | None = None
+    # Format version 3 only (D109): present, with a subject, on every new pin;
+    # absent on versions 1 and 2, whose bytes and fingerprints never move.
+    command: RunCommand | None = None
 
     @property
     def format_version(self) -> int:
-        return 1 if self.subject is None else 2
+        if self.subject is None:
+            return 1
+        return 2 if self.command is None else 3
 
 
 def input_fields(pin: RunInput) -> dict[str, object]:
-    """The pin as plain data; a version-1 pin keeps its version-1 keys exactly."""
+    """The pin as plain data; a version-1 or version-2 pin keeps its own
+    version's keys exactly, and version 3 adds `command_json`."""
     fields = asdict(pin)
+    command = fields.pop("command")
     if pin.format_version == 1:
         del fields["subject"], fields["cos_run_id"]
+    if command is not None:
+        fields["command_json"] = command["text"]
     return fields
 
 
@@ -83,6 +112,12 @@ def cos_run_id(run_id: UUID, created_at: datetime) -> str:
 
 
 def _subject_text(value: object) -> bool:
+    """One line of subject text: NFC within the bound, and nothing a reader
+    cannot see (`hides_text`, F525) -- an issuer name and a period reach
+    every node's front matter and the gate preview, and a model copying a
+    hidden character back is refused `HANDOFF_MALFORMED` for the host's
+    defect. The one-line rule refuses U+2028 and U+2029 and `hides_text`
+    U+FEFF, so with it this is `handoff.INVISIBLE` too."""
     try:
         return (
             type(value) is str
@@ -92,6 +127,7 @@ def _subject_text(value: object) -> bool:
             and len(value.splitlines()) == 1
             and len(value.encode("utf-8")) <= _SUBJECT_TEXT_BYTES
             and BoundaryText.of(value, limit=_SUBJECT_TEXT_BYTES).value == value
+            and not hides_text(value)
         )
     except Refusal:
         return False
@@ -354,11 +390,8 @@ def _validate(pin: RunInput) -> None:
             )
         ) or not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,63}", pin.adapter_version):
             raise Refusal(RefusalCode.RUN_INPUT_INVALID)
-        if pin.research_json is not None:
-            if len(pin.research_json.encode("utf-8")) > 65536:
-                raise Refusal(RefusalCode.RUN_INPUT_INVALID)
-            if _research(json.loads(pin.research_json)) != pin.research_json:
-                raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+        if not _stored_research(pin.research_json) or not _command_valid(pin):
+            raise Refusal(RefusalCode.RUN_INPUT_INVALID)
         if (pin.subject is None) != (pin.cos_run_id is None) or (
             pin.subject is not None
             and (
@@ -371,6 +404,31 @@ def _validate(pin: RunInput) -> None:
             raise Refusal(RefusalCode.RUN_INPUT_INVALID)
     except (TypeError, ValueError, AttributeError, RecursionError):
         raise Refusal(RefusalCode.RUN_INPUT_INVALID) from None
+
+
+def _stored_research(research_json: str | None) -> bool:
+    """Whether a stored brief is absent, or the exact canonical text
+    `_research` writes within the store's bound."""
+    return research_json is None or (
+        len(research_json.encode("utf-8")) <= 65536
+        and _research(json.loads(research_json)) == research_json
+    )
+
+
+def _command_valid(pin: RunInput) -> bool:
+    """Whether a pin's command is absent (versions 1 and 2), or a version-3
+    `RunCommand` over a subject whose text, when any, `read_command` reads
+    back: canonical, closed, and every derived value the rule's over the
+    pinned reporting period. `ValueError` from the read is the caller's."""
+    command, subject = pin.command, pin.subject
+    if command is None:
+        return True
+    if subject is None or type(command) is not RunCommand:
+        return False
+    return command.text is None or (
+        len(command.text.encode("utf-8")) <= 65536
+        and bool(read_command(command.text, reporting_period=subject.reporting_period))
+    )
 
 
 def load_run_input(conn: StoreConnection, run_id: UUID) -> RunInput | None:
@@ -391,7 +449,7 @@ def _load_run_input(
             "SELECT run_id, case_id, source_version, source_fingerprint, route_digest,"
             " build_id, manifest_sha256, adapter_version, research_json,"
             " input_fingerprint, issuer_id, issuer_name, reporting_period,"
-            " analysis_date, cos_run_id, format_version"
+            " analysis_date, cos_run_id, format_version, command_json"
             " FROM run_inputs WHERE run_id = %s",
             (run_id,),
         ).fetchone()
@@ -399,7 +457,8 @@ def _load_run_input(
             return None
         subject = None if row[10] is None else RunSubject(*row[10:14])
         pin = RunInput(**dict(zip(_V1_COLUMNS, row[:10], strict=True)))
-        pin = replace(pin, subject=subject, cos_run_id=row[14])
+        command = RunCommand(row[16]) if row[15] == 3 else None
+        pin = replace(pin, subject=subject, cos_run_id=row[14], command=command)
         _validate(pin)
         run = conn.execute(
             "SELECT case_id, created_at FROM runs WHERE run_id = %s", (run_id,)
@@ -409,7 +468,8 @@ def _load_run_input(
         source = load_source_set(conn, pin.case_id, pin.source_version)
         pinned = route_pin(conn, run_id)
         if (
-            row[-1] != pin.format_version
+            row[15] != pin.format_version
+            or (row[16] is not None and command is None)
             or owner != (pin.case_id,)
             or (
                 pin.cos_run_id is not None
@@ -419,11 +479,53 @@ def _load_run_input(
             or source.fingerprint != pin.source_fingerprint
             or pinned is None
             or pinned[1] != pin.route_digest
+            or not _command_fits(pin.command, pinned[0])
         ):
             raise Refusal(RefusalCode.RUN_INPUT_INVALID)
     except psycopg.Error:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
     return pin, pinned[0], source
+
+
+def _command_fits(command: RunCommand | None, route: ResolvedRoute) -> bool:
+    """Whether a stored command names only modules the pinned route carries,
+    and, on a route carrying CP-2G, states both its horizon and its base (the
+    pin derives what the caller left unstated, D109). Versions 1 and 2 carry
+    no command and fit any route."""
+    if command is None:
+        return True
+    names: dict[str, Any] = json.loads(command.text or "{}")
+    modules = {node.module_id for node in route.nodes}
+    return modules.issuperset(names) and (
+        FORECAST_MODULE not in modules
+        or {FORECAST_HORIZON, BASE_PERIOD} <= set(names.get(FORECAST_MODULE, {}))
+    )
+
+
+def pinned_run_command(
+    bundle: Bundle,
+    route: ResolvedRoute,
+    stated: Mapping[str, Mapping[str, str]],
+    subject: RunSubject,
+) -> RunCommand:
+    """A new pin's command (D109): `stated` judged against the pinned route,
+    with CP-2G's unstated scope derived by the owner's rule; each name checked
+    against the stage fields of the verified `SKILL.md` it belongs to. Public
+    so a qualification set is judged by it before anything is written
+    (`harness.assert_admissible`, F526)."""
+    modules = frozenset(node.module_id for node in route.nodes)
+    stage_fields = {
+        module_id: ux_stage_fields(verified_bytes(bundle, module_id, "SKILL.md"))
+        for module_id in STAGE_FIELD_MODULES & modules
+    }
+    return RunCommand(
+        pinned_command(
+            stated,
+            route_modules=modules,
+            stage_fields=stage_fields,
+            reporting_period=subject.reporting_period,
+        )
+    )
 
 
 def pin_run_input(  # noqa: PLR0913 -- subject is keyword-only
@@ -434,19 +536,31 @@ def pin_run_input(  # noqa: PLR0913 -- subject is keyword-only
     research: object = None,
     *,
     subject: RunSubject | None = None,
+    qualifiers: Mapping[str, Mapping[str, str]] | None = None,
+    objective: str | None = None,
 ) -> RunInput:
     """Own one case-first/run-locked row/event transaction; setup commits separately.
 
-    Every new pin is format version 2 under the one canonical adapter (§42.1):
-    its fingerprint and gate preview bind the `subject` and the UTC vendor run
-    id, and a pin without a subject refuses `RUN_INPUT_INVALID`. Stored version
-    1 pins stay readable and byte-identical; execution refuses them.
+    Every new pin is format version 3 under the one canonical adapter (§42.1):
+    its fingerprint and gate preview bind the `subject`, the UTC vendor run
+    id and the run's command (D109) -- the caller's `qualifiers` and CP-0
+    `objective`, and CP-2G's scope derived by the owner's rule where the
+    caller stated none -- and a pin without a subject refuses
+    `RUN_INPUT_INVALID`. Stored version 1 and 2 pins stay readable and
+    byte-identical; execution refuses version 1.
     """
     if conn.autocommit:
         raise Refusal(RefusalCode.STORE_NOT_TRANSACTIONAL)
     with committed_unit(conn):
         candidate = pin_run_input_in(
-            conn, run_id, source_version, bundle, research, subject=subject
+            conn,
+            run_id,
+            source_version,
+            bundle,
+            research,
+            subject=subject,
+            qualifiers=qualifiers,
+            objective=objective,
         )
     return candidate
 
@@ -496,13 +610,21 @@ def pin_run_input_in(  # noqa: PLR0913 -- pin_run_input's arguments
     research: object = None,
     *,
     subject: RunSubject | None = None,
+    qualifiers: Mapping[str, Mapping[str, str]] | None = None,
+    objective: str | None = None,
 ) -> RunInput:
-    """`pin_run_input`'s row and event in the caller's transaction; never commits."""
+    """`pin_run_input`'s row and event in the caller's transaction; never commits.
+
+    `RUN_QUALIFIER_INVALID` for a command naming a module, name or value the
+    pin does not take, or a module the pinned route does not carry;
+    `REPORTING_PERIOD_UNREADABLE` when CP-2G's scope must be derived from a
+    period the owner's rule cannot read (D109)."""
     if type(source_version) is not int or not 0 < source_version < 2**63:
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
     # Every run pins the canonical adapter, whose handoffs name a subject.
     if subject is None or not _subject_valid(subject):
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+    stated = stated_command(qualifiers, objective)
     raw = _research(research)
     status = lock_run(conn, run_id)
     owner = conn.execute(
@@ -514,6 +636,7 @@ def pin_run_input_in(  # noqa: PLR0913 -- pin_run_input's arguments
     pinned = route_pin(conn, run_id)
     if source is None or pinned is None:
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+    command = pinned_run_command(bundle, pinned[0], stated, subject)
     candidate = RunInput(
         run_id,
         owner[0],
@@ -527,6 +650,7 @@ def pin_run_input_in(  # noqa: PLR0913 -- pin_run_input's arguments
         "",
         subject,
         cos_run_id(run_id, owner[1]),
+        command,
     )
     candidate = replace(candidate, input_fingerprint=_fingerprint(candidate))
     _validate(candidate)
@@ -556,7 +680,8 @@ def pin_run_input_in(  # noqa: PLR0913 -- pin_run_input's arguments
             " source_fingerprint, route_digest, build_id, manifest_sha256,"
             " adapter_version, research_json, input_fingerprint, issuer_id,"
             " issuer_name, reporting_period, analysis_date, cos_run_id,"
-            " format_version) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            " format_version, command_json)"
+            " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             (
                 *(getattr(candidate, name) for name in _V1_COLUMNS),
                 subject.issuer_id,
@@ -565,6 +690,7 @@ def pin_run_input_in(  # noqa: PLR0913 -- pin_run_input's arguments
                 subject.analysis_date,
                 candidate.cos_run_id,
                 candidate.format_version,
+                command.text,
             ),
         )
         append(conn, run_id, RunEvent.INPUT_PINNED)

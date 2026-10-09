@@ -213,7 +213,9 @@ export function pinRunInput(
   research: ResearchBrief | null,
   intent: Intent = newIntent(),
 ): Promise<CommandResult<RunInputPinned>> {
-  const request: PinRunInput = { subject, research };
+  // D109: no qualifiers and no stated objective from the workspace yet; the
+  // host derives CP-2G's forecast scope from the subject's reporting period.
+  const request: PinRunInput = { subject, research, qualifiers: [], objective: null };
   return jsonCommand(intent, `${runPath(caseId, runId)}/input`, request, parseRunInputPinned);
 }
 

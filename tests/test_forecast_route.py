@@ -296,7 +296,7 @@ def test_forecast_route_accepts_real_host_calculated_artifact(
     }
     assert set(owners) == set(OWNER_QUOTES)
     for prompt in owners.values():
-        tag = re.search(r"--- EVIDENCE ([0-9a-f]{16}) ---", prompt)
+        tag = re.search(r"--- HOST-OWNED FRONT MATTER ([0-9a-f]{16}) ", prompt)
         assert tag is not None
         opened = re.findall(
             rf"^--- (?!END )([A-Z0-9 -]+?) {tag.group(1)}\b", prompt, re.M

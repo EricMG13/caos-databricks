@@ -216,6 +216,11 @@ class HostIdentity:
     # digest -- as canonical JSON. None for every other module, and absent from
     # a serialised record when None, so no record written before it moved.
     research_brief: str | None = None
+    # D109: this module's part of the run's pinned command -- qualifier name
+    # to its `value` and `basis` -- as canonical JSON, rendered as the
+    # host-owned current-command section. None for a module the command does
+    # not name, and absent from a serialised record when None, as above.
+    current_command: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -762,10 +767,11 @@ WIRE_CITATION_KEYS = frozenset({"source_id", "page", "matched_text"})
 RECORD_FORMAT = "caos-canonical-record-v2"
 # What the record codec reads and writes (`record_bytes`, `_decoded_record`),
 # raised whenever a record this build writes is one an older build would
-# refuse: 1 since D106 (`unverified`, `linked`), 2 since D107 (`marker`). A
+# refuse: 1 since D106 (`unverified`, `linked`), 2 since D107 (`marker`), 3
+# since D109 (the identity's `current_command`). A
 # build with another value, or none, cannot read this build's records, so
 # `scripts/rollback_check.py` refuses a rollback across a change of it.
-RECORD_CODEC_VERSION = 2
+RECORD_CODEC_VERSION = 3
 # A validated Blocked answer's citations, judged as any answer's (D106).
 BLOCKED_FORMAT = "caos-blocked-citations-v1"
 # A body may carry the largest Markdown the host accepts plus its citations
@@ -1290,7 +1296,9 @@ def _absent_ids_line(
         registers = contract.completeness_check.load_contract(
             skill.decode("utf-8"), module_id
         )["registers"]
-        absent = sorted(register for register in registers if register not in text)
+        absent = sorted(
+            register for register in registers if not _writes_id(text, register)
+        )
         if absent:
             shown = absent[:MAX_FEEDBACK_CITATIONS]
             rest = len(absent) - len(shown)
@@ -1305,22 +1313,36 @@ def _absent_ids_line(
     return None
 
 
+def _writes_id(text: str, register: str) -> bool:
+    """Whether `text` writes `register` whole, as the vendor's locator reads an
+    ID (the `id_re` of vendor `tests/test_regressions.py:607`): not inside a
+    longer ID (`T4.1` in `T4.10`), a sentence's full stop after it ending it
+    (F520)."""
+    whole = rf"(?<![A-Za-z0-9_.]){re.escape(register)}(?![A-Za-z0-9_]|\.[A-Za-z0-9])"
+    return re.search(whole, text) is not None
+
+
 # How many register rows of another width than their header a retry is told
 # of (F509); the rest are counted on one more line.
 MAX_WIDTH_ROWS = 5
 _WIDTH_FAULT = "differs from its header"  # the vendor's own tagged-table line
+# How a width line shows the row (F522): its first cell and its last
+# `_READ_COLUMNS` columns as the vendor binds them, each cell cut at a word to
+# at most `_QUOTE_CHARS` characters.
+_READ_COLUMNS = 3
+_QUOTE_CHARS = 40
 
 
 @dataclass(frozen=True, slots=True)
 class _PipeTable:
     """One pipe table as `find_registers` walks it: its header line's index,
-    its header, its rows as the vendor binds them, each row's own cell count,
-    and the table-id tag right above it, if any."""
+    its header, its rows as the vendor binds them, each row's own cells as
+    `_row_cells` reads them, and the table-id tag right above it, if any."""
 
     start: int
     header: list[str]
     rows: list[dict[str, str]]
-    widths: tuple[int, ...]
+    cells: tuple[tuple[str, ...], ...]
     tag: str | None
 
 
@@ -1329,9 +1351,11 @@ def _width_lines(
 ) -> list[str]:
     """Every register row whose cell count is not its header's (F509), an
     advisory line: the vendor pads a short row with empty cells and drops a
-    long row's extra ones, so its own message names only the critical cell
-    left empty, and a model that sees that cell's text one column to the
-    left cannot find the fault (LCR4 CP-3C, four times). The registers are
+    long row's extra ones. Its own message names the critical cell left
+    empty and, since fork r13 (D111), the row's cell count against the
+    header's, but not the row's first cell or where its columns shift, and
+    nothing at all for a short row that empties no critical cell or for a
+    long row (LCR4 CP-3C was refused four times on it). The registers are
     the ones `check()` binds, the cells counted by the vendor's `_row_cells`;
     a tagged table the vendor already reports as of another width keeps its
     own line alone. At most `MAX_WIDTH_ROWS` rows, the rest counted."""
@@ -1357,8 +1381,8 @@ def _width_lines(
 
 def _width_faults(
     contract: VendorContract, module_id: str, text: str, skill: bytes
-) -> list[tuple[str, int, int, list[str]]]:
-    """(register ID, row number, cell count, header) for each register row of
+) -> list[tuple[str, int, tuple[str, ...], list[str]]]:
+    """(register ID, row number, cells, header) for each register row of
     another width than its header, in the answer's order."""
     checker = contract.completeness_check
     loaded = checker.load_contract(skill.decode("utf-8"), module_id)
@@ -1373,12 +1397,13 @@ def _width_faults(
         if table is None or _WIDTH_FAULT in str(errors.get(table.tag, "")):
             continue
         faults += [
-            (table.start, n, reg_id, width, header)
-            for n, width in enumerate(table.widths, 1)
-            if width != len(header)
+            (table.start, n, reg_id, cells, header)
+            for n, cells in enumerate(table.cells, 1)
+            if len(cells) != len(header)
         ]
     return [
-        (reg_id, n, width, header) for _, n, reg_id, width, header in sorted(faults)
+        (reg_id, n, cells, header)
+        for _, n, reg_id, cells, header in sorted(faults, key=lambda f: f[:2])
     ]
 
 
@@ -1414,10 +1439,13 @@ def _pipe_tables(contract: VendorContract, text: str) -> list[_PipeTable]:
             dict(zip(header, [*row, *pad][: len(header)], strict=False))
             for row in cells
         ]
-        widths = tuple(map(len, cells))
         found.append(
             _PipeTable(
-                i, header, rows, widths, _tag_above(tables.TABLE_ID_RE, lines, i)
+                i,
+                header,
+                rows,
+                tuple(map(tuple, cells)),
+                _tag_above(tables.TABLE_ID_RE, lines, i),
             )
         )
         i = j
@@ -1435,8 +1463,18 @@ def _tag_above(pattern: re.Pattern[str], lines: list[str], start: int) -> str | 
     return None
 
 
-def _width_message(reg_id: str, n: int, width: int, header: list[str]) -> str:
-    size = len(header)
+def _width_message(
+    reg_id: str, n: int, cells: tuple[str, ...], header: list[str]
+) -> str:
+    """The width line (F509), naming the row by its first cell and showing how
+    its last columns read (F522): told only "row 7 has 11 cells", LCR6's
+    CP-3C rewrote that row three times and kept it 11 wide. The quotes are the
+    model's own cells, into its retry request only, like the vendor's lines;
+    a cell that will not cross `BoundaryText` drops the quotes, never the line."""
+    size, width = len(header), len(cells)
+    first = _quoted(cells[0]) if cells else None
+    read = _read_as(cells, header) if first else None
+    row = f"{reg_id} row {n}" + (f" ({first})" if read else "")
     last = _column(header[-1])
     if width < size:
         short = size - width
@@ -1452,15 +1490,57 @@ def _width_message(reg_id: str, n: int, width: int, header: list[str]) -> str:
             if extra == 1
             else f"the {extra} cells past the last column, {last}, are dropped"
         )
-    return (
-        f"{reg_id} row {n} has {width} cells under a {size}-cell header; a cell is"
-        f" missing or extra, so its later columns shift ({shift})"
+    plain = (
+        f"{reg_id} row {n} has {width} cells under a {size}-cell header; a cell"
+        f" is missing or extra, so its later columns shift ({shift})"
     )
+    if not read:
+        return plain
+    shown = (
+        f"{row} has {width} cells under a {size}-cell header; a cell is"
+        f" missing or extra, so its later columns shift ({shift}); as read, {read}"
+    )
+    # Past the bound `_bounded` would cut mid-quote: keep the whole sentence.
+    return shown if len(shown) <= MAX_FEEDBACK_CHARS else plain
 
 
 def _column(name: str) -> str:
     """A header cell as a line names it: quoted, at most 64 characters."""
     return f"'{name[:64]}'"
+
+
+def _read_as(cells: tuple[str, ...], header: list[str]) -> str | None:
+    """What the row's last `_READ_COLUMNS` columns hold as the vendor binds
+    it, and a long row's first dropped cell; None when any of those cells
+    will not cross the boundary."""
+    parts = []
+    for i in range(max(len(header) - _READ_COLUMNS, 0), len(header)):
+        quote = _quoted(cells[i]) if i < len(cells) else "nothing"
+        if quote is None:
+            return None
+        parts.append(f"{_column(header[i])} holds {quote}")
+    if len(cells) > len(header):
+        quote = _quoted(cells[len(header)])
+        if quote is None:
+            return None
+        parts.append(f"past it {quote} is dropped")
+    return ", ".join(parts[:-1]) + " and " + parts[-1] if len(parts) > 1 else parts[0]
+
+
+def _quoted(cell: str) -> str | None:
+    """One cell as a width line quotes it: whitespace collapsed, cut at a
+    word to at most `_QUOTE_CHARS` characters, or None when it hides text or
+    will not cross `BoundaryText`."""
+    text = " ".join(cell.split())
+    if len(text) > _QUOTE_CHARS:
+        head = text[: _QUOTE_CHARS + 1]
+        head = head.rsplit(" ", 1)[0] if " " in head else head
+        text = head[:_QUOTE_CHARS].rstrip(" ,;") + "…"
+    if hides_text(text):
+        return None
+    with suppress(Refusal):
+        return f"«{BoundaryText.of(text, limit=_QUOTE_CHARS + 1).value}»"
+    return None
 
 
 def _transport_or_reason(
@@ -2046,8 +2126,9 @@ def record_bytes(record: CanonicalRecord) -> bytes:
         del document["projections"]["blockers"]
     if document["citation_rule"] == ANY_RUN:
         del document["citation_rule"]
-    if document["identity"]["research_brief"] is None:
-        del document["identity"]["research_brief"]
+    for optional in ("research_brief", "current_command"):
+        if document["identity"][optional] is None:
+            del document["identity"][optional]
     for citation in document["citations"]:
         _written_citation(citation, record.citation_rule)
     document["unverified"] = [_unverified_document(e) for e in record.unverified]
@@ -2176,10 +2257,12 @@ def _with_blockers(value: object) -> dict[str, Any]:
 
 def _with_research(value: object) -> dict[str, Any]:
     """Supply the absent `research_brief` an identity omits (every module but
-    CP-DR, and every record written before §96), read back as None."""
-    if not isinstance(value, dict) or "research_brief" in value:
-        return value if isinstance(value, dict) else {}
-    return {**value, "research_brief": None}
+    CP-DR, and every record written before §96), and the absent
+    `current_command` (every module the run's command does not name, and every
+    record written before D109), each read back as None."""
+    if not isinstance(value, dict):
+        return {}
+    return {"research_brief": None, "current_command": None, **value}
 
 
 def _with_rule(value: dict[str, Any]) -> dict[str, Any]:
@@ -2376,6 +2459,7 @@ def _decoded_record(data: bytes) -> CanonicalRecord:
             ordinal=_int,
             upstream=_each(lambda ref: _typed(UpstreamRef, ref)),
             research_brief=_optional_str,
+            current_command=_optional_str,
         ),
         lineage=_each(lambda ref: _typed(LineageRef, ref)),
         projections=lambda item: _typed(

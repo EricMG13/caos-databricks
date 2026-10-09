@@ -69,6 +69,7 @@ from caos.methodology.handoff import (
     research_brief_of,
     stored_lineage,
 )
+from caos.methodology.qualifiers import command_card, module_command
 from caos.methodology.vendor import (
     VENDOR_MODULE,
     VendorContract,
@@ -76,7 +77,7 @@ from caos.methodology.vendor import (
     cached_contract,
     catalog,
 )
-from caos.provider import MAX_REQUEST_BYTES, CompletionProvider
+from caos.provider import CompletionProvider, request_ceiling
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.outcomes import accepted_rows, artifact_digests
@@ -237,6 +238,11 @@ def _identity(  # noqa: PLR0913 -- one identity, keyword-only
             )
             if node.module_id == RESEARCH_MODULE
             else None
+        ),
+        current_command=(
+            None
+            if pin.command is None
+            else module_command(pin.command.text, node.module_id)
         ),
     )
 
@@ -519,6 +525,10 @@ MODULE_AUTHORED_SCRIPTS = frozenset({"confidence_score.py"})
 _HOST_STEPS = prompt_block("host_steps")
 
 _GATE_INSTRUCTION = prompt_block("gate_instruction")
+
+# D109: a module's pinned command qualifiers, only for a module the run's
+# command names.
+_CURRENT_COMMAND = prompt_block("current_command")
 
 # A node's guided retry after a refused answer (D30, D82): what the checks
 # reported, as written. The host adds no rule of its own here (invariant 4).
@@ -993,6 +1003,48 @@ _PAGE_MAP_NOTE = (
 )
 
 
+# D116: what a consumer is told when its pack is larger than one request to
+# its model can carry, so its largest sources are shown as page maps. A
+# consumer has no evidence demand of its own: the gate's T8 is the one channel
+# that attaches pages (Step I rule 5).
+_CONSUMER_PAGE_MAP = (
+    "\n--- HOST EVIDENCE DELIVERY {tag} (host-owned: how the EVIDENCE above "
+    "was delivered; not citable evidence) ---\n"
+    "The evidence handed to this module is larger than one request to this "
+    "model can carry, so the host shows each source listed below as its page "
+    "map: its EVIDENCE is the first leading_lines_per_page lines of each of its "
+    "pages (lines_shown of lines), and no other line of it is in your evidence "
+    "or may be cited. Every other source is delivered whole. A fact that may "
+    "sit in a withheld line is a limitation you name, never a value you "
+    "supply. This module cannot ask for pages itself: CP-0's T8 attaches a "
+    "module the pages it needs (`<filename> pages <first>-<last>`, Step I "
+    "rule 5); a run whose CP-0 names them hands this module those pages in "
+    "place of the whole source, within this same request bound.\n"
+    "{body}\n--- END HOST EVIDENCE DELIVERY {tag} ---\n"
+)
+
+
+def _delivery_section(
+    source_set: SourceSet | None,
+    tag: str,
+    page_maps: Mapping[UUID, Mapping[str, int]] | None = None,
+) -> str:
+    """A consumer's page maps (D116), or nothing: the gate's are said in its
+    source preparation section, and a consumer handed its pack whole is told
+    nothing, so its prompt is byte for byte what it was."""
+    if source_set is not None or not page_maps:
+        return ""
+    body = json.dumps(
+        [
+            {"source_id": str(source_id), "evidence_delivery": "PAGE_MAP", **shown}
+            for source_id, shown in page_maps.items()
+        ],
+        sort_keys=True,
+        indent=2,
+    )
+    return _CONSUMER_PAGE_MAP.format(tag=tag, body=body)
+
+
 def _source_preparation_section(
     source_set: SourceSet | None,
     tag: str,
@@ -1080,6 +1132,21 @@ def _research_section(identity: HostIdentity, tag: str = "") -> str:
         "record what it cannot answer as UNRESOLVED, and cite only the evidence "
         "below) ---\n" + body + f"\n--- END RESEARCH BRIEF {tag} ---\n"
     )
+
+
+def _command_section(identity: HostIdentity, tag: str = "") -> str:
+    """The module's pinned command as a host-owned section (D109), and nothing
+    for a module the run's command does not name -- so every such prompt is
+    byte for byte what it was. The vendor's command card, then who stated
+    each value: the run's input, or the host by the owner's rule."""
+    if identity.current_command is None:
+        return ""
+    try:
+        names = json.loads(identity.current_command)
+        card = command_card(identity.module_id, names)
+    except (ValueError, KeyError, TypeError):
+        raise Refusal(RefusalCode.HANDOFF_IDENTITY_MISMATCH) from None
+    return "\n" + _CURRENT_COMMAND.format(tag=tag, command=card)
 
 
 # N27: what the host says of delivered lines the extractor kept though a reader
@@ -1192,6 +1259,19 @@ def _evidence_section(delivered: Sequence[Delivery]) -> str:
     )
 
 
+def evidence_tag(delivered: Sequence[Delivery], pack_tag: str | None = None) -> str:
+    """The tag the EVIDENCE section's two markers carry (D113): derived from
+    the section `delivered` renders, and from nothing else, so no evidence
+    line can carry it. The canonical executor derives it from the run's whole
+    pin, so every node of a run opens alike whatever part of the pin its gate
+    row hands it; any part's lines are lines of the pin, so none of them can
+    carry it either. `pack_tag`, when given, is that pin's tag, returned as
+    it is."""
+    if pack_tag is not None:
+        return pack_tag
+    return hashlib.sha256(_evidence_section(delivered).encode("utf-8")).hexdigest()[:16]
+
+
 def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-only
     contract: VendorContract,
     *,
@@ -1207,9 +1287,10 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     page_maps: Mapping[UUID, Mapping[str, int]] | None = None,
     retry_feedback: Sequence[str] = (),
     refused_answer: str | None = None,
+    pack_tag: str | None = None,
 ) -> str:
-    """The task, the host-owned front matter, the host's own steps, every
-    delivered authority file, upstream, its citation register, evidence.
+    """The evidence, then the task, the host-owned front matter, the host's
+    own steps, every delivered authority file, upstream, its citation register.
 
     `authority` is this module's delivered set (§45.1): each file whole, UTF-8,
     in its own section named with its digest, `SKILL.md` first; any other
@@ -1227,7 +1308,10 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     CP-0's T8 modules are the pinned route's,
     never a caller's list. Section markers carry a tag derived from every
     section's own bytes, the host-owned front matter included, so neither a
-    section's text nor a host-owned field value can reproduce one. CP-0 also
+    section's text nor a host-owned field value can reproduce one; the
+    evidence, which opens the prompt, carries its own tag, derived from the
+    evidence alone (`pack_tag`), so it is one prefix for every call handed
+    it (D113). CP-0 also
     receives its host-verified pinned source metadata as context, never as
     evidence; from it CP-0 authors P3 and P5 and restates nothing. Nothing is
     cut or summarised; the caller bounds it with `within_request_ceiling`.
@@ -1248,6 +1332,8 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     on (already across `BoundaryText`), rides only with `retry_feedback`, in
     its own sub-section asking for that answer corrected (D104); it is folded
     into the tag too, so no marker it holds can close the block around it.
+    `pack_tag` is the evidence's tag, `evidence_tag` over the run's whole pin
+    (D113); without it, the tag of `delivered` itself.
     """
     if identity.module_id not in ADAPTER_MODULES:
         raise Refusal(RefusalCode.HANDOFF_MODULE_UNSUPPORTED)
@@ -1288,7 +1374,9 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _upstream_section(upstream, uses, owned)
         + _citation_register(upstream, upstream_citations, "", upstream_unverified)
         + _research_section(identity)
+        + _command_section(identity)
         + _source_preparation_section(source_set, "", page_maps)
+        + _delivery_section(source_set, "", page_maps)
         + evidence
     )
     # Host-owned values join the derivation: none of them can pre-compute a tag.
@@ -1298,15 +1386,26 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     answer = _carried(feedback, refused_answer)
     untagged = front_matter + sections + feedback + answer
     tag = hashlib.sha256(untagged.encode("utf-8")).hexdigest()[:16]
+    # D113 (N153): the evidence opens the prompt, before every module- and
+    # attempt-specific block, under a tag derived from the evidence alone
+    # (`evidence_tag`), so every call of a run -- a node's retries, and every
+    # node handed the same leading part of the pin -- repeats the same bytes
+    # for as long as its evidence does, which a provider's prompt cache reads
+    # back. Every other section keeps `tag`, which also covers the evidence.
+    opened = evidence_tag(delivered, pack_tag)
     prompt = (
-        _INSTRUCTION.format(
+        f"--- EVIDENCE {opened} ---\n"
+        + evidence
+        + f"\n--- END EVIDENCE {opened} ---\n"
+        + "\n"
+        + _INSTRUCTION.format(
             module_id=identity.module_id,
             module_name=identity.module_name,
             route_node_id=identity.route_node_id,
             filename=expected_filename(identity),
         )
         + gate
-        + _TAGGED.format(tag=tag)
+        + _TAGGED.format(tag=tag, evidence_tag=opened)
         + f"\n--- HOST-OWNED FRONT MATTER {tag} (copy exactly) ---\n"
         + front_matter
         + f"\n--- END HOST-OWNED FRONT MATTER {tag} ---\n"
@@ -1317,10 +1416,9 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _upstream_section(upstream, uses, owned, tag)
         + _citation_register(upstream, upstream_citations, tag, upstream_unverified)
         + _research_section(identity, tag)
+        + _command_section(identity, tag)
         + _source_preparation_section(source_set, tag, page_maps)
-        + f"\n--- EVIDENCE {tag} ---\n"
-        + evidence
-        + f"\n--- END EVIDENCE {tag} ---\n"
+        + _delivery_section(source_set, tag, page_maps)
     )
     if identity.module_id in {"CP-1", "CP-2G", "CP-4"} and any(
         n.module_id == MODEL_MODULE for n in route.nodes
@@ -1390,15 +1488,17 @@ def _retry_section(
 
 def request_size(provider: CompletionProvider, prompt: str) -> int:
     """The whole request the provider would send for `prompt`, in bytes, or
-    `CONTEXT_OVER_CEILING` past `MAX_REQUEST_BYTES` (§45.3).
+    `CONTEXT_OVER_CEILING` past its model's `request_ceiling` (§45.3, D116):
+    `MAX_REQUEST_BYTES`, or less where the model's declared context is less.
 
     Model, parameters and JSON escapes, not the prompt's encoding alone. A
     canonical call always asks for a JSON object, so that is the request
     measured. The number is what the call is priced and reserved on (Task 8.2),
     so the bytes bounded and the bytes paid for are the same bytes.
     """
+    ceiling = request_ceiling(provider.model)
     measured = len(provider.request_bytes(prompt, json_object=True))
-    if measured > MAX_REQUEST_BYTES:
+    if measured > ceiling:
         raise Refusal(RefusalCode.CONTEXT_OVER_CEILING)
     return measured
 

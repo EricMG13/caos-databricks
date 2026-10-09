@@ -26,7 +26,7 @@ from caos import methodology
 from caos.boundary_text import BoundaryText
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, committed_unit, rollback_or_close
-from caos.store.budget import CEILING, validate_spend
+from caos.store.budget import CEILING, overspent, validate_spend
 from caos.store.cases import lock_case
 from caos.store.events import RunEvent, append, lock_run
 from caos.store.gates import approved_run_input, require_adapter_route
@@ -37,6 +37,7 @@ from caos.store.outcomes import (
     _locked_attempt,
     accepted_owner,
     artifact_digests,
+    drop_stop_owed,
     record_outcome,
 )
 from caos.store.work import (
@@ -234,6 +235,12 @@ def _start(
     conn: StoreConnection, run_id: UUID, route_node_id: str, lease: Lease | None
 ) -> UUID:
     """The attempt row and its event, under the caller's run lock."""
+    # R2.6 (F589): a run whose AI-unit bill overshot its reservation starts
+    # no attempt on any node, under the lock and ahead of every other check:
+    # the ledger holds the charge even when the park after its refusal was
+    # lost to a crash or a store fault.
+    if overspent(conn, run_id):
+        raise Refusal(RefusalCode.BUDGET_CHARGE_OVER_RESERVATION)
     if (
         conn.execute(
             _UNSETTLED,
@@ -247,6 +254,12 @@ def _start(
         is not None
     ):
         raise Refusal(RefusalCode.ATTEMPT_UNSETTLED)
+    # F530 round 2: a node whose one re-attempt was itself a declared drop,
+    # with no park after it, is stopped here -- under the lock, in the unit
+    # that would start the attempt -- so a drop billed after a pass read the
+    # ledger still stops it; nothing is written and nothing is called.
+    if drop_stop_owed(conn, run_id=run_id, route_node_id=route_node_id):
+        raise Refusal(RefusalCode.PROVIDER_UNAVAILABLE)
     # Under the run lock, so two starts cannot take one ordinal. Counting rows
     # rather than reading the maximum keeps attempts that predate ordinals.
     counted = conn.execute(

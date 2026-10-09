@@ -56,6 +56,10 @@ class RefusalCode(StrEnum):
     # The request an attempt is about to send prices above what that attempt
     # reserved: the context is unchanged, the reservation no longer covers it.
     RESERVATION_BELOW_REQUEST = "RESERVATION_BELOW_REQUEST"
+    # R2.6 (D77, addendum 2): a settled charge above what its attempt reserved.
+    # Recorded in full, the answer not accepted, and the run parked for good on
+    # its pin: the same price would reserve, and overshoot, the same way.
+    BUDGET_CHARGE_OVER_RESERVATION = "BUDGET_CHARGE_OVER_RESERVATION"
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     PROVIDER_OUTPUT_TRUNCATED = "PROVIDER_OUTPUT_TRUNCATED"
     PROVIDER_REFUSED = "PROVIDER_REFUSED"
@@ -154,6 +158,12 @@ class RefusalCode(StrEnum):
     # W4: a caller's own research brief -- or its absence, on a route that
     # reads one -- is what a new pin refused, not the stored input.
     RESEARCH_BRIEF_INVALID = "RESEARCH_BRIEF_INVALID"
+    # D109: a caller's command qualifier or objective names a module, a name
+    # or a value the pin does not take, or a module the route does not carry.
+    RUN_QUALIFIER_INVALID = "RUN_QUALIFIER_INVALID"
+    # D109: CP-2G's scope must be derived from a reporting period the owner's
+    # rule cannot read; the pin refuses rather than guess.
+    REPORTING_PERIOD_UNREADABLE = "REPORTING_PERIOD_UNREADABLE"
     RUN_INPUT_ALREADY_PINNED = "RUN_INPUT_ALREADY_PINNED"
     RUN_INPUT_TOO_LATE = "RUN_INPUT_TOO_LATE"
     GATE_APPROVAL_MISMATCH = "GATE_APPROVAL_MISMATCH"
