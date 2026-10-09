@@ -150,15 +150,21 @@ class DropKind(StrEnum):
     """How a call that got no answer ended (F513's kind), carried to the
     ledger (D110). Only `DECLARED` earns a node its one automatic
     re-attempt: the provider itself said the call failed, by a status or by
-    its own error object, before anything was generated."""
+    its own error object. Since D118 that includes an error the provider
+    declared after content began; the ledger does not tell the two apart,
+    because they share the one re-attempt and neither leaves a charge, an
+    answer or a body (F513's stderr line names the cut's class)."""
 
     # A vendor error with a status or a provider error object (a body, an
-    # SSE `error` event) and no content received.
+    # SSE `error` event) and no content received; or (D118) the provider's
+    # error object after content began, stating a 5xx, a 429 or a transient
+    # `error_type`.
     DECLARED = "declared"
     # A vendor error with neither: a connection reset or a client timeout,
     # after which the bytes received are unknown.
     VENDOR = "vendor"
-    # Anything else the client raised, held back (ST-8).
+    # Anything else the client raised, held back (ST-8), a cut after content
+    # with no transient provider error among it (D118).
     RAISED = "raised"
     # Raised and not held back.
     ESCAPED = "escaped"

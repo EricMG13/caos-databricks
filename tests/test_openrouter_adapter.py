@@ -4,6 +4,7 @@ streaming (F511, F512). No network."""
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -303,9 +304,11 @@ def test_a_streamed_answer_is_one_assistant_message() -> None:
 @pytest.mark.parametrize(
     ("frames", "drop", "said"),
     [
+        # D118: LCR10-dec's stop -- an upstream 502 after content -- is a
+        # drop the provider declared; F513's line still says the client raised.
         pytest.param(
             MID_STREAM_ERROR,
-            DropKind.RAISED,
+            DropKind.DECLARED,
             "call=raised class=CutAfterContentError cause=APIError ",
             id="after-partial-output",
         ),
@@ -325,8 +328,9 @@ def test_a_mid_stream_error_is_unavailable_and_carries_no_text(
 ) -> None:
     """A provider error after the `200` is committed arrives as an SSE `error`
     event: no answer, no charge, no partial content, and none of its words.
-    Before anything was generated it is a drop the provider declared; after,
-    it is not (D110), and neither the seam nor the node re-attempts it."""
+    Before anything was generated it is a drop the provider declared (D110);
+    after, it is one too when its error object states a 5xx, a 429 or a
+    transient type (D118), and the seam never sends it again itself."""
     completion = _complete(frames)
     assert completion == Completion(
         None, None, None, RefusalCode.PROVIDER_UNAVAILABLE, drop
@@ -336,6 +340,46 @@ def test_a_mid_stream_error_is_unavailable_and_carries_no_text(
     assert "error_code=502" in unanswered
     assert "error_type=provider_unavailable" in unanswered
     assert "private" not in unanswered and "private" not in repr(completion)
+
+
+def _reset_after_content(sent: list[dict[str, object]]) -> httpx.Client:
+    """A fake OpenRouter whose stream carries content, then the connection
+    fails with no error frame. No network."""
+
+    class _Cut(httpx.SyncByteStream):
+        def __iter__(self) -> Iterator[bytes]:
+            yield "".join(_ANSWER[:5]).encode()
+            raise httpx.RemoteProtocolError("private")
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        headers = {"content-type": "text/event-stream"}
+        return httpx.Response(200, headers=headers, stream=_Cut())
+
+    return httpx.Client(transport=httpx.MockTransport(answer))
+
+
+@pytest.mark.parametrize("cut", ["reset", "truncated"])
+def test_a_cut_after_content_without_an_error_frame_is_not_declared(
+    cut: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """D118: the provider said nothing -- a reset mid-stream, or a stream that
+    simply stops -- so nothing is declared, nothing is re-attempted, and the
+    call is sent once."""
+    sent: list[dict[str, object]] = []
+    if cut == "reset":
+        client = _reset_after_content(sent)
+        chat = openrouter_chat_model(MODEL, http_client=client)
+        completion = ChatCompletions(chat, MODEL, _PRICE).complete("hi")
+        assert completion == Completion(
+            None, None, None, RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED
+        )
+        assert "call=raised" in capsys.readouterr().err
+    else:
+        completion = _complete(CUT_SHORT, sent)
+        assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+        assert completion.drop_kind is None
+    assert len(sent) == 1
 
 
 def test_only_a_frame_carrying_something_generated_has_begun() -> None:
