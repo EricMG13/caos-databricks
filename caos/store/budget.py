@@ -16,6 +16,10 @@ to one -- many prices and request sizes reach the same number -- and the unit
 that later spends reads the price back to check that the request it is about to
 send still fits what was set aside.
 
+*A Copilot reservation names its credit price* (0048, D77 addendum 2): the
+dated price of one AI credit pinned when it was taken, which settles the call's
+AI units. The process's pin is read at the reservation and nowhere after it.
+
 *Nothing is released.* An indeterminate call may have reached the provider and
 may be billed (`PROVIDER_UNAVAILABLE` leaves the attempt indeterminate with its
 reservation). Releasing it would let the retry spend money the run has
@@ -38,7 +42,7 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, committed_unit
 
 if TYPE_CHECKING:
-    from caos.pricing import ModelPrice
+    from caos.pricing import CreditPrice, ModelPrice
     from caos.store.work import Lease
 
 # What a run may spend when its caller names no ceiling. A run with no ceiling
@@ -90,10 +94,12 @@ def validate_spend(amount: Decimal) -> None:
 
 @dataclass(frozen=True, slots=True)
 class Reservation:
-    """What an attempt set aside, and the dated price that produced it."""
+    """What an attempt set aside, the dated price that produced it, and for a
+    Copilot model the dated credit price its AI units are settled at (0048)."""
 
     amount: Decimal
     price: ModelPrice
+    credit: CreditPrice | None = None
 
 
 def reserve(
@@ -109,6 +115,12 @@ def reserve(
     `price` is the dated price the amount was computed from and is stored with
     it, so the row can be read back to what it was priced at rather than only
     to a number (§40).
+
+    For a Copilot model the process's pinned credit price
+    (`caos.copilot.credit_price`) is stored beside it, read here and only
+    here, so the call is settled at the price in force when it was reserved;
+    a Copilot model with no valid pin refuses `PROVIDER_NOT_CONFIGURED` before
+    anything is written (R2.2).
 
     Taken under the run row lock, which is what makes two connections reserving
     at once resolve to one: without it both read the same remaining balance and
@@ -132,6 +144,7 @@ def _reserve(
 
     validate_spend(amount)
     _validate_price(price)
+    credit = _credit_for(price)
     if conn.autocommit:
         raise Refusal(RefusalCode.STORE_NOT_TRANSACTIONAL)
     run_id = _run_of(conn, attempt_id)
@@ -148,8 +161,9 @@ def _reserve(
         raise Refusal(RefusalCode.BUDGET_CEILING_REACHED)
     conn.execute(
         "INSERT INTO budget_reservations (attempt_id, run_id, amount,"
-        " price_model, price_input, price_output, price_as_of)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        " price_model, price_input, price_output, price_as_of,"
+        " credit_price, credit_as_of)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (
             attempt_id,
             run_id,
@@ -158,8 +172,21 @@ def _reserve(
             price.input_per_token,
             price.output_per_token,
             price.as_of,
+            None if credit is None else credit.per_credit,
+            None if credit is None else credit.as_of,
         ),
     )
+
+
+def _credit_for(price: ModelPrice) -> CreditPrice | None:
+    """The process's pinned credit price for a Copilot model, or refused
+    `PROVIDER_NOT_CONFIGURED`; None for any other model. Imported here:
+    `caos.copilot` imports this module at its top."""
+    from caos import copilot
+
+    if copilot.parsed(price.model) is None:
+        return None
+    return copilot.credit_price()
 
 
 def _validate_price(price: ModelPrice) -> None:
@@ -232,12 +259,15 @@ def price_of(conn: StoreConnection, run_id: UUID) -> ModelPrice | None:
 def reserved_for(conn: StoreConnection, attempt_id: UUID) -> Reservation | None:
     """What this attempt set aside and under which price, or None if it never
     reserved. A legacy row (`0024_reservation_price`) reads back as the
-    unnamed price it was migrated with, which no caller may spend under."""
-    from caos.pricing import ModelPrice
+    unnamed price it was migrated with, which no caller may spend under. A
+    row from before 0048, or for a model that is not Copilot's, names no
+    credit price."""
+    from caos.pricing import CreditPrice, ModelPrice
 
     try:
         row = conn.execute(
-            "SELECT amount, price_model, price_input, price_output, price_as_of"
+            "SELECT amount, price_model, price_input, price_output, price_as_of,"
+            " credit_price, credit_as_of"
             " FROM budget_reservations WHERE attempt_id = %s",
             (attempt_id,),
         ).fetchone()
@@ -245,8 +275,9 @@ def reserved_for(conn: StoreConnection, attempt_id: UUID) -> Reservation | None:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
     if row is None:
         return None
-    amount, model, per_input, per_output, as_of = row
-    return Reservation(amount, ModelPrice(model, per_input, per_output, as_of))
+    amount, model, per_input, per_output, as_of, per_credit, credit_as_of = row
+    credit = None if per_credit is None else CreditPrice(per_credit, credit_as_of)
+    return Reservation(amount, ModelPrice(model, per_input, per_output, as_of), credit)
 
 
 def _remaining(conn: StoreConnection, run_id: UUID) -> Decimal:

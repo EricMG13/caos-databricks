@@ -121,15 +121,19 @@ def request_ceiling(model: str) -> int:
     `MAX_REQUEST_BYTES`, the bound every run had before D116 (review round
     1: refusing it stopped every approved workspace endpoint). A declared
     context no wider than the completion leaves the prompt no room, and
-    refuses `PROVIDER_NOT_CONFIGURED`."""
-    tokens = CONTEXT_TOKENS.get(model)
+    refuses `PROVIDER_NOT_CONFIGURED`. A Copilot model's context is its
+    listing's, else its pinned entry (`caos.copilot.context_tokens`, R4), and
+    its completion is its own output cap (`caos.copilot.output_cap`, R2.5).
+    Imported here: `caos.copilot` imports this module at its top."""
+    from caos import copilot
+
+    cap = copilot.output_cap(model)
+    tokens = copilot.context_tokens(model)
     if tokens is None:
         return MAX_REQUEST_BYTES
-    if tokens <= MAX_COMPLETION_TOKENS:
+    if tokens <= cap:
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    return min(
-        MAX_REQUEST_BYTES, (tokens - MAX_COMPLETION_TOKENS) * BYTES_PER_TOKEN_FLOOR
-    )
+    return min(MAX_REQUEST_BYTES, (tokens - cap) * BYTES_PER_TOKEN_FLOOR)
 
 
 # What a run driven on an endpoint with no declared context says on stderr,
@@ -141,8 +145,10 @@ _PLAIN_NAME = re.compile(r"[A-Za-z0-9._:/@+-]{1,256}")
 
 def context_notice(model: str) -> str | None:
     """The line a run on `model` prints when no context is declared for it,
-    or None when one is (D116, N170)."""
-    if model in CONTEXT_TOKENS:
+    or None when one is (D116, N170; a Copilot model's listing, R4)."""
+    from caos import copilot
+
+    if copilot.context_tokens(model) is not None:
         return None
     name = model if _PLAIN_NAME.fullmatch(model) else "-"
     return f"{CONTEXT_NOT_DECLARED} endpoint={name}"
