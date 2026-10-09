@@ -1,8 +1,9 @@
 """The provider seam: one prompt in, one `Completion` out, a closed set of refusals.
 
 What the canonical executor depends on and nothing more. The transport that
-answers lives behind `caos/models.py` (Databricks AI Gateway through the one
-model factory); this module holds the shape both sides agree on: the request
+answers lives behind `caos/models.py` (Databricks AI Gateway, or GitHub
+Copilot for a Copilot model, through the one model factory); this module
+holds the shape both sides agree on: the request
 and response ceilings, the request bytes a call is priced on, the refusal a
 finish reason maps to, and the rule that a charge is exact known money or
 unknown -- never a float, never a guess (invariant 7).

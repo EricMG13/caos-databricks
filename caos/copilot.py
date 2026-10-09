@@ -29,17 +29,21 @@ The SDK itself is imported only by the transport (Task 3), never here.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import os
 import re
 import shutil
 import sys
-from collections.abc import Callable, Mapping, Sequence
+import tempfile
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, TypeIs
+from fractions import Fraction
+from typing import TYPE_CHECKING, Any, TypeIs
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel
@@ -49,9 +53,19 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from openai import OpenAIError
 
 from caos.pricing import CreditPrice, exact_context
-from caos.provider import MAX_COMPLETION_TOKENS, TIMEOUT_SECONDS, reported_charge
+from caos.provider import (
+    MAX_COMPLETION_TOKENS,
+    TIMEOUT_SECONDS,
+    reported_charge,
+    reserved_amount,
+    reserved_credit,
+)
 from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
+
+if TYPE_CHECKING:
+    from copilot import CopilotClient, CopilotSession, SessionEvent
+    from copilot.generated.rpc import PermissionDecisionReject
 
 PLATFORM = "copilot"
 # The CLI fallback (D78): parsed so that it is never read as an endpoint, and
@@ -376,6 +390,187 @@ class CopilotStatusError(OpenAIError):
 Ask = Callable[[str, CopilotModel, float], Sequence[Event]]
 
 
+# The runtime an operator provisioned (R3): an absolute path CAOS passes as
+# the explicit entry. `COPILOT_CLI_PATH` is never consulted or passed on.
+RUNTIME_ENV = "CAOS_COPILOT_RUNTIME"
+# What the deny-all permission handler adds to a call's events, where it was
+# asked, whenever the runtime asks it anything: a host fact, not a runtime
+# event type, so the mapping's allow-list states no finish reason and its
+# spend rule keeps the call's bill (never a drop, never re-sent).
+PERMISSION_ASKED = "caos.permission_asked"
+# The MCP servers the runtime loads unless they are disabled (the spike saw
+# them load with no tool offered).
+_BUILTIN_MCP_SERVERS = ("github-mcp-server", "githubiq")
+# The SDK's credit cap is floored at 30 credits (R2.7).
+MIN_CREDIT_CAP = 30
+# The events that end a call: the main agent went idle, or it failed. A
+# sub-agent's (`agentId` set) ends nothing; the mapping refuses it.
+_ENDS = frozenset({"session.idle", "session.error"})
+# How long an abort is waited for once the deadline has passed.
+_ABORT_SECONDS = 5.0
+
+
+def session_options(
+    target: CopilotModel, home: str, credits: int | None = None
+) -> dict[str, Any]:
+    """What one session is created with: the pinned model at its pinned
+    effort, and nothing else the runtime offers (D77; R5 Task 3).
+
+    `credits`, when given, is the SDK's own spend cap for the session (R2.7):
+    a guard after the fact, never the bound.
+    """
+    from copilot import ModelCapabilitiesOverride, ModelLimitsOverride
+
+    options: dict[str, Any] = {
+        "model": target.name,
+        "reasoning_effort": target.reasoning_effort,
+        # A model, not an agent: no tool of any source -- built-in, MCP or
+        # custom -- so no file, shell or web page is reachable (invariant 1).
+        "available_tools": [],
+        "tools": [],
+        # The prompt is the whole request, as it is on the gateway.
+        "system_message": {"mode": "replace", "content": ""},
+        # Never compacted to fit: evidence is sent whole or refused.
+        "infinite_sessions": {"enabled": False},
+        # The 1M-token tier: CP-0 sends whole filings (D29).
+        "context_tier": "long_context",
+        # The completion cap every reservation is priced on.
+        "model_capabilities": ModelCapabilitiesOverride(
+            limits=ModelLimitsOverride(max_output_tokens=MAX_COMPLETION_TOKENS)
+        ),
+        "working_directory": home,
+        "streaming": False,
+        # Nothing the runtime would load of its own: no built-in MCP server,
+        # skill, instruction file, hook, plugin or agent.
+        "disabled_mcp_servers": list(_BUILTIN_MCP_SERVERS),
+        "mcp_servers": {},
+        "enable_skills": False,
+        "skip_custom_instructions": True,
+        "enable_file_hooks": False,
+        "plugin_directories": [],
+        "skill_directories": [],
+        "custom_agents": [],
+        "enable_session_telemetry": False,
+    }
+    if credits is not None:
+        options["session_limits"] = {"max_ai_credits": credits}
+    return options
+
+
+def _credit_cap() -> int | None:
+    """The session cap for the reservation in scope, in whole credits: its
+    amount over its credit price, rounded up and never below
+    `MIN_CREDIT_CAP` (R2.7), exactly. None with no reservation in scope or
+    none naming a positive credit price: no cap is sent."""
+    amount = reserved_amount.get()
+    credit = reserved_credit.get()
+    if amount is None or credit is None or not credit:
+        return None
+    return max(MIN_CREDIT_CAP, math.ceil(Fraction(amount) / Fraction(credit)))
+
+
+def _runtime_entry() -> str:
+    """The runtime to start: the operator's (`RUNTIME_ENV`, an absolute path,
+    else `PROVIDER_NOT_CONFIGURED`), or the one the SDK downloaded and
+    verified against its release's checksums."""
+    named = os.environ.get(RUNTIME_ENV, "")
+    if named:
+        if not os.path.isabs(named):
+            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+        return named
+    from copilot._cli_download import ensure_runtime_wrapper
+
+    return ensure_runtime_wrapper()
+
+
+@asynccontextmanager
+async def _client() -> AsyncIterator[tuple[CopilotClient, str]]:
+    """One runtime in a private directory removed with it, so a prompt --
+    which carries document text -- is not left on the disk after its call.
+
+    The connection is always an explicit child process of the runtime CAOS
+    resolved, so neither `COPILOT_SDK_DEFAULT_CONNECTION` nor
+    `COPILOT_CLI_PATH` in the worker's environment can redirect it. The
+    runtime never logs in on its own (`--no-auto-login`), runs in the private
+    directory, and sees only `child_environment` (R3). A directory that could
+    not be removed is named on stderr by code alone (never its path), the
+    documented fail-open of a removal the platform refused.
+    """
+    from copilot import CopilotClient, RuntimeConnection
+
+    executable = _runtime_entry()
+    _silenced()
+    home = tempfile.mkdtemp(prefix="caos-copilot-")
+    try:
+        async with CopilotClient(
+            connection=RuntimeConnection.for_stdio(path=executable),
+            mode="empty",
+            base_directory=home,
+            working_directory=home,
+            log_level="none",
+            use_logged_in_user=False,
+            env=child_environment(home, executable),
+        ) as client:
+            yield client, home
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+        if os.path.lexists(home):
+            print("COPILOT_HOME_NOT_REMOVED", file=sys.stderr)
+
+
+def ask_copilot(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+    """One call through the SDK: every event, in its wire form and order.
+
+    Raises `TimeoutError` past `seconds` -- the runtime's start, the session's
+    creation and the wait alike -- having asked the session to stop; whatever
+    else the SDK raises propagates, and `ChatCompletions` reads it as
+    indeterminate. A session error ends the wait and is returned as data, so
+    its message is never raised. Runs on its own event loop, on the thread
+    `ChatCompletions._invoked` calls it on, with the reservation in scope.
+    """
+    return asyncio.run(_asked(prompt, target, seconds, _credit_cap()))
+
+
+async def _asked(
+    prompt: str, target: CopilotModel, seconds: float, credits: int | None
+) -> list[Event]:
+    seen: list[Event] = []
+    ended = asyncio.Event()
+
+    def heard(event: SessionEvent) -> None:
+        wire = event.to_dict()
+        seen.append(wire)
+        if wire.get("type") in _ENDS and wire.get("agentId") is None:
+            ended.set()
+
+    def denied(_request: object, _invocation: object) -> PermissionDecisionReject:
+        from copilot.generated.rpc import PermissionDecisionReject
+
+        seen.append({"type": PERMISSION_ASKED, "data": {}})
+        return PermissionDecisionReject()
+
+    async with asyncio.timeout(seconds), _client() as (client, home):
+        session = await client.create_session(
+            on_event=heard,
+            on_permission_request=denied,
+            **session_options(target, home, credits),
+        )
+        async with session:
+            await session.send(prompt)
+            try:
+                await ended.wait()
+            except asyncio.CancelledError:
+                await _aborted(session)
+                raise
+    return list(seen)
+
+
+async def _aborted(session: CopilotSession) -> None:
+    """Ask the session to stop, for at most `_ABORT_SECONDS`. What the abort
+    raises propagates in place of the timeout; both are indeterminate."""
+    await asyncio.wait_for(session.abort(), _ABORT_SECONDS)
+
+
 class ChatCopilot(BaseChatModel):
     """The chat model a Copilot name is answered by: one prompt, one call, one
     reply. `ask` is the transport: it sends the prompt to the pinned model
@@ -383,7 +578,7 @@ class ChatCopilot(BaseChatModel):
 
     model: str
     timeout: float = TIMEOUT_SECONDS
-    ask: Ask
+    ask: Ask = ask_copilot
 
     @property
     def _llm_type(self) -> str:

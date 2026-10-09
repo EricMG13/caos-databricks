@@ -1,7 +1,8 @@
-"""The one model factory: every production call goes through Databricks AI Gateway.
+"""The one model factory: every production call goes through AI Gateway or Copilot.
 
 Spec section 3 (D7, D8). `chat_model` returns the LangChain chat model the host
-talks to -- `ChatDatabricks` against the configured serving endpoint -- and
+talks to -- `ChatDatabricks` against the configured serving endpoint, or
+`ChatCopilot` for a Copilot model (D77, `caos/copilot.py`) -- and
 `ChatCompletions` adapts it to the `CompletionProvider` seam the canonical
 executor was built on, so nothing downstream of this module knows which vendor
 answered. Tests inject another `BaseChatModel` through `completions(chat=...)`;
@@ -36,6 +37,8 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from openai import APIConnectionError, OpenAIError
+
+from caos import copilot
 
 # The configuration names live beside the price they configure, so the API,
 # which may not import this module (D4), reads them too.
@@ -85,20 +88,39 @@ _clock = time.monotonic
 
 def identity_of(model: str, reasoning_effort: str | None = None) -> str:
     """The execution profile a verdict binds (D8), from the names alone, so a
-    caller can refuse an unexpected one before any client is built."""
-    return "/".join(
-        (PLATFORM, model, reasoning_effort or "none", str(MAX_COMPLETION_TOKENS))
-    )
+    caller can refuse an unexpected one before any client is built. A Copilot
+    model names its own platform, its runtime model id, the effort its name
+    pins and its output cap (D77), so it qualifies apart from the same model
+    on a gateway; a Copilot name that does not parse, or whose transport is
+    not built, is refused `PROVIDER_NOT_CONFIGURED`."""
+    target = copilot.parsed(model)
+    if target is None:
+        parts = (PLATFORM, model, reasoning_effort or "none")
+        cap = MAX_COMPLETION_TOKENS
+    else:
+        parts = (target.platform, target.name, target.reasoning_effort or "none")
+        cap = copilot.output_cap(model)
+    return "/".join((*parts, str(cap)))
 
 
 def chat_model(*, endpoint: str | None = None) -> BaseChatModel:
-    """The production chat model: `ChatDatabricks` on the configured endpoint.
+    """The production chat model: `ChatDatabricks` on the configured endpoint,
+    or `ChatCopilot` for a Copilot model (D77).
 
     Imported here rather than at module load so the seam's tests, which inject
     their own model, never touch the Databricks SDK. Authentication is the
     SDK's unified chain -- the app's service-principal variables on Databricks
-    Apps, a CLI profile locally -- and no credential is read by this code.
+    Apps, a CLI profile locally -- and no credential is read by this code. A
+    Copilot name is never read as an endpoint: one that does not parse is
+    refused, and a `copilot-cli:` model is refused until its transport is
+    built (owner decision (a), 2026-10-06).
     """
+    name = endpoint or configured_endpoint()
+    target = copilot.parsed(name)
+    if target is not None:
+        if target.platform != copilot.PLATFORM:
+            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+        return copilot.ChatCopilot(model=name)
     from databricks_langchain import ChatDatabricks
 
     from caos.workspace import workspace_client
@@ -108,7 +130,7 @@ def chat_model(*, endpoint: str | None = None) -> BaseChatModel:
     # is the process's bounded one (CR-6): the default the library would
     # build carries the SDK's five-minute discovery budget.
     return ChatDatabricks(
-        endpoint=endpoint or configured_endpoint(),
+        endpoint=name,
         max_tokens=MAX_COMPLETION_TOKENS,
         timeout=TIMEOUT_SECONDS,
         max_retries=0,
