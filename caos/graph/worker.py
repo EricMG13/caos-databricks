@@ -34,6 +34,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.copilot import require_ready
 from caos.graph.checkpoint import checkpointer, close_checkpointer
 from caos.graph.route import ResolvedRoute, route_digest
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
@@ -569,6 +570,9 @@ def _configured() -> Configured:
     # until the first run a caller starts under it.
     configured_ceiling()
     choices = model_choices()
+    # The Copilot models among them answer on this machine (D77): ready here,
+    # or refused before the store is touched or a run claimed.
+    require_ready(choices)
     url, root = _store_configuration()
     bundle = Bundle(VENDORED_BUNDLE)
     bundle.verify_manifest()

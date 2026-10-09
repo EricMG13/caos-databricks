@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, ClassVar, cast
 from uuid import uuid4
 
+import gateway_smoke
 import pytest
 from copilot import (
     GetAuthStatusResponse,
@@ -41,6 +42,7 @@ from copilot import (
     SessionEvent,
     StdioRuntimeConnection,
 )
+from copilot import _jsonrpc as copilot_jsonrpc
 from copilot.generated import session_events
 from copilot.generated.rpc import PermissionDecisionReject
 from copilot.generated.session_events import SessionEventType
@@ -74,6 +76,7 @@ from caos.copilot import (
     settled_charge,
     usable,
 )
+from caos.graph import worker
 from caos.methodology import canonical
 from caos.models import ChatCompletions, completions
 from caos.pricing import CreditPrice, ModelPrice
@@ -4692,6 +4695,13 @@ LONG_TIER: dict[str, object] = {
     "outputPrice": 2.0,
     "maxPromptTokens": 1_000_000,
 }
+INPUT_RATES = (
+    "inputPrice",
+    "cachePrice",
+    "cacheReadPrice",
+    "cacheWritePrice",
+    "cacheWrite1hPrice",
+)
 
 
 def billed(
@@ -4700,10 +4710,11 @@ def billed(
     multiplier: float | None = 1,
 ) -> dict[str, object]:
     """A listing's `billing`, in its wire keys: both tiers, and the multiplier
-    unless None. An empty long-context tier is left out."""
-    tier: dict[str, object] = dict(base)
+    unless None. A rate given as None is left out, as is an empty long-context
+    tier."""
+    tier: dict[str, object] = {k: v for k, v in base.items() if v is not None}
     if long_context:
-        tier["longContext"] = dict(long_context)
+        tier["longContext"] = {k: v for k, v in long_context.items() if v is not None}
     billing: dict[str, object] = {"tokenPrices": tier}
     if multiplier is not None:
         billing["multiplier"] = multiplier
@@ -4977,6 +4988,204 @@ def test_usable_reads_the_policy_and_the_effort() -> None:
     assert not usable(unlisted, TARGET)
 
 
+# Each rate a call can be billed at, in each tier, raised by one ten-millionth
+# of a credit per batch above the pin's figure: refused; at the figure: ready.
+_ABOVE = (
+    [("base", rate, 0.5000001) for rate in INPUT_RATES]
+    + [("long", rate, 0.5000001) for rate in INPUT_RATES]
+    + [
+        ("base", "outputPrice", 2.0000001),
+        ("long", "outputPrice", 2.0000001),
+    ]
+)
+
+
+@pytest.mark.parametrize(
+    ("tier", "rate", "value"), _ABOVE, ids=[f"{t}-{r}" for t, r, _ in _ABOVE]
+)
+def test_readiness_refuses_a_pinned_price_below_the_listed_price_times_the_multiplier(
+    ready: type[FakeRuntime],
+    capsys: pytest.CaptureFixture[str],
+    tier: str,
+    rate: str,
+    value: float,
+) -> None:
+    base, long = dict(BASE_TIER), dict(LONG_TIER)
+    (base if tier == "base" else long)[rate] = value
+    ready.offered = [listed(billing=billed(base, long))]
+    refused_not_configured({MODEL: PRICE})
+    line = capsys.readouterr().err.splitlines()[-1]
+    assert " price_check=low " in line
+    assert copilot_module.CONTEXT_LISTED == {}
+    # On the figure exactly, the pin covers it.
+    (base if tier == "base" else long)[rate] = round(value, 1)
+    ready.offered = [listed(billing=billed(base, long))]
+    require_ready({MODEL: PRICE})
+
+
+@pytest.mark.parametrize(
+    ("multiplier", "ok"),
+    [(1.0000001, False), (2, False), (1, True), (None, True), (0.5, True)],
+)
+def test_the_listed_multiplier_scales_every_rate(
+    ready: type[FakeRuntime], multiplier: float | None, ok: bool
+) -> None:
+    ready.offered = [listed(billing=billed(multiplier=multiplier))]
+    if ok:
+        require_ready({MODEL: PRICE})
+    else:
+        refused_not_configured({MODEL: PRICE})
+
+
+def test_a_price_floor_is_shown_rounded_up_never_down(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    base = {"batchSize": 3, "inputPrice": 0.001, "outputPrice": 0.002}
+    long = {"inputPrice": 0.0005, "outputPrice": 0.001}
+    ready.offered = [listed(billing=billed(base, long))]
+    require_ready({MODEL: PRICE})
+    # 0.001 / 3 x 0.01 = 3.33...e-6, shown as 0.000003333334.
+    line = capsys.readouterr().err.splitlines()[-1]
+    assert " price_floor=0.000003333334,0.000006666667 " in line
+    assert " context=128000 " in line
+
+
+@pytest.mark.parametrize(
+    "listing",
+    [
+        listed(billing={}),
+        listed(billing=billed({"inputPrice": 0.3, "outputPrice": 1.5}, {})),
+        listed(billing=billed(dict(BASE_TIER, batchSize=0))),
+        listed(billing=billed(dict(BASE_TIER, batchSize=-1000))),
+        listed(billing=billed(dict(BASE_TIER, inputPrice=-0.3))),
+        listed(billing=billed(dict(BASE_TIER, cacheWritePrice=math.nan))),
+        listed(billing=billed(long_context=dict(LONG_TIER, outputPrice=math.inf))),
+        listed(billing=billed(multiplier=-1)),
+        listed(billing=billed(multiplier=math.nan)),
+        listed(billing=billed(multiplier=0)),
+        listed(billing=billed(multiplier=math.inf)),
+        listed(billing=billed(dict(BASE_TIER, inputPrice=None))),
+        listed(billing=billed(dict(BASE_TIER, outputPrice=None))),
+        listed(billing=billed(long_context=dict(LONG_TIER, inputPrice=None))),
+        listed(billing=billed(long_context=dict(LONG_TIER, outputPrice=None))),
+        listed(billing=billed(BASE_TIER, {})),
+        listed(billing=billed(BASE_TIER, {"maxPromptTokens": 1_000_000})),
+        listed(
+            billing=billed(
+                {k: v for k, v in BASE_TIER.items() if k not in INPUT_RATES},
+                {k: v for k, v in LONG_TIER.items() if k not in INPUT_RATES},
+            )
+        ),
+        listed(
+            billing=billed(
+                {k: v for k, v in BASE_TIER.items() if k != "outputPrice"},
+                {k: v for k, v in LONG_TIER.items() if k != "outputPrice"},
+            )
+        ),
+    ],
+    ids=[
+        "no-billing",
+        "no-batch-size",
+        "zero-batch",
+        "negative-batch",
+        "negative-rate",
+        "nan-rate",
+        "infinite-rate",
+        "negative-multiplier",
+        "nan-multiplier",
+        "zero-multiplier",
+        "infinite-multiplier",
+        "base-no-input-price",
+        "base-no-output-price",
+        "long-no-input-price",
+        "long-no-output-price",
+        "no-long-context-tier",
+        "long-context-tier-unpriced",
+        "no-input-rate",
+        "no-output-rate",
+    ],
+)
+def test_a_listing_readiness_cannot_price_refuses_the_worker(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str], listing: ModelInfo
+) -> None:
+    ready.offered = [listing]
+    refused_not_configured({MODEL: PRICE})
+    line = capsys.readouterr().err.splitlines()[-1]
+    assert " price_check=unpriced price_floor=- " in line
+
+
+def test_a_listing_with_no_token_prices_cannot_be_priced(
+    ready: type[FakeRuntime],
+) -> None:
+    info = ModelInfo.from_dict(
+        {"id": PIN, "name": PIN, "capabilities": {}, "billing": {"multiplier": 1}}
+        | {"supportedReasoningEfforts": ["high"]}
+    )
+    assert info.billing is not None
+    assert info.billing.token_prices is None
+    ready.offered = [info]
+    refused_not_configured({MODEL: PRICE})
+
+
+@pytest.mark.parametrize(
+    ("long", "base_prompt", "limits", "context"),
+    [
+        (True, True, {"max_prompt_tokens": 128_000}, 1_000_000),
+        (False, True, {"max_prompt_tokens": 128_000}, 200_000),
+        (False, False, {"max_prompt_tokens": 128_000}, 128_000),
+        (False, False, {"max_context_window_tokens": 150_000}, 150_000),
+        (False, False, {}, None),
+    ],
+    ids=["long-context", "base-tier", "prompt-limit", "context-window", "none"],
+)
+def test_readiness_declares_each_listed_models_context_once(
+    ready: type[FakeRuntime],
+    long: bool,
+    base_prompt: bool,
+    limits: Mapping[str, object],
+    context: int | None,
+) -> None:
+    base = dict(BASE_TIER)
+    if not base_prompt:
+        del base["maxPromptTokens"]
+    tier = dict(LONG_TIER) if long else {"inputPrice": 0.5, "outputPrice": 2.0}
+    if not long:
+        base["outputPrice"] = 1.5
+    ready.offered = [listed(billing=billed(base, tier), limits=limits)]
+    require_ready({MODEL: PRICE})
+    expected = {} if context is None else {PIN: context}
+    assert copilot_module.CONTEXT_LISTED == expected
+    # A second start in this process (the in-process worker's retry after a
+    # store fault) reads the same listing: declared again, unchanged.
+    require_ready({MODEL: PRICE})
+    assert copilot_module.CONTEXT_LISTED == expected
+
+
+def test_a_listing_that_changed_since_it_was_declared_refuses(
+    ready: type[FakeRuntime],
+) -> None:
+    require_ready({MODEL: PRICE})
+    ready.offered = [
+        listed(billing=billed(long_context=dict(LONG_TIER, maxPromptTokens=900_000)))
+    ]
+    refused_not_configured({MODEL: PRICE})
+    assert copilot_module.CONTEXT_LISTED == {PIN: 1_000_000}
+
+
+def test_two_efforts_of_one_model_declare_its_context_once(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    low = f"copilot:{PIN}@low"
+    low_price = ModelPrice(
+        low, PRICE.input_per_token, PRICE.output_per_token, PRICE.as_of
+    )
+    require_ready({MODEL: PRICE, low: low_price})
+    assert copilot_module.CONTEXT_LISTED == {PIN: 1_000_000}
+    assert capsys.readouterr().err == (
+        f"{RUNTIME_LINE}\n{ready_line()}\n{ready_line(low)}\n"
+    )
+
+
 @pytest.mark.parametrize("credit", [None, "", "0.01", "0,2026-10-01", "x,2026-10-01"])
 def test_readiness_needs_a_credit_price_for_any_copilot_model(
     ready: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, credit: str | None
@@ -5030,6 +5239,73 @@ def test_the_runtime_pin_is_verified_at_readiness(
     assert copilot_module.CONTEXT_LISTED == {}
 
 
+def _raising(error: BaseException) -> Callable[..., Any]:
+    async def raised(_self: object) -> None:
+        raise error
+
+    return raised
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        copilot_jsonrpc.JsonRpcError(-32000, SECRET),
+        copilot_jsonrpc.ProcessExitedError(SECRET),
+        OSError(SECRET),
+        RuntimeError(SECRET),
+        ValueError(SECRET),
+        TimeoutError(SECRET),
+        AssertionError(SECRET),
+        TypeError(SECRET),
+        KeyError(SECRET),
+        ExceptionGroup(SECRET, [RuntimeError(SECRET)]),
+    ],
+    ids=lambda error: type(error).__name__,
+)
+def test_a_runtime_that_cannot_answer_readiness_refuses_by_class_alone(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    error: Exception,
+) -> None:
+    monkeypatch.setattr(ready, "get_auth_status", _raising(error))
+    with pytest.raises(Refusal) as refused:
+        require_ready({MODEL: PRICE})
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+    assert refused.value.__cause__ is None
+    assert refused.value.__suppress_context__
+    err = capsys.readouterr().err
+    assert err == (
+        f"PROVIDER_NOT_CONFIGURED reason=runtime_unready class={type(error).__name__}\n"
+    )
+    assert copilot_module.CONTEXT_LISTED == {}
+    [made] = ready.made
+    assert not made.home.exists()
+
+
+def test_a_runtime_that_never_answers_readiness_is_refused_at_its_deadline(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def hangs(_self: object) -> None:
+        await asyncio.sleep(30)
+
+    monkeypatch.setattr(ready, "list_models", hangs)
+    monkeypatch.setattr(copilot_module, "READY_SECONDS", 0.05)
+    started = time.monotonic()
+    refused_not_configured({MODEL: PRICE})
+    assert time.monotonic() - started < 5
+    assert capsys.readouterr().err == (
+        "PROVIDER_NOT_CONFIGURED reason=runtime_unready class=TimeoutError\n"
+    )
+    assert copilot_module.READY_SECONDS == 0.05
+
+
+def test_the_ready_deadline_is_a_minute() -> None:
+    assert copilot_module.READY_SECONDS == 60.0
+
+
 @pytest.mark.parametrize(
     ("said", "shown"),
     [
@@ -5069,3 +5345,230 @@ def test_a_listed_field_that_is_no_identifier_is_printed_as_a_dash(
     refused_not_configured({MODEL: PRICE})
     line = capsys.readouterr().err.splitlines()[-1]
     assert " policy=- usable=n efforts=high,- max_prompt_tokens=- " in line
+
+
+def test_a_worker_whose_copilot_model_is_not_ready_refuses_before_the_store(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(models.ENDPOINT_ENV, MODEL)
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
+    monkeypatch.delenv("CAOS_MODEL_CHOICES", raising=False)
+    monkeypatch.setattr(
+        worker, "_store_configuration", lambda: pytest.fail("the store was read")
+    )
+    ready.signed_in = False
+    assert worker.main() == 2
+    assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
+
+
+def test_the_worker_checks_readiness_on_every_approved_model_before_the_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(models.ENDPOINT_ENV, MODEL)
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
+    monkeypatch.setenv("CAOS_MODEL_CHOICES", f"{GATEWAY},0.000005,0.00002,2026-10-01")
+    checked: list[Mapping[str, ModelPrice]] = []
+
+    def checking(choices: Mapping[str, ModelPrice]) -> None:
+        checked.append(dict(choices))
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(worker, "require_ready", checking)
+    monkeypatch.setattr(
+        worker, "_store_configuration", lambda: pytest.fail("the store was read")
+    )
+    with pytest.raises(Refusal):
+        worker._configured()
+    assert checked == [{MODEL: PRICE, GATEWAY: GATEWAY_PRICE}]
+
+
+def _smoke_ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+    json_call = "JSON" in prompt
+    text = '{"ok": true}' if json_call else "OK"
+    # Each call its own bill, so a line mixing the two is seen. No usage
+    # event: its counts would exceed the smoke's few request bytes.
+    units = 300_000_000 if json_call else 100_000_000
+    return sdk_call(answer=answer(text), usage=None, checkpoint=checkpoint(units, 1))
+
+
+def test_the_production_smoke_takes_copilot_only_on_a_real_transport(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv(CREDIT_PRICE_ENV, READY_CREDIT)
+    scripted = completions(
+        PRICE, chat=ChatCopilot(model=MODEL, ask=_smoke_ask), endpoint=MODEL
+    )
+    monkeypatch.setattr(models, "from_environment", lambda: scripted)
+    assert gateway_smoke.main() == 2
+    assert capsys.readouterr().err == (
+        "gateway_smoke: refused, chat model is ChatCopilot\n"
+    )
+    # The transport the factory gives a Copilot name, standing in for the SDK.
+    monkeypatch.setattr(copilot_module, "ask_copilot", _smoke_ask)
+    real = completions(
+        PRICE,
+        chat=ChatCopilot(model=MODEL, ask=copilot_module.ask_copilot),
+        endpoint=MODEL,
+    )
+    monkeypatch.setattr(models, "from_environment", lambda: real)
+    assert gateway_smoke.main() == 0
+    out = capsys.readouterr().out
+    assert f"endpoint={MODEL} model=ChatCopilot " in out
+    # The plain call's charge beside its own AI units (F604): 100,000,000
+    # nano-AIU at $0.01 a credit, under the smoke's reservation.
+    assert " charge=0.001 nano_aiu=100000000 json_mode=accepted" in out
+
+
+def test_the_production_smoke_needs_a_credit_price_for_copilot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(CREDIT_PRICE_ENV, raising=False)
+    monkeypatch.setattr(copilot_module, "ask_copilot", _smoke_ask)
+    real = completions(
+        PRICE,
+        chat=ChatCopilot(model=MODEL, ask=copilot_module.ask_copilot),
+        endpoint=MODEL,
+    )
+    monkeypatch.setattr(models, "from_environment", lambda: real)
+    with pytest.raises(Refusal) as refused:
+        gateway_smoke.main()
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+def test_a_batch_of_one_token_prices_each_token_at_its_rate(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    base = {"batchSize": 1, "inputPrice": 0.0005, "outputPrice": 0.002}
+    long = {"inputPrice": 0.0005, "outputPrice": 0.002}
+    ready.offered = [listed(billing=billed(base, long), state=None)]
+    require_ready({MODEL: PRICE})
+    line = capsys.readouterr().err.splitlines()[-1]
+    # No policy listed is no policy to refuse, printed as such.
+    assert " policy=- usable=y " in line
+    assert " price_check=ok price_floor=0.000005,0.00002 " in line
+
+
+@pytest.mark.parametrize("value", [True, False, "0.3", None, [0.3]])
+def test_a_figure_that_is_no_number_is_no_rate(value: object) -> None:
+    """The SDK's own parsing never hands these on; a later SDK might."""
+    assert copilot_module._rate(value) is None
+    assert copilot_module._rate(0) == 0
+    assert copilot_module._rate(0.3) == Fraction(3, 10)
+
+
+def test_a_copilot_qualification_run_needs_a_ready_seat_before_any_call(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`scripts/qualify.py` is a paid path outside the worker (F602): the seat
+    and the pin are checked as the worker checks them, or nothing is built."""
+    import qualify
+
+    monkeypatch.setenv(models.ENDPOINT_ENV, MODEL)
+    monkeypatch.delenv("CAOS_MODEL_CHOICES", raising=False)
+    identity = models.identity_of(MODEL)
+    low = "0.000000001"
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},{low},{low},2026-10-01")
+    ready.auth_type = "gh-cli"
+    assert qualify._configured_provider(identity) is None
+    ready.auth_type = "env"
+    assert qualify._configured_provider(identity) is None
+    assert "PROVIDER_NOT_CONFIGURED: no provider; nothing was spent" in (
+        capsys.readouterr().err
+    )
+    # Readiness lists models; it never opens a session.
+    assert all(not made.created for made in ready.made)
+    assert copilot_module.CONTEXT_LISTED == {}
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
+    provider = qualify._configured_provider(identity)
+    assert provider is not None
+    assert provider.model == MODEL
+    assert copilot_module.CONTEXT_LISTED == {PIN: 1_000_000}
+    # A profile the caller did not expect starts no runtime at all.
+    started = len(ready.made)
+    assert qualify._configured_provider("copilot/other/none/65536") is None
+    assert len(ready.made) == started
+
+
+def _unparsable_listing(_self: object) -> list[ModelInfo]:
+    """What the SDK's own parsing raises on a listing it cannot read."""
+    return [
+        ModelInfo.from_dict(
+            {
+                "id": PIN,
+                "name": PIN,
+                "capabilities": {},
+                "billing": {"tokenPrices": {"batchSize": "1000"}},
+            }
+        )
+    ]
+
+
+async def _listing_unparsable(self: object) -> list[ModelInfo]:
+    return _unparsable_listing(self)
+
+
+async def _stop_failed(_self: object, *_exc: object) -> None:
+    raise ExceptionGroup(SECRET, [OSError(SECRET), RuntimeError(SECRET)])
+
+
+@pytest.mark.parametrize(
+    ("method", "failing"),
+    [
+        ("list_models", (_listing_unparsable, "AssertionError")),
+        ("__aexit__", (_stop_failed, "ExceptionGroup")),
+    ],
+    ids=["sdk-parse", "stop-group"],
+)
+def test_a_worker_whose_runtime_fails_its_parsing_or_its_stop_exits_two_typed(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    method: str,
+    failing: tuple[Callable[..., Any], str],
+) -> None:
+    replacement, named = failing
+    monkeypatch.setattr(ready, method, replacement)
+    monkeypatch.setenv(models.ENDPOINT_ENV, MODEL)
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
+    monkeypatch.delenv("CAOS_MODEL_CHOICES", raising=False)
+    monkeypatch.setattr(
+        worker, "_store_configuration", lambda: pytest.fail("the store was read")
+    )
+    assert worker.main() == 2
+    err = capsys.readouterr().err
+    assert err == (
+        f"PROVIDER_NOT_CONFIGURED reason=runtime_unready class={named}\n"
+        "PROVIDER_NOT_CONFIGURED\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "efforts",
+    ["xhigh", "high", ["high", 1], [["high"]], {"high": True}, 3],
+    ids=["text-containing", "text-equal", "a-non-text", "nested", "mapping", "number"],
+)
+def test_efforts_that_are_no_list_of_names_take_no_effort(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str], efforts: object
+) -> None:
+    """`ModelInfo.from_dict` keeps `supportedReasoningEfforts` as sent (F605):
+    only a list of names, matched exactly, can take the pinned effort."""
+    info = ModelInfo.from_dict(
+        {
+            "id": PIN,
+            "name": PIN,
+            "capabilities": {},
+            "supportedReasoningEfforts": efforts,
+            "billing": billed(),
+        }
+    )
+    assert info.supported_reasoning_efforts == efforts
+    assert not usable(info, TARGET)
+    assert not usable(info, CopilotModel("copilot", PIN, None))
+    ready.offered = [info]
+    refused_not_configured({MODEL: PRICE})
+    line = capsys.readouterr().err.splitlines()[-1]
+    assert " usable=n efforts=- " in line

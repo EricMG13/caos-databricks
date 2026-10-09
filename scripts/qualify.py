@@ -25,6 +25,14 @@ them, and `$TMPDIR` is purged (FP-16).
     scripts/qualify.py qualification/ccl-fy2025-market-dislocation \
         --expect-identity databricks/claude-opus-5-5/none/65536 --ceiling 60.00
 
+    # The same set through GitHub Copilot on this machine (D77): the identity
+    # names the platform, the model, the effort and the output cap.
+    CAOS_MODEL_ENDPOINT=copilot:gpt-6-luna@high \
+    CAOS_MODEL_PRICE=copilot:gpt-6-luna@high,<in>,<out>,<YYYY-MM-DD> \
+    CAOS_COPILOT_CREDIT_PRICE=<usd per AI credit>,<YYYY-MM-DD> \
+    scripts/qualify.py qualification/ccl-fy2025-market-dislocation \
+        --expect-identity copilot/gpt-6-luna/high/65536 --ceiling 5.00
+
 `--expect-identity` is not a convenience. A verdict binds the execution profile
 it was measured under, so the run refuses before spending anything if the
 environment resolves to a different one than the caller believes.
@@ -50,6 +58,7 @@ import psycopg
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from caos.blobs import BlobStore
+from caos.copilot import require_ready
 from caos.methodology import CANONICAL_ADAPTER_VERSION
 from caos.methodology.bundle import Bundle
 from caos.methodology.vendor import catalog
@@ -275,8 +284,10 @@ def _perform_until(  # noqa: PLR0913 -- one set, one loop, keyword-only tail
 
 def _configured_provider(expect_identity: str) -> ChatCompletions | None:
     """The provider, built last, after every check that needs no client; None
-    having said why nothing was spent: a workspace that cannot be reached, or
-    a profile the caller did not expect."""
+    having said why nothing was spent: a workspace that cannot be reached, a
+    profile the caller did not expect, or a Copilot model this machine cannot
+    answer on at its pinned price -- readiness, exactly as the worker runs it
+    before claiming a run (D77; F602)."""
     try:
         provider = from_environment()
     except Refusal as refused:
@@ -288,6 +299,11 @@ def _configured_provider(expect_identity: str) -> ChatCompletions | None:
             f"not {expect_identity}; nothing was spent",
             file=sys.stderr,
         )
+        return None
+    try:
+        require_ready({provider.model: provider.price})
+    except Refusal as refused:
+        print(f"{refused.code.value}: no provider; nothing was spent", file=sys.stderr)
         return None
     return provider
 

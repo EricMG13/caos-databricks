@@ -206,3 +206,9 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
     - whether the runtime honours the client's `working_directory`.
   - **The SDK update path.** `ensure_runtime_wrapper` is a private SDK function, pinned with the SDK at 1.0.16. An SDK update must re-check it.
   - **The owner.** `BUDGET_CHARGE_OVER_RESERVATION` maps to HTTP 500 (Task 2's registration). A RETRY_RUN command sent directly for a run parked with it therefore answers 500, where a refused command elsewhere answers 409; the Run section no longer offers that retry (F585). Whether the code should map to 409 is the owner's call.
+- N184 (2026-10-07; D77, addendum 2; F599) — What readiness (Task 5) leaves to the firm-seat spike (N177) and the owner.
+  - **The spike.** It must record:
+    - the exact `host` that `auth.getStatus` reports on the firm's seat (readiness accepts only `<pin>` or `https://<pin>`);
+    - whether `models.list` states `billing.tokenPrices` with a `batchSize` for each candidate (without one, readiness refuses `unpriced`);
+    - whether `capabilities.limits.max_output_tokens` is listed. `CopilotClient.list_models()`'s `ModelInfo` drops it, but the typed, experimental `client.rpc.models.list` returns it (`ModelCapabilitiesLimits.max_output_tokens`), so it can be printed from there if the owner wants the second call (F599, corrected).
+  - **The owner.** An approved model the seat does not offer refuses the worker (the Task 5 brief's rule). R3 instead printed it `offered=n` and let its runs park. Which rule stands is the owner's call.
