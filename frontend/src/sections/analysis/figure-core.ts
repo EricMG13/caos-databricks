@@ -4,6 +4,7 @@
 // bounds on how much is drawn. A leaf: it imports neither.
 import type {
   BulletRow,
+  ChartColor,
   ChartSelection,
   ChartSeries,
   Datum,
@@ -105,6 +106,8 @@ export interface DivergingFigure extends FigureBase {
 export interface WaterfallFigure extends FigureBase {
   kind: "waterfall";
   steps: WaterfallStep[];
+  /** What the steps' colours stand for, where they wear a status's. */
+  statuses?: { color: ChartColor; label: string }[];
 }
 
 /** A bullet chart's tests, one a row. */

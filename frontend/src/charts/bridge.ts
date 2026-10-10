@@ -5,7 +5,7 @@
 // residual step carries the exact difference: a bar is never bent to make a
 // bridge close, and a total is never recomputed.
 import { fromScaled, placesOf, readDatum, toScaled } from "./decimal";
-import type { Decimal, Origin, WaterfallStep } from "./types";
+import type { ChartColor, Decimal, Origin, WaterfallStep } from "./types";
 
 export interface BridgeStep {
   key: string;
@@ -23,6 +23,9 @@ export interface BridgeStep {
   end: Decimal | null;
   /** The residual's stated total, which the steps before it do not reach. */
   before?: string;
+  /** The step's own, as given (`WaterfallStep`). */
+  color?: ChartColor;
+  status?: string;
 }
 
 export const UNRECONCILED = "Unreconciled";
@@ -43,7 +46,8 @@ export function bridgeOf(steps: readonly WaterfallStep[]): BridgeStep[] {
   let level = 0n;
   read.forEach(({ step, value, reason }, index) => {
     const key = step.key ?? `${index}`;
-    const base = { key, label: step.label, kind: step.kind, origin: step.origin };
+    const { label, kind, origin, color, status } = step;
+    const base = { key, label, kind, origin, color, status };
     if (value === null) {
       out.push({ ...base, value: null, reason, start: null, end: null });
       return;

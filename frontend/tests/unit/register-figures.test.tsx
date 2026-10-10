@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   covenantHeadroom,
+  ebitdaQuality,
   peerRanges,
   registerFigures,
   registerRows,
@@ -426,4 +427,169 @@ test("a register past the marks a figure may draw is stated, not drawn", () => {
   expect(figure!.oversized).toBe(true);
   expect(figure!.title).toBe("Covenant headroom, x");
   expect(figure!.summary).toMatch(/^2002 marks: too many to draw\./);
+});
+
+// CP-1D's T1D.4, as the profile declares it.
+const QUALITY = [
+  "Step",
+  "Amount",
+  "Basis",
+  "Supported / Challenged / Rejected",
+  "Cumulative EBITDA",
+  "Evidence ID",
+];
+const t1d4 = (step: string, amount: Served, status: string, cumulative: Served, id = "E-1") => [
+  c(step),
+  amount,
+  c(`Basis of ${step}`),
+  c(status),
+  cumulative,
+  c(id),
+];
+
+/** A CP-1D handoff: the fixture has none, so CP-1's stands in, renamed,
+    with no tables and only the registers given. */
+const cp1dWith = (registers: Register[]): HandoffView => ({
+  ...handoffOf("CP-1"),
+  module_id: "CP-1D",
+  tables: [],
+  registers,
+});
+
+/** A figure read as a waterfall: a figure of any other kind fails the test. */
+function waterfall(figure: Figure) {
+  if (figure.kind !== "waterfall") throw new Error(`A ${figure.kind} figure, not a waterfall.`);
+  return figure;
+}
+const quality = (rows: Served[][]) =>
+  ebitdaQuality(cp1dWith([register("T1D.4", QUALITY, rows)])).map(waterfall);
+
+test("ebitdaQuality: opening total, deltas as served, a stated total, a gap, the closing total", () => {
+  const [figure, ...rest] = quality([
+    t1d4("Reported EBITDA", c("100.0", "100.0"), "Supported", c("100.0", "100.0")),
+    t1d4("Restructuring", c("12.5", "12.5"), " challenged ", c("112.5", "112.5"), "E-2"),
+    t1d4("Pro forma synergies", c("(4.0)", "-4.0"), "REJECTED", c("108.5", "108.5")),
+    t1d4("Subtotal", c(""), "", c("108.5", "108.5")),
+    t1d4("Run-rate savings", c("Not quantified"), "Insufficient Information", c("")),
+    // A status is matched exactly, past its case and spaces: a cited one is not.
+    t1d4("Rebate", c("0.0", "0.0"), "Supported [C1]", c("108.5", "108.5")),
+    t1d4("FX", c("1.5", "1.5"), "Under review", c("110.0", "110.0"), "E-6"),
+  ]);
+  expect(rest).toEqual([]);
+  expect(figure!.key).toBe("ebitda-quality");
+  expect(figure!.table).toBe("T1D.4");
+  expect(figure!.title).toBe("EBITDA quality bridge");
+  expect(figure!.steps).toEqual([
+    {
+      key: "0",
+      label: "Reported EBITDA",
+      kind: "total",
+      value: "100.0",
+      origin: "model",
+      status: "Supported",
+    },
+    {
+      key: "1",
+      label: "Restructuring",
+      kind: "delta",
+      value: "12.5",
+      origin: "model",
+      color: "series-3",
+      status: "challenged",
+    },
+    {
+      key: "2",
+      label: "Pro forma synergies",
+      kind: "delta",
+      value: "-4.0",
+      origin: "model",
+      color: "negative",
+      status: "REJECTED",
+    },
+    { key: "3", label: "Subtotal", kind: "total", value: "108.5", origin: "model" },
+    {
+      key: "4",
+      label: "Run-rate savings",
+      kind: "delta",
+      value: null,
+      reason: "Not quantified",
+      origin: "model",
+      color: "series-4",
+      status: "Insufficient Information",
+    },
+    {
+      key: "5",
+      label: "Rebate",
+      kind: "delta",
+      value: "0.0",
+      origin: "model",
+      status: "Supported [C1]",
+    },
+    { key: "6", label: "FX", kind: "delta", value: "1.5", origin: "model", status: "Under review" },
+    { key: "closing", label: "Cumulative EBITDA", kind: "total", value: "110.0", origin: "model" },
+  ]);
+  // The opening total's Supported is said, not coloured: no legend entry.
+  expect(figure!.statuses).toEqual([
+    { color: "series-3", label: "Challenged" },
+    { color: "negative", label: "Rejected" },
+    { color: "series-4", label: "Insufficient Information" },
+  ]);
+  expect(figure!.summary).toBe("Reported EBITDA 100.0 to Cumulative EBITDA 110.0, as served.");
+  const pressed = (series: string) => ({
+    series,
+    category: "",
+    index: 0,
+    value: null,
+    origin: "model" as const,
+  });
+  expect(figure!.sourceOf(pressed("1"))).toBe("Basis: Basis of Restructuring; Evidence ID: E-2");
+  // The closing total is the last row's own cumulative figure.
+  expect(figure!.sourceOf(pressed("closing"))).toBe("Basis: Basis of FX; Evidence ID: E-6");
+  expect(figure!.sourceOf(pressed("5:unreconciled"))).toBeNull();
+});
+
+test("an opening row with no amount opens on its cumulative figure; a last stated total closes", () => {
+  const [figure] = quality([
+    t1d4("Reported EBITDA", c("n/a"), "Supported", c("80", "80")),
+    t1d4("Add-back", c("5", "5"), "Supported", c("85", "85")),
+    t1d4("Adjusted EBITDA", c(""), "Supported", c("85", "85")),
+  ]);
+  expect(figure!.steps.map((step) => [step.kind, step.label, step.value])).toEqual([
+    ["total", "Reported EBITDA", "80"],
+    ["delta", "Add-back", "5"],
+    ["total", "Adjusted EBITDA", "85"],
+  ]);
+  expect(figure!.statuses).toEqual([{ color: "positive", label: "Supported" }]);
+});
+
+test("a bridge that ends on a change with no cumulative figure names no change as its end", () => {
+  const [figure] = quality([
+    t1d4("Reported EBITDA", c("100.0", "100.0"), "Supported", c("100.0", "100.0")),
+    t1d4("FX", c("1.5", "1.5"), "Supported", c("n/a")),
+  ]);
+  expect(figure!.steps.at(-1)!.kind).toBe("delta");
+  expect(figure!.summary).toBe(
+    "Reported EBITDA 100.0; the last change, FX, states no cumulative EBITDA.",
+  );
+  const [gap] = quality([
+    t1d4("Reported EBITDA", c("100.0", "100.0"), "Supported", c("100.0", "100.0")),
+    t1d4("Run-rate savings", c("Not quantified"), "Insufficient Information", c("—")),
+  ]);
+  expect(gap!.summary).toBe(
+    "Reported EBITDA 100.0; the last change, Run-rate savings, states no cumulative EBITDA.",
+  );
+});
+
+test("the schema's empty bridge, and a register of another module, draw nothing", () => {
+  expect(quality([t1d4(" NONE ", c("—"), "—", c("—"))])).toEqual([]);
+  expect(quality([])).toEqual([]);
+  const cp1 = withRegisters("CP-1", [
+    register("T1D.4", QUALITY, [t1d4("Reported EBITDA", c("1", "1"), "Supported", c("1", "1"))]),
+  ]);
+  expect(ebitdaQuality(cp1)).toEqual([]);
+  expect(registerFigures(cp1)).toEqual([]);
+  const cp1d = cp1dWith([
+    register("T1D.4", QUALITY, [t1d4("Reported EBITDA", c("1", "1"), "Supported", c("1", "1"))]),
+  ]);
+  expect(registerFigures(cp1d).map((figure) => figure.key)).toEqual(["ebitda-quality"]);
 });
