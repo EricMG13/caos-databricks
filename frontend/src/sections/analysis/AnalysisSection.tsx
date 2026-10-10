@@ -252,7 +252,11 @@ function Picked({ pick }: { pick: FigurePick }) {
             : `${formatDecimal(pick.value)}${pick.unit ? ` ${pick.unit}` : ""}`}
         </dd>
         <dt>Origin</dt>
-        <dd>Model-authored, not host-verified</dd>
+        <dd>
+          {pick.origin === null
+            ? "Computed here: the stated total less the running level, not served"
+            : "Model-authored, not host-verified"}
+        </dd>
         <dt>Table</dt>
         <dd className="mono">{pick.table}</dd>
         <dt>Stated source</dt>

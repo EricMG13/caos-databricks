@@ -6,9 +6,12 @@ import { resolve } from "node:path";
 import { fireEvent, render, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { AnalysisSection } from "@/sections/analysis/AnalysisSection";
+import { bridgeOf } from "@/charts";
 import {
+  accountLines,
   addbackValidation,
   addbacks,
+  cashFlowBridge,
   comparatorChanges,
   figuresOf,
   forecastDrivers,
@@ -519,4 +522,179 @@ test("CP-2B's catalysts are a ranked, dated list, not a chart", () => {
   expect(items[0]).toHaveTextContent("Springing leverage test on the revolver");
   expect(items[0]).toHaveTextContent("p.22, Note 9 Debt, financial covenants");
   expect(container.querySelector("[data-figure]")).toBeNull();
+});
+
+// CP-1's account register, served typed since D32 and drawn nowhere until
+// now. Its figures here are made up for the test: the demo fixture carries no
+// account register. The periods are the fixture's own register.
+const ACCOUNT = [
+  "metric_id",
+  "period_id",
+  "value",
+  "calculation_status",
+  "source_id",
+  "source_locator",
+];
+const periodRegister = cp1.tables.find((t) => t.table_id === "cp1.model_period_register")!;
+const accountRegister = (rows: string[][]) => [
+  periodRegister,
+  table(
+    "cp1.model_account_register",
+    ACCOUNT,
+    rows.map(([metric, period, value, status = "REPORTED"]) => [
+      metric!,
+      period!,
+      value!,
+      status,
+      "S1",
+      `p.${period}`,
+    ]),
+  ),
+];
+
+test("accountLines: earnings keep to one type of period, balances to one point a date", () => {
+  const tables = accountRegister([
+    ...["2400", "520", "560", "610", "690", "758", "1448", "2618"].map((value, index) => [
+      "ebitda",
+      ["FY2025", "Q2-2025", "Q3-2025", "Q4-2025", "Q1-2026", "Q2-2026", "H1-2026", "LTM-Q2-2026"][
+        index
+      ]!,
+      value,
+    ]),
+    ["adjusted_ebitda", "Q2-2025", "530"],
+    ["adjusted_ebitda", "Q3-2025", "575"],
+    ["adjusted_ebitda", "Q4-2025", "620"],
+    ["adjusted_ebitda", "Q1-2026", "null", "NOT_AVAILABLE"],
+    ["adjusted_ebitda", "Q2-2026", "769"],
+    ["total_debt", "FY2025", "5600"],
+    ["total_debt", "Q2-2026", "5790"],
+    ["total_debt", "H1-2026", "5790"],
+    ["total_debt", "LTM-Q2-2026", "5790"],
+    ["cash_and_equivalents", "FY2025", "2410"],
+    ["cash_and_equivalents", "Q2-2025", "1900"],
+    ["cash_and_equivalents", "Q2-2026", "2630"],
+  ]);
+  const [earnings, balances, ...rest] = accountLines(tables);
+  // No revolver row: no revolver figure.
+  expect(rest).toEqual([]);
+  // A year, a half-year and a twelve-month period beside the quarters would
+  // draw falls that are only their lengths; the quarters are the most.
+  expect(earnings!.key).toBe("earnings");
+  expect(earnings!.categories).toEqual(["Q2-2025", "Q3-2025", "Q4-2025", "Q1-2026", "Q2-2026"]);
+  expect(earnings!.series.map((series) => series.key)).toEqual(["ebitda", "adjusted_ebitda"]);
+  expect(earnings!.series.every((series) => series.origin === "model")).toBe(true);
+  expect(earnings!.series[1]!.data[3]).toEqual({ value: null, reason: "NOT_AVAILABLE" });
+  expect(earnings!.unit).toBe("USD m");
+  expect(earnings!.summary).toBe(
+    "Q2-2026: EBITDA 758 USD m; Adjusted EBITDA 769 USD m, over 5 quarters.",
+  );
+  expect(
+    earnings!.sourceOf({
+      series: "ebitda",
+      category: "Q2-2026",
+      index: 4,
+      value: "758",
+      origin: "model",
+    }),
+  ).toBe("S1, p.Q2-2026");
+  // Three periods ending 2026-06-30 state one balance once, and the register
+  // listing FY2025 first does not put December before June.
+  expect(balances!.key).toBe("debt-cash");
+  expect(balances!.categories).toEqual(["Q2-2025", "FY2025", "Q2-2026"]);
+  expect(balances!.series[0]!.data).toEqual([
+    { value: null, reason: "not stated" },
+    { value: "5600" },
+    { value: "5790" },
+  ]);
+  expect(balances!.summary).toBe(
+    "Q2-2026: Total debt 5,790 USD m; Cash and equivalents 2,630 USD m, over 3 period ends.",
+  );
+  // A register with none of these accounts draws none of them.
+  expect(accountLines(accountRegister([["revenue", "Q2-2026", "7394"]]))).toEqual([]);
+});
+
+test("cashFlowBridge: the latest period with both ends, bridged as CP-MODEL bridges it", () => {
+  const tables = accountRegister([
+    ["cfo_ncfo", "FY2025", "1300"],
+    ["net_cash_change", "FY2025", "220"],
+    // The latest period by date, but with no stated change in cash.
+    ["cfo_ncfo", "LTM-Q2-2026", "1500"],
+    ["cfo_ncfo", "Q2-2026", "412"],
+    ["capex_and_intangible_investment", "Q2-2026", "-180"],
+    ["acquisitions_disposals", "Q2-2026", "null", "NOT_DISCLOSED"],
+    ["net_debt_issue_repay", "Q2-2026", "-95"],
+    ["other_investing_financing", "Q2-2026", "-12"],
+    ["net_cash_change", "Q2-2026", "100"],
+  ]);
+  const figure = cashFlowBridge(tables)!;
+  expect(figure.kind).toBe("waterfall");
+  expect(figure.title).toBe("Cash flow, Q2-2026");
+  // No dividend or equity row: left out, not drawn as a zero.
+  expect(figure.steps!.map((step) => [step.label, step.kind])).toEqual([
+    ["Operating cash flow", "total"],
+    ["Capex and intangibles", "delta"],
+    ["Acquisitions and disposals", "delta"],
+    ["Debt issued less repaid", "delta"],
+    ["Other investing and financing", "delta"],
+    ["Net change in cash", "total"],
+  ]);
+  expect(figure.steps![2]).toMatchObject({ value: null, reason: "NOT_DISCLOSED" });
+  expect(figure.summary).toBe(
+    "Operating cash flow 412 USD m to a net change in cash of +100 USD m.",
+  );
+  // The undisclosed acquisitions leave 412 - 180 - 95 - 12 = 125 against a
+  // stated 100: the chart says the 25 it cannot place, never bends a bar.
+  const residual = bridgeOf(figure.steps!).find((step) => step.kind === "residual")!;
+  expect(residual).toMatchObject({ value: "-25", before: "Net change in cash" });
+  expect(
+    figure.sourceOf({
+      series: "net_debt_issue_repay",
+      category: "Debt issued less repaid",
+      index: 3,
+      value: "-95",
+      origin: "model",
+    }),
+  ).toBe("S1, p.Q2-2026");
+  // No period states both ends: no bridge.
+  expect(cashFlowBridge(accountRegister([["cfo_ncfo", "Q2-2026", "412"]]))).toBeNull();
+});
+
+test("the account figures read in place, and a residual is said as computed, not served", () => {
+  const register = accountRegister([
+    ["ebitda", "Q1-2026", "690"],
+    ["ebitda", "Q2-2026", "758"],
+    ["total_debt", "Q2-2026", "5790"],
+    ["cfo_ncfo", "Q2-2026", "412"],
+    ["capex_and_intangible_investment", "Q2-2026", "-180"],
+    ["net_cash_change", "Q2-2026", "200"],
+  ])[1]!;
+  const handoff = { ...cp1, tables: [...cp1.tables, register] };
+  // Earnings beside the add-backs that bridge them; balances before maturities.
+  expect(figuresOf(handoff).map((figure) => figure.key)).toEqual([
+    "segment-mix",
+    ...kpiLines(cp1.tables).map((figure) => figure.key),
+    "earnings",
+    "addbacks",
+    "cash-flow",
+    "debt-cash",
+    "maturities",
+  ]);
+  const { container } = render(
+    <MemoryRouter>
+      <AnalysisSection
+        document={{ ...document, body: { ...document.body, handoffs: [handoff] } }}
+        tab={handoff.route_node_id}
+      />
+    </MemoryRouter>,
+  );
+  const bridge = container.querySelector("[data-figure='cash-flow']") as HTMLElement;
+  fireEvent.click(within(bridge).getByRole("button", { name: /^Unreconciled before/ }));
+  const picked = container.querySelector("[data-figures] ~ [data-picked]")!;
+  expect(picked).toHaveTextContent("Cash flow, Q2-2026");
+  expect(picked).toHaveTextContent("Computed here: the stated total less the running level");
+  expect(picked).not.toHaveTextContent("Model-authored");
+  fireEvent.click(within(bridge).getByRole("button", { name: /^Operating cash flow/ }));
+  expect(container.querySelector("[data-picked]")).toHaveTextContent(
+    "Model-authored, not host-verified",
+  );
 });

@@ -9,11 +9,14 @@ import {
   ProvenanceKeyed,
   StackedBarChart,
   Swatch,
+  WaterfallChart,
   formatDecimal,
   type ChartColor,
   type ChartSelection,
   type ChartSeries,
   type Datum,
+  type Origin,
+  type WaterfallStep,
 } from "@/charts";
 import { fromScaled, placesOf, toScaled } from "@/charts/decimal";
 import { hundredfold, plainName } from "@/ds/format";
@@ -83,12 +86,14 @@ export function unitOf(currency: string, scale: string): string | undefined {
 export interface Figure {
   key: string;
   table: string;
-  kind: "stack" | "line" | "diverging";
+  kind: "stack" | "line" | "diverging" | "waterfall";
   title: string;
   summary: string;
   unit?: string;
   categories: string[];
   series: ChartSeries[];
+  /** A waterfall's steps, in bridge order; absent on every other kind. */
+  steps?: WaterfallStep[];
   /** Where the model says a mark's figure came from: its source locator. */
   sourceOf: (selection: ChartSelection) => string | null;
   /** Past `MAX_MARKS`: stated, not drawn. */
@@ -143,8 +148,8 @@ function periodUnit(tables: readonly Table[], period: string | undefined): strin
 const unique = (values: readonly string[]) => [...new Set(values)];
 /** Rows grouped by `key`, in table order, built once: a `find` or `filter`
     per mark made the figures cubic in a table's rows. */
-function groupBy(rows: readonly Row[], key: (row: Row) => string): Map<string, Row[]> {
-  const groups = new Map<string, Row[]>();
+function groupBy<T>(rows: readonly T[], key: (row: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
   for (const row of rows) {
     const k = key(row);
     const group = groups.get(k);
@@ -634,16 +639,234 @@ export function forecastDrivers(tables: readonly Table[]): Figure[] {
   });
 }
 
+const ACCOUNTS = "cp1.model_account_register";
+
+/** One of CP-1's controlled metric ids, and what a reader calls it. */
+interface Account {
+  id: string;
+  label: string;
+}
+
+/** A flow (earnings) is stated over a span; a balance (debt, cash) at a date. */
+type Measure = "flow" | "balance";
+
+const PERIOD_TYPES: Record<string, string> = {
+  QUARTER: "quarters",
+  FY: "fiscal years",
+  YTD: "year-to-date periods",
+  LTM: "last-twelve-month periods",
+  PERIOD_END: "period ends",
+};
+
+/** A period register field, or "" for a period the register does not list. */
+function periodField(tables: readonly Table[]) {
+  const register = groupBy(tableOf(tables, "cp1.model_period_register") ?? [], (row) =>
+    text(row, "period_id"),
+  );
+  return (period: string, column: string) => {
+    const row = register.get(period)?.[0];
+    return row ? text(row, column) : "";
+  };
+}
+
+/** `periods` by the register's end dates, oldest first: its listing order is
+    not time's (a fiscal year may head its quarters). A period with no end
+    date leaves them in the order given; a tie keeps it. */
+function chronological(tables: readonly Table[], periods: readonly string[]): string[] {
+  const field = periodField(tables);
+  const end = (period: string) => field(period, "end_date");
+  return periods.every(end)
+    ? [...periods].sort((a, b) => end(a).localeCompare(end(b)))
+    : [...periods];
+}
+
+/** `present`'s periods as a line reads them, oldest first, and what they are.
+    A flow keeps to one type of period: a quarter beside a year or a
+    half-year draws a fall that is only the periods' lengths, so the type
+    with the most periods is kept, the register's last period's on a tie. A
+    balance keeps one period a date: a quarter, a half-year and a
+    twelve-month period ending together state one balance three times. */
+function linePeriods(
+  tables: readonly Table[],
+  present: readonly string[],
+  measure: Measure,
+): { periods: string[]; noun: string } {
+  const field = periodField(tables);
+  const type = (period: string) => field(period, "period_type").toUpperCase();
+  const ordered = periodsOf(tables, present);
+  if (measure === "balance") {
+    const byDate = groupBy(ordered, (period) => field(period, "end_date") || period);
+    const periods = [...byDate.values()].map((group) => group[0]!);
+    return { periods: chronological(tables, periods), noun: "period ends" };
+  }
+  const byType = groupBy(ordered, type);
+  let kept = type(ordered.at(-1)!);
+  for (const [other, periods] of byType) {
+    if (periods.length > byType.get(kept)!.length) kept = other;
+  }
+  return {
+    periods: chronological(tables, byType.get(kept)!),
+    noun: PERIOD_TYPES[kept] ?? "periods",
+  };
+}
+
+/** The account register's rows for `accounts`, by metric and period. */
+function accountCells(tables: readonly Table[], accounts: readonly Account[]) {
+  const ids = new Set(accounts.map((account) => account.id));
+  const rows = (tableOf(tables, ACCOUNTS) ?? []).filter((row) => ids.has(text(row, "metric_id")));
+  const cells = groupBy(rows, (row) => pair(text(row, "metric_id"), text(row, "period_id")));
+  return { rows, at: (metric: string, period: string) => cells.get(pair(metric, period))?.[0] };
+}
+
+/** A register value, or the gap it leaves with the status the model gave it. */
+const accountDatum = (row: Row | undefined): Datum =>
+  row?.value?.value != null
+    ? { value: row.value.value }
+    : { value: null, reason: (row && text(row, "calculation_status")) || "not stated" };
+
+/** `accounts` as lines over the periods `measure` reads, each figure as served. */
+function accountLine(
+  tables: readonly Table[],
+  key: string,
+  title: string,
+  measure: Measure,
+  accounts: readonly Account[],
+): Figure | null {
+  const { rows, at } = accountCells(tables, accounts);
+  const stated = rows.filter((row) => row.value?.value != null);
+  if (stated.length === 0) return null;
+  const { periods, noun } = linePeriods(
+    tables,
+    unique(stated.map((row) => text(row, "period_id"))),
+    measure,
+  );
+  if (accounts.length * periods.length > MAX_MARKS) {
+    return oversized(key, ACCOUNTS, title, accounts.length * periods.length);
+  }
+  // An account the register states in none of these periods draws no line.
+  const drawn = accounts.filter((account) =>
+    periods.some((period) => at(account.id, period)?.value?.value != null),
+  );
+  const latest = periods.at(-1)!;
+  const unit = periodUnit(tables, latest);
+  const amount = (account: Account) => {
+    const value = at(account.id, latest)?.value?.value;
+    return value == null ? "not stated" : `${formatDecimal(value)}${unit ? ` ${unit}` : ""}`;
+  };
+  return {
+    key,
+    table: ACCOUNTS,
+    kind: "line",
+    title,
+    summary:
+      `${latest}: ${drawn.map((account) => `${account.label} ${amount(account)}`).join("; ")}` +
+      `${periods.length > 1 ? `, over ${periods.length} ${noun}` : ""}.`,
+    unit,
+    categories: periods,
+    series: drawn.map((account) => ({
+      key: account.id,
+      label: account.label,
+      origin: "model" as const,
+      data: periods.map((period) => accountDatum(at(account.id, period))),
+    })),
+    sourceOf: (selection) => locate(at(selection.series, selection.category)),
+  };
+}
+
+/** CP-1's account register as lines: earnings over one type of period, and
+    debt against cash and the revolver at each period end. Every value is the
+    register's, as served; nothing is derived from it here (no leverage, no
+    net debt). */
+export function accountLines(tables: readonly Table[]): Figure[] {
+  return [
+    accountLine(tables, "earnings", "EBITDA, reported and adjusted", "flow", [
+      { id: "ebitda", label: "EBITDA" },
+      { id: "adjusted_ebitda", label: "Adjusted EBITDA" },
+    ]),
+    accountLine(tables, "debt-cash", "Debt and cash", "balance", [
+      { id: "total_debt", label: "Total debt" },
+      { id: "cash_and_equivalents", label: "Cash and equivalents" },
+    ]),
+    accountLine(tables, "revolver", "Revolver, drawn and committed", "balance", [
+      { id: "rcf_drawn", label: "Drawn" },
+      { id: "rcf_commitment", label: "Commitment" },
+    ]),
+  ].filter((figure): figure is Figure => figure !== null);
+}
+
+const OPERATING: Account = { id: "cfo_ncfo", label: "Operating cash flow" };
+const CASH_USES: readonly Account[] = [
+  { id: "capex_and_intangible_investment", label: "Capex and intangibles" },
+  { id: "acquisitions_disposals", label: "Acquisitions and disposals" },
+  { id: "net_debt_issue_repay", label: "Debt issued less repaid" },
+  { id: "net_equity_issue_repay", label: "Equity issued less repurchased" },
+  { id: "dividends_paid", label: "Dividends" },
+  { id: "other_investing_financing", label: "Other investing and financing" },
+];
+const NET_CHANGE: Account = { id: "net_cash_change", label: "Net change in cash" };
+
+/** The latest period's cash flow, bridged as the bundle's own model bridges
+    it (CP-MODEL's `cp_model_v3/calculations.py`): operating cash flow, then
+    capex, acquisitions, debt, equity, dividends and the rest, to the stated
+    net change in cash. The period is the latest by end date whose register
+    states both ends; a step the register does not list is left out, one it
+    lists without a value is a gap, and where the steps do not reach the
+    stated change the chart's residual says by exactly how much. */
+export function cashFlowBridge(tables: readonly Table[]): Figure | null {
+  const { rows, at } = accountCells(tables, [OPERATING, ...CASH_USES, NET_CHANGE]);
+  const ends = (period: string) =>
+    at(OPERATING.id, period)?.value?.value != null &&
+    at(NET_CHANGE.id, period)?.value?.value != null;
+  const present = periodsOf(tables, unique(rows.map((row) => text(row, "period_id"))));
+  const latest = chronological(tables, present.filter(ends)).at(-1);
+  if (latest === undefined) return null;
+  const step = (account: Account, kind: WaterfallStep["kind"]): WaterfallStep => {
+    const value = accountDatum(at(account.id, latest));
+    return { key: account.id, label: account.label, kind, origin: "model", ...value };
+  };
+  const unit = periodUnit(tables, latest);
+  const amount = (account: Account, signed: boolean) =>
+    `${formatDecimal(at(account.id, latest)!.value!.value!, signed)}${unit ? ` ${unit}` : ""}`;
+  return {
+    key: "cash-flow",
+    table: ACCOUNTS,
+    kind: "waterfall",
+    title: `Cash flow, ${latest}`,
+    summary:
+      `${OPERATING.label} ${amount(OPERATING, false)} to a net change in cash of` +
+      ` ${amount(NET_CHANGE, true)}.`,
+    unit,
+    categories: [],
+    series: [],
+    steps: [
+      step(OPERATING, "total"),
+      ...CASH_USES.filter((account) => at(account.id, latest)).map((account) =>
+        step(account, "delta"),
+      ),
+      step(NET_CHANGE, "total"),
+    ],
+    sourceOf: (selection) => locate(at(selection.series, latest)),
+  };
+}
+
 /** Every figure a handoff's tables support, in reading order. */
 export function figuresOf(handoff: HandoffView): Figure[] {
   const tables = handoff.tables;
   // The key figures beside the view already print every comparison when
   // there are no more than they hold; the chart would say them again.
   const compared = tableOf(tables, "cp1b.model_comparator_register")?.length ?? 0;
+  // Earnings read with the add-backs that bridge them; balances with the
+  // maturities that follow.
+  const accounts = accountLines(tables);
+  const earnings = accounts.filter((figure) => figure.key === "earnings");
+  const balances = accounts.filter((figure) => figure.key !== "earnings");
   const figures = [
     segmentMix(tables),
     ...kpiLines(tables),
+    ...earnings,
     addbacks(tables),
+    cashFlowBridge(tables),
+    ...balances,
     maturityLadder(tables),
     compared > KEY_FIGURES ? comparatorChanges(tables) : null,
     addbackValidation(tables),
@@ -701,6 +924,8 @@ export interface FigurePick {
   value: string | null;
   unit?: string;
   source: string | null;
+  /** `null` for a waterfall's unreconciled residual: computed here, not served. */
+  origin: Origin | null;
 }
 
 function Chart({
@@ -720,11 +945,15 @@ function Chart({
         value: selection.value,
         unit: figure.unit,
         source: figure.sourceOf(selection),
+        origin: selection.origin,
       },
       opener,
     );
   };
   const common = { title: figure.title, summary: figure.summary, unit: figure.unit, onSelect };
+  if (figure.kind === "waterfall") {
+    return <WaterfallChart {...common} steps={figure.steps ?? []} />;
+  }
   if (figure.kind === "line") {
     return <LineChart {...common} categories={figure.categories} series={figure.series} />;
   }
