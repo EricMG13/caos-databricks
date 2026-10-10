@@ -7,7 +7,7 @@
 import { ChartFrame } from "./ChartFrame";
 import { bandPlot, type BandBar, type BandMarker } from "./band";
 import { formatDecimal, readDatum, toNumber, type ReadValue } from "./decimal";
-import { ORIGIN_WORD, valueText } from "./series";
+import { ORIGIN_WORD, cellOf, said } from "./series";
 import type {
   BulletRow,
   ChartProps,
@@ -51,22 +51,13 @@ function readRow(row: BulletRow, index: number): Read {
   };
 }
 
-/** "3.25 x", or "n/a (NOT_DISCLOSED)". */
-function said(read: ReadValue, unit: string | undefined): string {
-  return read.value === null ? `n/a (${read.reason})` : valueText(read.value, unit);
-}
-
-/** The headroom as served, without a unit of its own: "1.25", "n/a (…)". */
-function headroomText(read: ReadValue): string {
-  return read.value === null ? `n/a (${read.reason})` : formatDecimal(read.value);
-}
-
 /** Each mark's name: what it is first, then the other value it is held
     against, the headroom as served and who stands behind the mark. */
 function namesOf(read: Read, unit: string | undefined) {
   const { row } = read;
   const word = row.direction ? DIRECTION_WORD[row.direction] : "threshold";
-  const headroom = `headroom ${headroomText(read.headroom)}`;
+  // The headroom as served, without a unit of its own: "1.25", "n/a (…)".
+  const headroom = `headroom ${said(read.headroom, undefined)}`;
   const current = said(read.current, unit);
   const threshold = said(read.threshold, unit);
   const of = (value: ReadValue) => ORIGIN_WORD[value.origin ?? row.origin];
@@ -114,14 +105,6 @@ function markerOf(read: Read, name: string): BandMarker {
   };
 }
 
-/** A table cell: the value as served, its origin said where it differs from
-    its row's, or "n/a" and why. */
-function cellOf(read: ReadValue, row: BulletRow): string {
-  if (read.value === null) return `n/a: ${read.reason}`;
-  const own = read.origin && read.origin !== row.origin ? ` (${ORIGIN_WORD[read.origin]})` : "";
-  return `${formatDecimal(read.value)}${own}`;
-}
-
 function tableOf(
   reads: readonly Read[],
   unit: string | undefined,
@@ -142,9 +125,9 @@ function tableOf(
       cells: [
         read.row.label,
         directionOf(read.row),
-        cellOf(read.threshold, read.row),
-        cellOf(read.current, read.row),
-        cellOf(read.headroom, read.row),
+        cellOf(read.threshold, read.row.origin),
+        cellOf(read.current, read.row.origin),
+        cellOf(read.headroom, read.row.origin),
         ORIGIN_WORD[read.row.origin],
       ],
     })),

@@ -7,8 +7,8 @@
 // gap with its reason.
 import { ChartFrame } from "./ChartFrame";
 import { bandPlot, type BandBar, type BandMarker } from "./band";
-import { formatDecimal, readDatum, toNumber, type ReadValue } from "./decimal";
-import { ORIGIN_WORD, valueText } from "./series";
+import { readDatum, toNumber, type ReadValue } from "./decimal";
+import { ORIGIN_WORD, cellOf, said, valueText } from "./series";
 import type {
   ChartProps,
   ChartSelection,
@@ -43,11 +43,6 @@ function readRow(row: RangeRow): Read {
 }
 
 const originOf = (value: ReadValue, row: RangeRow): Origin => value.origin ?? row.origin;
-
-/** "7.5 x", or "n/a (NOT_DISCLOSED)". */
-function said(value: ReadValue, unit: string | undefined): string {
-  return value.value === null ? `n/a (${value.reason})` : valueText(value.value, unit);
-}
 
 function selectionOf(
   row: RangeRow,
@@ -162,16 +157,6 @@ function spanOf(index: number, read: Read) {
   return [{ category: index, from: toNumber(min), to: toNumber(max) }];
 }
 
-/** A table cell: empty where the register does not declare the statistic,
-    the value as served with its origin where it differs from its row's, or
-    "n/a" and why. */
-function cellOf(value: ReadValue | undefined, row: RangeRow): string {
-  if (value === undefined) return "";
-  if (value.value === null) return `n/a: ${value.reason}`;
-  const own = value.origin && value.origin !== row.origin ? ` (${ORIGIN_WORD[value.origin]})` : "";
-  return `${formatDecimal(value.value)}${own}`;
-}
-
 function tableOf(
   rows: readonly RangeRow[],
   reads: readonly Read[],
@@ -194,7 +179,7 @@ function tableOf(
       key: row.key,
       cells: [
         row.label,
-        ...columns.map(([statistic]) => cellOf(reads[index]?.[statistic], row)),
+        ...columns.map(([statistic]) => cellOf(reads[index]?.[statistic], row.origin)),
         ORIGIN_WORD[row.origin],
       ],
     })),

@@ -23,7 +23,8 @@ import {
 import { ChartFrame } from "@/charts/ChartFrame";
 import { bandPlot, type BandMarker } from "@/charts/band";
 import { DOT } from "@/charts/marks";
-import { fromScaled, placesOf, toScaled } from "@/charts/decimal";
+import { fromScaled, placesOf, readDatum, toScaled } from "@/charts/decimal";
+import { cellOf, said } from "@/charts/series";
 import { FALLBACK_WIDTH } from "@/charts/scale";
 import { useWidth } from "@/charts/use-width";
 
@@ -1032,6 +1033,18 @@ describe("a range strip", () => {
     expect(within(legend).getByText("Implied EV").querySelector("circle")).not.toBeNull();
   });
 
+  test("draws a row that declares one quartile as a gap naming the end it does not serve", () => {
+    const { q3: _undeclared, ...one } = PEERS[0]!;
+    const { container } = strips({ rows: [one] });
+    expect(container.querySelector('rect[data-mark="ev:iqr"]')).toBeNull();
+    expect(container.querySelector('[data-gap][data-mark="ev:iqr"]')).not.toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: "EV / EBITDA: interquartile range n/a (Q3: Not served) (host-verified)",
+      }),
+    ).toBeInTheDocument();
+  });
+
   test("has a table twin of the rows as served, columns no row carries left out", () => {
     strips();
     fireEvent.click(screen.getByRole("button", { name: "Table" }));
@@ -1128,6 +1141,24 @@ describe("a range strip", () => {
       expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(24);
       expect(parseFloat(button.style.height)).toBeGreaterThanOrEqual(24);
     }
+  });
+});
+
+describe("a value read for a name or a table cell", () => {
+  test("said prints it with its unit or n/a and why; cellOf names an origin only where it differs", () => {
+    expect(said(readDatum({ value: "1234.5" }), "x")).toBe("1,234.5 x");
+    expect(said(readDatum({ value: "-2" }), undefined)).toBe("-2");
+    expect(said(readDatum({ value: null, reason: "NOT_DISCLOSED" }), "x")).toBe(
+      "n/a (NOT_DISCLOSED)",
+    );
+    // A statistic the register does not declare is an empty cell, not n/a.
+    expect(cellOf(undefined, "model")).toBe("");
+    expect(cellOf(readDatum({ value: null, reason: "PEER_ONLY" }), "model")).toBe("n/a: PEER_ONLY");
+    expect(cellOf(readDatum({ value: "2500.5", origin: "host" }), "model")).toBe(
+      "2,500.5 (host-verified)",
+    );
+    expect(cellOf(readDatum({ value: "2.5", origin: "model" }), "model")).toBe("2.5");
+    expect(cellOf(readDatum({ value: "2.5" }), "host")).toBe("2.5");
   });
 });
 
