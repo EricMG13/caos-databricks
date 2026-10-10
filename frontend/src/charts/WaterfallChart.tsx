@@ -117,7 +117,8 @@ export function WaterfallChart({
 }) {
   const bridge = bridgeOf(steps);
   const residuals = bridge.filter((step) => step.kind === "residual");
-  const poled = bridge.some((step) => step.kind === "delta" && !step.color);
+  // A change with no value is a gap, not a pole: it needs no pole's entry.
+  const poled = bridge.some((step) => step.kind === "delta" && !step.color && step.value !== null);
   const legend: LegendEntry[] = [
     { key: "total", label: "Stated total", tone: "neutral", shape: "fill" },
     ...(statuses ?? []).map(({ color, label }) => ({

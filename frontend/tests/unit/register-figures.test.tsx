@@ -562,6 +562,24 @@ test("an opening row with no amount opens on its cumulative figure; a last state
   expect(figure!.statuses).toEqual([{ color: "positive", label: "Supported" }]);
 });
 
+test("a bridge that ends on a change with no cumulative figure names no change as its end", () => {
+  const [figure] = quality([
+    t1d4("Reported EBITDA", c("100.0", "100.0"), "Supported", c("100.0", "100.0")),
+    t1d4("FX", c("1.5", "1.5"), "Supported", c("n/a")),
+  ]);
+  expect(figure!.steps.at(-1)!.kind).toBe("delta");
+  expect(figure!.summary).toBe(
+    "Reported EBITDA 100.0; the last change, FX, states no cumulative EBITDA.",
+  );
+  const [gap] = quality([
+    t1d4("Reported EBITDA", c("100.0", "100.0"), "Supported", c("100.0", "100.0")),
+    t1d4("Run-rate savings", c("Not quantified"), "Insufficient Information", c("—")),
+  ]);
+  expect(gap!.summary).toBe(
+    "Reported EBITDA 100.0; the last change, Run-rate savings, states no cumulative EBITDA.",
+  );
+});
+
 test("the schema's empty bridge, and a register of another module, draw nothing", () => {
   expect(quality([t1d4(" NONE ", c("—"), "—", c("—"))])).toEqual([]);
   expect(quality([])).toEqual([]);

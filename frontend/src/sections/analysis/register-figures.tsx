@@ -306,10 +306,18 @@ function bridgeFigure(handoff: HandoffView, spec: BridgeRegister): Figure[] {
   }
   const marks = bridgeOf(steps).length;
   if (marks > MAX_MARKS) return [oversized(spec.key, spec.register, spec.title, marks)];
-  const ends = [steps[0]!, steps.at(-1)!].map(
-    (step) =>
-      `${step.label} ${step.value === null ? `n/a (${step.reason})` : formatDecimal(step.value)}`,
-  );
+  const said = (step: WaterfallStep) =>
+    `${step.label} ${step.value === null ? `n/a (${step.reason})` : formatDecimal(step.value)}`;
+  // Only a total may be named as the bridge's end: a last change with no
+  // running level of its own is said to state none.
+  const [first, end] = [steps[0]!, steps.at(-1)!];
+  const level = spec.cumulative.charAt(0).toLowerCase() + spec.cumulative.slice(1);
+  const summary =
+    steps.length === 1
+      ? `${said(first)}, as served.`
+      : end.kind === "total"
+        ? `${said(first)} to ${said(end)}, as served.`
+        : `${said(first)}; the last change, ${end.label}, states no ${level}.`;
   const rowOf = (key: string) => (key === "closing" ? last : rows[Number(key)]);
   const used = new Set(steps.map((step) => step.color));
   const statuses = spec.status ? STATUSES.filter(({ color }) => used.has(color)) : undefined;
@@ -319,7 +327,7 @@ function bridgeFigure(handoff: HandoffView, spec: BridgeRegister): Figure[] {
       table: spec.register,
       kind: "waterfall",
       title: spec.title,
-      summary: `${steps.length > 1 ? ends.join(" to ") : ends[0]}, as served.`,
+      summary,
       steps,
       ...(statuses ? { statuses } : {}),
       sourceOf: (selection) => {

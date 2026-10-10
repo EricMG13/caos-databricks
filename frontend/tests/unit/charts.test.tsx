@@ -576,6 +576,39 @@ describe("a waterfall chart", () => {
     const legend = screen.getByRole("list", { name: "Legend" });
     expect(within(legend).getByText("Decrease")).toBeInTheDocument();
   });
+
+  test("an uncoloured change with no value is a gap, not a pole: the legend keeps no poles", () => {
+    render(
+      <WaterfallChart
+        title="Quality bridge"
+        summary="Reported to adjusted."
+        steps={[
+          { label: "Reported", kind: "total", value: "50", origin: "model" },
+          {
+            label: "Savings",
+            kind: "delta",
+            value: "3",
+            origin: "model",
+            color: "series-3",
+            status: "Challenged",
+          },
+          {
+            label: "Other",
+            kind: "delta",
+            value: null,
+            reason: "Not quantified",
+            origin: "model",
+            status: "Pending",
+          },
+        ]}
+        statuses={[{ color: "series-3", label: "Challenged" }]}
+      />,
+    );
+    const legend = screen.getByRole("list", { name: "Legend" });
+    expect(within(legend).getByText("Challenged")).toBeInTheDocument();
+    expect(within(legend).queryByText("Increase")).toBeNull();
+    expect(within(legend).queryByText("Decrease")).toBeNull();
+  });
 });
 
 describe("a diverging bar chart", () => {
