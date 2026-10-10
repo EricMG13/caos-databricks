@@ -236,6 +236,7 @@ function HostCalculation({ handoff, model }: { handoff: HandoffView; model: stri
 
 /** The pressed mark, said beside the figures it came from. */
 function Picked({ pick }: { pick: FigurePick }) {
+  const amount = (value: string) => `${formatDecimal(value)}${pick.unit ? ` ${pick.unit}` : ""}`;
   return (
     <section className="pnl" data-picked aria-labelledby="picked-heading" aria-live="polite">
       <header>
@@ -247,9 +248,12 @@ function Picked({ pick }: { pick: FigurePick }) {
         <dd>{pick.label}</dd>
         <dt>Value</dt>
         <dd className="mono tabular" data-picked-value>
-          {pick.value === null
-            ? "n/a"
-            : `${formatDecimal(pick.value)}${pick.unit ? ` ${pick.unit}` : ""}`}
+          {/* An interquartile bar is no one figure: Q1 to Q3, each as served. */}
+          {pick.interval
+            ? `${amount(pick.interval.from)} to ${amount(pick.interval.to)}`
+            : pick.value === null
+              ? "n/a"
+              : amount(pick.value)}
         </dd>
         <dt>Origin</dt>
         <dd>

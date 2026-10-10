@@ -5,7 +5,7 @@
 // tagged tables, every value is the model's, printed exactly as served; a
 // float only places a mark. Rows of one unit share a figure, so no axis
 // holds a multiple beside a percentage.
-import { formatDecimal, type ChartSelection } from "@/charts";
+import { formatDecimal, type ChartSelection, type RangeRow } from "@/charts";
 import type { HandoffView } from "@/wire/v1";
 import {
   MAX_MARKS,
@@ -181,8 +181,59 @@ export function covenantHeadroom(handoff: HandoffView): Figure[] {
   }));
 }
 
+/** A range strip's statistics and the `T4.6` column each is read from. */
+const PEER_STATISTICS = [
+  ["min", "Min"],
+  ["q1", "Q1"],
+  ["median", "Median"],
+  ["q3", "Q3"],
+  ["max", "Max"],
+  ["marker", "Borrower Value"],
+] as const;
+
+/** A metric's range: each statistic its register declares, as served. */
+function peerRange({ row, index }: Entry): RangeRow {
+  const range: RangeRow = { key: `${index}`, label: text(row, "Metric"), origin: "model" };
+  for (const [statistic, column] of PEER_STATISTICS) {
+    const cell = row[column];
+    if (cell !== undefined) range[statistic] = datum(cell);
+  }
+  return range;
+}
+
+/** CP-1C's peer statistics (`T4.6`): each metric's peer range, min to max
+    with its quartiles and median, the borrower's value marked against it. */
+export function peerRanges(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-1C", "T4.6");
+  if (!rows?.length) return [];
+  const unitOf = (row: Row) => suffixOf(row["Borrower Value"]) ?? suffixOf(row["Median"]);
+  const declares = (column: string) => rows[0]![column] !== undefined;
+  // One bar for the quartiles, and a rule or a dot for each other statistic.
+  const marks =
+    (declares("Q1") || declares("Q3") ? 1 : 0) +
+    ["Min", "Median", "Max", "Borrower Value"].filter(declares).length;
+  const base = { key: "peer-ranges", table: "T4.6", title: "Peer ranges" };
+  return perUnit(rows, base, unitOf, marks, (entries, head) => ({
+    ...head,
+    kind: "range",
+    summary: `Borrower value as served: ${entries
+      .map(({ row }) => {
+        const position = text(row, "Borrower Position");
+        return `${text(row, "Metric")} ${served(row["Borrower Value"])}${position ? ` (${position})` : ""}`;
+      })
+      .join("; ")}.`,
+    ranges: entries.map(peerRange),
+    markerLabel: "Borrower value",
+    categoryLabel: "Metric",
+    sourceOf: (selection) => {
+      const row = pickedRow(entries, selection);
+      return row ? stated(row, ["Peer Avg", "N"]) : null;
+    },
+  }));
+}
+
 /** Every figure a handoff's registers support, in reading order. A handoff
     is one module's, so at most one of these draws for it. */
 export function registerFigures(handoff: HandoffView): Figure[] {
-  return [...covenantHeadroom(handoff)];
+  return [...covenantHeadroom(handoff), ...peerRanges(handoff)];
 }
