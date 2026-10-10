@@ -187,19 +187,15 @@ def handoff_registers(
         _bounded(reg_id, header, rows) for reg_id, header, rows, _ in written
     ):
         return HandoffRegisters((), "TABLES_TOO_LARGE")
-    declared = [
-        _declared(contract, specs[reg_id]["columns"], header)
-        for reg_id, header, _, _ in written
-    ]
     return HandoffRegisters(
         tuple(
             HandoffRegister(
                 register_id=reg_id,
                 columns=tuple(header),
-                declared=bound,
+                declared=_declared(contract, specs[reg_id]["columns"], header),
                 rows=_rows(contract, header, rows),
             )
-            for (reg_id, header, rows, _), bound in zip(written, declared, strict=True)
+            for reg_id, header, rows, _ in written
         ),
         None,
     )
