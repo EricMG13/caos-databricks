@@ -785,6 +785,25 @@ const headroom: Register = {
     ],
   ],
 };
+const PEERS = ["Metric", "Borrower Value", "Peer Avg", "Median", "Min", "Max", "Q1", "Q3", "N"];
+const peers: Register = {
+  register_id: "T4.6",
+  columns: PEERS,
+  declared: PEERS,
+  rows: [
+    [
+      served("EV / EBITDA"),
+      served("9.1x", "9.1"),
+      served("7.4x", "7.4"),
+      served("7.5x", "7.5"),
+      served("5.0x", "5.0"),
+      served("11.0x", "11.0"),
+      served("6.25x", "6.25"),
+      served("8.75x", "8.75"),
+      served("12", "12"),
+    ],
+  ],
+};
 
 function shown(handoff: HandoffView) {
   return render(
@@ -809,6 +828,48 @@ test("register figures follow the table figures, and each refusal withholds only
   const noRegisters = { ...both, registers_unavailable_reason: "TABLES_TOO_LARGE" as const };
   expect(figuresOf(noTables).map((figure) => figure.key)).toEqual(["covenant-headroom-x"]);
   expect(figuresOf(noRegisters).map((figure) => figure.key)).toEqual(tableKeys);
+  // The note names each refusal; the figures the other source supports draw.
+  const tablesRefused = shown(noTables);
+  expect(
+    tablesRefused.querySelector("[data-tables-unavailable='TABLES_MALFORMED']"),
+  ).not.toBeNull();
+  expect(tablesRefused.querySelector("[data-registers-unavailable]")).toBeNull();
+  expect(tablesRefused.querySelector("[data-figure='covenant-headroom-x']")).not.toBeNull();
+  expect(tablesRefused.querySelector("[data-figure='segment-mix']")).toBeNull();
+  const registersRefused = shown(noRegisters);
+  expect(
+    registersRefused.querySelector("[data-registers-unavailable='TABLES_TOO_LARGE']"),
+  ).toHaveTextContent("registers could not be read (TABLES_TOO_LARGE)");
+  expect(registersRefused.querySelector("[data-figure='covenant-headroom-x']")).toBeNull();
+  expect(registersRefused.querySelector("[data-figure='segment-mix']")).not.toBeNull();
+  const neither = shown({ ...noTables, registers_unavailable_reason: "TABLES_MALFORMED" });
+  const note = neither.querySelector(
+    "[data-tables-unavailable='TABLES_MALFORMED'][data-registers-unavailable='TABLES_MALFORMED']",
+  );
+  expect(note).toHaveTextContent(
+    "This module's tables (TABLES_MALFORMED) and registers (TABLES_MALFORMED) could not be read",
+  );
+  expect(neither.querySelector("[data-figures]")).toBeNull();
+});
+
+test("pressing an interquartile bar names both ends, Q1 to Q3, never n/a", () => {
+  const container = shown({ ...handoffOf("CP-1C"), registers: [peers] });
+  const figure = container.querySelector("[data-figure='peer-ranges-x']") as HTMLElement;
+  fireEvent.click(
+    within(figure).getByRole("button", { name: /interquartile range 6\.25 x to 8\.75 x/ }),
+  );
+  const picked = container.querySelector("[data-figures] ~ [data-picked]")!;
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("6.25 x to 8.75 x");
+  expect(picked).toHaveTextContent("Interquartile range · EV / EBITDA");
+  expect(picked).toHaveTextContent("Peer ranges, x");
+  expect(picked).toHaveTextContent("T4.6");
+  expect(picked).toHaveTextContent("Peer Avg: 7.4x; N: 12");
+  // The borrower's dot is one value, named as the figure names it.
+  fireEvent.click(within(figure).getByRole("button", { name: /Borrower value 9\.1 x/ }));
+  expect(container.querySelector("[data-picked-value]")!.textContent).toBe("9.1 x");
+  expect(container.querySelector("[data-picked]")).toHaveTextContent(
+    "Borrower value · EV / EBITDA",
+  );
 });
 
 test("pressing a covenant's bar names its current basis and stated source", () => {
@@ -830,5 +891,8 @@ test("the figures' key keys a rule and a dot only where one is drawn", () => {
   expect(bullets).toContain("Outlined: model-authored, not host-verified");
   expect(bullets).toContain("Dashed rule: model-authored, not host-verified");
   expect(bullets).not.toContain("Hollow dot");
+  const ranges = key(shown({ ...handoffOf("CP-1C"), registers: [peers] }));
+  expect(ranges).toContain("Dashed rule: model-authored, not host-verified");
+  expect(ranges).toContain("Hollow dot: model-authored, not host-verified");
   expect(key(shown(cp1))).not.toContain("rule");
 });

@@ -2,7 +2,14 @@
 // (`figures.tsx`) or its declared registers (`register-figures.tsx`): the
 // figure each draws, the served cell and its readers, exact sums and the
 // bounds on how much is drawn. A leaf: it imports neither.
-import type { BulletRow, ChartSelection, ChartSeries, Datum, WaterfallStep } from "@/charts";
+import type {
+  BulletRow,
+  ChartSelection,
+  ChartSeries,
+  Datum,
+  RangeRow,
+  WaterfallStep,
+} from "@/charts";
 import { fromScaled, placesOf, toScaled } from "@/charts/decimal";
 import type { HandoffView } from "@/wire/v1";
 
@@ -108,9 +115,20 @@ export interface BulletFigure extends FigureBase {
   categoryLabel?: string;
 }
 
+/** A range strip's rows, one a metric. */
+export interface RangeFigure extends FigureBase {
+  kind: "range";
+  ranges: RangeRow[];
+  /** What the dot is: "Borrower value", "Implied EV". */
+  markerLabel: string;
+  /** What the rows are, heading the table twin. */
+  categoryLabel?: string;
+}
+
 /** One figure: what it shows, drawn by which chart, from which table. Each
     kind carries its own rows, so a figure without them does not build. */
-export type Figure = StackFigure | LineFigure | DivergingFigure | WaterfallFigure | BulletFigure;
+export type Figure =
+  StackFigure | LineFigure | DivergingFigure | WaterfallFigure | BulletFigure | RangeFigure;
 
 /** A figure past this many marks is stated, not drawn, and past this many
     figures a module's are stated too. The tables are model-authored and may

@@ -9,6 +9,7 @@ import {
   DivergingBarChart,
   LineChart,
   ProvenanceKeyed,
+  RangeStripChart,
   StackedBarChart,
   Swatch,
   WaterfallChart,
@@ -16,7 +17,9 @@ import {
   type ChartColor,
   type ChartSelection,
   type Datum,
+  type Decimal,
   type Origin,
+  type RangeRow,
   type WaterfallStep,
 } from "@/charts";
 import { hundredfold, plainName } from "@/ds/format";
@@ -861,16 +864,23 @@ export interface FigurePick {
   table: string;
   label: string;
   value: string | null;
+  /** A range strip's interquartile bar: Q1 and Q3 as served, where `value`
+      is null because no one figure stands for a range. */
+  interval?: { from: Decimal; to: Decimal };
   unit?: string;
   source: string | null;
   /** `null` for a waterfall's unreconciled residual: computed here, not served. */
   origin: Origin | null;
 }
 
-/** What a bullet's marks are, by their selection's key. */
+/** What a bullet's or a range strip's marks are, by their selection's key. */
 const MARK_WORD: Record<string, string> = {
   current: "Current basis",
   threshold: "Threshold",
+  interquartile: "Interquartile range",
+  min: "Min",
+  median: "Median",
+  max: "Max",
 };
 
 /** A figure of no kind `Chart` draws: `tsc` refuses the case first. */
@@ -890,6 +900,8 @@ function markOf(figure: Figure, key: string): string | undefined {
       return undefined;
     case "bullet":
       return MARK_WORD[key];
+    case "range":
+      return key === "marker" ? figure.markerLabel : MARK_WORD[key];
     default:
       return unreachable(figure);
   }
@@ -909,6 +921,7 @@ function Chart({
         table: figure.table,
         label: [markOf(figure, selection.series), selection.category].filter(Boolean).join(" · "),
         value: selection.value,
+        ...(selection.interval ? { interval: selection.interval } : {}),
         unit: figure.unit,
         source: figure.sourceOf(selection),
         origin: selection.origin,
@@ -922,6 +935,15 @@ function Chart({
       return <WaterfallChart {...common} steps={figure.steps} />;
     case "bullet":
       return <BulletChart {...common} rows={figure.bullets} categoryLabel={figure.categoryLabel} />;
+    case "range":
+      return (
+        <RangeStripChart
+          {...common}
+          rows={figure.ranges}
+          markerLabel={figure.markerLabel}
+          categoryLabel={figure.categoryLabel}
+        />
+      );
     case "line":
       return <LineChart {...common} categories={figure.categories} series={figure.series} />;
     case "diverging":
@@ -935,19 +957,27 @@ function Chart({
   }
 }
 
-type KeyShape = "fill" | "line" | "rule";
+type KeyShape = "fill" | "line" | "rule" | "dot";
 
-/** The forms a drawn figure's marks take: a bar, a line, a rule. */
+/** The forms a drawn figure's marks take: a bar, a line, a rule, a dot. */
 function shapesOf(figure: Figure): KeyShape[] {
   if (figure.kind === "line") return ["line"];
   if (figure.kind === "bullet") return ["fill", "rule"];
-  return ["fill"];
+  if (figure.kind !== "range") return ["fill"];
+  const declares = (statistics: readonly (keyof RangeRow)[]) =>
+    figure.ranges.some((row) => statistics.some((statistic) => row[statistic]));
+  return [
+    ...(declares(["q1", "q3"]) ? (["fill"] as const) : []),
+    ...(declares(["min", "median", "max"]) ? (["rule"] as const) : []),
+    ...(declares(["marker"]) ? (["dot"] as const) : []),
+  ];
 }
 
 const KEY_WORD: Record<KeyShape, string> = {
   fill: "Outlined",
   line: "Dashed, hollow point",
   rule: "Dashed rule",
+  dot: "Hollow dot",
 };
 
 /** Every figure here is the model's, so one key says so for all of them, in
@@ -956,7 +986,7 @@ function ModelKey({ figures }: { figures: readonly Figure[] }) {
   const drawn = new Set(
     figures.filter((figure) => !figure.oversized).flatMap((figure) => shapesOf(figure)),
   );
-  const shapes = (["fill", "line", "rule"] as const).filter((shape) => drawn.has(shape));
+  const shapes = (["fill", "line", "rule", "dot"] as const).filter((shape) => drawn.has(shape));
   if (shapes.length === 0) return null;
   return (
     <ul className="chart-legend" aria-label="Key" data-figures-key>
@@ -967,6 +997,29 @@ function ModelKey({ figures }: { figures: readonly Figure[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** What the host could not read for this module, said once with each
+    refusal's code; the figures the other source supports still draw. */
+function Unread({ handoff }: { handoff: HandoffView }) {
+  const tables = handoff.tables_unavailable_reason;
+  const registers = handoff.registers_unavailable_reason;
+  if (!tables && !registers) return null;
+  const what =
+    tables && registers
+      ? `tables (${tables}) and registers (${registers}) could not be read`
+      : tables
+        ? `tables could not be read (${tables})`
+        : `registers could not be read (${registers})`;
+  return (
+    <p
+      className="note"
+      data-tables-unavailable={tables ?? undefined}
+      data-registers-unavailable={registers ?? undefined}
+    >
+      This module&apos;s {what}, so no figure is drawn from them. Its prose below is unaffected.
+    </p>
   );
 }
 
@@ -982,28 +1035,20 @@ export function Figures({
 }) {
   // Once a document, not once a render: pressing a mark re-renders the
   // section, and the figures' cost is the tables' (F327).
-  const figures = useMemo(
-    () => (handoff.tables_unavailable_reason ? [] : figuresOf(handoff)),
-    [handoff],
-  );
+  const figures = useMemo(() => figuresOf(handoff), [handoff]);
+  // Tables that draw nothing here (a comparator the key figures print) leave
+  // no empty Figures heading behind. Refused tables list no catalysts.
+  const tables = handoff.tables_unavailable_reason ? [] : handoff.tables;
+  const catalysts = tableOf(tables, "cp2b.cp_model_catalysts")?.length ?? 0;
   // With no figures to head, what the host calculated is a caveat on the
   // module, drawn as one -- not a loose line between its cards (brief 5).
-  if (handoff.tables_unavailable_reason) {
+  if (figures.length === 0 && catalysts === 0) {
     return (
       <div className="calc-caveat">
-        <p className="note" data-tables-unavailable={handoff.tables_unavailable_reason}>
-          This module&apos;s tables could not be read ({handoff.tables_unavailable_reason}), so it
-          shows no figures. Its prose below is unaffected.
-        </p>
+        <Unread handoff={handoff} />
         {calculation}
       </div>
     );
-  }
-  // Tables that draw nothing here (a comparator the key figures print) leave
-  // no empty Figures heading behind.
-  const catalysts = tableOf(handoff.tables, "cp2b.cp_model_catalysts")?.length ?? 0;
-  if (figures.length === 0 && catalysts === 0) {
-    return <div className="calc-caveat">{calculation}</div>;
   }
   return (
     <section className="figures" aria-labelledby="figures-heading" data-figures>
@@ -1012,6 +1057,7 @@ export function Figures({
         <ModelKey figures={figures} />
         {calculation}
       </header>
+      <Unread handoff={handoff} />
       {figures.length ? (
         <ProvenanceKeyed value={false}>
           <div className="figgrid">
@@ -1029,7 +1075,7 @@ export function Figures({
           </div>
         </ProvenanceKeyed>
       ) : null}
-      <Catalysts tables={handoff.tables} />
+      <Catalysts tables={tables} />
     </section>
   );
 }

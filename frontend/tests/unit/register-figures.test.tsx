@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   covenantHeadroom,
+  peerRanges,
   registerFigures,
   registerRows,
 } from "@/sections/analysis/register-figures";
@@ -113,6 +114,38 @@ const ev = [
   c("12", "12"),
   c("Above Q3"),
 ];
+const leverage = [
+  c("Net leverage"),
+  c("3.2x", "3.2"),
+  c("3.6x", "3.6"),
+  c("3.5x", "3.5"),
+  c("2.0x", "2.0"),
+  c("5.25x", "5.25"),
+  c("n/a"),
+  c("4.0x", "4.0"),
+  c("11", "11"),
+  c("Below median"),
+];
+const margin = [
+  c("EBITDA margin"),
+  c("18.5%", "18.5"),
+  c("16.0%", "16.0"),
+  c("15.5%", "15.5"),
+  c("9.0%", "9.0"),
+  c("24.0%", "24.0"),
+  c("12.0%", "12.0"),
+  c("19.0%", "19.0"),
+  c("12", "12"),
+  c("Top quartile"),
+];
+
+/** A figure read as range strips: a figure of any other kind fails the test. */
+function ranges(figure: Figure) {
+  if (figure.kind !== "range") throw new Error(`A ${figure.kind} figure, not ranges.`);
+  return figure;
+}
+const peers = (rows: Served[][], columns = PEERS) =>
+  peerRanges(withRegisters("CP-1C", [register("T4.6", columns, rows)])).map(ranges);
 
 test("registerRows reads a register only for its own module, keyed by the profile's column", () => {
   const written = ["metric", "borrower value", ...PEERS.slice(2)];
@@ -298,9 +331,81 @@ test("rows of two units split into two figures, in the order they first appear",
   expect(figures[2]!.bullets![0]!.current).toEqual({ value: "-80" });
 });
 
+test("peerRanges: a range per metric, the borrower its marker, a null quartile a gap", () => {
+  const figures = peers([ev, margin, leverage]);
+  expect(figures.map((figure) => [figure.kind, figure.title, figure.unit])).toEqual([
+    ["range", "Peer ranges, x", "x"],
+    ["range", "Peer ranges, %", "%"],
+  ]);
+  const [ratios] = figures;
+  expect(ratios!.table).toBe("T4.6");
+  expect(ratios!.markerLabel).toBe("Borrower value");
+  expect(ratios!.ranges).toEqual([
+    {
+      key: "0",
+      label: "EV / EBITDA",
+      min: { value: "5.0" },
+      q1: { value: "6.25" },
+      median: { value: "7.5" },
+      q3: { value: "8.75" },
+      max: { value: "11.0" },
+      marker: { value: "9.1" },
+      origin: "model",
+    },
+    {
+      key: "2",
+      label: "Net leverage",
+      min: { value: "2.0" },
+      q1: { value: null, reason: "n/a" },
+      median: { value: "3.5" },
+      q3: { value: "4.0" },
+      max: { value: "5.25" },
+      marker: { value: "3.2" },
+      origin: "model",
+    },
+  ]);
+  expect(ratios!.summary).toBe(
+    "Borrower value as served: EV / EBITDA 9.1 (Above Q3); Net leverage 3.2 (Below median).",
+  );
+  const pressed = {
+    series: "marker",
+    category: "",
+    index: 1,
+    value: "3.2",
+    origin: "model" as const,
+  };
+  expect(ratios!.sourceOf(pressed)).toBe("Peer Avg: 3.6x; N: 11");
+});
+
+test("a borrower value not stated is a gap, and the unit falls back to the median's", () => {
+  const unstated = [
+    c("Interest cover"),
+    c("Not disclosed"),
+    ...margin.slice(2, 3),
+    c("4.5x", "4.5"),
+    ...ev.slice(4),
+  ];
+  const [figure] = peers([unstated]);
+  expect(figure!.unit).toBe("x");
+  expect(figure!.ranges![0]!.marker).toEqual({ value: null, reason: "Not disclosed" });
+  expect(figure!.summary).toBe(
+    "Borrower value as served: Interest cover n/a (Not disclosed) (Above Q3).",
+  );
+});
+
+test("a statistic the register does not declare is left out of its row, not drawn as a gap", () => {
+  const columns = PEERS.filter((column) => column !== "Q1" && column !== "Q3");
+  const row = ev.filter((_, index) => PEERS[index] !== "Q1" && PEERS[index] !== "Q3");
+  const [figure] = peers([row], columns);
+  expect(figure!.ranges![0]).not.toHaveProperty("q1");
+  expect(figure!.ranges![0]).not.toHaveProperty("q3");
+  expect(figure!.ranges![0]!.median).toEqual({ value: "7.5" });
+});
+
 test("a register of another module's id draws nothing", () => {
   // CP-1 serves a `T4.6` of its own: it is not CP-1C's peer statistics.
   const cp1 = withRegisters("CP-1", [register("T4.6", PEERS, [ev])]);
+  expect(peerRanges(cp1)).toEqual([]);
   expect(registerFigures(cp1)).toEqual([]);
   const cp1c = withRegisters("CP-1C", [
     register("T4C.4", COVENANT, [
@@ -309,6 +414,8 @@ test("a register of another module's id draws nothing", () => {
   ]);
   expect(covenantHeadroom(cp1c)).toEqual([]);
   expect(registerFigures(cp1c)).toEqual([]);
+  // In their own modules, both are drawn by registerFigures.
+  expect(registerFigures(withRegisters("CP-1C", [register("T4.6", PEERS, [ev])]))).toHaveLength(1);
 });
 
 test("a register past the marks a figure may draw is stated, not drawn", () => {
