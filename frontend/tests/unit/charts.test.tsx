@@ -1718,18 +1718,24 @@ describe("every chart form, audited", () => {
           fromLabel="Expected"
           toLabel="Realized"
         />
-        <ScatterChart
-          title="Curve"
-          summary="Against maturity."
-          unit="bps"
-          points={CURVE}
-          xLabel="Maturity"
-        />
       </main>,
     );
     expect(await audit(container)).toEqual([]);
     for (const toggle of screen.getAllByRole("button", { name: "Table" })) fireEvent.click(toggle);
-    expect(screen.getAllByRole("table")).toHaveLength(9);
+    expect(screen.getAllByRole("table")).toHaveLength(8);
+    expect(await audit(container)).toEqual([]);
+  });
+
+  // Apart from the eight above, so neither audit nears the 5 s test timeout.
+  test("has no axe violation in a scatter, drawn or as its table twin", async () => {
+    const { container } = render(
+      <main>
+        <h1>Charts</h1>
+        <ScatterChart title="Curve" summary="Against maturity." points={CURVE} xLabel="Maturity" />
+      </main>,
+    );
+    expect(await audit(container)).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
     expect(await audit(container)).toEqual([]);
   });
 });
