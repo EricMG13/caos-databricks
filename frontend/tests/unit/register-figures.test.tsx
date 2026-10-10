@@ -539,11 +539,11 @@ test("ebitdaQuality: opening total, deltas as served, a stated total, a gap, the
     { key: "6", label: "FX", kind: "delta", value: "1.5", origin: "model", status: "Under review" },
     { key: "closing", label: "Cumulative EBITDA", kind: "total", value: "110.0", origin: "model" },
   ]);
-  // The opening total's Supported is said, not coloured: no legend entry.
+  // The opening total's Supported is said, not coloured, and the gap's
+  // Insufficient Information is worn by no drawn mark: neither is listed.
   expect(figure!.statuses).toEqual([
     { color: "series-3", label: "Challenged" },
     { color: "negative", label: "Rejected" },
-    { color: "series-4", label: "Insufficient Information" },
   ]);
   expect(figure!.summary).toBe("Reported EBITDA 100.0 to Cumulative EBITDA 110.0, as served.");
   const pressed = (series: string) => ({
@@ -580,14 +580,14 @@ test("a bridge that ends on a change with no cumulative figure names no change a
   ]);
   expect(figure!.steps.at(-1)!.kind).toBe("delta");
   expect(figure!.summary).toBe(
-    "Reported EBITDA 100.0; the last change, FX, states no cumulative EBITDA.",
+    "Reported EBITDA 100.0; the last change, FX, states no Cumulative EBITDA.",
   );
   const [gap] = quality([
     t1d4("Reported EBITDA", c("100.0", "100.0"), "Supported", c("100.0", "100.0")),
     t1d4("Run-rate savings", c("Not quantified"), "Insufficient Information", c("—")),
   ]);
   expect(gap!.summary).toBe(
-    "Reported EBITDA 100.0; the last change, Run-rate savings, states no cumulative EBITDA.",
+    "Reported EBITDA 100.0; the last change, Run-rate savings, states no Cumulative EBITDA.",
   );
 });
 
@@ -603,6 +603,15 @@ test("the schema's empty bridge, and a register of another module, draw nothing"
     register("T1D.4", QUALITY, [t1d4("Reported EBITDA", c("1", "1"), "Supported", c("1", "1"))]),
   ]);
   expect(registerFigures(cp1d).map((figure) => figure.key)).toEqual(["ebitda-quality"]);
+});
+
+test("a bridge past the marks a figure may draw is stated, not drawn", () => {
+  const many = Array.from({ length: 2001 }, (_, index) =>
+    t1d4(`Step ${index}`, c("1", "1"), "Supported", c(`${index + 1}`, `${index + 1}`)),
+  );
+  expect(ebitdaQuality(cp1dWith([register("T1D.4", QUALITY, many)]))).toEqual([
+    expect.objectContaining({ oversized: true, key: "ebitda-quality" }),
+  ]);
 });
 
 test("negatedMagnitude: a decimal's magnitude negated, exactly, zero unsigned", () => {
@@ -896,6 +905,21 @@ test("a scenario T4E.6 names no fulcrum for marks none; each register draws for 
   expect(registerFigures(cp2d).map((figure) => figure.key)).toEqual(["liquidity-bridge"]);
 });
 
+test("of two claims as long once lowercased, the first is the fulcrum", () => {
+  // "İ" lowercases to two code units, so lengths are compared lowercased.
+  const [figure] = allocations(
+    [
+      t4e5("Base", "HoldCo", c("10", "10"), "İstanbul notes", c("5", "5"), c("0", "0")),
+      t4e5("Base", "HoldCo", c("10", "10"), "i\u0307stanbul notes", c("5", "5"), c("0", "0")),
+    ],
+    [t4e6("Base", "İstanbul notes, 0% recovery")],
+  );
+  expect(figure!.steps.slice(1, 3).map((step) => step.label)).toEqual([
+    "İstanbul notes (fulcrum)",
+    "i\u0307stanbul notes",
+  ]);
+});
+
 // CP-1D's T1E.3, as the profile declares it.
 const DEBT = ["Step", "Amount", "Basis", "Cumulative Adjusted Debt", "Evidence ID"];
 const t1e3 = (step: string, amount: Served, cumulative: Served, id = "E-1") => [
@@ -957,7 +981,7 @@ test("adjustedDebtBridge: T1E.3 read as the EBITDA bridge reads T1D.4, with no s
     t1e3("Leases", c("35.5", "35.5"), c("n/a")),
   ]);
   expect(open!.summary).toBe(
-    "Reported debt 400; the last change, Leases, states no cumulative Adjusted Debt.",
+    "Reported debt 400; the last change, Leases, states no Cumulative Adjusted Debt.",
   );
 });
 
@@ -1122,6 +1146,7 @@ test("liquiditySources: components stacked by accessibility, a component with no
     key: "liquidity-sources",
     table: "T2E.2",
     title: "Liquidity by accessibility",
+    categoryLabel: "Accessibility Status",
     summary: "Source-Supported Amount, summed over the 4 of 5 rows that state one: 80.",
     categories: ["Accessible", "Restricted", "Conditional"],
   });
@@ -1175,6 +1200,7 @@ test("cashUses: a segment is the exact sum of its uses, its source naming each o
     key: "cash-uses",
     table: "T2E.3",
     title: "Cash uses by timing",
+    categoryLabel: "Timing",
     summary: "Amount, summed over the 4 of 6 rows that state one: 27.0.",
     categories: ["Next 12 months", "Months 13-24", "Months 25-36"],
   });
@@ -1243,6 +1269,7 @@ test("rateMix: a figure per currency, fixed against floating, stacked by instrum
   ]);
   const [usd, eur] = figures;
   expect(usd!.categories).toEqual(["Floating", "Fixed"]);
+  expect(usd!.categoryLabel).toBe("Fixed / Floating");
   expect(usd!.series.map((series) => [series.key, series.data])).toEqual([
     ["Term loan", [{ value: "400" }, { value: "0" }]],
     ["Notes", [{ value: "0" }, { value: "300" }]],
@@ -1297,6 +1324,7 @@ test("refinancingWall: a wall per currency, years sorted, Undated last, summed a
   ]);
   const [usd, eur] = figures;
   expect(usd!.table).toBe("T3D.2");
+  expect(usd!.categoryLabel).toBe("Year");
   expect(usd!.categories).toEqual(["2028", "2029", "2031", "Undated"]);
   expect(usd!.series.map((series) => [series.key, series.data])).toEqual([
     ["Senior unsecured", [{ value: "0" }, { value: "0" }, { value: "250" }, { value: "0" }]],
@@ -1305,11 +1333,11 @@ test("refinancingWall: a wall per currency, years sorted, Undated last, summed a
     ["Subordinated", [{ value: "0" }, { value: "0" }, { value: "0" }, { value: "50" }]],
   ]);
   expect(usd!.summary).toBe(
-    "975.5 USD known principal across 5 of 6 instruments (1 unstated); the nearest," +
+    "975.5 USD known amount across 5 of 6 instruments (1 unstated); the nearest," +
       " Revolver, falls due 2028-12-15.",
   );
   expect(eur!.summary).toBe(
-    "200 EUR principal in 1 instruments; the nearest, Euro notes, falls due 2030-01-15.",
+    "200 EUR amount in 1 instruments; the nearest, Euro notes, falls due 2030-01-15.",
   );
   expect(usd!.sourceOf(pick("First lien", "2029"))).toBe(
     "Sum of 2 rows: Term loan (Source Trace: Trace Term loan); Bridge (Source Trace: Trace Bridge)",
@@ -1438,7 +1466,7 @@ test("basketCapacity: usage stacked on remaining capacity, the estimate named, n
     ["basket-capacity-x", "Baskets, used and remaining, x", "x"],
   ]);
   const [plain] = figures;
-  expect(plain!.table).toBe("T4C.5");
+  expect(plain).toMatchObject({ table: "T4C.5", categoryLabel: "Basket / Test" });
   expect(plain!.categories).toEqual(["General basket", "Ratio debt"]);
   expect(plain!.series.map((series) => [series.key, series.label, series.data])).toEqual([
     ["usage", "Usage", [{ value: "10" }, { value: null, reason: "Not disclosed" }]],
@@ -1510,6 +1538,48 @@ test("recoveryByClass: claim beside recovery per scenario and currency; the pack
   expect(usd!.sourceOf({ ...pick("claim", "Junior"), index: 1 })).toBe(
     "timing: Exit; cash/debt/equity/warrant value: 60 / 20 / 10 / 0",
   );
+});
+
+const recoveries = (rows: Served[][]) =>
+  recoveryByClass(cp4cWith([register("T4E.7", RECOVERY, rows)])).map(bars);
+
+test("a blank scenario leaves its part out of a title", () => {
+  const [allocation] = allocations([
+    t4e5(" ", "HoldCo", c("10", "10"), "Senior", c("10", "10"), c("0", "0")),
+  ]);
+  expect(allocation!.title).toBe("Value allocation");
+  const titles = (rows: Served[][]) => recoveries(rows).map((figure) => figure.title);
+  expect(titles([t4e7("", "Senior", c("1", "1"), c("1", "1"), "USD")])).toEqual([
+    "Recovery by class",
+  ]);
+  expect(
+    titles([
+      t4e7("", "Senior", c("1", "1"), c("1", "1"), "USD"),
+      t4e7("", "Euro notes", c("1", "1"), c("1", "1"), "EUR"),
+    ]),
+  ).toEqual(["Recovery by class, USD", "Recovery by class, EUR"]);
+});
+
+test("a recovery written in % or x draws in its own unit's figure, not on the currency's", () => {
+  const figures = recoveries([
+    t4e7("Base", "Senior", c("100", "100"), c("45%", "45"), "USD"),
+    t4e7("Base", "Junior", c("50", "50"), c("10", "10"), "USD"),
+  ]);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["recovery-by-class-0", "Recovery by class, Base", "USD"],
+    ["recovery-by-class-0-percent", "Recovery by class, Base, %", "%"],
+  ]);
+  const elsewhere = (text: string) => ({
+    value: null,
+    reason: `${text}, drawn in its unit's figure`,
+  });
+  const [amounts, percent] = figures;
+  expect(said(amounts!)).toEqual([
+    [{ value: "100" }, { value: "50" }],
+    [elsewhere("45%"), { value: "10" }],
+  ]);
+  expect(percent!.categories).toEqual(["Senior"]);
+  expect(said(percent!)).toEqual([[elsewhere("100")], [{ value: "45" }]]);
 });
 
 test("T4E.2 draws nothing: its one amount column packs principal, accrued and PIK (N192)", () => {

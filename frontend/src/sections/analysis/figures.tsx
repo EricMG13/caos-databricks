@@ -915,7 +915,14 @@ function Chart({
         <DivergingBarChart {...common} categories={figure.categories} series={figure.series[0]} />
       );
     case "stack":
-      return <StackedBarChart {...common} categories={figure.categories} series={figure.series} />;
+      return (
+        <StackedBarChart
+          {...common}
+          categories={figure.categories}
+          series={figure.series}
+          categoryLabel={figure.categoryLabel}
+        />
+      );
     case "bars":
       return (
         <BarChart

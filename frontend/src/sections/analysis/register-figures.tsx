@@ -477,14 +477,14 @@ function bridgeFigure(handoff: HandoffView, spec: BridgeRegister): Figure[] {
   // Only a total may be named as the bridge's end: a last change with no
   // running level of its own is said to state none.
   const [first, end] = [steps[0]!, steps.at(-1)!];
-  const level = spec.cumulative.charAt(0).toLowerCase() + spec.cumulative.slice(1);
   const summary =
     steps.length === 1
       ? `${said(first)}, as served.`
       : end.kind === "total"
         ? `${said(first)} to ${said(end)}, as served.`
-        : `${said(first)}; the last change, ${end.label}, states no ${level}.`;
-  const used = new Set(steps.map((step) => step.color));
+        : `${said(first)}; the last change, ${end.label}, states no ${spec.cumulative}.`;
+  // A gap is drawn with no colour: only a drawn step's colour is listed.
+  const used = new Set(steps.filter((step) => step.value !== null).map((step) => step.color));
   const statuses = spec.status ? STATUSES.filter(({ color }) => used.has(color)) : undefined;
   const head = { key: spec.key, table: spec.register, title: spec.title, summary };
   return [
@@ -570,6 +570,10 @@ export function liquidityBridge(handoff: HandoffView): Figure[] {
   ];
 }
 
+/** A title and its parts, a blank part left out: "Value allocation, Base". */
+const titled = (title: string, ...parts: readonly string[]) =>
+  [title, ...parts.filter((part) => part.trim())].join(", ");
+
 /** The fulcrum `T4E.6` states for `scenario`: its `fulcrum class/range` on
     the first row whose `scenario/EV range` starts with the scenario. */
 function fulcrumOf(fulcrums: readonly Row[], scenario: string): string | undefined {
@@ -585,11 +589,12 @@ function fulcrumOf(fulcrums: readonly Row[], scenario: string): string | undefin
     such claim, so "Senior" never takes "Senior notes"'s mark. */
 function fulcrumClaim(group: readonly Entry[], fulcrum: string): number | undefined {
   const named = fulcrum.toLowerCase();
-  let best: Entry | undefined;
-  for (const entry of group) {
-    const claim = text(entry.row, "priority claim").trim().toLowerCase();
-    const length = best ? text(best.row, "priority claim").trim().length : 0;
-    if (claim && named.startsWith(claim) && claim.length > length) best = entry;
+  let best: { index: number; claim: string } | undefined;
+  for (const { row, index } of group) {
+    const claim = text(row, "priority claim").trim().toLowerCase();
+    if (claim && named.startsWith(claim) && claim.length > (best?.claim.length ?? 0)) {
+      best = { index, claim };
+    }
   }
   return best?.index;
 }
@@ -609,7 +614,7 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
   return groups.map((group, n) => {
     const [first, last] = [group[0]!.row, group.at(-1)!.row];
     const scenario = text(first, "scenario");
-    const entity = entities.get(scenario)!.length > 1 ? `, ${text(first, "entity")}` : "";
+    const entity = entities.get(scenario)!.length > 1 ? text(first, "entity") : "";
     const fulcrum = fulcrumOf(fulcrums, scenario);
     const marked = fulcrum ? fulcrumClaim(group, fulcrum) : undefined;
     const steps: WaterfallStep[] = [
@@ -645,7 +650,7 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
     const head = {
       key: `value-allocation-${n}`,
       table: "T4E.5",
-      title: `Value allocation, ${scenario}${entity}`,
+      title: titled("Value allocation", scenario, entity),
       summary,
     };
     const rowOf = (key: string) =>
@@ -677,9 +682,9 @@ function byColumns(columns: StackColumns): Omit<StackSpec, "head"> {
     amountOf,
     sourceOf: (rows) => {
       const lines = rows.map((row) => {
-        const said = stated(row, columns.source);
+        const details = stated(row, columns.source);
         const name = text(row, columns.name);
-        return name && said ? `${name} (${said})` : name || said || "";
+        return name && details ? `${name} (${details})` : name || details || "";
       });
       if (rows.length === 1) return lines[0] || null;
       const unstated = rows.filter((row) => amountOf(row) == null).length;
@@ -710,7 +715,11 @@ export function liquiditySources(handoff: HandoffView): Figure[] {
   const head = { key: "liquidity-sources", table: "T2E.2", title: "Liquidity by accessibility" };
   return [
     stackFigure(rows, {
-      head: { ...head, summary: summed(rows, amount, undefined) },
+      head: {
+        ...head,
+        summary: summed(rows, amount, undefined),
+        categoryLabel: "Accessibility Status",
+      },
       ...byColumns({
         category: "Accessibility Status",
         series: "Liquidity Component",
@@ -730,7 +739,7 @@ export function cashUses(handoff: HandoffView): Figure[] {
   const head = { key: "cash-uses", table: "T2E.3", title: "Cash uses by timing" };
   return [
     stackFigure(rows, {
-      head: { ...head, summary: summed(rows, "Amount", undefined) },
+      head: { ...head, summary: summed(rows, "Amount", undefined), categoryLabel: "Timing" },
       ...byColumns({
         category: "Timing",
         series: "Mandatory / Discretionary",
@@ -751,7 +760,11 @@ export function rateMix(handoff: HandoffView): Figure[] {
   return groupsOf(rows, base, BY_CURRENCY).map(({ entries, head }) => {
     const group = entries.map((entry) => entry.row);
     return stackFigure(group, {
-      head: { ...head, summary: summed(group, "Amount", head.unit) },
+      head: {
+        ...head,
+        summary: summed(group, "Amount", head.unit),
+        categoryLabel: "Fixed / Floating",
+      },
       ...byColumns({
         category: "Fixed / Floating",
         series: "Debt Instrument",
@@ -773,12 +786,13 @@ export function refinancingWall(handoff: HandoffView): Figure[] {
     dateOf: (row) => text(row, "Maturity Date"),
     nameOf: (row) => text(row, "Instrument"),
     noun: "instruments",
+    word: "amount",
   };
   const base = { key: "refinancing-wall", table: "T3D.2", title: "Maturities by seniority" };
   return groupsOf(rows, base, BY_CURRENCY).map(({ entries, head }) => {
     const group = entries.map((entry) => entry.row);
     return stackFigure(group, {
-      head: { ...head, summary: wallSummary(group, wall, head.unit) },
+      head: { ...head, summary: wallSummary(group, wall, head.unit), categoryLabel: "Year" },
       ...byColumns({
         category: "Maturity Date",
         series: "Seniority / Lien",
@@ -786,6 +800,7 @@ export function refinancingWall(handoff: HandoffView): Figure[] {
         name: "Instrument",
         source: ["Source Trace"],
       }),
+      // A category is its maturity's year, not the date `byColumns` reads.
       categoryOf: (row) => yearOf(wall.dateOf(row)),
       sorted: true,
     });
@@ -851,18 +866,21 @@ function columnFigure(
     return row ? stated(row, spec.source) : null;
   };
   const summary = seriesSummary(spec.noun, categories, series);
-  const figure = { ...head, categories, series, summary, sourceOf };
-  return spec.kind === "bars"
-    ? { ...figure, kind: "bars", categoryLabel: spec.category }
-    : { ...figure, kind: "stack" };
+  const figure = { ...head, categories, series, summary, sourceOf, categoryLabel: spec.category };
+  return { ...figure, kind: spec.kind };
 }
 
 /** A register drawn a series per column, a figure per unit its `columns`'
-    cells are written in. */
-function byUnitFigures(rows: readonly Row[], base: Omit<Head, "unit">, spec: ColumnFigure) {
+    cells are written in; the figure of no such unit is in `plain`. */
+function byUnitFigures(
+  rows: readonly Row[],
+  base: Omit<Head, "unit">,
+  spec: ColumnFigure,
+  plain?: string,
+) {
   const grouping = byCellUnits(spec.columns.map(({ column }) => column));
   return groupsOf(rows, base, grouping).map(({ entries, head, at }) =>
-    columnFigure(entries, head, spec, (cell) => inUnit(cell, at)),
+    columnFigure(entries, at ? head : { ...head, unit: plain }, spec, (cell) => inUnit(cell, at)),
   );
 }
 
@@ -911,7 +929,8 @@ export function basketCapacity(handoff: HandoffView): Figure[] {
 }
 
 /** CP-4C's recovery by class (`T4E.7`): per scenario and currency, each
-    class's allowed claim beside its total recovery. The packed
+    class's allowed claim beside its total recovery, a cell written in `x` or
+    `%` drawn in its own unit's figure. The packed
     `cash/debt/equity/warrant value` holds several figures the bundle's
     reader cannot split (N192): a mark's source states it, nothing draws it.
     CP-4C's `T4E.2` draws nothing for the same reason: its one amount column,
@@ -924,14 +943,13 @@ export function recoveryByClass(handoff: HandoffView): Figure[] {
     ...groupBy(entries, ({ row }) => pair(text(row, "scenario"), text(row, "currency"))).values(),
   ];
   const currencies = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
-  return groups.map((group, n) => {
+  return groups.flatMap((group, n) => {
     const [scenario, currency] = [text(group[0]!.row, "scenario"), text(group[0]!.row, "currency")];
-    const named = currencies.get(scenario)!.length > 1 && currency ? `, ${currency}` : "";
-    const head = {
+    const named = currencies.get(scenario)!.length > 1 ? currency : "";
+    const base = {
       key: `recovery-by-class-${n}`,
       table: "T4E.7",
-      title: `Recovery by class, ${scenario}${named}`,
-      unit: currency || undefined,
+      title: titled("Recovery by class", scenario, named),
     };
     const spec: ColumnFigure = {
       kind: "bars",
@@ -943,7 +961,8 @@ export function recoveryByClass(handoff: HandoffView): Figure[] {
       noun: "Recovery",
       source: ["timing", "cash/debt/equity/warrant value"],
     };
-    return columnFigure(group, head, spec, datum);
+    const rows = group.map(({ row }) => row);
+    return byUnitFigures(rows, base, spec, currency || undefined);
   });
 }
 

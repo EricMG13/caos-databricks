@@ -1005,3 +1005,17 @@ test("the figures' key keys a rule and a dot only where one is drawn", () => {
   expect(ranges).toContain("Hollow dot: model-authored, not host-verified");
   expect(key(shown(cp1))).not.toContain("rule");
 });
+
+test("a register stack's table twin heads its first column with what the categories are", () => {
+  const columns = ["Basket / Test", "Usage", "Remaining Capacity"];
+  const baskets: Register = {
+    register_id: "T4C.5",
+    columns,
+    declared: columns,
+    rows: [[served("General basket"), served("10", "10"), served("40", "40")]],
+  };
+  const container = shown({ ...handoffOf("CP-4"), tables: [], registers: [baskets] });
+  const figure = container.querySelector<HTMLElement>("[data-figure='basket-capacity']")!;
+  fireEvent.click(within(figure).getByRole("button", { name: "Table" }));
+  expect(figure.querySelector("thead th:first-child")).toHaveTextContent("Basket / Test");
+});
