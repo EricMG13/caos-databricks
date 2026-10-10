@@ -1028,6 +1028,45 @@ test("pressing a dumbbell's end names which end it is, its metric and stated sou
   );
 });
 
+test("pressing a security's point names its seniority, security and stated source", () => {
+  const columns = [
+    "security_id",
+    "maturity/call date",
+    "spread/yield",
+    "seniority",
+    "curve residual",
+  ];
+  const curve: Register = {
+    register_id: "T3E.3",
+    columns,
+    declared: columns,
+    rows: [
+      [
+        served("NOTE-A"),
+        served("2031-06"),
+        served("412.5", "412.5"),
+        served("Senior"),
+        served("+12"),
+      ],
+    ],
+  };
+  const container = shown({ ...handoffOf("CP-4"), module_id: "CP-3D", registers: [curve] });
+  const figure = container.querySelector("[data-figure='spread-curve']") as HTMLElement;
+  expect(figure.querySelector("[data-chart='scatter']")).not.toBeNull();
+  fireEvent.click(
+    within(figure).getByRole("button", {
+      name: /^NOTE-A, Senior, maturity\/call date 2031-06: 412\.5/,
+    }),
+  );
+  const picked = container.querySelector("[data-picked]")!;
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("412.5");
+  expect(picked).toHaveTextContent("Senior · NOTE-A");
+  expect(picked).toHaveTextContent("curve residual: +12");
+  expect(container.querySelector("[data-figures-key]")).toHaveTextContent(
+    "Hollow dot: model-authored",
+  );
+});
+
 test("the figures' key keys a rule and a dot only where one is drawn", () => {
   const key = (container: HTMLElement) =>
     container.querySelector("[data-figures-key]")!.textContent ?? "";
