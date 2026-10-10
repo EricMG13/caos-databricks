@@ -1237,7 +1237,7 @@ test("cash uses state every amount summed, none unstated; past MAX_MARKS they ar
   expect(figure!.summary).toBe("Amount, summed over 2 rows: 3.");
   expect(figure!.sourceOf(pick("Discretionary", "Q1"))).toBe("Capex");
   const [none] = cashUses2d([t2e3("Interest", c("TBD"), "Q1", "Mandatory", "E-1")]);
-  expect(none!.summary).toBe("None of 1 rows states a figure for Amount.");
+  expect(none!.summary).toBe("The 1 row states no figure for Amount.");
   const many = Array.from({ length: 2001 }, (_, index) =>
     t2e3("Interest", c("1", "1"), `Week ${index}`, "Mandatory", "E-1"),
   );
@@ -1348,7 +1348,7 @@ test("refinancingWall: a wall per currency, years sorted, Undated last, summed a
       " Revolver, falls due 2028-12-15.",
   );
   expect(eur!.summary).toBe(
-    "200 EUR amount in 1 instruments; the nearest, Euro notes, falls due 2030-01-15.",
+    "200 EUR amount in 1 instrument; the nearest, Euro notes, falls due 2030-01-15.",
   );
   expect(usd!.sourceOf(pick("First lien", "2029"))).toBe(
     "Sum of 2 rows: Term loan (Source Trace: Trace Term loan); Bridge (Source Trace: Trace Bridge)",
@@ -1823,7 +1823,7 @@ test("cases group trimmed and case-insensitive, periods trimmed, a blank case na
   expect(revenue!.categories).toEqual(["FY26", "FY27"]);
   expect(revenue!.series.map((series) => [series.key, series.label])).toEqual([
     ["BASE", "Base"],
-    ["not-stated", "Case not stated"],
+    ["row 3, case not stated", "row 3, case not stated"],
   ]);
   expect(said(revenue!)).toEqual([
     [{ value: "100" }, { value: "110" }],
@@ -1949,7 +1949,7 @@ test("a sensitivity stated twice is a gap naming both, unless they agree; units 
       ]),
     ]),
   ).map(diverging);
-  expect(plain!.categories).toEqual(["FX", "Sensitivity not stated", "Rates +100bp"]);
+  expect(plain!.categories).toEqual(["FX", "row 6, Sensitivity not stated", "Rates +100bp"]);
   expect(said(plain!)).toEqual([
     [{ value: "4" }, { value: "1" }, { value: null, reason: "stated twice: 5, 7" }],
   ]);
@@ -2131,7 +2131,7 @@ test("a trigger stated twice in one agency is a gap naming both; other modules d
   expect(keys("CP-2H")).toEqual(["rating-triggers-0"]);
   // A blank metric is named, never an empty mark; a blank direction is left out.
   const [blank] = triggers([t2r4("A", "Issuer", "", " ", c("5", "5"), c("4", "4"), c("1", "1"))]);
-  expect(blank!.bullets![0]!.label).toBe("metric not stated (Issuer)");
+  expect(blank!.bullets![0]!.label).toBe("row 1, metric not stated (Issuer)");
   expect(keys("CP-2E")).toEqual(["rate-sensitivities"]);
   expect(keys("CP-2A")).toEqual(["downside-sensitivities"]);
   expect(keys("CP-3D")).toEqual(["scenario-moves-0"]);
@@ -2206,7 +2206,9 @@ test("scoreRegisters: a factor stated twice is one bar, a gap naming each text w
   expect(said(figure!)).toEqual([
     [{ value: "0.8" }, { value: null, reason: "stated twice: 1, 2" }],
   ]);
-  expect(figure!.summary).toBe("Weighted Score as served. Highest: Scale 0.8. Lowest: Scale 0.8.");
+  expect(figure!.summary).toBe(
+    "Weighted Score as served. One factor scores: Scale 0.8; 1 is n/a. Leverage stated twice.",
+  );
 });
 
 test("scoreRegisters: no row states a score, the summary says so", () => {
@@ -2311,9 +2313,7 @@ test("scoreRegisters: CP-4's legal areas and CP-6's debate dimensions, each its 
     ["debate-scores", "Debate scores by dimension, 1 to 5", "Score (1-5)", "horizontal"],
   ]);
   expect(debate[0]!.sourceOf(pick("score", "Cash flow"))).toBe("Chair Assessment: Balanced");
-  expect(debate[0]!.summary).toBe(
-    "Score (1-5) as served. Highest: Cash flow 3.5. Lowest: Cash flow 3.5.",
-  );
+  expect(debate[0]!.summary).toBe("Score (1-5) as served. One dimension scores: Cash flow 3.5.");
 });
 
 test("scoreRegisters: a register of another module draws nothing", () => {
@@ -2407,7 +2407,9 @@ test("expectedRealised: a metric stated twice is one row, a gap naming each text
       origin: "model",
     },
   ]);
-  expect(figure!.summary).toBe("Variance as served: Leverage stated twice: Up 0.6x, Up 0.8x.");
+  expect(figure!.summary).toBe(
+    "Variance as served: Leverage stated twice: Up 0.6x, Up 0.8x. Leverage stated twice.",
+  );
 });
 
 test("expectedRealised: ends in two units join each unit's figure, the other end a gap naming it", () => {
@@ -2418,7 +2420,7 @@ test("expectedRealised: ends in two units join each unit's figure, the other end
       [
         {
           key: "0",
-          label: "Metric not stated",
+          label: "row 1, Metric not stated",
           from: { value: "4.0" },
           to: { value: null, reason: "45%, drawn in its unit's figure" },
           origin: "model",
@@ -2430,7 +2432,7 @@ test("expectedRealised: ends in two units join each unit's figure, the other end
       [
         {
           key: "0",
-          label: "Metric not stated",
+          label: "row 1, Metric not stated",
           from: { value: null, reason: "4.0x, drawn in its unit's figure" },
           to: { value: "45" },
           origin: "model",
@@ -2517,7 +2519,7 @@ test("spreadCurve: a point a security, its spread at its date, coloured by senio
     },
     {
       key: "2",
-      label: "security_id not stated",
+      label: "row 3, security_id not stated",
       at: "03/04/2031",
       value: { value: null, reason: "Not quoted" },
       group: "seniority not stated",
@@ -2525,7 +2527,7 @@ test("spreadCurve: a point a security, its spread at its date, coloured by senio
     },
   ]);
   expect(curve!.summary).toBe(
-    "spread/yield as served, by maturity/call date: NOTE-A 2031-06-15 412.5; NOTE-B 2029-03 275; security_id not stated 03/04/2031 n/a (Not quoted).",
+    "spread/yield as served, by maturity/call date: NOTE-A 2031-06-15 412.5; NOTE-B 2029-03 275; row 3, security_id not stated 03/04/2031 n/a (Not quoted).",
   );
   const pressed = { series: "Subordinated", category: "NOTE-B", index: 1, value: "275" };
   expect(curve!.sourceOf({ ...pressed, origin: "model" })).toBe(
@@ -2541,12 +2543,7 @@ test("spreadCurve: a security stated twice is one point, each cell a gap naming 
     t3e3("NOTE-B", "2030", c("200", "200"), "Senior"),
   ]);
   expect(curve!.points.map(({ key, at, value, group }) => [key, at, value, group])).toEqual([
-    [
-      "0",
-      "stated twice: 2031-06-15, 2032-06-15",
-      { value: null, reason: "stated twice: 412.5, 415" },
-      "Senior",
-    ],
+    ["0", "", { value: null, reason: "stated twice: 412.5, 415" }, "Senior"],
     ["2", "2030", { value: "200" }, "Senior"],
   ]);
   expect(
@@ -2787,4 +2784,126 @@ test("auditCounts: past the marks a count is stated, not drawn", () => {
     key: "issue-counts",
     summary: expect.stringMatching(/^2001 marks/),
   });
+});
+
+// The series tidy: currencies apart, blanks by row, restatements named,
+// summaries capped, counts of one singular.
+
+test("a written currency sign splits figures as a unit does: $12 and €8 never share an axis", () => {
+  const rows = [
+    t2f5("A", c("$12", "12")),
+    t2f5("B", c("(8 €) [C1]", "-8")),
+    t2f5("C", c("€1x", "1")),
+  ];
+  const handoff = moduleWith("CP-2E", [register("T2F.5", RATE_SENSITIVITY, rows)]);
+  expect(rateSensitivities(handoff).map((figure) => `${figure.key}: ${figure.title}`)).toEqual([
+    "rate-sensitivities-dollar: Rate and FX sensitivities, $",
+    "rate-sensitivities-euro: Rate and FX sensitivities, €",
+    "rate-sensitivities-euro-x: Rate and FX sensitivities, € x",
+  ]);
+});
+
+test("blank categories are named by their row and never merge: a bar figure and a line figure", () => {
+  const rows = [t33("Scale", c("1", "1")), t33(" ", c("2", "2")), t33("", c("3", "3"))];
+  const [figure] = scores("CP-3", [register("T3.3", FACTORS, rows)]);
+  const blank = (n: number, column: string) => `row ${n}, ${column} not stated`;
+  expect(figure!.categories).toEqual(["Scale", blank(2, "Factor"), blank(3, "Factor")]);
+  expect(said(figure!)).toEqual([[{ value: "1" }, { value: "2" }, { value: "3" }]]);
+  const lines = [
+    ["FY26", "Base"],
+    ["", "Base"],
+    [" ", "Base"],
+    ["FY26", ""],
+    ["FY26", " "],
+  ];
+  const forecast = lines.map(([period, kase], n) =>
+    t2h4(period!, kase!, c(`${n}`, `${n}`), c(""), c("")),
+  );
+  const [revenue] = forecastCases(cp2gWith([register("T2H.4", FORECAST, forecast)])).map(line);
+  expect(revenue!.categories).toEqual(["FY26", blank(2, "period"), blank(3, "period")]);
+  expect(revenue!.series.map((series) => [series.label, series.data])).toEqual([
+    ["Base", [{ value: "0" }, { value: "1" }, { value: "2" }]],
+    [blank(4, "case"), [{ value: "3" }, gap, gap]],
+    [blank(5, "case"), [{ value: "4" }, gap, gap]],
+  ]);
+});
+
+test("an available value, a fulcrum or a liquidity total stated twice is named, never the first taken", () => {
+  const [allocation] = allocations(
+    [
+      t4e5("Base", "HoldCo", c("90", "90"), "Senior", c("60", "60"), c("30", "30")),
+      t4e5("Base", "HoldCo", c("95", "95"), "Junior", c("30", "30"), c("0", "0")),
+    ],
+    [t4e6("Base", "Senior"), t4e6("Base case", "Junior")],
+  );
+  expect(allocation!.summary).toBe(
+    "Available value n/a (stated twice: 90, 95) to Residual 0, as served; fulcrum stated twice: Senior, Junior.",
+  );
+  const begin = "Beginning accessible liquidity";
+  const [bridge] = liquidity([t2e5(begin, c("100", "100")), t2e5(begin, c("110", "110"))]);
+  expect(bridge!.summary).toMatch(/^Beginning accessible liquidity stated twice: 100, 110 to no/);
+});
+
+test("a summary listing every row names at most ten, the rest counted", () => {
+  const twelve = Array.from({ length: 12 }, (_, n) => t74(`M${n}`, c("4", "4"), c("5", "5"), "Up"));
+  expect(outcomes(twelve)[0]!.summary).toMatch(/: M0 Up; M1 Up; .*; M9 Up; …and 2 more\.$/);
+  const points = Array.from({ length: 11 }, (_, n) => t3e3(`N${n}`, "2031", c("1", "1"), "S"));
+  expect(curves(points)[0]!.summary).toMatch(/; N9 2031 1; …and 1 more\.$/);
+});
+
+test("scores: all equal or one bar is said so; a stated-twice score is named; a unit splits", () => {
+  const figures = (rows: Served[][]) => scores("CP-3", [register("T3.3", FACTORS, rows)]);
+  const summary = (...rows: Served[][]) => figures(rows)[0]!.summary.slice(26);
+  const [one, two, four] = [c("1", "1"), c("2", "2"), c("4", "4")];
+  expect(summary(t33("A", c("4.0", "4.0")), t33("B", four), t33("C", four))).toBe(
+    "All 3 factors score 4.0.",
+  );
+  expect(summary(t33("A", four), t33("B", c("TBD")))).toBe("One factor scores: A 4; 1 is n/a.");
+  expect(summary(t33("A", one), t33("B", four), t33("C", one), t33("C", two))).toBe(
+    "Highest: B 4. Lowest: A 1. C stated twice.",
+  );
+  const split = figures([t33("A", four), t33("B", c("4%", "4"))]);
+  expect(split.map((figure) => `${figure.key}: ${figure.categories}`)).toEqual([
+    "weighted-factor-scores: A",
+    "weighted-factor-scores-percent: B",
+  ]);
+});
+
+test("triggers read their threshold and value by unit and name a restatement; labels leave markers", () => {
+  const value = c("4.0x", "4.0");
+  const [plain, multiple] = triggers([
+    t2r4("A", "Issuer [C1]", "Ceiling", "Leverage [C2]", c("5", "5"), value, c("1", "1")),
+    t2r4("A", "Issuer", "Ceiling", "Leverage", c("6", "6"), value, c("1", "1")),
+  ]);
+  expect([plain!.key, multiple!.key]).toEqual(["rating-triggers-0", "rating-triggers-0-x"]);
+  expect(plain!.bullets[0]).toMatchObject({
+    label: "Leverage (Issuer, ceiling)",
+    threshold: { value: null, reason: "stated twice: 5, 6" },
+    current: { value: null, reason: "4.0x, drawn in its unit's figure" },
+  });
+  expect(plain!.summary).toMatch(/1\. Leverage \(Issuer, ceiling\) stated twice\.$/);
+  expect(multiple!.bullets[0]!.current).toEqual({ value: "4.0" });
+  const fx = moduleWith("CP-2E", [register("T2F.5", RATE_SENSITIVITY, [t2f5("FX [C3]", value)])]);
+  expect(diverging(rateSensitivities(fx)[0]!).categories).toEqual(["FX"]);
+});
+
+test("a security's restated date is its reason for not being placed; markers alone never restate", () => {
+  const [curve] = curves([
+    t3e3("NOTE-A", "2031-06 [C1]", c("4", "4"), "Senior"),
+    t3e3("NOTE-A", "2031-06 [C2]", c("4", "4"), "Senior"),
+    t3e3("NOTE-B", "2031", c("5", "5"), "Senior"),
+    t3e3("NOTE-B", "2032", c("5", "5"), "Senior"),
+  ]);
+  expect(curve!.points.map(({ at, unread }) => [at, unread])).toEqual([
+    ["2031-06", undefined],
+    ["", "stated twice: 2031, 2032"],
+  ]);
+  expect(curve!.summary).toMatch(/: NOTE-A 2031-06 4; NOTE-B stated twice: 2031, 2032 5\.$/);
+});
+
+test("counts of one are singular: one row of two stating an amount", () => {
+  const rows = [t2e2("Cash", c("5", "5"), "Open", "T-1"), t2e2("RCF", c("TBD"), "Open", "T-2")];
+  expect(liquiditySources(cp2dWith([register("T2E.2", SOURCES, rows)]))[0]!.summary).toBe(
+    "Source-Supported Amount, summed over the 1 of 2 rows that states one: 5.",
+  );
 });

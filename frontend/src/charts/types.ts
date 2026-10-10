@@ -167,6 +167,10 @@ export interface ScatterPoint {
   /** A date as served: placed where it reads as `YYYY-MM-DD`, `YYYY-MM` or
       `YYYY`, never guessed from any other spelling. */
   at: string;
+  /** Why no one date is served, where the figure says (a date stated
+      twice): the point's reason for not being placed, in place of an
+      unread spelling's. */
+  unread?: string;
   value: Datum;
   /** What colours the point: the series colours by first appearance. */
   group: string;

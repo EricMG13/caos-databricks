@@ -126,7 +126,7 @@ test("wallSummary, nearestOf, yearOf, unique: a maturity wall's words", () => {
     amountOf: (r: Row) => r["amount"]?.value,
     dateOf: (r: Row) => text(r, "date"),
     nameOf: (r: Row) => text(r, "name"),
-    noun: "loans",
+    noun: ["loan", "loans"] as const,
   };
   const rows = [
     row("Later", "2030-01-01", "1.5"),
@@ -141,8 +141,10 @@ test("wallSummary, nearestOf, yearOf, unique: a maturity wall's words", () => {
   expect(nearestOf(undated, wall.dateOf)).toEqual({ row: undated[1], dated: false });
   expect(wallSummary(undated, wall, undefined)).toBe("Principal unstated for all 2 loans.");
   expect(wallSummary([rows[0]!], wall, undefined)).toBe(
-    "1.5 principal in 1 loans; the nearest, Later, falls due 2030-01-01.",
+    "1.5 principal in 1 loan; the nearest, Later, falls due 2030-01-01.",
   );
+  // One of anything is said in the singular.
+  expect(wallSummary([undated[0]!], wall, undefined)).toBe("Principal unstated for the 1 loan.");
 });
 
 test("the readers the register figures share: groupBy, pair, text, datum, oversized", () => {
