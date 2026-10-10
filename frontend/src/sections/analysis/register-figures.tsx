@@ -1191,17 +1191,24 @@ export function scenarioMoves(handoff: HandoffView): Figure[] {
   );
 }
 
-/** A trigger's label: "Leverage (Issuer)", its rating type left out where blank. */
+/** A trigger's label, which is also its identity: "Leverage (Issuer,
+    downgrade)", its stated direction read trimmed and casefolded past its
+    citation markers, so an upgrade and a downgrade trigger on one metric
+    stay two triggers. A blank rating type or direction is left out; a blank
+    metric is named as not stated. */
 function triggerLabel(row: Row): string {
-  const [metric, type] = [text(row, "metric").trim(), text(row, "rating type").trim()];
-  return type ? `${metric} (${type})` : metric;
+  const metric = text(row, "metric").trim() || "metric not stated";
+  const direction = unmarked(text(row, "trigger direction")).trim().toLowerCase();
+  const parts = [text(row, "rating type").trim(), direction].filter(Boolean);
+  return parts.length ? `${metric} (${parts.join(", ")})` : metric;
 }
 
 /** CP-2H's quantitative triggers (`T2R.4`): a bullet figure per agency and
     unit, each trigger's case/period value against its threshold, the
     headroom as served. A packed case/period value is a gap carrying its
-    text (N192). A trigger stated twice is one row, each value a gap naming
-    each text where they differ, its direction only where they agree. */
+    text (N192). A trigger stated twice (one metric, rating type and
+    direction) is one row, each value a gap naming each text where they
+    differ. */
 export function ratingTriggers(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2H", "T2R.4");
   if (!rows?.length) return [];
@@ -1218,11 +1225,10 @@ export function ratingTriggers(handoff: HandoffView): Figure[] {
       const tests = [...groupBy(entries, ({ row }) => triggerLabel(row)).values()];
       const bullets = tests.map((same): BulletRow => {
         const stating = same.map(({ row }) => row);
-        const ways = new Set(stating.map((row) => directionOf(row, "trigger direction")));
         return {
           key: `${same[0]!.index}`,
           label: triggerLabel(stating[0]!),
-          direction: ways.size === 1 ? directionOf(stating[0]!, "trigger direction") : null,
+          direction: directionOf(stating[0]!, "trigger direction"),
           threshold: pointOf(stating, "threshold", datum),
           current: pointOf(stating, "case/period value", datum),
           headroom: pointOf(stating, "headroom", datum),

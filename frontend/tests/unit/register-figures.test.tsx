@@ -2054,7 +2054,7 @@ test("ratingTriggers: bullets per agency, direction only as the bundle reads it"
   expect(a!.bullets).toEqual([
     {
       key: "0",
-      label: "Leverage (Issuer)",
+      label: "Leverage (Issuer, max-ratio)",
       direction: "max",
       threshold: { value: "5.0" },
       current: { value: "4.0" },
@@ -2064,7 +2064,7 @@ test("ratingTriggers: bullets per agency, direction only as the bundle reads it"
     // Keyed by its place among its agency's rows.
     {
       key: "1",
-      label: "Max leverage (Senior)",
+      label: "Max leverage (Senior, downgrade)",
       direction: null,
       threshold: { value: "6.0" },
       current: { value: null, reason: "4.2x / 3.9x" },
@@ -2074,12 +2074,12 @@ test("ratingTriggers: bullets per agency, direction only as the bundle reads it"
   ]);
   expect(b!.bullets![0]!.direction).toBe("min");
   expect(a!.summary).toBe(
-    "Headroom as served: Leverage (Issuer) 1.0; Max leverage (Senior) n/a (TBD).",
+    "Headroom as served: Leverage (Issuer, max-ratio) 1.0; Max leverage (Senior, downgrade) n/a (TBD).",
   );
   expect(
     a!.sourceOf({
       series: "current",
-      category: "Max leverage (Senior)",
+      category: "Max leverage (Senior, downgrade)",
       index: 1,
       value: null,
       origin: "model",
@@ -2089,17 +2089,29 @@ test("ratingTriggers: bullets per agency, direction only as the bundle reads it"
 
 test("a trigger stated twice in one agency is a gap naming both; other modules draw nothing", () => {
   const [figure] = triggers([
-    t2r4("A", "", "ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1")),
-    t2r4("A", "", "minimum", "Leverage", c("5", "5"), c("3", "3"), c("2", "2")),
+    // An upgrade and a downgrade trigger on one metric are two triggers.
+    t2r4("A", "", "Ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1")),
+    t2r4("A", "", "minimum", "Leverage", c("3.5", "3.5"), c("4", "4"), c("0.5", "0.5")),
+    // The same metric, rating type and direction, however spelt: one trigger.
+    t2r4("A", "", " ceiling ", "Leverage", c("6", "6"), c("4", "4"), c("2", "2")),
   ]);
   expect(figure!.bullets).toEqual([
     {
       key: "0",
-      label: "Leverage",
-      direction: null,
-      threshold: { value: "5" },
-      current: { value: null, reason: "stated twice: 4, 3" },
+      label: "Leverage (ceiling)",
+      direction: "max",
+      threshold: { value: null, reason: "stated twice: 5, 6" },
+      current: { value: "4" },
       headroom: { value: null, reason: "stated twice: 1, 2" },
+      origin: "model",
+    },
+    {
+      key: "1",
+      label: "Leverage (minimum)",
+      direction: "min",
+      threshold: { value: "3.5" },
+      current: { value: "4" },
+      headroom: { value: "0.5" },
       origin: "model",
     },
   ]);
@@ -2112,6 +2124,9 @@ test("a trigger stated twice in one agency is a gap naming both; other modules d
   const keys = (module: string) =>
     registerFigures(moduleWith(module, [t2r, t2f, t2b, t3e])).map((figure) => figure.key);
   expect(keys("CP-2H")).toEqual(["rating-triggers-0"]);
+  // A blank metric is named, never an empty mark; a blank direction is left out.
+  const [blank] = triggers([t2r4("A", "Issuer", "", " ", c("5", "5"), c("4", "4"), c("1", "1"))]);
+  expect(blank!.bullets![0]!.label).toBe("metric not stated (Issuer)");
   expect(keys("CP-2E")).toEqual(["rate-sensitivities"]);
   expect(keys("CP-2A")).toEqual(["downside-sensitivities"]);
   expect(keys("CP-3D")).toEqual(["scenario-moves-0"]);
