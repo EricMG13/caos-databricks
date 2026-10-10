@@ -28,6 +28,8 @@ function toneOf(step: BridgeStep): Tone {
 
 /** ", Challenged": a step's status as its name says it. */
 const statusOf = (step: BridgeStep) => (step.status ? `, ${step.status}` : "");
+/** " (served 45, a use the method subtracts)": a step's note as said. */
+const noteOf = (step: BridgeStep) => (step.note ? ` (${step.note})` : "");
 
 /** A step's accessible name: its amount and unit, what kind of step it is,
     where the running level stands after it, and who stands behind it. */
@@ -41,7 +43,7 @@ function nameOf(step: BridgeStep, unit: string | undefined): string {
     return `${step.label}: ${valueText(step.value, unit)}, stated total${statusOf(step)} (${origin})`;
   }
   const level = step.end === null ? "" : `, running level ${formatDecimal(step.end)}`;
-  return `${step.label}: ${valueText(step.value, unit, true)}${level}${statusOf(step)} (${origin})`;
+  return `${step.label}: ${valueText(step.value, unit, true)}${noteOf(step)}${level}${statusOf(step)} (${origin})`;
 }
 
 function barOf(step: BridgeStep, index: number, unit: string | undefined): BandBar {
@@ -88,7 +90,7 @@ function tableOf(bridge: readonly BridgeStep[], unit: string | undefined): Table
         KIND_WORD[step.kind],
         step.value === null
           ? `n/a: ${step.reason}`
-          : formatDecimal(step.value, step.kind !== "total"),
+          : `${formatDecimal(step.value, step.kind !== "total")}${noteOf(step)}`,
         step.end === null ? "n/a" : formatDecimal(step.end),
         ...(statused ? [step.status ?? ""] : []),
         step.origin ? ORIGIN_WORD[step.origin] : NOT_SERVED,

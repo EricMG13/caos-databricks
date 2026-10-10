@@ -53,6 +53,13 @@ export function sumOf(values: readonly (string | null | undefined)[]): PartialSu
   };
 }
 
+/** An exact decimal's magnitude negated, by string work alone: "800" and
+    "-800" are both "-800", and a zero stays unsigned ("-0.00" is "0.00"). */
+export function negatedMagnitude(value: string): string {
+  const magnitude = value.startsWith("-") ? value.slice(1) : value;
+  return /[1-9]/.test(magnitude) ? `-${magnitude}` : magnitude;
+}
+
 /** Rows grouped by `key`, in table order, built once: a `find` or `filter`
     per mark made the figures cubic in a table's rows. */
 export function groupBy<T>(rows: readonly T[], key: (row: T) => string): Map<string, T[]> {

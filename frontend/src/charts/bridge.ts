@@ -26,6 +26,7 @@ export interface BridgeStep {
   /** The step's own, as given (`WaterfallStep`). */
   color?: ChartColor;
   status?: string;
+  note?: string;
 }
 
 export const UNRECONCILED = "Unreconciled";
@@ -46,8 +47,8 @@ export function bridgeOf(steps: readonly WaterfallStep[]): BridgeStep[] {
   let level = 0n;
   read.forEach(({ step, value, reason }, index) => {
     const key = step.key ?? `${index}`;
-    const { label, kind, origin, color, status } = step;
-    const base = { key, label, kind, origin, color, status };
+    const { label, kind, origin, color, status, note } = step;
+    const base = { key, label, kind, origin, color, status, note };
     if (value === null) {
       out.push({ ...base, value: null, reason, start: null, end: null });
       return;

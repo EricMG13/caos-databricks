@@ -557,6 +557,39 @@ describe("a waterfall chart", () => {
     expect(rows[1]).toEqual(["Reported", "stated total", "50", "50", "", "model-authored"]);
   });
 
+  test("a step's note follows its amount in its name and its row", () => {
+    render(
+      <WaterfallChart
+        title="Liquidity bridge"
+        summary="Beginning to ending."
+        steps={[
+          { label: "Beginning", kind: "total", value: "50", origin: "model" },
+          {
+            label: "Cash interest",
+            kind: "delta",
+            value: "-5",
+            origin: "model",
+            note: "served 5, a use the method subtracts",
+          },
+        ]}
+      />,
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Cash interest: -5 (served 5, a use the method subtracts), running level 45 (model-authored)",
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const rows = within(screen.getByRole("table")).getAllByRole("row");
+    expect([...(rows[2] as HTMLTableRowElement).cells].map((cell) => cell.textContent)).toEqual([
+      "Cash interest",
+      "change",
+      "-5 (served 5, a use the method subtracts)",
+      "45",
+      "model-authored",
+    ]);
+  });
+
   test("a step of no known status keeps its pole, and the legend keeps the poles for it", () => {
     const { container } = render(
       <WaterfallChart
