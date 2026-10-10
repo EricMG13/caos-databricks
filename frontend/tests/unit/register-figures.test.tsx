@@ -6,14 +6,17 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   adjustedDebtBridge,
+  basketCapacity,
   cashUses,
   covenantHeadroom,
   ebitdaQuality,
   impliedEv,
   liquidityBridge,
   liquiditySources,
+  lmeExposure,
   peerRanges,
   rateMix,
+  recoveryByClass,
   refinancingWall,
   registerFigures,
   registerRows,
@@ -1330,4 +1333,212 @@ test("the stacked registers draw only for their own module", () => {
   const debt = register("T2F.2", RATES, [t2f2("Loan", c("1", "1"), "Fixed", "", "GBP")]);
   expect(rateMix(cp2dWith([debt]))).toEqual([]);
   expect(registerFigures({ ...cp2dWith([debt]), module_id: "CP-2E" })).toHaveLength(1);
+});
+
+function bars(figure: Figure) {
+  if (figure.kind !== "bars") throw new Error(`A ${figure.kind} figure, not grouped bars.`);
+  return figure;
+}
+const said = (figure: { series: { data: readonly unknown[] }[] }) =>
+  figure.series.map((series) => series.data);
+
+// CP-3C's T3D.8, as the profile declares it.
+const EXPOSURE = [
+  "Creditor Class",
+  "Exposure: Base Case",
+  "Exposure: Stress Case",
+  "Exposure: LME Case",
+  "Recovery Implication",
+  "Priming / Subordination Risk",
+  "Source Trace",
+];
+const t3d8 = (name: string, base: Served, stress: Served, lme: Served, trace: string) =>
+  [name, base, stress, lme, "Partial", "Low", trace].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const exposures = (rows: Served[][], module = "CP-3C") =>
+  lmeExposure({ ...cp2dWith([register("T3D.8", EXPOSURE, rows)]), module_id: module });
+
+test("lmeExposure: base, stress and LME grouped by class; a row of two units splits by cell", () => {
+  const figures = exposures([
+    t3d8("Senior secured", c("100", "100"), c("120", "120"), c("Not modelled"), "E-1"),
+    t3d8("Mezzanine", c("40%", "40"), c("30% [C2]", "30"), c("20%", "20"), "E-2"),
+    t3d8("Unsecured", c("50", "50"), c("70", "70"), c("90", "90"), "E-3"),
+    t3d8("Second lien", c("25", "25"), c("60%", "60"), c("TBD"), "E-4"),
+  ]).map(bars);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["lme-exposure", "Exposure by case", undefined],
+    ["lme-exposure-percent", "Exposure by case, %", "%"],
+  ]);
+  const [plain, percent] = figures;
+  expect(plain).toMatchObject({ table: "T3D.8", categoryLabel: "Creditor Class" });
+  expect(plain!.series.map((series) => [series.key, series.label])).toEqual([
+    ["base", "Base"],
+    ["stress", "Stress"],
+    ["lme", "LME"],
+  ]);
+  // A cell written in another unit is a gap here, drawn in its own unit's figure.
+  const elsewhere = (text: string) => ({
+    value: null,
+    reason: `${text}, drawn in its unit's figure`,
+  });
+  expect(plain!.categories).toEqual(["Senior secured", "Unsecured", "Second lien"]);
+  expect(said(plain!)).toEqual([
+    [{ value: "100" }, { value: "50" }, { value: "25" }],
+    [{ value: "120" }, { value: "70" }, elsewhere("60%")],
+    [{ value: null, reason: "Not modelled" }, { value: "90" }, { value: null, reason: "TBD" }],
+  ]);
+  expect(percent!.categories).toEqual(["Mezzanine", "Second lien"]);
+  expect(said(percent!)).toEqual([
+    [{ value: "40" }, elsewhere("25")],
+    [{ value: "30" }, { value: "60" }],
+    [{ value: "20" }, { value: null, reason: "TBD" }],
+  ]);
+  expect(percent!.summary).toBe(
+    "Exposure as served, Base / Stress / LME: Mezzanine 40 / 30 / 20;" +
+      " Second lien n/a (25, drawn in its unit's figure) / 60 / n/a (TBD).",
+  );
+  // A mark's index is its row's place in its own figure.
+  expect(percent!.sourceOf({ ...pick("base", "Second lien"), index: 1 })).toBe(
+    "Recovery Implication: Partial; Priming / Subordination Risk: Low; Source Trace: E-4",
+  );
+});
+
+// CP-4's T4C.5, as the profile declares it.
+const BASKETS = [
+  "Capacity Type",
+  "Basket / Test",
+  "Formula",
+  "Conditions",
+  "Current Input",
+  "Usage",
+  "Estimated Capacity",
+  "Remaining Capacity",
+  "Status",
+  "Severity",
+  "Risk Mechanic",
+  "Credit Implication",
+  "Evidence ID",
+];
+const t4c5 = (name: string, usage: Served, estimated: Served, remaining: Served) =>
+  ["Debt", name, "", "", "", usage, estimated, remaining, "Open", "Medium", "", "", "E-9"].map(
+    (cell) => (typeof cell === "string" ? c(cell) : cell),
+  );
+
+test("basketCapacity: usage stacked on remaining capacity, the estimate named, never drawn", () => {
+  const cp4 = (rows: Served[][], module = "CP-4") =>
+    basketCapacity({ ...cp2dWith([register("T4C.5", BASKETS, rows)]), module_id: module });
+  const figures = cp4([
+    t4c5("General basket", c("10", "10"), c("999", "999"), c("40", "40")),
+    t4c5("Leverage test", c("1.5x", "1.5"), c("2.0x", "2.0"), c("0.5x", "0.5")),
+    t4c5("Ratio debt", c("Not disclosed"), c("75", "75"), c("25", "25")),
+  ]).map(stack);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["basket-capacity", "Baskets, used and remaining", undefined],
+    ["basket-capacity-x", "Baskets, used and remaining, x", "x"],
+  ]);
+  const [plain] = figures;
+  expect(plain!.table).toBe("T4C.5");
+  expect(plain!.categories).toEqual(["General basket", "Ratio debt"]);
+  expect(plain!.series.map((series) => [series.key, series.label, series.data])).toEqual([
+    ["usage", "Usage", [{ value: "10" }, { value: null, reason: "Not disclosed" }]],
+    ["remaining", "Remaining Capacity", [{ value: "40" }, { value: "25" }]],
+  ]);
+  expect(plain!.summary).toBe(
+    "Baskets as served, Usage / Remaining Capacity:" +
+      " General basket 10 / 40; Ratio debt n/a (Not disclosed) / 25.",
+  );
+  expect(plain!.sourceOf(pick("usage", "General basket"))).toBe(
+    "Estimated Capacity: 999; Status: Open; Severity: Medium; Evidence ID: E-9",
+  );
+  expect(cp4([t4c5("General basket", c("1", "1"), c("2", "2"), c("1", "1"))], "CP-4C")).toEqual([]);
+});
+
+// CP-4C's T4E.7 and T4E.2, as the profile declares them.
+const RECOVERY = [
+  "scenario",
+  "class/instrument",
+  "allowed claim",
+  "cash/debt/equity/warrant value",
+  "total recovery",
+  "timing",
+  "currency",
+];
+const t4e7 = (scenario: string, name: string, claim: Served, total: Served, currency: string) =>
+  [scenario, name, claim, "60 / 20 / 10 / 0", total, "Exit", currency].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const CLAIMS = [
+  "class/claim ID",
+  "obligor",
+  "principal/accrued/PIK",
+  "currency",
+  "security/guarantee",
+  "priority",
+  "disputed/contingent",
+  "evidence",
+];
+
+test("recoveryByClass: claim beside recovery per scenario and currency; the packed value not drawn", () => {
+  const figures = recoveryByClass(
+    cp4cWith([
+      register("T4E.7", RECOVERY, [
+        t4e7("Base", "Senior", c("100", "100"), c("90", "90"), "USD"),
+        t4e7("Base", "Junior", c("50", "50"), c("10", "10"), "USD"),
+        t4e7("Base", "Euro notes", c("30", "30"), c("15", "15"), "EUR"),
+        t4e7("Downside", "Senior", c("100", "100"), c("TBD"), "USD"),
+      ]),
+    ]),
+  ).map(bars);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["recovery-by-class-0", "Recovery by class, Base, USD", "USD"],
+    ["recovery-by-class-1", "Recovery by class, Base, EUR", "EUR"],
+    ["recovery-by-class-2", "Recovery by class, Downside", "USD"],
+  ]);
+  const [usd, , downside] = figures;
+  expect(usd).toMatchObject({ table: "T4E.7", categoryLabel: "class/instrument" });
+  expect(usd!.categories).toEqual(["Senior", "Junior"]);
+  // N192: the packed column is never a series.
+  expect(usd!.series.map((series) => [series.key, series.label, series.data])).toEqual([
+    ["claim", "allowed claim", [{ value: "100" }, { value: "50" }]],
+    ["recovery", "total recovery", [{ value: "90" }, { value: "10" }]],
+  ]);
+  expect(usd!.summary).toBe(
+    "Recovery as served, allowed claim / total recovery: Senior 100 / 90; Junior 50 / 10.",
+  );
+  expect(downside!.series[1]!.data).toEqual([{ value: null, reason: "TBD" }]);
+  expect(usd!.sourceOf({ ...pick("claim", "Junior"), index: 1 })).toBe(
+    "timing: Exit; cash/debt/equity/warrant value: 60 / 20 / 10 / 0",
+  );
+});
+
+test("T4E.2 draws nothing: its one amount column packs principal, accrued and PIK (N192)", () => {
+  const row = ["Senior", "OpCo", "100 / 5 / 2", "USD", "First lien", "1", "No", "E-1"].map((cell) =>
+    c(cell),
+  );
+  expect(registerFigures(cp4cWith([register("T4E.2", CLAIMS, [row])]))).toEqual([]);
+});
+
+test("the grouped registers draw only for their own module, and past MAX_MARKS are stated", () => {
+  const exposure = register("T3D.8", EXPOSURE, [
+    t3d8("Senior", c("1", "1"), c("2", "2"), c("3", "3"), "E-1"),
+  ]);
+  const baskets = register("T4C.5", BASKETS, [
+    t4c5("Basket", c("1", "1"), c("2", "2"), c("1", "1")),
+  ]);
+  const recovery = register("T4E.7", RECOVERY, [
+    t4e7("Base", "Senior", c("1", "1"), c("1", "1"), "USD"),
+  ]);
+  const all = [exposure, baskets, recovery];
+  const keys = (module: string) =>
+    registerFigures({ ...cp2dWith(all), module_id: module }).map((figure) => figure.key);
+  expect(keys("CP-3C")).toEqual(["lme-exposure"]);
+  expect(keys("CP-4")).toEqual(["basket-capacity"]);
+  expect(keys("CP-4C")).toEqual(["recovery-by-class-0"]);
+  expect(exposures(exposure.rows, "CP-3D")).toEqual([]);
+  // Three bars a row: 667 rows are 2,001 marks.
+  const many = Array.from({ length: 667 }, (_, index) =>
+    t3d8(`Class ${index}`, c("1", "1"), c("1", "1"), c("1", "1"), "E-1"),
+  );
+  expect(exposures(many)[0]).toMatchObject({ oversized: true, key: "lme-exposure" });
 });

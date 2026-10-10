@@ -10,6 +10,8 @@ import {
   formatDecimal,
   type ChartColor,
   type ChartSelection,
+  type ChartSeries,
+  type Datum,
   type RangeRow,
   type WaterfallStep,
 } from "@/charts";
@@ -111,11 +113,11 @@ interface Head {
   unit: string | undefined;
 }
 
-/** How a register's rows split into figures: a row's group (none: the
-    figure whose key and title carry no suffix), the suffix a group adds to
-    its figure's key and title, and the figure's unit. */
+/** How a register's rows split into figures: a row's groups, each once
+    (none: the figure whose key and title carry no suffix), the suffix a
+    group adds to its figure's key and title, and the figure's unit. */
 interface Grouping<G extends string> {
-  of: (row: Row) => G | undefined;
+  of: (row: Row) => readonly (G | undefined)[];
   key: (group: G) => string;
   title: (group: G) => string;
   unit: (group: G) => string | undefined;
@@ -123,18 +125,44 @@ interface Grouping<G extends string> {
 
 const UNIT_KEY: Record<Unit, string> = { x: "x", "%": "percent" };
 
+const BY_UNIT = {
+  key: (unit: Unit) => UNIT_KEY[unit],
+  title: (unit: Unit) => unit,
+  unit: (unit: Unit) => unit,
+};
+
 /** Rows grouped by the unit their figure is written in, `x` or `%`. */
 const bySuffix = (unitOf: (row: Row) => Unit | undefined): Grouping<Unit> => ({
-  of: unitOf,
-  key: (unit) => UNIT_KEY[unit],
-  title: (unit) => unit,
-  unit: (unit) => unit,
+  of: (row) => [unitOf(row)],
+  ...BY_UNIT,
 });
+
+/** Rows grouped by the units their `columns`' figures are written in. A row
+    whose cells agree joins that unit's figure; one whose cells disagree
+    joins each of its units' figures, a cell drawn only in its own unit's and
+    a gap naming it in the others (`inUnit`): no unit is invented and no axis
+    holds two. A row stating no figure joins the figure of no unit. */
+const byCellUnits = (columns: readonly string[]): Grouping<Unit> => ({
+  of: (row) => {
+    const units = columns.filter((column) => row[column]?.value != null);
+    return units.length ? [...new Set(units.map((column) => suffixOf(row[column])))] : [undefined];
+  },
+  ...BY_UNIT,
+});
+
+/** A cell as the figure of unit `at` draws it: its figure where written in
+    `at`, else a gap naming it, drawn in its own unit's figure. */
+function inUnit(cell: Cell | undefined, at: Unit | undefined): Datum {
+  if (cell?.value != null && suffixOf(cell) !== at) {
+    return { value: null, reason: `${cell.text}, drawn in its unit's figure` };
+  }
+  return datum(cell);
+}
 
 /** Rows grouped by their `Currency`, as written: one currency's amounts
     never share an axis with another's. */
 const BY_CURRENCY: Grouping<string> = {
-  of: (row) => text(row, "Currency") || undefined,
+  of: (row) => [text(row, "Currency") || undefined],
   key: (currency) => currency,
   title: (currency) => currency,
   unit: (currency) => currency,
@@ -146,17 +174,23 @@ function groupsOf<G extends string>(
   rows: readonly Row[],
   base: { key: string; table: string; title: string },
   grouping: Grouping<G>,
-): { entries: Entry[]; head: Head }[] {
-  const entries = rows.map((row, index) => ({ row, index }));
-  return [...groupBy(entries, (entry) => grouping.of(entry.row) ?? "").values()].map((group) => {
-    const at = grouping.of(group[0]!.row);
+): { entries: Entry[]; head: Head; at: G | undefined }[] {
+  const groups = new Map<G | undefined, Entry[]>();
+  rows.forEach((row, index) => {
+    for (const at of grouping.of(row)) {
+      const group = groups.get(at);
+      if (group) group.push({ row, index });
+      else groups.set(at, [{ row, index }]);
+    }
+  });
+  return [...groups].map(([at, group]) => {
     const head = {
       key: at ? `${base.key}-${grouping.key(at)}` : base.key,
       table: base.table,
       title: at ? `${base.title}, ${grouping.title(at)}` : base.title,
       unit: at ? grouping.unit(at) : undefined,
     };
-    return { entries: group, head };
+    return { entries: group, head, at };
   });
 }
 
@@ -758,11 +792,167 @@ export function refinancingWall(handoff: HandoffView): Figure[] {
   });
 }
 
+/** A series read from a register column, keyed and labelled. */
+interface ColumnSeries {
+  key: string;
+  label: string;
+  column: string;
+}
+
+/** A series per column, a datum per entry as `read` draws its cell. */
+const columnSeries = (
+  entries: readonly Entry[],
+  columns: readonly ColumnSeries[],
+  read: (cell: Cell | undefined) => Datum,
+): ChartSeries[] =>
+  columns.map(({ key, label, column }) => ({
+    key,
+    label,
+    origin: "model",
+    data: entries.map(({ row }) => read(row[column])),
+  }));
+
+/** "Exposure as served, Base / Stress: Senior 100 / n/a (TBD); …": each
+    category's values, as drawn. */
+function seriesSummary(noun: string, categories: readonly string[], series: ChartSeries[]) {
+  const say = (value: Datum | undefined) =>
+    value?.value != null ? formatDecimal(value.value) : `n/a (${value?.reason ?? "not stated"})`;
+  const rows = categories.map(
+    (category, index) => `${category} ${series.map((one) => say(one.data[index])).join(" / ")}`,
+  );
+  return `${noun} as served, ${series.map((one) => one.label).join(" / ")}: ${rows.join("; ")}.`;
+}
+
+/** How a register is drawn a series per column: as grouped bars or a stack,
+    the column naming each row's category, the series, what the summary calls
+    the values, and the columns a mark's source states. */
+interface ColumnFigure {
+  kind: "bars" | "stack";
+  category: string;
+  columns: readonly ColumnSeries[];
+  noun: string;
+  source: readonly string[];
+}
+
+/** A figure of `entries`, a category a row and a series a column, every
+    value as served; past `MAX_MARKS` it is stated, not drawn. */
+function columnFigure(
+  entries: readonly Entry[],
+  head: Head,
+  spec: ColumnFigure,
+  read: (cell: Cell | undefined) => Datum,
+): Figure {
+  const marks = entries.length * spec.columns.length;
+  if (marks > MAX_MARKS) return oversized(head.key, head.table, head.title, marks);
+  const categories = entries.map(({ row }) => text(row, spec.category));
+  const series = columnSeries(entries, spec.columns, read);
+  const sourceOf = (selection: ChartSelection) => {
+    const row = pickedRow(entries, selection);
+    return row ? stated(row, spec.source) : null;
+  };
+  const summary = seriesSummary(spec.noun, categories, series);
+  const figure = { ...head, categories, series, summary, sourceOf };
+  return spec.kind === "bars"
+    ? { ...figure, kind: "bars", categoryLabel: spec.category }
+    : { ...figure, kind: "stack" };
+}
+
+/** A register drawn a series per column, a figure per unit its `columns`'
+    cells are written in. */
+function byUnitFigures(rows: readonly Row[], base: Omit<Head, "unit">, spec: ColumnFigure) {
+  const grouping = byCellUnits(spec.columns.map(({ column }) => column));
+  return groupsOf(rows, base, grouping).map(({ entries, head, at }) =>
+    columnFigure(entries, head, spec, (cell) => inUnit(cell, at)),
+  );
+}
+
+/** CP-3C's exposure by case (`T3D.8`): each creditor class's base, stress
+    and LME exposure, side by side. */
+export function lmeExposure(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-3C", "T3D.8");
+  if (!rows?.length) return [];
+  return byUnitFigures(
+    rows,
+    { key: "lme-exposure", table: "T3D.8", title: "Exposure by case" },
+    {
+      kind: "bars",
+      category: "Creditor Class",
+      columns: [
+        { key: "base", label: "Base", column: "Exposure: Base Case" },
+        { key: "stress", label: "Stress", column: "Exposure: Stress Case" },
+        { key: "lme", label: "LME", column: "Exposure: LME Case" },
+      ],
+      noun: "Exposure",
+      source: ["Recovery Implication", "Priming / Subordination Risk", "Source Trace"],
+    },
+  );
+}
+
+/** CP-4's basket capacity (`T4C.5`): each basket's usage stacked on its
+    remaining capacity. Its `Estimated Capacity` is named in a mark's source,
+    never drawn, nor checked against the two. */
+export function basketCapacity(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-4", "T4C.5");
+  if (!rows?.length) return [];
+  return byUnitFigures(
+    rows,
+    { key: "basket-capacity", table: "T4C.5", title: "Baskets, used and remaining" },
+    {
+      kind: "stack",
+      category: "Basket / Test",
+      columns: [
+        { key: "usage", label: "Usage", column: "Usage" },
+        { key: "remaining", label: "Remaining Capacity", column: "Remaining Capacity" },
+      ],
+      noun: "Baskets",
+      source: ["Estimated Capacity", "Status", "Severity", "Evidence ID"],
+    },
+  );
+}
+
+/** CP-4C's recovery by class (`T4E.7`): per scenario and currency, each
+    class's allowed claim beside its total recovery. The packed
+    `cash/debt/equity/warrant value` holds several figures the bundle's
+    reader cannot split (N192): a mark's source states it, nothing draws it.
+    CP-4C's `T4E.2` draws nothing for the same reason: its one amount column,
+    `principal/accrued/PIK`, packs three. */
+export function recoveryByClass(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-4C", "T4E.7");
+  if (!rows?.length) return [];
+  const entries = rows.map((row, index) => ({ row, index }));
+  const groups = [
+    ...groupBy(entries, ({ row }) => pair(text(row, "scenario"), text(row, "currency"))).values(),
+  ];
+  const currencies = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
+  return groups.map((group, n) => {
+    const [scenario, currency] = [text(group[0]!.row, "scenario"), text(group[0]!.row, "currency")];
+    const named = currencies.get(scenario)!.length > 1 && currency ? `, ${currency}` : "";
+    const head = {
+      key: `recovery-by-class-${n}`,
+      table: "T4E.7",
+      title: `Recovery by class, ${scenario}${named}`,
+      unit: currency || undefined,
+    };
+    const spec: ColumnFigure = {
+      kind: "bars",
+      category: "class/instrument",
+      columns: [
+        { key: "claim", label: "allowed claim", column: "allowed claim" },
+        { key: "recovery", label: "total recovery", column: "total recovery" },
+      ],
+      noun: "Recovery",
+      source: ["timing", "cash/debt/equity/warrant value"],
+    };
+    return columnFigure(group, head, spec, datum);
+  });
+}
+
 /** Every figure a handoff's registers support, in reading order. A handoff
     is one module's, so only its own module's figures draw for it. */
 export function registerFigures(handoff: HandoffView): Figure[] {
   return [
     ...covenantHeadroom(handoff),
+    ...basketCapacity(handoff),
     ...peerRanges(handoff),
     ...impliedEv(handoff),
     ...ebitdaQuality(handoff),
@@ -772,6 +962,8 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...liquidityBridge(handoff),
     ...rateMix(handoff),
     ...refinancingWall(handoff),
+    ...lmeExposure(handoff),
     ...valueAllocation(handoff),
+    ...recoveryByClass(handoff),
   ];
 }

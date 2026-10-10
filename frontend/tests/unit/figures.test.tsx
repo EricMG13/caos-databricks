@@ -975,6 +975,24 @@ test("pressing a covenant's bar names its current basis and stated source", () =
   );
 });
 
+test("grouped bars draw a bar per case, each named and pressed for its class", () => {
+  const columns = ["Creditor Class", "Exposure: Base Case", "Exposure: Stress Case"];
+  const exposure: Register = {
+    register_id: "T3D.8",
+    columns,
+    declared: columns,
+    rows: [[served("Senior secured"), served("100", "100"), served("120", "120")]],
+  };
+  const container = shown({ ...handoffOf("CP-4"), module_id: "CP-3C", registers: [exposure] });
+  const figure = container.querySelector("[data-figure='lme-exposure']") as HTMLElement;
+  expect(figure.querySelector("[data-chart='bar']")).not.toBeNull();
+  fireEvent.click(within(figure).getByRole("button", { name: /^Stress, Senior secured: 120/ }));
+  const picked = container.querySelector("[data-picked]")!;
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("120");
+  expect(picked).toHaveTextContent("Stress · Senior secured");
+  expect(picked).toHaveTextContent("T3D.8");
+});
+
 test("the figures' key keys a rule and a dot only where one is drawn", () => {
   const key = (container: HTMLElement) =>
     container.querySelector("[data-figures-key]")!.textContent ?? "";

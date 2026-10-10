@@ -101,6 +101,15 @@ export interface StackFigure extends FigureBase {
   series: ChartSeries[];
 }
 
+/** A bar per series in each category, grouped side by side. */
+export interface BarsFigure extends FigureBase {
+  kind: "bars";
+  categories: string[];
+  series: ChartSeries[];
+  /** What the categories are, heading the table twin. */
+  categoryLabel?: string;
+}
+
 /** A line per series over categories. */
 export interface LineFigure extends FigureBase {
   kind: "line";
@@ -144,7 +153,13 @@ export interface RangeFigure extends FigureBase {
 /** One figure: what it shows, drawn by which chart, from which table. Each
     kind carries its own rows, so a figure without them does not build. */
 export type Figure =
-  StackFigure | LineFigure | DivergingFigure | WaterfallFigure | BulletFigure | RangeFigure;
+  | StackFigure
+  | BarsFigure
+  | LineFigure
+  | DivergingFigure
+  | WaterfallFigure
+  | BulletFigure
+  | RangeFigure;
 
 /** A figure past this many marks is stated, not drawn, and past this many
     figures a module's are stated too. The tables are model-authored and may
