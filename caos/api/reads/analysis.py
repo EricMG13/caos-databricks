@@ -50,6 +50,7 @@ from caos.api.wire import (
     PendingNode,
     RectView,
     RefusalBody,
+    RegisterView,
     RunSubjectView,
     SectionNote,
     ServedRole,
@@ -68,7 +69,7 @@ from caos.graph.route import (
     ResolvedRoute,
     node_states,
 )
-from caos.methodology.bundle import Bundle, module_display_names
+from caos.methodology.bundle import Bundle, module_display_names, verified_bytes
 from caos.methodology.canonical import accepted_handoff
 from caos.methodology.handoff import (
     CanonicalRecord,
@@ -76,7 +77,12 @@ from caos.methodology.handoff import (
     read_blocked_citations,
 )
 from caos.methodology.invocation import named_objects
-from caos.methodology.tables import HandoffTable, handoff_tables
+from caos.methodology.tables import (
+    HandoffRegister,
+    HandoffTable,
+    handoff_registers,
+    handoff_tables,
+)
 from caos.methodology.vendor import cached_contract
 from caos.methodology.verification import AcceptedRow
 from caos.refusals import Refusal, RefusalCode
@@ -124,6 +130,13 @@ BLOCKED_QUOTES_BLOBS = 1
 BLOB_BUDGET = LONGEST_ROUTE_NODES * PER_HANDOFF_BLOBS + BLOCKED_QUOTES_BLOBS
 # A handoff's tables cost neither: they are read from the Markdown this request
 # already downloaded and verified, by the contract `accepted_handoff` compiled.
+# Its registers cost no store or blob read either: the module's `SKILL.md` is
+# the bundle's own tree, verified on disk (or the host's own, for CP-CF). They
+# do cost disk and CPU: each handoff's registers read and hash that `SKILL.md`
+# and re-verify the bundle manifest (`verified_bytes` -> `bundle.verify_manifest`),
+# a second time after `verify_accepted`'s. And CPU: the read locates registers
+# twice per handoff, once in `verify_accepted`'s `check()` and once here,
+# measured 1.7 ms against `check()`'s 2.1 ms on the CP-1A fixture.
 
 router = APIRouter()
 
@@ -525,9 +538,19 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
         derived = handoff_tables(cached_contract(bundle), markdown)
         tables = [_table_view(table) for table in derived.tables]
         tables_unavailable_reason = derived.unavailable_reason
+        located = handoff_registers(
+            cached_contract(bundle),
+            verified_bytes(bundle, projections.module_id, "SKILL.md").decode("utf-8"),
+            projections.module_id,
+            markdown,
+        )
+        registers = [_register_view(register) for register in located.registers]
+        registers_unavailable_reason = located.unavailable_reason
     else:
         tables = []
         tables_unavailable_reason = None
+        registers = []
+        registers_unavailable_reason = None
     return HandoffView(
         route_node_id=route_node_id,
         module_id=projections.module_id,
@@ -556,6 +579,8 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
         ),
         tables=tables,
         tables_unavailable_reason=tables_unavailable_reason,
+        registers=registers,
+        registers_unavailable_reason=registers_unavailable_reason,
     )
 
 
@@ -566,6 +591,18 @@ def _table_view(table: HandoffTable) -> TableView:
         rows=[
             [CellView(text=cell.text, value=cell.value) for cell in row]
             for row in table.rows
+        ],
+    )
+
+
+def _register_view(register: HandoffRegister) -> RegisterView:
+    return RegisterView(
+        register_id=register.register_id,
+        columns=list(register.columns),
+        declared=list(register.declared),
+        rows=[
+            [CellView(text=cell.text, value=cell.value) for cell in row]
+            for row in register.rows
         ],
     )
 

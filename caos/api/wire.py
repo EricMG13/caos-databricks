@@ -882,6 +882,25 @@ class TableView(BaseModel):
     ]
 
 
+class RegisterView(BaseModel):
+    """One register the module's output profile declares, located by the
+    bundle's own `_locate_registers` (`find_registers`' body): the header
+    exactly as written, `declared` the profile column the bundle binds to each
+    header cell (`None` where it binds none), then every row in header order."""
+
+    model_config = _CLOSED
+
+    register_id: Annotated[
+        str, Field(max_length=TABLE_ID_CHARS, pattern=r"^[A-Za-z0-9_.]+$")
+    ]
+    columns: Annotated[list[CellText], Field(max_length=TABLE_COLUMNS_MAX)]
+    declared: Annotated[list[CellText | None], Field(max_length=TABLE_COLUMNS_MAX)]
+    rows: Annotated[
+        list[Annotated[list[CellView], Field(max_length=TABLE_COLUMNS_MAX)]],
+        Field(max_length=TABLE_ROWS_MAX),
+    ]
+
+
 class HandoffView(BaseModel):
     """One accepted handoff, labelled per §46.3."""
 
@@ -916,6 +935,11 @@ class HandoffView(BaseModel):
     # when the bundle's reader refused them or they are past a bound.
     tables: Annotated[list[TableView], Field(max_length=TABLES_MAX)]
     tables_unavailable_reason: TablesUnavailable | None
+    # The registers the module's output profile declares (N94), derived the
+    # same way and with the same standing: model-authored, empty with a reason
+    # when the bundle's reader refused them or they are past a bound.
+    registers: Annotated[list[RegisterView], Field(max_length=TABLES_MAX)]
+    registers_unavailable_reason: TablesUnavailable | None
 
 
 class PendingNode(BaseModel):

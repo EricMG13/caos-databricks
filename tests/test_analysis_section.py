@@ -15,7 +15,7 @@ from dataclasses import replace
 from uuid import UUID, uuid4
 
 import pytest
-from canonical_fixtures import CATALOG
+from canonical_fixtures import CATALOG, CONTRACT
 from conftest import priced, tamper
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -34,8 +34,10 @@ from caos.boundary_text import BoundaryText
 from caos.evidence.citations import ANY_RUN, EXCERPT, WHOLE_LINE, AnchoredCitation
 from caos.graph.route import RouteExtensions, resolve_route
 from caos.graph.runtime import Execution, run_route
+from caos.methodology.bundle import verified_bytes
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.methodology.runner import ModuleProvider
+from caos.methodology.tables import handoff_registers
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.gates import withdraw_source
@@ -174,6 +176,17 @@ def test_analysis_labels_source_facts_model_analysis_and_no_host_calculation(
         assert handoff.model_analysis.encode() == harness.blobs.get(artifact)
         # No LITE module's contract names a tagged table, and none is invented.
         assert (handoff.tables, handoff.tables_unavailable_reason) == ([], None)
+        # The registers are the host reader's own over the same bytes (N94).
+        located = handoff_registers(
+            CONTRACT,
+            verified_bytes(harness.bundle, handoff.module_id, "SKILL.md").decode(),
+            handoff.module_id,
+            handoff.model_analysis,
+        )
+        assert handoff.registers_unavailable_reason == located.unavailable_reason
+        assert [r.register_id for r in handoff.registers] == [
+            r.register_id for r in located.registers
+        ]
         [fact] = handoff.source_facts
         assert fact.filename == "report.txt"
         # The pinned live source the page endpoint is addressed by (4.4a).

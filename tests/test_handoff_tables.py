@@ -23,10 +23,13 @@ from caos.api.wire import AnalysisDocument, CellView, TableView
 from caos.methodology import tables
 from caos.methodology.bundle import verified_bytes
 from caos.methodology.tables import (
+    HandoffRegister,
+    HandoffRegisters,
     HandoffTable,
     HandoffTables,
     TableCell,
     figure_value,
+    handoff_registers,
     handoff_tables,
 )
 
@@ -323,6 +326,11 @@ def test_the_demo_fixtures_carry_exactly_the_tables_their_markdown_derives(
         derived = handoff_tables(CONTRACT, handoff["model_analysis"])
         assert handoff["tables"] == _served(derived), handoff["module_id"]
         assert handoff["tables_unavailable_reason"] == derived.unavailable_reason
+        # N191: the demo serves no register rows, whatever its Markdown holds.
+        assert (handoff["registers"], handoff["registers_unavailable_reason"]) == (
+            [],
+            None,
+        )
 
 
 def _stable_columns() -> dict[str, set[str]]:
@@ -359,3 +367,182 @@ def test_the_demo_cp1_tables_carry_the_bundles_column_names_literally() -> None:
         # In the order and spelling REF_CP-1_13 declares them.
         assert "`" + " | ".join(columns) + "`" in reference, table_id
         assert set(columns) == stable.get(table_id, set(columns)), table_id
+
+
+def _skill(module_id: str) -> str:
+    return verified_bytes(BUNDLE, module_id, "SKILL.md").decode("utf-8")
+
+
+def _register(heading: str, columns: list[str], rows: list[list[str]]) -> str:
+    lines = [heading, "", "| " + " | ".join(columns) + " |"]
+    lines.append("| " + " | ".join("---" for _ in columns) + " |")
+    lines += ["| " + " | ".join(row) + " |" for row in rows]
+    return "\n".join(lines) + "\n\n"
+
+
+HEADROOM = [
+    *("Test", "Test Type", "Threshold", "Current Basis", "Formula", "Headroom (x)"),
+    *("Status", "Limitation", "Risk Mechanic", "Credit Implication", "Evidence ID"),
+]
+
+
+def test_a_register_is_served_under_its_id_with_the_columns_the_bundle_binds() -> None:
+    rows = [
+        [
+            *("Net leverage", "Maintenance", "5.00x", "3.50x", "Net debt / EBITDA"),
+            *("1.50x", "Pass", "None", "Margin squeeze", "Low PD", "E1"),
+        ],
+        [
+            *("Interest cover", "Incurrence", "2.00x"),
+            "[Insufficient Information] \u2014 current tested ratio",
+            *("EBITDA / interest", "n/a", "Untested", "No Q4 accounts"),
+            *("Rate rise", "Watch", "E2"),
+        ],
+    ]
+    markdown = "## Analysis\n\n" + _register(
+        "### T4C.4 \u2014 Covenant headroom", HEADROOM, rows
+    )
+
+    found = handoff_registers(CONTRACT, _skill("CP-4"), "CP-4", markdown)
+
+    assert found.unavailable_reason is None
+    [register] = found.registers
+    assert register.register_id == "T4C.4"
+    assert register.columns == tuple(HEADROOM)
+    assert register.declared == tuple(
+        "Headroom" if c == "Headroom (x)" else c for c in HEADROOM
+    )
+    assert register.rows == tuple(
+        tuple(TableCell(cell, figure_value(CONTRACT, cell)) for cell in row)
+        for row in rows
+    )
+    assert register.rows[0][2] == TableCell("5.00x", "5.00")
+    assert register.rows[1][3] == TableCell(
+        "[Insufficient Information] \u2014 current tested ratio", None
+    )
+
+
+def test_a_template_column_binds_no_declared_column() -> None:
+    markdown = _register(
+        "### T4.6 \u2014 Cash flow statement",
+        ["Line Item", "FY2024", "FY2025"],
+        [["Operating cash flow", "120", "(45)"]],
+    )
+
+    found = handoff_registers(CONTRACT, _skill("CP-1"), "CP-1", markdown)
+
+    assert found == HandoffRegisters(
+        (
+            HandoffRegister(
+                "T4.6",
+                ("Line Item", "FY2024", "FY2025"),
+                ("Line Item", None, None),
+                (
+                    (
+                        TableCell("Operating cash flow", None),
+                        TableCell("120", "120"),
+                        TableCell("(45)", "-45"),
+                    ),
+                ),
+            ),
+        ),
+        None,
+    )
+
+
+def test_registers_come_back_in_the_profiles_order_and_only_those_written() -> None:
+    # Written T4.6 first; the profile declares T4.4 first; T4.5 is not written.
+    markdown = _register(
+        "### T4.6 \u2014 Cash flow statement", ["Line Item", "FY2025"], [["Capex", "9"]]
+    ) + _register(
+        "### T4.4 \u2014 Income statement", ["Line Item", "FY2025"], [["Revenue", "7"]]
+    )
+
+    found = handoff_registers(CONTRACT, _skill("CP-1"), "CP-1", markdown)
+
+    assert [r.register_id for r in found.registers] == ["T4.4", "T4.6"]
+    assert found.unavailable_reason is None
+
+
+def test_a_skill_with_no_output_profile_declares_no_registers() -> None:
+    markdown = _register("### T4.6", ["Line Item", "FY2025"], [["Capex", "9"]])
+    assert handoff_registers(
+        CONTRACT, "# A skill\n\nNo profile here.\n", "CP-1", markdown
+    ) == HandoffRegisters((), None)
+
+
+def test_a_register_past_a_bound_serves_none_as_tables_too_large() -> None:
+    def written(rows: int) -> str:
+        return _register("### T4.6", ["Line Item", "FY2025"], [["Capex", "9"]] * rows)
+
+    skill = _skill("CP-1")
+    at_bound = handoff_registers(
+        CONTRACT, skill, "CP-1", written(tables.TABLE_ROWS_MAX)
+    )
+    assert at_bound.unavailable_reason is None
+    assert len(at_bound.registers[0].rows) == tables.TABLE_ROWS_MAX
+    past = handoff_registers(
+        CONTRACT, skill, "CP-1", written(tables.TABLE_ROWS_MAX + 1)
+    )
+    assert past == HandoffRegisters((), "TABLES_TOO_LARGE")
+
+
+def test_every_declared_register_id_fits_the_wires_table_id() -> None:
+    checker = CONTRACT.completeness_check
+    ids: list[str] = []
+    for module_id in BUNDLE.physical_modules():
+        text = _skill(module_id)
+        for profile in checker.profile_bodies(text):
+            ids += checker.load_contract(text, profile)["registers"]
+    assert ids
+    for register_id in ids:
+        assert re.fullmatch(r"[A-Za-z0-9_.]+", register_id), register_id
+        assert len(register_id) <= tables.TABLE_ID_CHARS, register_id
+
+
+def test_a_register_row_of_another_width_than_its_header_is_malformed() -> None:
+    # Threshold left out: the vendor pads the row, so `3.50x` would sit under
+    # Threshold and `E1` under Notes.
+    row = [
+        *("Net leverage", "Maintenance", "3.50x", "Net debt / EBITDA", "1.50x"),
+        *("Pass", "None", "Margin squeeze", "Low PD", "E1"),
+    ]
+    markdown = _register(
+        "### T4C.4 \u2014 Covenant headroom", [*HEADROOM, "Notes"], [row]
+    )
+    found = handoff_registers(CONTRACT, _skill("CP-4"), "CP-4", markdown)
+    assert found == HandoffRegisters((), "TABLES_MALFORMED")
+
+
+@pytest.mark.parametrize(
+    "header",
+    [["Line Item", "FY2025", "FY2025"], ["Line Item", "", "FY2025"]],
+    ids=["repeated", "empty"],
+)
+def test_a_register_header_with_a_repeated_or_empty_cell_is_malformed(
+    header: list[str],
+) -> None:
+    markdown = _register("### T4.6", header, [["Capex", "9", "11"]])
+    found = handoff_registers(CONTRACT, _skill("CP-1"), "CP-1", markdown)
+    assert found == HandoffRegisters((), "TABLES_MALFORMED")
+
+
+def test_a_cell_two_columns_claim_is_declared_to_the_one_it_spells() -> None:
+    # Without `Test`, the bundle binds `Test` to the `Test Type` cell too.
+    header = HEADROOM[1:]
+    row = [
+        *("Maintenance", "5.00x", "3.50x", "Net debt / EBITDA", "1.50x"),
+        *("Pass", "None", "Margin squeeze", "Low PD", "E1"),
+    ]
+    markdown = _register("### T4C.4 \u2014 Covenant headroom", header, [row])
+    [register] = handoff_registers(CONTRACT, _skill("CP-4"), "CP-4", markdown).registers
+    assert register.declared[0] == "Test Type"
+    assert "Test" not in register.declared
+
+
+@pytest.mark.parametrize("letter", ["\u0130", "\u0131"])
+def test_a_vendor_exception_on_the_answer_is_malformed(letter: str) -> None:
+    # The locator's title match is case-insensitive where its lookup casefolds.
+    markdown = _register(f"#### Company descr{letter}ption", ["a", "b"], [["1", "2"]])
+    found = handoff_registers(CONTRACT, _skill("CP-1A"), "CP-1A", markdown)
+    assert found == HandoffRegisters((), "TABLES_MALFORMED")

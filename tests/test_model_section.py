@@ -209,6 +209,36 @@ def test_analysis_serves_the_tagged_tables_each_owner_wrote(
     assert bounded["CP-1"]["tables"] == cp1["tables"]
 
 
+def test_analysis_serves_the_registers_each_modules_profile_declares(
+    client: TestClient, harness: _Harness
+) -> None:
+    """N94: CP-4's `T4C.4` is read from its accepted Markdown by the bundle's
+    locator, with the profile column the bundle binds to each header cell; CP-CF
+    (the host's own `SKILL.md`) serves no register and no refusal."""
+    _complete(harness)
+    response = client.get(
+        f"/api/v1/cases/{harness.case_id}/analysis", headers=_as(harness.approver)
+    )
+    harness.conn.rollback()
+    assert response.status_code == 200, response.json()
+    served = {h["module_id"]: h for h in response.json()["body"]["handoffs"]}
+
+    cp4 = served["CP-4"]
+    assert cp4["registers_unavailable_reason"] is None
+    [register] = [r for r in cp4["registers"] if r["register_id"] == "T4C.4"]
+    profile = CONTRACT.completeness_check.load_contract(skill("CP-4").decode(), "CP-4")
+    expected = profile["registers"]["T4C.4"]["columns"]
+    assert register["columns"] == expected
+    assert register["declared"] == expected
+    [row] = register["rows"]
+    assert [cell["text"] for cell in row][:3] == ["Net leverage", "maintenance", "4.0x"]
+    assert set(register) == {"register_id", "columns", "declared", "rows"}
+    assert (
+        served["CP-CF"]["registers"],
+        served["CP-CF"]["registers_unavailable_reason"],
+    ) == ([], None)
+
+
 def test_read_analysis_without_tables_matches_read_analysis_but_the_tables(
     harness: _Harness,
 ) -> None:
@@ -237,10 +267,17 @@ def test_read_analysis_without_tables_matches_read_analysis_but_the_tables(
     )
     assert len(lean.body.handoffs) == len(served.body.handoffs)
     for bare, full in zip(lean.body.handoffs, served.body.handoffs, strict=True):
-        stripped = {"tables", "tables_unavailable_reason"}
+        stripped = {
+            "tables",
+            "tables_unavailable_reason",
+            "registers",
+            "registers_unavailable_reason",
+        }
         assert bare.model_dump(exclude=stripped) == full.model_dump(exclude=stripped)
         assert (bare.tables, bare.tables_unavailable_reason) == ([], None)
+        assert (bare.registers, bare.registers_unavailable_reason) == ([], None)
     assert any(h.tables for h in served.body.handoffs)
+    assert any(h.registers for h in served.body.handoffs)
 
 
 def test_model_reads_the_analysis_route_without_deriving_its_tables(

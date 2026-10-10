@@ -14,6 +14,17 @@ spelling read again with `Decimal`, never through the vendor's float
 (invariant 7), and served in plain notation at the cell's own scale. A figure
 whose exact value would not fit the wire's bound has no value; its text stands.
 
+A register is the other machine interface: a pipe table a module's output
+profile declares (`T4C.4`), found under the heading that names it, tagged or
+not. The host reads registers with the bundle's own locator, the one the
+acceptance check ran (`completeness_check._locate_registers`,
+`find_registers`' own body, which also returns each row's cell count), so a
+reader sees the table the gate verified and no second reading of the answer.
+Each header cell carries the profile's column the bundle binds to it, so a
+reader keys a figure by the column the method declares (`Headroom`), not by
+however the model spelt it (`Headroom (x)`). The same bounds and the same cells
+hold as for a tagged table.
+
 Pure: no I/O. A vendor exception never leaves here, and its message, which can
 quote the document, is never read (invariant 2).
 """
@@ -21,9 +32,10 @@ quote the document, is never read (invariant 2).
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from caos.methodology.citation_markers import unmarked
 from caos.methodology.vendor import VendorContract
@@ -82,6 +94,27 @@ class HandoffTables:
     unavailable_reason: TablesUnavailable | None
 
 
+@dataclass(frozen=True, slots=True)
+class HandoffRegister:
+    """One declared register: its id, its header as written, per header cell
+    the profile column the bundle binds to it (None for a cell only a template
+    column such as `Period 1…N` stands for, or one two contract columns claim
+    where none spells it), and every row in header order."""
+
+    register_id: str
+    columns: tuple[str, ...]
+    declared: tuple[str | None, ...]
+    rows: tuple[tuple[TableCell, ...], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class HandoffRegisters:
+    """Every declared register a handoff writes, or none and the reason why."""
+
+    registers: tuple[HandoffRegister, ...]
+    unavailable_reason: TablesUnavailable | None
+
+
 class _VendorTable(Protocol):
     """`cp_tables.Table`, as far as this module reads it."""
 
@@ -103,9 +136,69 @@ def handoff_tables(contract: VendorContract, markdown: str) -> HandoffTables:
     except ValueError:
         return HandoffTables((), "TABLES_MALFORMED")
     tables: list[_VendorTable] = list(parsed.values())
-    if len(tables) > TABLES_MAX or not all(_bounded(table) for table in tables):
+    if len(tables) > TABLES_MAX or not all(
+        _bounded(table.table_id, table.columns, table.rows) for table in tables
+    ):
         return HandoffTables((), "TABLES_TOO_LARGE")
     return HandoffTables(tuple(_table(contract, table) for table in tables), None)
+
+
+def handoff_registers(
+    contract: VendorContract, skill: str, module_id: str, markdown: str
+) -> HandoffRegisters:
+    """Every register `module_id`'s output profile in `skill` declares that
+    `markdown` writes, in the profile's order, located as the bundle locates it.
+
+    A skill with no output profile declares no registers: that is no table, not
+    a refusal. `TABLES_MALFORMED` where a located register is not a table a
+    reader can key -- a header cell empty or repeated, a row of another width
+    than its header, the rules `parse_tables` holds a tagged table to -- or
+    where the locator raised on the answer's text; `TABLES_TOO_LARGE` past a
+    bound. Both serve no register at all, since a partial set would read as
+    the whole one.
+    """
+    checker = contract.completeness_check
+    try:
+        loaded = checker.load_contract(skill, module_id)
+    except ValueError:  # the skill declares no `## Output profile` for the module
+        return HandoffRegisters((), None)
+    specs: dict[str, dict[str, Any]] = loaded["registers"]
+    # The private `_locate_registers` is `find_registers`' own body, called on
+    # purpose because it also gives each row's own cell count, which
+    # `find_registers` drops after padding a short row and cutting a long one
+    # (cells that would then sit under the wrong column). The precedent is
+    # `handoff._pipe_tables`, which calls `cp_tables._split_row` and
+    # `_row_cells`; the bytes are pinned (invariant 4), so it cannot change
+    # without a re-pin; and it is the location `check()` applied at acceptance,
+    # so a figure reads the table the gate verified. With the module's retired
+    # ids too, as `check()` asks it (fork r7, D95).
+    try:
+        located: dict[str, tuple[list[str], list[dict[str, str]], list[int]]] = (
+            checker._locate_registers(
+                markdown, specs, loaded.get("retired_registers", ())
+            )
+        )
+    except (KeyError, ValueError):  # unread: its message can quote the answer
+        return HandoffRegisters((), "TABLES_MALFORMED")
+    written = [(reg_id, *located[reg_id]) for reg_id in specs if reg_id in located]
+    if not all(_keyable(header, widths) for _, header, _, widths in written):
+        return HandoffRegisters((), "TABLES_MALFORMED")
+    if len(written) > TABLES_MAX or not all(
+        _bounded(reg_id, header, rows) for reg_id, header, rows, _ in written
+    ):
+        return HandoffRegisters((), "TABLES_TOO_LARGE")
+    return HandoffRegisters(
+        tuple(
+            HandoffRegister(
+                register_id=reg_id,
+                columns=tuple(header),
+                declared=_declared(contract, specs[reg_id]["columns"], header),
+                rows=_rows(contract, header, rows),
+            )
+            for reg_id, header, rows, _ in written
+        ),
+        None,
+    )
 
 
 def figure_value(contract: VendorContract, cell: str) -> str | None:
@@ -131,27 +224,89 @@ def figure_value(contract: VendorContract, cell: str) -> str | None:
     return None if read is None else _plain(value)
 
 
-def _bounded(table: _VendorTable) -> bool:
+def _bounded(
+    table_id: str, columns: Sequence[str], rows: Sequence[Mapping[str, str]]
+) -> bool:
+    """D32's bounds, one check for a tagged table and a register alike."""
     return (
-        len(table.table_id) <= TABLE_ID_CHARS
-        and len(table.columns) <= TABLE_COLUMNS_MAX
-        and len(table.rows) <= TABLE_ROWS_MAX
-        and all(len(column) <= CELL_CHARS for column in table.columns)
-        and all(len(cell) <= CELL_CHARS for row in table.rows for cell in row.values())
+        len(table_id) <= TABLE_ID_CHARS
+        and len(columns) <= TABLE_COLUMNS_MAX
+        and len(rows) <= TABLE_ROWS_MAX
+        and all(len(column) <= CELL_CHARS for column in columns)
+        and all(len(cell) <= CELL_CHARS for row in rows for cell in row.values())
     )
 
 
 def _table(contract: VendorContract, table: _VendorTable) -> HandoffTable:
     """The reader's rows are keyed by column; they are served in header order."""
-    columns = tuple(table.columns)
     return HandoffTable(
         table_id=table.table_id,
-        columns=columns,
-        rows=tuple(
-            tuple(TableCell(row[c], figure_value(contract, row[c])) for c in columns)
-            for row in table.rows
-        ),
+        columns=tuple(table.columns),
+        rows=_rows(contract, table.columns, table.rows),
     )
+
+
+def _rows(
+    contract: VendorContract,
+    columns: Sequence[str],
+    rows: Sequence[Mapping[str, str]],
+) -> tuple[tuple[TableCell, ...], ...]:
+    """Rows keyed by column, served in header order, each cell with its figure."""
+    return tuple(
+        tuple(TableCell(row[c], figure_value(contract, row[c])) for c in columns)
+        for row in rows
+    )
+
+
+def _keyable(header: Sequence[str], widths: Sequence[int]) -> bool:
+    """A header of nonempty, unique cells and every row exactly as wide.
+
+    The locator keys a row by `dict(zip(header, cells))`, so a repeated header
+    cell would collapse two cells into one, and it pads a short row and cuts a
+    long one, so a cell would be served under another column than it was
+    written under.
+    """
+    return (
+        all(header)
+        and len(set(header)) == len(header)
+        and all(width == len(header) for width in widths)
+    )
+
+
+def _declared(
+    contract: VendorContract, columns: Sequence[str], header: Sequence[str]
+) -> tuple[str | None, ...]:
+    """Per header cell, the profile column the bundle binds to it, else None.
+
+    The private `_resolve_columns` and `_column_key` are called on purpose, for
+    the reasons `_locate_registers` is (see `handoff_registers`): it is the
+    resolution `check()` applied at acceptance, so a figure reads the cell the
+    gate verified. A template column (`Period 1…N`) stands for every cell no
+    other column claims and binds none of them: those cells keep their own
+    header text as their key. The bundle can bind one cell to two columns
+    (`Test`, by containment, to the `Test Type` cell a `Test Type` column
+    names too); such a cell is declared to the column it spells, under
+    `_column_key`, or to none when no one does.
+    """
+    checker = contract.completeness_check
+    resolved: dict[str, list[str]] = checker._resolve_columns(
+        list(columns), list(header)
+    )
+    claims: dict[str, list[str]] = {}
+    for column, cells in resolved.items():
+        if not checker.TEMPLATE_COLUMN_RE.search(column):
+            for cell in cells:
+                claims.setdefault(cell, []).append(column)
+    return tuple(_claimant(contract, cell, claims.get(cell, [])) for cell in header)
+
+
+def _claimant(contract: VendorContract, cell: str, columns: list[str]) -> str | None:
+    """The one column claiming `cell`, or of several the one that spells it."""
+    if len(columns) == 1:
+        return columns[0]
+    key = contract.completeness_check._column_key
+    spelt = [c for c in columns if key(c) == key(cell)]
+    return spelt[0] if len(spelt) == 1 else None
 
 
 def _exact(cell: str) -> Decimal | None:
