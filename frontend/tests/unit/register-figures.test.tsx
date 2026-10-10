@@ -1685,9 +1685,9 @@ test("forecastCases: a line figure a metric, base then downside then the rest, a
   const [revenue, , fcf] = figures;
   expect(revenue!.categories).toEqual(["FY26", "FY27"]);
   expect(revenue!.series.map((series) => [series.key, series.label, series.origin])).toEqual([
-    ["Base", "Base", "model"],
-    ["downside", "downside", "model"],
-    ["Upside", "Upside", "model"],
+    ["BASE", "Base", "model"],
+    ["DOWNSIDE", "downside", "model"],
+    ["UPSIDE", "Upside", "model"],
   ]);
   expect(said(revenue!)).toEqual([
     [{ value: "100" }, { value: "110" }],
@@ -1699,8 +1699,8 @@ test("forecastCases: a line figure a metric, base then downside then the rest, a
     "Revenue as served, Base / downside / Upside: FY26 100 / 90 / 130;" +
       " FY27 110 / 80 / n/a (not stated).",
   );
-  expect(revenue!.sourceOf(pick("downside", "FY27"))).toBe("evidence/assumption IDs: A-FY27");
-  expect(revenue!.sourceOf(pick("Upside", "FY27"))).toBeNull();
+  expect(revenue!.sourceOf(pick("DOWNSIDE", "FY27"))).toBe("evidence/assumption IDs: A-FY27");
+  expect(revenue!.sourceOf(pick("UPSIDE", "FY27"))).toBeNull();
 });
 
 test("creditPath: leverage, coverage and FCF/debt, a packed leverage cell a gap (N192)", () => {
@@ -1778,4 +1778,47 @@ test("the case lines draw only for CP-2G, and past MAX_MARKS are stated", () => 
     oversized: true,
     key: "forecast-cases-revenue",
   });
+});
+
+test("a period and case stated twice draws a gap naming both, unless they agree", () => {
+  const [leverage, coverage] = creditPath(
+    cp2gWith([
+      register("T2H.6", CREDIT_PATH, [
+        t2h6("FY26", "Base", c("4.0x", "4.0"), c("2x", "2"), c("10%", "10")),
+        t2h6("FY26", "Base", c("5.0x", "5.0"), c("2x", "2"), c("10%", "10")),
+        t2h6("FY27", "Base", c("3.0x", "3.0"), c("2.5x", "2.5"), c("11%", "11")),
+      ]),
+    ]),
+  ).map(line);
+  expect(said(leverage!)).toEqual([
+    [{ value: null, reason: "stated twice: 4.0x, 5.0x" }, { value: "3.0" }],
+  ]);
+  expect(said(coverage!)).toEqual([[{ value: "2" }, { value: "2.5" }]]);
+  // Both rows name the one definition: a point's source states it once.
+  expect(leverage!.sourceOf(pick("BASE", "FY26"))).toBe("definition IDs: D-FY26");
+  expect(leverage!.summary).toBe(
+    "Gross/net leverage as served, Base: FY26 n/a (stated twice: 4.0x, 5.0x); FY27 3.0.",
+  );
+});
+
+test("cases group trimmed and case-insensitive, periods trimmed, a blank case named", () => {
+  const [revenue] = forecastCases(
+    cp2gWith([
+      register("T2H.4", FORECAST, [
+        t2h4("FY26 ", "Base", c("100", "100"), c("20", "20"), c("8", "8")),
+        t2h4("FY27", "BASE", c("110", "110"), c("22", "22"), c("9", "9")),
+        t2h4("FY26", " ", c("70", "70"), c("10", "10"), c("1", "1")),
+      ]),
+    ]),
+  ).map(line);
+  expect(revenue!.categories).toEqual(["FY26", "FY27"]);
+  expect(revenue!.series.map((series) => [series.key, series.label])).toEqual([
+    ["BASE", "Base"],
+    ["not-stated", "Case not stated"],
+  ]);
+  expect(said(revenue!)).toEqual([
+    [{ value: "100" }, { value: "110" }],
+    [{ value: "70" }, { value: null, reason: "not stated" }],
+  ]);
+  expect(revenue!.sourceOf(pick("BASE", "FY27"))).toBe("evidence/assumption IDs: A-FY27");
 });

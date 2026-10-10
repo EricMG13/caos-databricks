@@ -560,6 +560,20 @@ test("an unknown case sorts after base and downside, and rank 0 is a rank", () =
   expect(growth!.series.map((series) => series.key)).toEqual(["BASE", "DOWNSIDE", "STRESS"]);
 });
 
+test("forecastDrivers reads a case trimmed and case-insensitive: base leads downside", () => {
+  const [growth] = forecastDrivers([
+    table(
+      "cp2g.cp_model_forecast_drivers",
+      ["driver_id", "slot_id", "case", "fiscal_year", "value", "status"],
+      [
+        ["division_growth", "DIVISION_1", "downside", "2026", "0.02", "READY"],
+        ["division_growth", "DIVISION_1", " base", "2026", "0.03", "READY"],
+      ],
+    ),
+  ]);
+  expect(growth!.series.map((series) => series.key)).toEqual([" base", "downside"]);
+});
+
 test("the catalyst list sorts by rank, whatever order the model wrote", () => {
   const cp2b = handoffOf("CP-2B");
   const [catalysts] = cp2b.tables;

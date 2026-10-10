@@ -980,20 +980,40 @@ interface CaseLines {
 /** A metric as a figure's key part: "gross/net leverage" is "gross-net-leverage". */
 const slug = (metric: string) => metric.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
+/** The point the rows stating one period and case give a metric: their
+    cell where every row writes it alike, else a gap naming each text. */
+function pointOf(group: readonly Row[], metric: string, unit: Unit | undefined): Datum {
+  const cells = group.map((row) => row[metric]);
+  const texts = cells.map((cell) => cell?.text.trim() || "not stated");
+  if (new Set(texts).size > 1) {
+    const times = texts.length === 2 ? "twice" : `${texts.length} times`;
+    return { value: null, reason: `stated ${times}: ${texts.join(", ")}` };
+  }
+  return inUnit(cells[0], unit);
+}
+
 /** A CP-2G register's cases as lines over its periods, a figure a metric and
     a unit its cells are written in: periods in the order they first appear,
-    a line a case (BASE, then DOWNSIDE, then the rest), every value as
-    served. A cell in another unit is a gap naming it, drawn in its own
-    unit's figure; a cell the host read no figure from is a gap carrying its
-    text. Past `MAX_MARKS` a figure is stated, not drawn. */
+    a line a case (BASE, then DOWNSIDE, then the rest, each read trimmed
+    and case-insensitive), every value as served. A cell in another unit is
+    a gap naming it, drawn in its own unit's figure; a cell the host read no
+    figure from is a gap carrying its text. Past `MAX_MARKS` a figure is
+    stated, not drawn. */
 function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
   const rows = registerRows(handoff, "CP-2G", spec.register);
   if (!rows?.length) return [];
-  const caseOf = (row: Row) => text(row, "case").trim();
-  const periods = unique(rows.map((row) => text(row, "period")));
-  const cases = unique(rows.map(caseOf)).sort((a, b) => caseRank(a) - caseRank(b));
-  const cells = groupBy(rows, (row) => pair(caseOf(row), text(row, "period")));
-  const rowAt = (kase: string, period: string) => cells.get(pair(kase, period))?.[0];
+  // A case is one line however it is spelt, labelled as first written; a
+  // blank case is its own line. Uppercase, a key never meets "not-stated".
+  const caseOf = (row: Row) => text(row, "case").trim().toUpperCase() || "not-stated";
+  const periodOf = (row: Row) => text(row, "period").trim();
+  const labels = new Map<string, string>();
+  for (const row of rows) {
+    if (!labels.has(caseOf(row))) labels.set(caseOf(row), text(row, "case").trim());
+  }
+  const periods = unique(rows.map(periodOf));
+  const cases = [...labels.keys()].sort((a, b) => caseRank(a) - caseRank(b));
+  const cells = groupBy(rows, (row) => pair(caseOf(row), periodOf(row)));
+  const rowsAt = (kase: string, period: string) => cells.get(pair(kase, period)) ?? [];
   const marks = cases.length * periods.length;
   return spec.metrics.flatMap((metric) => {
     const label = `${metric.charAt(0).toUpperCase()}${metric.slice(1)}`;
@@ -1015,9 +1035,9 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
       if (marks > MAX_MARKS) return oversized(head.key, spec.register, head.title, marks);
       const series = cases.map((kase) => ({
         key: kase,
-        label: kase,
+        label: labels.get(kase) || "Case not stated",
         origin: "model" as const,
-        data: periods.map((period) => inUnit(rowAt(kase, period)?.[metric], head.unit)),
+        data: periods.map((period) => pointOf(rowsAt(kase, period), metric, head.unit)),
       }));
       return {
         ...head,
@@ -1027,8 +1047,11 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
         categories: periods,
         series,
         sourceOf: (selection) => {
-          const row = rowAt(selection.series, selection.category);
-          return row ? stated(row, [spec.source]) : null;
+          const sources = rowsAt(selection.series, selection.category).map((row) =>
+            stated(row, [spec.source]),
+          );
+          const named = unique(sources.filter((source): source is string => source !== null));
+          return named.length ? named.join("; ") : null;
         },
       };
     });
