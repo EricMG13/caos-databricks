@@ -43,7 +43,9 @@
         "model_analysis": "Source register carries six pinned sources at set version 4.\n",
         "host_calculation": "NONE",
         "tables": [],
-        "tables_unavailable_reason": null
+        "tables_unavailable_reason": null,
+        "registers": [],
+        "registers_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-1",
@@ -65,7 +67,9 @@
         "model_analysis": "Adjusted EBITDA for Q2 2026 is $769M.\n",
         "host_calculation": "NONE",
         "tables": [],
-        "tables_unavailable_reason": null
+        "tables_unavailable_reason": null,
+        "registers": [],
+        "registers_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-1c",
@@ -87,7 +91,9 @@
         "model_analysis": "Peer benchmark is restricted: one comparable is stale.\n",
         "host_calculation": "NONE",
         "tables": [],
-        "tables_unavailable_reason": null
+        "tables_unavailable_reason": null,
+        "registers": [],
+        "registers_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-2",
@@ -109,7 +115,9 @@
         "model_analysis": "Perimeter and debt schedule accepted with no open item.\n",
         "host_calculation": "NONE",
         "tables": [],
-        "tables_unavailable_reason": null
+        "tables_unavailable_reason": null,
+        "registers": [],
+        "registers_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-4",
@@ -131,7 +139,9 @@
         "model_analysis": "Covenants read at a 3.50x net leverage threshold.\n",
         "host_calculation": "NONE",
         "tables": [],
-        "tables_unavailable_reason": null
+        "tables_unavailable_reason": null,
+        "registers": [],
+        "registers_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-5",
@@ -153,7 +163,9 @@
         "model_analysis": "QA audit passed clean on every citation anchored so far.\n",
         "host_calculation": "NONE",
         "tables": [],
-        "tables_unavailable_reason": null
+        "tables_unavailable_reason": null,
+        "registers": [],
+        "registers_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-cf",
@@ -175,7 +187,9 @@
         "model_analysis": "Cash flow forecast reconciles within tolerance.\n\n<!-- table-id: cpcf.closing_cash -->\n| period_id | closing_cash |\n| FY2026 | 2,480 |\n",
         "host_calculation": "NONE",
         "tables": [],
-        "tables_unavailable_reason": "TABLES_MALFORMED"
+        "tables_unavailable_reason": "TABLES_MALFORMED",
+        "registers": [],
+        "registers_unavailable_reason": null
       }
     ],
     "pending": [

@@ -326,6 +326,11 @@ def test_the_demo_fixtures_carry_exactly_the_tables_their_markdown_derives(
         derived = handoff_tables(CONTRACT, handoff["model_analysis"])
         assert handoff["tables"] == _served(derived), handoff["module_id"]
         assert handoff["tables_unavailable_reason"] == derived.unavailable_reason
+        # N191: the demo serves no register rows, whatever its Markdown holds.
+        assert (handoff["registers"], handoff["registers_unavailable_reason"]) == (
+            [],
+            None,
+        )
 
 
 def _stable_columns() -> dict[str, set[str]]:

@@ -463,6 +463,21 @@ function analysis(): { [key: string]: Json } {
             },
           ],
           tables_unavailable_reason: null,
+          registers: [
+            {
+              register_id: "T4C.4",
+              columns: ["Test", "Headroom", "Note"],
+              declared: ["Test", "Headroom", null],
+              rows: [
+                [
+                  { text: "Net leverage", value: null },
+                  { text: "1.5x", value: "1.5" },
+                  { text: "n/a", value: null },
+                ],
+              ],
+            },
+          ],
+          registers_unavailable_reason: null,
         },
       ],
       pending: [],
@@ -754,6 +769,22 @@ describe("the v1 wire contract", () => {
     const reason = JSON.parse(JSON.stringify(analysis()));
     reason.body.handoffs[0].tables_unavailable_reason = "PARSE_ERROR";
     refuses(() => parseAnalysisDocument(reason), "$.body.handoffs[0].tables_unavailable_reason");
+
+    // A register is read as a table is, and `declared` is a header cell's
+    // profile column or null, never a number.
+    const register = "$.body.handoffs[0].registers[0]";
+    const declared = JSON.parse(JSON.stringify(analysis()));
+    declared.body.handoffs[0].registers[0].declared[0] = 7;
+    refuses(() => parseAnalysisDocument(declared), `${register}.declared[0]`);
+    const registerId = JSON.parse(JSON.stringify(analysis()));
+    registerId.body.handoffs[0].registers[0].register_id = "T4C 4";
+    refuses(() => parseAnalysisDocument(registerId), `${register}.register_id`);
+    const registerReason = JSON.parse(JSON.stringify(analysis()));
+    registerReason.body.handoffs[0].registers_unavailable_reason = "PARSE_ERROR";
+    refuses(
+      () => parseAnalysisDocument(registerReason),
+      "$.body.handoffs[0].registers_unavailable_reason",
+    );
 
     refuses(() => parseDirectoryDocument([]), "$");
     refuses(() => parseDirectoryDocument(null), "$");

@@ -473,6 +473,15 @@ const TableView = object({
   columns: array(text, 32),
   rows: array(array(CellView, 32), 2000),
 });
+// A register the module's output profile declares (N94), located by the
+// bundle's own reader: `declared` is the profile column the bundle binds to
+// each header cell, null where it binds none.
+const RegisterView = object({
+  register_id: string({ max: SHORT, pattern: "^[A-Za-z0-9_.]+$" }),
+  columns: array(text, 32),
+  declared: array(nullable(text), 32),
+  rows: array(array(CellView, 32), 2000),
+});
 const HandoffView = object({
   route_node_id: short,
   module_id: short,
@@ -494,6 +503,8 @@ const HandoffView = object({
   host_calculation: enumOf(["NONE", "CP_CF_FORECAST"]),
   tables: array(TableView, 64),
   tables_unavailable_reason: nullable(enumOf(["TABLES_MALFORMED", "TABLES_TOO_LARGE"])),
+  registers: array(RegisterView, 64),
+  registers_unavailable_reason: nullable(enumOf(["TABLES_MALFORMED", "TABLES_TOO_LARGE"])),
 });
 const PendingNode = object({
   route_node_id: short,
@@ -873,6 +884,7 @@ export const V1_SHAPES = {
   SourceRow,
   Standing,
   Subject,
+  RegisterView,
   TableView,
   UploadBody,
   UploadDocument,
@@ -905,6 +917,7 @@ export type SourceRow = Infer<typeof SourceRow>;
 export type RunView = Infer<typeof RunView>;
 export type NodeView = Infer<typeof NodeView>;
 export type HandoffView = Infer<typeof HandoffView>;
+export type RegisterView = Infer<typeof RegisterView>;
 export type TableView = Infer<typeof TableView>;
 export type CellView = Infer<typeof CellView>;
 export type CitationView = Infer<typeof CitationView>;

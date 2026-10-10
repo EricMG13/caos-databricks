@@ -62,6 +62,7 @@ from caos.api.wire import (
     PinRunInput,
     RectView,
     RefusalBody,
+    RegisterView,
     ResearchBrief,
     ResearchBriefQuestion,
     RetryRun,
@@ -376,9 +377,12 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "host_calculation",
             "tables",
             "tables_unavailable_reason",
+            "registers",
+            "registers_unavailable_reason",
         }
     ),
     TableView: frozenset({"table_id", "columns", "rows"}),
+    RegisterView: frozenset({"register_id", "columns", "declared", "rows"}),
     CellView: frozenset({"text", "value"}),
     PendingNode: frozenset({"route_node_id", "module_id", "module_name", "state"}),
     AnalysisBody: frozenset(
@@ -816,6 +820,20 @@ def test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null() -> None:
     ):
         with pytest.raises(ValidationError):
             TableView.model_validate(bad)
+    register = {
+        "register_id": "T4C.4",
+        "columns": ["Test", "Extra"],
+        "declared": ["Test", None],
+        "rows": [],
+    }
+    assert RegisterView.model_validate(register).declared == ["Test", None]
+    for broken in (
+        {**register, "register_id": "T4C 4"},
+        {**register, "declared": ["x"] * 33},
+        {**register, "extra": 1},
+    ):
+        with pytest.raises(ValidationError):
+            RegisterView.model_validate(broken)
 
 
 def test_every_section_router_declares_its_store_budget() -> None:
