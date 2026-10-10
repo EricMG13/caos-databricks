@@ -279,7 +279,7 @@ export function maturityLadder(tables: readonly Table[]): StackFigure | null {
     amountOf: (row) => row.principal?.value,
     dateOf: (row) => text(row, "maturity_date"),
     nameOf: (row) => text(row, "facility_name"),
-    noun: "facilities",
+    noun: ["facility", "facilities"],
   };
   const { row: nearest } = nearestOf(own, wall.dateOf);
   const unit = periodUnit(tables, latest) ?? unitOf(text(nearest, "currency"), "");

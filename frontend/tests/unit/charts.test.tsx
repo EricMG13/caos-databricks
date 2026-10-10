@@ -1723,6 +1723,13 @@ describe("a scatter chart", () => {
     );
   });
 
+  test("a point whose figure says why it has no one date gives that as its reason", () => {
+    scatter({ points: [{ ...CURVE[0]!, at: "", unread: "stated twice: 2031, 2032" }] });
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const row = screen.getByRole("row", { name: /Note A/ }) as HTMLTableRowElement;
+    expect([...row.cells].at(-1)?.textContent).toBe("stated twice: 2031, 2032");
+  });
+
   test("colours and keys only the groups of placed points", () => {
     const { container } = scatter({
       points: [

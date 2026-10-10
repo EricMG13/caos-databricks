@@ -28,11 +28,12 @@ export function riskLevel(written: string): RiskLevel | null {
 /** The most ids a cell's name or a summary lists; the table twin lists all. */
 const MOST_IDS = 10;
 
-/** "E1, E2, …, E10, …and 2 more": at most ten ids, the rest counted. */
-export function idList(ids: readonly string[]): string {
+/** "E1, E2, …, E10, …and 2 more": at most ten ids, the rest counted; a
+    summary's entries joined by `separator`. */
+export function idList(ids: readonly string[], separator = ", "): string {
   const rest = ids.length - MOST_IDS;
-  const listed = ids.slice(0, MOST_IDS).join(", ");
-  return rest > 0 ? `${listed}, …and ${rest} more` : listed;
+  const listed = ids.slice(0, MOST_IDS).join(separator);
+  return rest > 0 ? `${listed}${separator}…and ${rest} more` : listed;
 }
 
 const TOP = 20;

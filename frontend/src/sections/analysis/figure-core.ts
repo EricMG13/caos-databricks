@@ -295,7 +295,8 @@ export interface Wall {
   amountOf: (row: Row) => string | null | undefined;
   dateOf: (row: Row) => string;
   nameOf: (row: Row) => string;
-  noun: string;
+  /** What one row is called, and several: "facility", "facilities". */
+  noun: readonly [string, string];
   /** What the register calls its amount; by default CP-1's "principal". */
   word?: string;
 }
@@ -320,10 +321,11 @@ export function wallSummary(rows: readonly Row[], wall: Wall, unit: string | und
   const values = rows.map(wall.amountOf);
   const total = sumOf(values);
   const unknown = values.filter((value) => value == null).length;
-  const [n, noun, word] = [rows.length, wall.noun, wall.word ?? "principal"];
+  const [n, word] = [rows.length, wall.word ?? "principal"];
+  const noun = wall.noun[n === 1 ? 0 : 1];
   const principal =
     total.value === null
-      ? `${word.charAt(0).toUpperCase()}${word.slice(1)} unstated for all ${n} ${noun}`
+      ? `${word.charAt(0).toUpperCase()}${word.slice(1)} unstated for ${n === 1 ? "the" : "all"} ${n} ${noun}`
       : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}${
           total.complete
             ? ` ${word} in ${n} ${noun}`

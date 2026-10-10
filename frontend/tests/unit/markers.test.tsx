@@ -9,7 +9,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
 import { Markdown, ModuleRefLink } from "@/ds/ModelMarkdown";
-import { readMarkers, readRefs } from "@/ds/markdown";
+import { MARKER, readMarkers, readRefs } from "@/ds/markdown";
 import { ArtifactMarkers, HandoffMarkers, unverifiedMarkerLabel } from "@/evidence/Markers";
 import { Narrative, figureChip } from "@/evidence/Narrative";
 import { AnalysisSection } from "@/sections/analysis/AnalysisSection";
@@ -69,6 +69,8 @@ describe("citation markers (D107)", () => {
     }
     // Past `MARKER_DIGITS` digits a marker names no citation, as on the host.
     expect(readMarkers("[C1234567890]")).toEqual([{ text: "[C1234567890]", numbers: [0] }]);
+    // The one pattern: the register figures strip a cell's trailing markers by it.
+    expect("3.25x [C1] \\[C2\\, C3\\]".replaceAll(MARKER, "").trim()).toBe("3.25x");
   });
 
   test("test_a_marker_is_a_chip_named_citation_n_that_opens_its_source", () => {

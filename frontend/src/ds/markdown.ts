@@ -387,7 +387,7 @@ export type MarkerPiece = string | { text: string; numbers: number[] };
 // `\[C3\]` and `[C3\, C4]` are markers. A number of more than `MARKER_DIGITS`
 // digits names no citation (0). Anything else -- `[c3]`, `[C 3]`, `[C3-C5]`,
 // `[C1,  C2]` -- is text.
-const MARKER = /\\?\[(C[0-9]+(?:\\?, ?C[0-9]+)*)\\?\]/g;
+export const MARKER = /\\?\[(C[0-9]+(?:\\?, ?C[0-9]+)*)\\?\]/g;
 /** `handoff.MARKER_DIGITS`. */
 export const MARKER_DIGITS = 9;
 
