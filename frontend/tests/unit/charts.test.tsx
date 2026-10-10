@@ -1794,6 +1794,13 @@ describe("a scatter chart", () => {
     expect(ticks.map((tick) => tick.textContent)).toContain("0");
   });
 
+  test("one point of one not placed is said in the singular", () => {
+    const { container } = scatter({ points: CURVE.slice(3, 4), title: "One" });
+    expect(container.querySelector("[data-chart-note]")).toHaveTextContent(
+      "1 of 1 point not placed; the table lists each with its reason.",
+    );
+  });
+
   test("with nothing placed, labels no year and reaches no point", () => {
     const { container } = scatter({ points: CURVE.slice(3), title: "None placed" });
     expect(xTicks(container)).toEqual([]);

@@ -321,7 +321,7 @@ export function ScatterChart({
     shape: "dot",
   }));
   const note = unplaced.length
-    ? `${unplaced.length} of ${reads.length} points not placed; the table lists each with its reason.`
+    ? `${unplaced.length} of ${reads.length} ${reads.length === 1 ? "point" : "points"} not placed; the table lists each with its reason.`
     : null;
   const labels = { point: pointLabel, x: xLabel, value: valueLabel, group: groupLabel };
   return (
