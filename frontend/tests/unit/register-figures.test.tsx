@@ -2608,7 +2608,7 @@ test("riskMatrix: an event a row, its labels past their citation markers; High/H
     t54("EV-4", "Likely", "High"),
   ]);
   expect(figures.map((figure) => [figure.key, figure.title, figure.unit, figure.table])).toEqual([
-    ["risk-matrix", "Probability and impact", undefined, "T5.4"],
+    ["risk-matrix", "Probability and impact", "events", "T5.4"],
   ]);
   const [matrix] = figures;
   expect(matrix!.events[0]).toEqual({
@@ -2625,11 +2625,11 @@ test("riskMatrix: an event a row, its labels past their citation markers; High/H
   ).toEqual([
     ["EV-1", "High", "High"],
     ["EV-2", "Medium", "Low"],
-    ["Event ID not stated", " high", "HIGH"],
+    ["row 3, Event ID not stated", " high", "HIGH"],
     ["EV-4", "Likely", "High"],
   ]);
   expect(matrix!.summary).toBe(
-    "High probability and high impact: 2 of 4 events, EV-1, Event ID not stated.",
+    "High probability and high impact: 2 of 4 events, EV-1, row 3, Event ID not stated.",
   );
   const pressed = { series: "Probability High", category: "Impact High", index: 2 };
   expect(matrix!.sourceOf({ ...pressed, value: "2", origin: "model" })).toBeNull();
@@ -2638,6 +2638,21 @@ test("riskMatrix: an event a row, its labels past their citation markers; High/H
 test("riskMatrix: none High/High is said as none", () => {
   const [matrix] = matrices([t54("EV-1", "Low", "High")]);
   expect(matrix!.summary).toBe("High probability and high impact: 0 of 1 event.");
+});
+
+test("riskMatrix: blank ids are told apart by their row; the summary names at most ten", () => {
+  const rows = Array.from({ length: 12 }, (_, n) =>
+    t54(n < 2 ? "" : `EV-${n + 1}`, "High", "High"),
+  );
+  const [matrix] = matrices(rows);
+  expect(matrix!.events.slice(0, 2).map((event) => event.label)).toEqual([
+    "row 1, Event ID not stated",
+    "row 2, Event ID not stated",
+  ]);
+  expect(matrix!.summary).toBe(
+    "High probability and high impact: 12 of 12 events, row 1, Event ID not stated, row 2, Event ID not stated, EV-3, EV-4, EV-5, EV-6, EV-7, EV-8, EV-9, EV-10, …and 2 more.",
+  );
+  expect(matrix!.computed).toBe("a count of the model's rows");
 });
 
 test("riskMatrix: another module's T5.4 draws nothing", () => {

@@ -8,6 +8,7 @@
 // one, so no axis holds a dollar beside a euro.
 import {
   formatDecimal,
+  idList,
   riskLevel,
   type BulletRow,
   type ChartColor,
@@ -1250,14 +1251,15 @@ export function spreadCurve(handoff: HandoffView): Figure[] {
 /** CP-2A's probability and impact matrix (`T5.4`): an event a row, its
     `Probability` and `Impact` past their citation markers, which the chart
     reads as the ordinal labels. The summary counts the rows whose two read
-    High, and names them. T5.4 declares no source column, so a cell states
+    High and names at most ten; a cell's value is that count, computed here. T5.4 declares no source column, so a cell states
     none. */
 export function riskMatrix(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2A", "T5.4");
   if (!rows?.length) return [];
   const events = rows.map((row, index): RiskEvent => ({
     key: `${index}`,
-    label: unmarked(text(row, "Event ID")).trim() || "Event ID not stated",
+    // A blank id told apart by its row, counted from 1.
+    label: unmarked(text(row, "Event ID")).trim() || `row ${index + 1}, Event ID not stated`,
     description: text(row, "Description"),
     probability: unmarked(text(row, "Probability")),
     impact: unmarked(text(row, "Impact")),
@@ -1274,9 +1276,11 @@ export function riskMatrix(handoff: HandoffView): Figure[] {
       table: "T5.4",
       title: "Probability and impact",
       kind: "matrix",
+      unit: "events",
+      computed: "a count of the model's rows",
       summary: `High probability and high impact: ${[
         `${high.length} of ${events.length} ${noun}`,
-        ...high.map((event) => event.label),
+        ...(high.length ? [idList(high.map((event) => event.label))] : []),
       ].join(", ")}.`,
       events,
       sourceOf: () => null,

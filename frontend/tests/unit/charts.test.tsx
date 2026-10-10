@@ -19,6 +19,7 @@ import {
   StackedBarChart,
   Swatch,
   WaterfallChart,
+  idList,
   riskLevel,
   type BulletRow,
   type ChartSeries,
@@ -1719,7 +1720,7 @@ describe("a risk matrix", () => {
     expect(mixed?.getAttribute("fill")).toMatch(/^url\(#/);
   });
 
-  test("its table twin lists each event as written", () => {
+  test("its table twin lists each event as given, label texts the ordinal labels do not read included", () => {
     matrix();
     fireEvent.click(screen.getByRole("button", { name: "Table" }));
     const table = screen.getByRole("table", { name: "Probability and impact" });
@@ -1732,6 +1733,19 @@ describe("a risk matrix", () => {
       ["E-02", "Covenant reset", " high ", "HIGH", "Critical"],
     ]);
     expect(rows).toHaveLength(7);
+  });
+
+  test("names at most ten ids a cell, the rest counted and left to the table", () => {
+    const twelve = Array.from({ length: 12 }, (_, n) => ({
+      ...EVENTS[0]!,
+      key: `k${n}`,
+      label: `E${n + 1}`,
+    }));
+    const { container } = matrix({ events: twelve });
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Probability High, Impact High: 12 events, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, …and 2 more (model-authored)",
+    ]);
+    expect(idList(["A", "B"])).toBe("A, B");
   });
 
   test("takes its cells by the arrow keys; every target 24px; a press hands the cell over", () => {

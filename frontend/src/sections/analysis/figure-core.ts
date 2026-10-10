@@ -105,6 +105,9 @@ interface FigureBase {
   sourceOf: (selection: ChartSelection) => string | null;
   /** Past `MAX_MARKS`: stated, not drawn. */
   oversized?: boolean;
+  /** What a mark's figure is where this host computed it, not served: "a
+      count of the model's rows". Said in place of the mark's origin. */
+  computed?: string;
 }
 
 /** Bars stacked by series over categories. */

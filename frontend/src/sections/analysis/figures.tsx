@@ -834,6 +834,9 @@ export interface FigurePick {
   source: string | null;
   /** `null` for a waterfall's unreconciled residual: computed here, not served. */
   origin: Origin | null;
+  /** What the value is where this host computed it, said in place of its
+      origin: "a count of the model's rows". */
+  computed?: string;
 }
 
 /** What a bullet's or a range strip's marks are, by their selection's key. */
@@ -895,6 +898,7 @@ function Chart({
         value: selection.value,
         ...(selection.interval ? { interval: selection.interval } : {}),
         unit: figure.unit,
+        ...(figure.computed ? { computed: figure.computed } : {}),
         source: figure.sourceOf(selection),
         origin: selection.origin,
       },

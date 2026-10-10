@@ -25,6 +25,16 @@ export function riskLevel(written: string): RiskLevel | null {
   return LEVELS.find((level) => level.toLowerCase() === read) ?? null;
 }
 
+/** The most ids a cell's name or a summary lists; the table twin lists all. */
+const MOST_IDS = 10;
+
+/** "E1, E2, …, E10, …and 2 more": at most ten ids, the rest counted. */
+export function idList(ids: readonly string[]): string {
+  const rest = ids.length - MOST_IDS;
+  const listed = ids.slice(0, MOST_IDS).join(", ");
+  return rest > 0 ? `${listed}, …and ${rest} more` : listed;
+}
+
 const TOP = 20;
 const ROW = 44;
 const BAND = 36;
@@ -82,7 +92,7 @@ function cellsOf(events: readonly RiskEvent[]): MatrixCell[] {
         index: row * IMPACT.length + column,
         events: held,
         origin,
-        name: `Probability ${probability}, Impact ${impact}: ${count}, ${held.map(idOf).join(", ")} (${said})`,
+        name: `Probability ${probability}, Impact ${impact}: ${count}, ${idList(held.map(idOf))} (${said})`,
       };
     }),
   );
@@ -185,7 +195,7 @@ export function RiskMatrix({
 }: {
   title: string;
   summary: string;
-  /** An event a row, in the order served; the table twin lists each. */
+  /** An event a row, in the order given; the table twin lists each as given. */
   events: readonly RiskEvent[];
   onSelect?: OnSelect;
 }) {

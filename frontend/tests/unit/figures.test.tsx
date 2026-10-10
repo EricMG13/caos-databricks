@@ -1084,8 +1084,10 @@ test("pressing a cell of the risk matrix names both labels and its count", () =>
     }),
   );
   const picked = container.querySelector("[data-picked]")!;
-  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("1");
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("1 events");
   expect(picked).toHaveTextContent("Probability High · Impact High");
+  expect(picked).toHaveTextContent("Computed here: a count of the model's rows, not served");
+  expect(picked).not.toHaveTextContent("Model-authored");
   expect(container.querySelector("[data-figures-key]")).toHaveTextContent("Outlined");
 });
 

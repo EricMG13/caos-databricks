@@ -9,7 +9,7 @@ export { DivergingBarChart } from "./DivergingBarChart";
 export { DumbbellChart } from "./DumbbellChart";
 export { LineChart } from "./LineChart";
 export { RangeStripChart } from "./RangeStripChart";
-export { RiskMatrix, riskLevel } from "./RiskMatrix";
+export { RiskMatrix, idList, riskLevel } from "./RiskMatrix";
 export { ScatterChart } from "./ScatterChart";
 export { StackedBarChart } from "./StackedBarChart";
 export { WaterfallChart } from "./WaterfallChart";
