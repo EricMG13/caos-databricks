@@ -12,6 +12,7 @@ import {
   LineChart,
   ProvenanceKeyed,
   RangeStripChart,
+  RiskMatrix,
   ScatterChart,
   StackedBarChart,
   Swatch,
@@ -833,6 +834,9 @@ export interface FigurePick {
   source: string | null;
   /** `null` for a waterfall's unreconciled residual: computed here, not served. */
   origin: Origin | null;
+  /** What the value is where this host computed it, said in place of its
+      origin: "a count of the model's rows". */
+  computed?: string;
 }
 
 /** What a bullet's or a range strip's marks are, by their selection's key. */
@@ -870,6 +874,9 @@ function markOf(figure: Figure, key: string): string | undefined {
     case "scatter":
       // A point's series is its group, as written.
       return key;
+    case "matrix":
+      // A cell's series is its probability, named with its label.
+      return key;
     default:
       return unreachable(figure);
   }
@@ -891,6 +898,7 @@ function Chart({
         value: selection.value,
         ...(selection.interval ? { interval: selection.interval } : {}),
         unit: figure.unit,
+        ...(figure.computed ? { computed: figure.computed } : {}),
         source: figure.sourceOf(selection),
         origin: selection.origin,
       },
@@ -931,6 +939,15 @@ function Chart({
           pointLabel={figure.pointLabel}
           valueLabel={figure.valueLabel}
           groupLabel={figure.groupLabel}
+        />
+      );
+    case "matrix":
+      return (
+        <RiskMatrix
+          title={figure.title}
+          summary={figure.summary}
+          events={figure.events}
+          onSelect={onSelect}
         />
       );
     case "line":

@@ -267,6 +267,7 @@ chart holds under the production CSP.
 - **Colour:** `--chart-1..5` per theme, the tranche tokens for seniority,
   `--chart-neutral` for stated totals; a sixth series is neutral, never a
   recycled hue.
+- **Two documented exceptions (D138, D139).** The spread curve's scatter uses Recharts' `ScatterChart` and `Scatter`, still with this app's own marks: no Recharts tooltip or legend. The probability and impact matrix is drawn as SVG through the same chart frame, since Recharts has no grid chart. Its marks, keyboard order, table twin and provenance follow every rule above, and a cell's count is said as computed.
 - No gradients, shadows, glow or rounded bar ends; bars start at zero; no dual
   axes. The route canvas alone carries a faint dot grid.
 
