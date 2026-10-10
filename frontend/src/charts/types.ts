@@ -107,6 +107,12 @@ export interface WaterfallStep {
   value: Decimal | null;
   reason?: string | null;
   origin: Origin;
+  /** A change's colour in place of its pole's: what its `status` stands for.
+      A total stays neutral. */
+  color?: ChartColor;
+  /** The word the colour stands for, said in the step's name and its table
+      row: colour is never the only carrier. */
+  status?: string;
 }
 
 /** One test of a bullet chart: a current basis against its threshold. The

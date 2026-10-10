@@ -492,6 +492,90 @@ describe("a waterfall chart", () => {
     expect(container.querySelector('rect[data-origin="residual"]')).toBeNull();
     expect(rects(container)).toHaveLength(4);
   });
+
+  test("a step's colour says its status, and the status word is in its name and its row", () => {
+    const { container } = render(
+      <WaterfallChart
+        title="Quality bridge"
+        summary="Reported to adjusted."
+        steps={[
+          { key: "0", label: "Reported", kind: "total", value: "50", origin: "model" },
+          {
+            key: "1",
+            label: "Restructuring",
+            kind: "delta",
+            value: "4",
+            origin: "model",
+            color: "series-3",
+            status: "Challenged",
+          },
+          {
+            key: "2",
+            label: "Synergies",
+            kind: "delta",
+            value: "6",
+            origin: "model",
+            color: "negative",
+            status: "Rejected",
+          },
+          { key: "3", label: "Adjusted", kind: "total", value: "60", origin: "model" },
+        ]}
+        statuses={[
+          { color: "series-3", label: "Challenged" },
+          { color: "negative", label: "Rejected" },
+        ]}
+      />,
+    );
+    // The colour overrides the pole's: a rejected increase is not green.
+    const tones = rects(container).map((rect) => rect.getAttribute("class"));
+    expect(tones[1]).toContain("chart-tone-series-3");
+    expect(tones[2]).toContain("chart-tone-negative");
+    expect(tones[2]).not.toContain("chart-tone-positive");
+    expect(
+      screen.getByRole("button", {
+        name: "Synergies: +6, running level 60, Rejected (model-authored)",
+      }),
+    ).toBeInTheDocument();
+    const legend = screen.getByRole("list", { name: "Legend" });
+    expect(within(legend).getByText("Challenged")).toBeInTheDocument();
+    expect(within(legend).getByText("Rejected")).toBeInTheDocument();
+    expect(within(legend).queryByText("Increase")).toBeNull();
+    expect(within(legend).queryByText("Decrease")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const rows = within(screen.getByRole("table"))
+      .getAllByRole("row")
+      .map((row) => [...(row as HTMLTableRowElement).cells].map((cell) => cell.textContent));
+    expect(rows[0]).toEqual(["Step", "Kind", "Amount", "Running level", "Status", "Origin"]);
+    expect(rows[2]).toEqual([
+      "Restructuring",
+      "change",
+      "+4",
+      "54",
+      "Challenged",
+      "model-authored",
+    ]);
+    expect(rows[1]).toEqual(["Reported", "stated total", "50", "50", "", "model-authored"]);
+  });
+
+  test("a step of no known status keeps its pole, and the legend keeps the poles for it", () => {
+    const { container } = render(
+      <WaterfallChart
+        title="Quality bridge"
+        summary="Reported to adjusted."
+        steps={[
+          { label: "Reported", kind: "total", value: "50", origin: "model" },
+          { label: "Other", kind: "delta", value: "-2", origin: "model", status: "Pending" },
+        ]}
+        statuses={[]}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Other: -2, running level 48, Pending (model-authored)" }),
+    ).toBeInTheDocument();
+    expect(rects(container)[1]).toHaveClass("chart-tone-negative");
+    const legend = screen.getByRole("list", { name: "Legend" });
+    expect(within(legend).getByText("Decrease")).toBeInTheDocument();
+  });
 });
 
 describe("a diverging bar chart", () => {

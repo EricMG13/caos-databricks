@@ -932,7 +932,7 @@ function Chart({
   const common = { title: figure.title, summary: figure.summary, unit: figure.unit, onSelect };
   switch (figure.kind) {
     case "waterfall":
-      return <WaterfallChart {...common} steps={figure.steps} />;
+      return <WaterfallChart {...common} steps={figure.steps} statuses={figure.statuses} />;
     case "bullet":
       return <BulletChart {...common} rows={figure.bullets} categoryLabel={figure.categoryLabel} />;
     case "range":

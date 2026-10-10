@@ -5,7 +5,14 @@
 // tagged tables, every value is the model's, printed exactly as served; a
 // float only places a mark. Rows of one unit share a figure, so no axis
 // holds a multiple beside a percentage.
-import { formatDecimal, type ChartSelection, type RangeRow } from "@/charts";
+import {
+  formatDecimal,
+  type ChartColor,
+  type ChartSelection,
+  type RangeRow,
+  type WaterfallStep,
+} from "@/charts";
+import { bridgeOf } from "@/charts/bridge";
 import type { HandoffView } from "@/wire/v1";
 import {
   MAX_MARKS,
@@ -232,8 +239,114 @@ export function peerRanges(handoff: HandoffView): Figure[] {
   }));
 }
 
+// The colour each of CP-1D's closed statuses wears
+// (vendor/deploy-v/skills/cp-1d-earnings-quality/references/CP-1D_SCHEMA_REFERENCE.md),
+// read trimmed and casefolded, in the schema's order. Any other word wears
+// no colour; its name and row still say it.
+const STATUSES: readonly { color: ChartColor; label: string }[] = [
+  { color: "positive", label: "Supported" },
+  { color: "series-3", label: "Challenged" },
+  { color: "negative", label: "Rejected" },
+  { color: "series-4", label: "Insufficient Information" },
+];
+const STATUS_COLOR = new Map(STATUSES.map(({ color, label }) => [label.toLowerCase(), color]));
+
+/** What a bridge register is: whose, which, its running-level column (which
+    names the closing total) and its status column, if it has one. */
+interface BridgeRegister {
+  module: string;
+  register: string;
+  cumulative: string;
+  status?: string;
+  key: string;
+  title: string;
+}
+
+/** A row's step: the first opens the bridge on its `Amount`, else its
+    running level; a later one with an `Amount` figure moves the level, as
+    served; one with only a running level states a total; one with neither is
+    a change with a gap, its `Amount` text the reason. */
+function bridgeStep(row: Row, index: number, spec: BridgeRegister): WaterfallStep {
+  const amount = row["Amount"];
+  const level = row[spec.cumulative];
+  const total = index === 0 || (amount?.value == null && level?.value != null);
+  const cell = amount?.value != null || level?.value == null ? amount : level;
+  const step: WaterfallStep = {
+    key: `${index}`,
+    label: text(row, "Step"),
+    kind: total ? "total" : "delta",
+    origin: "model",
+    ...datum(cell),
+  };
+  // A total stays neutral: only a change wears its status's colour.
+  const status = spec.status ? text(row, spec.status).trim() : "";
+  const color = total ? undefined : STATUS_COLOR.get(status.toLowerCase());
+  return { ...step, ...(color ? { color } : {}), ...(status ? { status } : {}) };
+}
+
+/** A bridge register drawn as a waterfall, every figure as served. Where the
+    last row is a change and states its running level, that level closes the
+    bridge as a total named for its column. The schema's empty bridge (one
+    `NONE` row) draws nothing. */
+function bridgeFigure(handoff: HandoffView, spec: BridgeRegister): Figure[] {
+  const rows = registerRows(handoff, spec.module, spec.register);
+  if (!rows?.length) return [];
+  if (rows.length === 1 && text(rows[0]!, "Step").trim().toUpperCase() === "NONE") return [];
+  const steps = rows.map((row, index) => bridgeStep(row, index, spec));
+  const last = rows.at(-1)!;
+  if (steps.at(-1)!.kind === "delta" && last[spec.cumulative]?.value != null) {
+    const level = last[spec.cumulative]!.value!;
+    steps.push({
+      key: "closing",
+      label: spec.cumulative,
+      kind: "total",
+      value: level,
+      origin: "model",
+    });
+  }
+  const marks = bridgeOf(steps).length;
+  if (marks > MAX_MARKS) return [oversized(spec.key, spec.register, spec.title, marks)];
+  const ends = [steps[0]!, steps.at(-1)!].map(
+    (step) =>
+      `${step.label} ${step.value === null ? `n/a (${step.reason})` : formatDecimal(step.value)}`,
+  );
+  const rowOf = (key: string) => (key === "closing" ? last : rows[Number(key)]);
+  const used = new Set(steps.map((step) => step.color));
+  const statuses = spec.status ? STATUSES.filter(({ color }) => used.has(color)) : undefined;
+  return [
+    {
+      key: spec.key,
+      table: spec.register,
+      kind: "waterfall",
+      title: spec.title,
+      summary: `${steps.length > 1 ? ends.join(" to ") : ends[0]}, as served.`,
+      steps,
+      ...(statuses ? { statuses } : {}),
+      sourceOf: (selection) => {
+        const row = /^(closing|[0-9]+)$/.test(selection.series)
+          ? rowOf(selection.series)
+          : undefined;
+        return row ? stated(row, ["Basis", "Evidence ID"]) : null;
+      },
+    },
+  ];
+}
+
+/** CP-1D's EBITDA quality bridge (`T1D.4`): reported to adjusted EBITDA, each
+    add-back coloured by whether the module supports, challenges or rejects it. */
+export function ebitdaQuality(handoff: HandoffView): Figure[] {
+  return bridgeFigure(handoff, {
+    module: "CP-1D",
+    register: "T1D.4",
+    cumulative: "Cumulative EBITDA",
+    status: "Supported / Challenged / Rejected",
+    key: "ebitda-quality",
+    title: "EBITDA quality bridge",
+  });
+}
+
 /** Every figure a handoff's registers support, in reading order. A handoff
-    is one module's, so at most one of these draws for it. */
+    is one module's, so only its own module's figures draw for it. */
 export function registerFigures(handoff: HandoffView): Figure[] {
-  return [...covenantHeadroom(handoff), ...peerRanges(handoff)];
+  return [...covenantHeadroom(handoff), ...peerRanges(handoff), ...ebitdaQuality(handoff)];
 }
