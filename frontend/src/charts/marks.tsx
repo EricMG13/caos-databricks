@@ -5,7 +5,7 @@
 // Colour comes from a `chart-tone-*` class (styles/charts.css), so every hue
 // is a token and nothing here writes a style string (the CSP's style-src).
 import { TICK_SIZE } from "./scale";
-import type { Box, Hatch, Origin, Tone } from "./types";
+import type { Box, Hatch, LegendEntry, Origin, Tone } from "./types";
 
 /** A bar: solid for the host, outlined and hatched for the model and the
     residual. An outlined bar is inset by half its stroke, so it never spills into
@@ -161,14 +161,15 @@ export function HatchPatterns({
 }
 
 /** A legend key in the mark's own form: a swatch for a bar, a stroke with its
-    point for a line; outlined and hatched, or dashed and hollow, for the model. */
+    point for a line, a short rule or a dot for a marker; outlined and hatched,
+    dashed, or hollow for the model. */
 export function Swatch({
   tone,
   shape,
   origin,
 }: {
   tone: Tone;
-  shape: "fill" | "line";
+  shape: LegendEntry["shape"];
   origin: Origin | null;
 }) {
   const outlined = origin !== "host";
@@ -180,7 +181,22 @@ export function Swatch({
       aria-hidden="true"
       focusable="false"
     >
-      {shape === "line" ? (
+      {shape === "rule" ? (
+        <line
+          className={outlined ? "chart-line chart-rule chart-dashed" : "chart-line chart-rule"}
+          x1={8}
+          y1={0}
+          x2={8}
+          y2={10}
+        />
+      ) : shape === "dot" ? (
+        <circle
+          className={outlined ? "chart-point chart-hollow" : "chart-point"}
+          cx={8}
+          cy={5}
+          r={3}
+        />
+      ) : shape === "line" ? (
         <>
           <line
             className={outlined ? "chart-line chart-dashed" : "chart-line"}

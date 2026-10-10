@@ -64,7 +64,11 @@ export interface ChartSelection {
   category: string;
   /** The category's position. */
   index: number;
+  /** `null` where unavailable, and for an interval: no one figure stands
+      for a range, so its two ends are in `interval`. */
   value: Decimal | null;
+  /** A range strip's interquartile bar: Q1 and Q3 as served. */
+  interval?: { from: Decimal; to: Decimal };
   /** `null` only for a waterfall's unreconciled residual: nobody served it. */
   origin: Origin | null;
   /** A waterfall step's kind; absent elsewhere. */
@@ -116,6 +120,22 @@ export interface BulletRow {
   threshold: Datum;
   current: Datum;
   headroom: Datum;
+  origin: Origin;
+}
+
+/** One metric of a range strip. A statistic absent from the row is one its
+    register does not declare: nothing is drawn for it and its table cell is
+    empty. One present with a null value is a gap with its reason. */
+export interface RangeRow {
+  key: string;
+  label: string;
+  min?: Datum;
+  q1?: Datum;
+  median?: Datum;
+  q3?: Datum;
+  max?: Datum;
+  /** The value held against the range: the borrower's, an implied EV. */
+  marker?: Datum;
   origin: Origin;
 }
 
@@ -171,8 +191,9 @@ export interface LegendEntry {
   key: string;
   label: string;
   tone: Tone;
-  /** A swatch for bars, a stroke for lines. */
-  shape: "fill" | "line";
+  /** A swatch for bars, a stroke with its point for lines, a short rule or a
+      dot for a value marked across its row. */
+  shape: "fill" | "line" | "rule" | "dot";
   /** Drawn in the series' own form; solid when absent, outlined when `null`
       (the residual, which nobody served). */
   origin?: Origin | null;

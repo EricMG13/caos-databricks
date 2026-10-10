@@ -191,7 +191,8 @@
     shape-rendering: crispEdges;
   }
   .chart-zero,
-  .chart-connector {
+  .chart-connector,
+  .chart-span {
     stroke: var(--chart-zero);
     stroke-width: 1;
     shape-rendering: crispEdges;

@@ -7,6 +7,7 @@ export { ProvenanceKeyed } from "./ChartFrame";
 export { Swatch } from "./marks";
 export { DivergingBarChart } from "./DivergingBarChart";
 export { LineChart } from "./LineChart";
+export { RangeStripChart } from "./RangeStripChart";
 export { StackedBarChart } from "./StackedBarChart";
 export { WaterfallChart } from "./WaterfallChart";
 export { bridgeOf } from "./bridge";
@@ -22,6 +23,7 @@ export type {
   OnSelect,
   Orientation,
   Origin,
+  RangeRow,
   SeriesChartProps,
   WaterfallStep,
 } from "./types";

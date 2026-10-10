@@ -1,7 +1,7 @@
 // What every series chart shares: the colour a series wears, how a mark is
 // named, and the table twin. One copy, so a bar and a line name a value the
 // same way.
-import { formatDecimal, readDatum } from "./decimal";
+import { formatDecimal, readDatum, type ReadValue } from "./decimal";
 import type {
   ChartColor,
   ChartSelection,
@@ -38,6 +38,21 @@ export const ORIGIN_WORD: Record<Origin, string> = {
 export function valueText(value: Decimal, unit: string | undefined, signed = false): string {
   const text = formatDecimal(value, signed);
   return unit ? `${text} ${unit}` : text;
+}
+
+/** "3.25 x", or "n/a (NOT_DISCLOSED)": a value read for a mark's name. */
+export function said(read: ReadValue, unit: string | undefined): string {
+  return read.value === null ? `n/a (${read.reason})` : valueText(read.value, unit);
+}
+
+/** A table cell of a row of values: empty where the row does not declare
+    the value, the value as served with its origin where it differs from its
+    row's, or "n/a" and why. */
+export function cellOf(read: ReadValue | undefined, origin: Origin): string {
+  if (read === undefined) return "";
+  if (read.value === null) return `n/a: ${read.reason}`;
+  const own = read.origin && read.origin !== origin ? ` (${ORIGIN_WORD[read.origin]})` : "";
+  return `${formatDecimal(read.value)}${own}`;
 }
 
 /** One (series, category) pair, read for drawing. */
