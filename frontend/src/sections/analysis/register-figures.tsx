@@ -1000,13 +1000,17 @@ function pointOf(
   column: string,
   read: (cell: Cell | undefined) => Datum,
 ): Datum {
-  const cells = group.map((row) => row[column]);
-  const texts = cells.map((cell) => cell?.text.trim() || "not stated");
-  if (new Set(texts).size > 1) {
-    const times = texts.length === 2 ? "twice" : `${texts.length} times`;
-    return { value: null, reason: `stated ${times}: ${texts.join(", ")}` };
-  }
-  return read(cells[0]);
+  const restated = restatement(group, column);
+  return restated ? { value: null, reason: restated } : read(group[0]?.[column]);
+}
+
+/** "stated twice: 1, 2", where the rows stating one category write `column`
+    differently; null where every row writes it alike. */
+function restatement(group: readonly Row[], column: string): string | null {
+  const texts = group.map((row) => row[column]?.text.trim() || "not stated");
+  if (new Set(texts).size < 2) return null;
+  const times = texts.length === 2 ? "twice" : `${texts.length} times`;
+  return `stated ${times}: ${texts.join(", ")}`;
 }
 
 /** A CP-2G register's cases as lines over its periods, a figure a metric and
@@ -1384,6 +1388,56 @@ export function scoreRegisters(handoff: HandoffView): Figure[] {
   return specs.flatMap((spec) => scoreFigure(handoff, spec));
 }
 
+const VARIANCE = "Variance (direction + magnitude)";
+
+/** CP-8's expected against realised (`T7.4`): a dumbbell a metric and a
+    figure a unit its ends are written in, from `Expected` to `Realized`, the
+    variance printed as served and never computed from the two. An end in
+    another unit is a gap naming it, drawn in its own unit's figure; a metric
+    stated twice is one row, an end a gap naming each text where they differ. */
+export function expectedRealised(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-8", "T7.4");
+  if (!rows?.length) return [];
+  const base = { key: "expected-realised", table: "T7.4", title: "Expected against realised" };
+  const metricOf = (row: Row) => text(row, "Metric").trim() || "Metric not stated";
+  const grouping = byCellUnits(["Expected", "Realized"]);
+  return groupsOf(rows, base, grouping).map(({ entries, head, at }): Figure => {
+    const metrics = [...groupBy(entries, ({ row }) => metricOf(row))];
+    // Two dots a metric.
+    const marks = metrics.length * 2;
+    if (marks > MAX_MARKS) return oversized(head.key, head.table, head.title, marks);
+    const read = (cell: Cell | undefined) => inUnit(cell, at);
+    const stating = metrics.map(([label, same]) => ({
+      label,
+      first: same[0]!.index,
+      same: same.map(({ row }) => row),
+    }));
+    const variance = (same: readonly Row[]) =>
+      restatement(same, VARIANCE) ?? (text(same[0]!, VARIANCE).trim() || "not stated");
+    return {
+      ...head,
+      kind: "dumbbell",
+      summary: `Variance as served: ${stating
+        .map(({ label, same }) => `${label} ${variance(same)}`)
+        .join("; ")}.`,
+      dumbbells: stating.map(({ label, first, same }) => ({
+        key: `${first}`,
+        label,
+        from: pointOf(same, "Expected", read),
+        to: pointOf(same, "Realized", read),
+        origin: "model",
+      })),
+      fromLabel: "Expected",
+      toLabel: "Realized",
+      categoryLabel: "Metric",
+      sourceOf: (selection) => {
+        const same = stating[selection.index]?.same;
+        return same ? sourcesOf(same, [VARIANCE, "Confidence", "Evidence ID"]) : null;
+      },
+    };
+  });
+}
+
 /** Every figure a handoff's registers support, in reading order. A handoff
     is one module's, so only its own module's figures draw for it. */
 export function registerFigures(handoff: HandoffView): Figure[] {
@@ -1409,5 +1463,6 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...valueAllocation(handoff),
     ...recoveryByClass(handoff),
     ...scoreRegisters(handoff),
+    ...expectedRealised(handoff),
   ];
 }

@@ -9,6 +9,7 @@ import type {
   ChartSelection,
   ChartSeries,
   Datum,
+  DumbbellRow,
   Orientation,
   RangeRow,
   WaterfallStep,
@@ -164,6 +165,17 @@ export interface RangeFigure extends FigureBase {
   categoryLabel?: string;
 }
 
+/** A dumbbell's rows, one a metric: two of its values, joined. */
+export interface DumbbellFigure extends FigureBase {
+  kind: "dumbbell";
+  dumbbells: DumbbellRow[];
+  /** What each end is: "Expected", "Realized". */
+  fromLabel: string;
+  toLabel: string;
+  /** What the rows are, heading the table twin. */
+  categoryLabel?: string;
+}
+
 /** One figure: what it shows, drawn by which chart, from which table. Each
     kind carries its own rows, so a figure without them does not build. */
 export type Figure =
@@ -173,7 +185,8 @@ export type Figure =
   | DivergingFigure
   | WaterfallFigure
   | BulletFigure
-  | RangeFigure;
+  | RangeFigure
+  | DumbbellFigure;
 
 /** A figure past this many marks is stated, not drawn, and past this many
     figures a module's are stated too. The tables are model-authored and may

@@ -12,6 +12,7 @@ import {
   creditPath,
   downsideSensitivities,
   ebitdaQuality,
+  expectedRealised,
   forecastCases,
   impliedEv,
   liquidityBridge,
@@ -2314,4 +2315,141 @@ test("scoreRegisters: CP-4's legal areas and CP-6's debate dimensions, each its 
 
 test("scoreRegisters: a register of another module draws nothing", () => {
   expect(scores("CP-2A", [register("T3.3", FACTORS, [t33("Scale", c("1", "1"))])])).toEqual([]);
+});
+
+// CP-8's T7.4, as the profile declares it.
+const OUTCOME = [
+  "Metric",
+  "Expected",
+  "Realized",
+  "Variance (direction + magnitude)",
+  "Confidence",
+  "Evidence ID",
+];
+const t74 = (metric: string, expected: Served, realized: Served, variance: string, id = "V-1") => [
+  c(metric),
+  expected,
+  realized,
+  c(variance),
+  c("Medium"),
+  c(id),
+];
+function dumbbell(figure: Figure) {
+  if (figure.kind !== "dumbbell") throw new Error(`A ${figure.kind} figure, not a dumbbell.`);
+  return figure;
+}
+const outcomes = (rows: Served[][], module = "CP-8") =>
+  expectedRealised(moduleWith(module, [register("T7.4", OUTCOME, rows)])).map(dumbbell);
+
+test("expectedRealised: a dumbbell a metric, expected to realised, a figure a unit", () => {
+  const figures = outcomes([
+    t74("Leverage", c("4.0x", "4.0"), c("4.6x", "4.6"), "Up 0.6x, adverse", "V-1"),
+    t74("EBITDA margin", c("20%", "20"), c("17.5%", "17.5"), "Down 2.5pp", "V-2"),
+    t74("Coverage", c("3.0x", "3.0"), c("Not yet reported"), "", "V-3"),
+  ]);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit, figure.table])).toEqual([
+    ["expected-realised-x", "Expected against realised, x", "x", "T7.4"],
+    ["expected-realised-percent", "Expected against realised, %", "%", "T7.4"],
+  ]);
+  const [ratios] = figures;
+  expect([ratios!.fromLabel, ratios!.toLabel, ratios!.categoryLabel]).toEqual([
+    "Expected",
+    "Realized",
+    "Metric",
+  ]);
+  expect(ratios!.dumbbells).toEqual([
+    {
+      key: "0",
+      label: "Leverage",
+      from: { value: "4.0" },
+      to: { value: "4.6" },
+      origin: "model",
+    },
+    {
+      key: "2",
+      label: "Coverage",
+      from: { value: "3.0" },
+      to: { value: null, reason: "Not yet reported" },
+      origin: "model",
+    },
+  ]);
+  // The variance as served, never computed from the two ends.
+  expect(ratios!.summary).toBe(
+    "Variance as served: Leverage Up 0.6x, adverse; Coverage not stated.",
+  );
+  const pressed = {
+    series: "to",
+    category: "Coverage",
+    index: 1,
+    value: null,
+    origin: "model" as const,
+  };
+  expect(ratios!.sourceOf(pressed)).toBe("Confidence: Medium; Evidence ID: V-3");
+  expect(ratios!.sourceOf({ ...pressed, index: 0 })).toBe(
+    "Variance (direction + magnitude): Up 0.6x, adverse; Confidence: Medium; Evidence ID: V-1",
+  );
+});
+
+test("expectedRealised: a metric stated twice is one row, a gap naming each text where they differ", () => {
+  const [figure] = outcomes([
+    t74("Leverage", c("4.0x", "4.0"), c("4.6x", "4.6"), "Up 0.6x"),
+    t74("Leverage", c("4.0x", "4.0"), c("4.8x", "4.8"), "Up 0.8x"),
+  ]);
+  expect(figure!.dumbbells).toEqual([
+    {
+      key: "0",
+      label: "Leverage",
+      from: { value: "4.0" },
+      to: { value: null, reason: "stated twice: 4.6x, 4.8x" },
+      origin: "model",
+    },
+  ]);
+  expect(figure!.summary).toBe("Variance as served: Leverage stated twice: Up 0.6x, Up 0.8x.");
+});
+
+test("expectedRealised: ends in two units join each unit's figure, the other end a gap naming it", () => {
+  const figures = outcomes([t74("", c("4.0x", "4.0"), c("45%", "45"), "Mixed")]);
+  expect(figures.map((figure) => [figure.key, figure.dumbbells])).toEqual([
+    [
+      "expected-realised-x",
+      [
+        {
+          key: "0",
+          label: "Metric not stated",
+          from: { value: "4.0" },
+          to: { value: null, reason: "45%, drawn in its unit's figure" },
+          origin: "model",
+        },
+      ],
+    ],
+    [
+      "expected-realised-percent",
+      [
+        {
+          key: "0",
+          label: "Metric not stated",
+          from: { value: null, reason: "4.0x, drawn in its unit's figure" },
+          to: { value: "45" },
+          origin: "model",
+        },
+      ],
+    ],
+  ]);
+});
+
+test("expectedRealised: another module's T7.4 draws nothing; past the marks it is stated", () => {
+  expect(outcomes([t74("Leverage", c("4", "4"), c("5", "5"), "Up 1")], "CP-7")).toEqual([]);
+  const cp8 = moduleWith("CP-8", [
+    register("T7.4", OUTCOME, [t74("Leverage", c("4", "4"), c("5", "5"), "Up 1")]),
+  ]);
+  expect(registerFigures(cp8).map((figure) => figure.key)).toEqual(["expected-realised"]);
+  // Two dots a metric: 1,001 metrics are too many to draw.
+  const many = Array.from({ length: 1001 }, (_, index) =>
+    t74(`M${index}`, c("4", "4"), c("5", "5"), "Up 1"),
+  );
+  expect(expectedRealised(moduleWith("CP-8", [register("T7.4", OUTCOME, many)]))[0]).toMatchObject({
+    oversized: true,
+    key: "expected-realised",
+    summary: expect.stringMatching(/^2002 marks/),
+  });
 });
