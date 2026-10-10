@@ -26,6 +26,7 @@ import {
   registerFigures,
   registerRows,
   scenarioMoves,
+  scoreRegisters,
   valueAllocation,
 } from "@/sections/analysis/register-figures";
 import { caseRank, negatedMagnitude, type Figure } from "@/sections/analysis/figure-core";
@@ -2136,4 +2137,181 @@ test("a trigger stated twice in one agency is a gap naming both; other modules d
   expect(
     rateSensitivities(moduleWith("CP-2E", [register("T2F.5", RATE_SENSITIVITY, many)]))[0],
   ).toMatchObject({ oversized: true, key: "rate-sensitivities" });
+});
+
+const FACTORS = [
+  "Category",
+  "Factor",
+  "Weight",
+  "Raw Score 1–5",
+  "Weighted Score",
+  "Confidence",
+  "Evidence",
+  "Risk Mechanic",
+  "Credit Implication",
+];
+const t33 = (factor: string, weighted: Served, category = "Business") =>
+  [category, factor, "20%", "4", weighted, "High", "E-1", "m", "i"].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const scores = (module: string, registers: Register[]) =>
+  scoreRegisters(moduleWith(module, registers)).map(bars);
+
+test("scoreRegisters: CP-3's factors as horizontal bars, the highest and lowest named as served", () => {
+  const figures = scores("CP-3", [
+    register("T3.3", FACTORS, [
+      t33("Scale", c("0.80", "0.80")),
+      t33("Leverage", c("1.2", "1.2"), "Financial"),
+      t33("Liquidity", c("0.4", "0.4"), "Financial"),
+      t33("Governance", c("TBD")),
+    ]),
+  ]);
+  expect(figures).toHaveLength(1);
+  const [figure] = figures;
+  expect([figure!.key, figure!.table, figure!.title, figure!.orientation]).toEqual([
+    "weighted-factor-scores",
+    "T3.3",
+    "Weighted factor scores",
+    "horizontal",
+  ]);
+  expect(figure!.categories).toEqual(["Scale", "Leverage", "Liquidity", "Governance"]);
+  expect(figure!.series.map((series) => [series.key, series.label, series.origin])).toEqual([
+    ["score", "Weighted Score", "model"],
+  ]);
+  expect(said(figure!)).toEqual([
+    [{ value: "0.80" }, { value: "1.2" }, { value: "0.4" }, { value: null, reason: "TBD" }],
+  ]);
+  expect(figure!.summary).toBe(
+    "Weighted Score as served. Highest: Leverage 1.2. Lowest: Liquidity 0.4.",
+  );
+  expect(figure!.sourceOf(pick("score", "Liquidity"))).toBe(
+    "Category: Financial; Weight: 20%; Raw Score 1–5: 4; Confidence: High",
+  );
+});
+
+test("scoreRegisters: a factor stated twice is one bar, a gap naming each text where they differ", () => {
+  const [figure] = scores("CP-3", [
+    register("T3.3", FACTORS, [
+      t33("Scale", c("0.8", "0.8")),
+      t33("Scale", c("0.8", "0.8")),
+      t33("Leverage", c("1", "1")),
+      t33("Leverage", c("2", "2")),
+    ]),
+  ]);
+  expect(figure!.categories).toEqual(["Scale", "Leverage"]);
+  expect(said(figure!)).toEqual([
+    [{ value: "0.8" }, { value: null, reason: "stated twice: 1, 2" }],
+  ]);
+  expect(figure!.summary).toBe("Weighted Score as served. Highest: Scale 0.8. Lowest: Scale 0.8.");
+});
+
+test("scoreRegisters: no row states a score, the summary says so", () => {
+  const [figure] = scores("CP-3", [register("T3.3", FACTORS, [t33("Scale", c("TBD"))])]);
+  expect(figure!.summary).toBe("Weighted Score as served. No row states a score.");
+});
+
+const RANKING = [
+  "Rank",
+  "Issuer",
+  "Security / Tranche",
+  "Composite Score /100",
+  "Normalized /5.0",
+  "Credit Tier",
+  "Fundamental View",
+  "Relative Value View",
+  "Final Recommendation",
+];
+const t37 = (rank: string, issuer: string, tranche: string, score: Served) => [
+  c(rank, /^[0-9]+$/.test(rank) ? rank : null),
+  c(issuer),
+  c(tranche),
+  score,
+  c("3.5", "3.5"),
+  c("Tier 2"),
+  c("f"),
+  c("r"),
+  c("Buy"),
+];
+
+test("scoreRegisters: CP-3's composite scores in rank order, a rank that is no number last", () => {
+  const [figure] = scores("CP-3", [
+    register("T3.7", RANKING, [
+      t37("2", "Alpha", "Sr Notes", c("71.5", "71.5")),
+      t37("n/a", "Delta", "TL", c("40", "40")),
+      t37("tbd", "Omega", "RCF", c("10", "10")),
+      t37("1", "Beta", "2L", c("88", "88")),
+      t37("3", "Gamma", "Sub", c("55.25", "55.25")),
+    ]),
+  ]);
+  expect([figure!.key, figure!.title, figure!.orientation]).toEqual([
+    "composite-score",
+    "Composite score /100",
+    "horizontal",
+  ]);
+  expect(figure!.categories).toEqual([
+    "Beta 2L",
+    "Alpha Sr Notes",
+    "Gamma Sub",
+    "Delta TL",
+    "Omega RCF",
+  ]);
+  expect(figure!.series[0]!.label).toBe("Composite Score /100");
+  expect(said(figure!)).toEqual([
+    [{ value: "88" }, { value: "71.5" }, { value: "55.25" }, { value: "40" }, { value: "10" }],
+  ]);
+  expect(figure!.summary).toBe(
+    "Composite Score /100 as served. Highest: Beta 2L 88. Lowest: Omega RCF 10.",
+  );
+  expect(figure!.sourceOf(pick("score", "Beta 2L"))).toBe(
+    "Credit Tier: Tier 2; Final Recommendation: Buy",
+  );
+});
+
+test("scoreRegisters: CP-4's legal areas and CP-6's debate dimensions, each its own columns", () => {
+  const legal = scores("CP-4", [
+    register(
+      "T4.11",
+      [
+        "Area",
+        "Score 1–5",
+        "Evidence",
+        "Risk Mechanic",
+        "Credit Implication",
+        "Confidence",
+        "Evidence ID",
+      ],
+      [
+        [c("Security"), c("4", "4"), c("e"), c("m"), c("i"), c("Med"), c("L-1")],
+        [c("Priming"), c("2", "2"), c("e"), c("m"), c("i"), c("Low"), c("L-2")],
+      ],
+    ),
+  ]);
+  expect(legal.map((f) => [f.key, f.table, f.title, f.categories, f.series[0]!.label])).toEqual([
+    [
+      "legal-area-scores",
+      "T4.11",
+      "Legal area scores, 1 to 5",
+      ["Security", "Priming"],
+      "Score 1–5",
+    ],
+  ]);
+  expect(legal[0]!.sourceOf(pick("score", "Priming"))).toBe("Confidence: Low; Evidence ID: L-2");
+  const debate = scores("CP-6", [
+    register(
+      "T6A.6",
+      ["Dimension", "Score (1-5)", "Bull Evidence", "Bear Evidence", "Chair Assessment"],
+      [[c("Cash flow"), c("3.5", "3.5"), c("b"), c("r"), c("Balanced")]],
+    ),
+  ]);
+  expect(debate.map((f) => [f.key, f.title, f.series[0]!.label, f.orientation])).toEqual([
+    ["debate-scores", "Debate scores by dimension, 1 to 5", "Score (1-5)", "horizontal"],
+  ]);
+  expect(debate[0]!.sourceOf(pick("score", "Cash flow"))).toBe("Chair Assessment: Balanced");
+  expect(debate[0]!.summary).toBe(
+    "Score (1-5) as served. Highest: Cash flow 3.5. Lowest: Cash flow 3.5.",
+  );
+});
+
+test("scoreRegisters: a register of another module draws nothing", () => {
+  expect(scores("CP-2A", [register("T3.3", FACTORS, [t33("Scale", c("1", "1"))])])).toEqual([]);
 });
