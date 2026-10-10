@@ -158,6 +158,21 @@ export interface DumbbellRow {
   origin: Origin;
 }
 
+/** One point of a scatter: a value against the date it is served with. A
+    point with no readable date or no value is not placed; the table twin
+    lists it with its reason. */
+export interface ScatterPoint {
+  key: string;
+  label: string;
+  /** A date as served: placed where it reads as `YYYY-MM-DD`, `YYYY-MM` or
+      `YYYY`, never guessed from any other spelling. */
+  at: string;
+  value: Datum;
+  /** What colours the point: the series colours by first appearance. */
+  group: string;
+  origin: Origin;
+}
+
 // What a chart hands its frame: the drawing, and every mark a reader can reach.
 
 export interface Box {
