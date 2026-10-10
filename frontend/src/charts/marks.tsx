@@ -52,6 +52,49 @@ export function BarShape({
   );
 }
 
+/** A dot's radius: 8px across, as a line chart's point. */
+export const DOT = 4;
+
+/** A value marked across its row rather than as a bar from zero: a `rule`, a
+    line perpendicular to the value axis, solid for the host and dashed for
+    the model; or a `dot`, filled for the host and hollow for the model. */
+export function MarkerShape({
+  shape,
+  line,
+  tone,
+  origin,
+  mark,
+}: {
+  shape: "rule" | "dot";
+  /** The rule's two ends; a dot sits at their midpoint. */
+  line: { x1: number; y1: number; x2: number; y2: number };
+  tone: Tone;
+  origin: Origin;
+  mark: string;
+}) {
+  const model = origin === "model";
+  if (shape === "dot") {
+    return (
+      <circle
+        className={`chart-point chart-tone-${tone}${model ? " chart-hollow" : ""}`}
+        data-mark={mark}
+        data-origin={origin}
+        cx={(line.x1 + line.x2) / 2}
+        cy={(line.y1 + line.y2) / 2}
+        r={DOT}
+      />
+    );
+  }
+  return (
+    <line
+      className={`chart-line chart-rule chart-tone-${tone}${model ? " chart-dashed" : ""}`}
+      data-mark={mark}
+      data-origin={origin}
+      {...line}
+    />
+  );
+}
+
 /** An unavailable value: a short tick off the baseline, labelled "n/a". Its
     reason is in the mark's accessible name, the readout and the table. */
 export function GapMark({

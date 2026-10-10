@@ -8,13 +8,18 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import axe from "axe-core";
 import {
   BarChart,
+  BulletChart,
   DivergingBarChart,
   LineChart,
   ProvenanceKeyed,
   StackedBarChart,
   WaterfallChart,
+  type BulletRow,
   type ChartSeries,
 } from "@/charts";
+import { ChartFrame } from "@/charts/ChartFrame";
+import { bandPlot, type BandMarker } from "@/charts/band";
+import { DOT } from "@/charts/marks";
 import { fromScaled, placesOf, toScaled } from "@/charts/decimal";
 import { FALLBACK_WIDTH } from "@/charts/scale";
 import { useWidth } from "@/charts/use-width";
@@ -551,6 +556,293 @@ describe("a diverging bar chart", () => {
   });
 });
 
+// Made-up tests and values: no real issuer's figures (N191).
+const TESTS: BulletRow[] = [
+  {
+    key: "lev",
+    label: "Net leverage",
+    direction: "max",
+    threshold: { value: "4.50" },
+    current: { value: "3.25" },
+    headroom: { value: "1.25" },
+    origin: "model",
+  },
+  {
+    key: "icr",
+    label: "Interest cover",
+    direction: "min",
+    threshold: { value: "2.00" },
+    current: { value: null, reason: "NOT_DISCLOSED" },
+    headroom: { value: null, reason: "NOT_DISCLOSED" },
+    origin: "host",
+  },
+  {
+    key: "fcc",
+    label: "Fixed charge cover",
+    direction: null,
+    threshold: { value: null, reason: "PACKED_CELL" },
+    current: { value: "1.8" },
+    headroom: { value: "-0.20" },
+    origin: "host",
+  },
+];
+
+function bullets(extra: Partial<Parameters<typeof BulletChart>[0]> = {}) {
+  return render(
+    <BulletChart
+      title="Covenant headroom"
+      summary="Three tests against their thresholds."
+      unit="x"
+      rows={TESTS}
+      {...extra}
+    />,
+  );
+}
+
+describe("a bullet chart", () => {
+  test("names each mark with its row, both values, the headroom as served and its origin", () => {
+    const { container } = bullets();
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Net leverage: current basis 3.25 x against a ceiling of 4.50 x, headroom 1.25 (model-authored)",
+      "Net leverage: ceiling 4.50 x against a current basis of 3.25 x, headroom 1.25 (model-authored)",
+      "Interest cover: current basis n/a (NOT_DISCLOSED) against a floor of 2.00 x, headroom n/a (NOT_DISCLOSED) (host-verified)",
+      "Interest cover: floor 2.00 x against a current basis of n/a (NOT_DISCLOSED), headroom n/a (NOT_DISCLOSED) (host-verified)",
+      "Fixed charge cover: current basis 1.8 x against a threshold of n/a (PACKED_CELL), headroom -0.20 (host-verified)",
+      "Fixed charge cover: threshold n/a (PACKED_CELL) against a current basis of 1.8 x, headroom -0.20 (host-verified)",
+    ]);
+    // The readout says what the name says, headroom included.
+    act(() => marks(container)[1]!.focus());
+    expect(container.querySelector("[data-readout]")).toHaveTextContent(
+      "Net leverage: ceiling 4.50 x against a current basis of 3.25 x, headroom 1.25 (model-authored)",
+    );
+    // Each row is labelled with its direction.
+    const ticks = [...plotOf(container).querySelectorAll("text.chart-tick")].map((tick) => {
+      const lines = [...tick.querySelectorAll("tspan")].map((line) => line.textContent);
+      return lines.length ? lines.join(" ") : tick.textContent;
+    });
+    expect(ticks).toEqual(
+      expect.arrayContaining([
+        "Net leverage, ceiling",
+        "Interest cover, floor",
+        "Fixed charge cover, direction not stated",
+      ]),
+    );
+    expect(container.querySelector("figure")).toHaveAttribute("data-chart", "bullet");
+  });
+
+  test("draws the current basis as a bar from zero and the threshold as a rule across its row", () => {
+    const { container } = bullets();
+    const bar = container.querySelector('rect[data-mark="lev:current"]');
+    // The model's bar is outlined and hatched; the model's rule is dashed.
+    expect(bar).toHaveClass("chart-outline", "chart-tone-series-1");
+    const rule = container.querySelector('line[data-mark="lev:threshold"]');
+    expect(rule).toHaveClass("chart-rule", "chart-tone-neutral", "chart-dashed");
+    expect(rule).toHaveAttribute("data-origin", "model");
+    const host = container.querySelector('line[data-mark="icr:threshold"]');
+    expect(host).toHaveClass("chart-rule");
+    expect(host).not.toHaveClass("chart-dashed");
+    expect(host).toHaveAttribute("data-origin", "host");
+    // Across the row: perpendicular to the value axis, standing past its bar.
+    expect(numberOf(rule ?? undefined, "x1")).toBe(numberOf(rule ?? undefined, "x2"));
+    const top = numberOf(rule ?? undefined, "y1");
+    const foot = numberOf(rule ?? undefined, "y2");
+    expect(top).toBeLessThan(numberOf(bar ?? undefined, "y"));
+    expect(foot).toBeGreaterThan(
+      numberOf(bar ?? undefined, "y") + numberOf(bar ?? undefined, "height"),
+    );
+    // The rule stands at 4.50 past the bar's end at 3.25, the bar from zero.
+    const zero = numberOf(container.querySelector(".chart-zero") ?? undefined, "x1");
+    // The model's outlined edge is drawn half its 1.5px stroke inside the box.
+    expect(numberOf(bar ?? undefined, "x") - 0.75).toBeCloseTo(zero);
+    expect(numberOf(rule ?? undefined, "x1")).toBeGreaterThan(
+      numberOf(bar ?? undefined, "x") + numberOf(bar ?? undefined, "width"),
+    );
+    // The bar's exact value labels it; headroom is never drawn.
+    const svg = plotOf(container);
+    expect(within(svg).getByText("3.25")).toHaveClass("chart-value");
+    expect(within(svg).queryByText("1.25")).toBeNull();
+    expect(rects(container)).toHaveLength(2);
+    const legend = screen.getByRole("list", { name: "Legend" });
+    expect(within(legend).getByText("Current basis")).toBeInTheDocument();
+    expect(within(legend).getByText("Threshold")).toBeInTheDocument();
+    expect(within(legend).getByText("Threshold").querySelector("line.chart-line")).not.toBeNull();
+  });
+
+  test("leaves out a value label the rule would cross: the name still says it", () => {
+    const { container } = bullets({
+      rows: [{ ...TESTS[0]!, current: { value: "4.40" }, headroom: { value: "0.10" } }],
+    });
+    expect(within(plotOf(container)).queryByText("4.40")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^Net leverage: current basis 4\.40 x/ }),
+    ).toBeInTheDocument();
+  });
+
+  test("marks an unavailable current basis or threshold n/a in its row, with its reason", () => {
+    const { container } = bullets();
+    const gaps = [...container.querySelectorAll<SVGGElement>("[data-gap]")];
+    expect(gaps.map((gap) => gap.dataset.mark)).toEqual(["icr:current", "fcc:threshold"]);
+    for (const gap of gaps)
+      expect(within(gap as unknown as HTMLElement).getByText("n/a")).toBeInTheDocument();
+    // Neither is drawn as a zero: no bar for the one, no rule for the other.
+    expect(container.querySelector('rect[data-mark="icr:current"]')).toBeNull();
+    expect(container.querySelector('line[data-mark="fcc:threshold"]')).toBeNull();
+    // A row with both unavailable marks the two apart, never one over the other.
+    const both = render(
+      <BulletChart
+        title="Both"
+        summary="Nothing served."
+        rows={[
+          {
+            key: "dscr",
+            label: "Debt service cover",
+            direction: "min",
+            threshold: { value: null, reason: "NOT_SERVED" },
+            current: { value: null, reason: "NOT_SERVED" },
+            headroom: { value: null, reason: "NOT_SERVED" },
+            origin: "host",
+          },
+        ]}
+      />,
+    ).container;
+    const ticks = [...plotOf(both).querySelectorAll("[data-gap] line")].map((line) =>
+      numberOf(line, "x1"),
+    );
+    expect(ticks).toHaveLength(2);
+    expect(new Set(ticks).size).toBe(2);
+  });
+
+  test("has a table twin of the rows as served, headroom included", () => {
+    bullets();
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const table = screen.getByRole("table", { name: "Covenant headroom" });
+    const cells = within(table)
+      .getAllByRole("row")
+      .map((row) => [...(row as HTMLTableRowElement).cells].map((cell) => cell.textContent));
+    expect(cells).toEqual([
+      ["Test", "Direction", "Threshold, x", "Current basis, x", "Headroom, x", "Origin"],
+      ["Net leverage", "ceiling", "4.50", "3.25", "1.25", "model-authored"],
+      [
+        "Interest cover",
+        "floor",
+        "2.00",
+        "n/a: NOT_DISCLOSED",
+        "n/a: NOT_DISCLOSED",
+        "host-verified",
+      ],
+      [
+        "Fixed charge cover",
+        "direction not stated",
+        "n/a: PACKED_CELL",
+        "1.8",
+        "-0.20",
+        "host-verified",
+      ],
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    bullets({ categoryLabel: "Trigger", unit: undefined });
+    fireEvent.click(screen.getAllByRole("button", { name: "Table" })[1]!);
+    expect(
+      within(screen.getByRole("table"))
+        .getAllByRole("columnheader")
+        .map((cell) => cell.textContent),
+    ).toEqual(["Trigger", "Direction", "Threshold", "Current basis", "Headroom", "Origin"]);
+  });
+
+  test("takes the bar, then the rule, row by row, from the keyboard; every target 24px", () => {
+    const onSelect = vi.fn();
+    const { container } = bullets({ onSelect });
+    expect(marks(container).map((button) => button.dataset.mark)).toEqual([
+      "lev:current",
+      "lev:threshold",
+      "icr:current",
+      "icr:threshold",
+      "fcc:current",
+      "fcc:threshold",
+    ]);
+    act(() => marks(container)[0]!.focus());
+    fireEvent.keyDown(marks(container)[0]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(marks(container)[1]);
+    fireEvent.keyDown(marks(container)[1]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(marks(container)[2]);
+    fireEvent.click(marks(container)[1]!);
+    expect(onSelect).toHaveBeenCalledWith(
+      { series: "threshold", category: "Net leverage", index: 0, value: "4.50", origin: "model" },
+      marks(container)[1],
+    );
+    for (const button of marks(container)) {
+      expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(24);
+      expect(parseFloat(button.style.height)).toBeGreaterThanOrEqual(24);
+    }
+  });
+});
+
+describe("a band chart's markers", () => {
+  // A dot marker, as the range strip and the dumbbell will draw one.
+  const dot = (origin: "host" | "model", at: number, gap = false): BandMarker => ({
+    key: `dot-${origin}`,
+    category: origin === "host" ? 0 : 1,
+    at,
+    tone: "series-3",
+    origin,
+    gap,
+    shape: "dot",
+    name: `Dot, ${origin}`,
+    selection: { series: "dot", category: origin, index: 0, value: null, origin },
+  });
+  const plot = (markers: readonly BandMarker[]) =>
+    render(
+      <ChartFrame
+        kind="markers"
+        title="Markers"
+        summary="Dots."
+        legend={[]}
+        provenance="line"
+        table={{ head: ["Row"], rows: [] }}
+        plot={(kit) =>
+          bandPlot(
+            { orientation: "horizontal", categories: ["A", "B"], slots: 1, bars: [], markers },
+            kit,
+          )
+        }
+      />,
+    ).container;
+
+  test("draws a dot filled for the host and hollow for the model, its target 24px and round", () => {
+    const container = plot([dot("host", 3), dot("model", 7)]);
+    const host = container.querySelector('circle[data-mark="dot-host"]');
+    const model = container.querySelector('circle[data-mark="dot-model"]');
+    expect(host).toHaveClass("chart-point", "chart-tone-series-3");
+    expect(host).not.toHaveClass("chart-hollow");
+    expect(model).toHaveClass("chart-point", "chart-hollow");
+    expect(numberOf(host ?? undefined, "r")).toBe(DOT);
+    // The marker counts in the value axis: 7 lies inside the plot, past 3.
+    expect(numberOf(model ?? undefined, "cx")).toBeGreaterThan(numberOf(host ?? undefined, "cx"));
+    expect(numberOf(model ?? undefined, "cx")).toBeLessThanOrEqual(FALLBACK_WIDTH - 8);
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Dot, host",
+      "Dot, model",
+    ]);
+    for (const button of marks(container)) {
+      expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(24);
+      expect(parseFloat(button.style.height)).toBeGreaterThanOrEqual(24);
+    }
+    fireEvent.click(marks(container)[0]!);
+    expect(container.querySelector("circle.chart-ring")).not.toBeNull();
+  });
+
+  test("an unavailable marker is a labelled gap, and its value never sets the axis", () => {
+    const container = plot([dot("host", 3), dot("model", 1000, true)]);
+    expect(container.querySelector('circle[data-mark="dot-model"]')).toBeNull();
+    expect(container.querySelector('[data-gap][data-mark="dot-model"]')).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Dot, model" })).toBeInTheDocument();
+    const ticks = [...plotOf(container).querySelectorAll("text.chart-tick")].map(
+      (tick) => tick.textContent,
+    );
+    expect(ticks).not.toContain("1,000");
+  });
+});
+
 describe("every chart form, audited", () => {
   // The tags scripts/a11y-axe.mjs audits the workspace with. Colour contrast
   // needs layout jsdom lacks; the stylesheet's own test below holds it.
@@ -599,11 +891,12 @@ describe("every chart form, audited", () => {
           categories={PERIODS}
           series={EBITDA}
         />
+        <BulletChart title="Headroom" summary="Against thresholds." unit="x" rows={TESTS} />
       </main>,
     );
     expect(await audit(container)).toEqual([]);
     for (const toggle of screen.getAllByRole("button", { name: "Table" })) fireEvent.click(toggle);
-    expect(screen.getAllByRole("table")).toHaveLength(5);
+    expect(screen.getAllByRole("table")).toHaveLength(6);
     expect(await audit(container)).toEqual([]);
   });
 });

@@ -228,6 +228,11 @@
   .chart-dashed {
     stroke-dasharray: 5 4;
   }
+  /* A value marked across its row (a threshold): square ends, so it stops
+     where its band does. */
+  .chart-rule {
+    stroke-linecap: butt;
+  }
   /* A point is edged 2px in the card's colour, so it reads where lines cross. */
   .chart-point {
     fill: var(--tone);

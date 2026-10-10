@@ -105,6 +105,20 @@ export interface WaterfallStep {
   origin: Origin;
 }
 
+/** One test of a bullet chart: a current basis against its threshold. The
+    headroom is the module's own figure, printed as served and never drawn
+    or computed here. */
+export interface BulletRow {
+  key: string;
+  label: string;
+  /** `max`: the threshold is a ceiling; `min`: a floor; `null`: not stated. */
+  direction: "max" | "min" | null;
+  threshold: Datum;
+  current: Datum;
+  headroom: Datum;
+  origin: Origin;
+}
+
 // What a chart hands its frame: the drawing, and every mark a reader can reach.
 
 export interface Box {
