@@ -5,7 +5,7 @@
 // with the state the route left them in.
 import { readFileSync } from "node:fs";
 import type { ReactNode } from "react";
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { composeChrome, words } from "@/chrome/compose";
 import { stamp } from "@/ds/format";
@@ -168,6 +168,74 @@ describe("Analysis", () => {
       expect(
         record.querySelector(`[data-digest="sha256:${handoff.record_sha256}"]`),
       ).not.toBeNull();
+      unmount();
+    }
+  });
+
+  /** The fixture's CP-5 with made-up issues, and CP-1's tables for figures. */
+  function cp5(extra: Partial<HandoffView> = {}): AnalysisDocument {
+    const columns = ["Issue ID", "Severity", "Module", "Issue Type"];
+    const cell = (text: string) => ({ text, value: null });
+    const of = (module: string) => complete.body.handoffs.find((h) => h.module_id === module)!;
+    const handoff: HandoffView = {
+      ...of("CP-5"),
+      tables: of("CP-1").tables,
+      registers: [
+        {
+          register_id: "T5.9",
+          columns,
+          declared: columns,
+          rows: [
+            ["I-1", "CRITICAL", "CP-1", "Citation"].map(cell),
+            ["I-2", "MINOR", "CP-1", "Math"].map(cell),
+          ],
+        },
+      ],
+      ...extra,
+    };
+    return { ...complete, body: { ...complete.body, handoffs: [handoff] } };
+  }
+
+  test("the Audit tab counts CP-5's issues, a pressed segment said as computed here", () => {
+    const { container } = mountAt(cp5(), "CP-5");
+    openTab(container, "audit");
+    const audit = container.querySelector('[data-depth-panel="audit"]')!;
+    const group = audit.querySelector('[data-audit-part="Counts"]') as HTMLElement;
+    // After every other group.
+    expect([...audit.querySelectorAll("[data-audit-part]")].at(-1)).toBe(group);
+    expect(group.querySelector("h3")).toHaveTextContent("Counts");
+    const figure = group.querySelector("[data-figure='issue-counts']") as HTMLElement;
+    expect(figure).toHaveTextContent("Issues by module and severity, count");
+    fireEvent.click(
+      within(figure).getByRole("button", {
+        name: "CRITICAL, CP-1: 1 issue (a count of the model's rows)",
+      }),
+    );
+    // Said beside the count it came from, in the Counts group.
+    const picked = group.querySelector("[data-picked]")!;
+    expect(container.querySelectorAll("[data-picked]")).toHaveLength(1);
+    expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("1 issue");
+    expect(picked).toHaveTextContent("Computed here: a count of the model's rows, not served");
+    expect(picked).toHaveTextContent("Issues by module and severity, count");
+    // A Figures mark is said beside the Figures, outside the depth panel.
+    const mark = container.querySelector("[data-figures] [data-figure] button") as HTMLElement;
+    fireEvent.click(mark);
+    expect(container.querySelectorAll("[data-picked]")).toHaveLength(1);
+    expect(container.querySelector("[data-depth] [data-picked]")).toBeNull();
+    expect(container.querySelector("[data-figures] ~ [data-picked]")).not.toBeNull();
+  });
+
+  test("no Counts group where the registers are refused or count nothing", () => {
+    const refused = cp5({ registers_unavailable_reason: "TABLES_MALFORMED" });
+    for (const [document, module] of [
+      [refused, "CP-5"],
+      [complete, "CP-1"],
+    ] as const) {
+      const { container, unmount } = mountAt(document, module);
+      openTab(container, "audit");
+      const audit = container.querySelector('[data-depth-panel="audit"]')!;
+      expect(audit.querySelector('[data-audit-part="Record"]')).not.toBeNull();
+      expect(audit.querySelector('[data-audit-part="Counts"]')).toBeNull();
       unmount();
     }
   });
