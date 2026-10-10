@@ -1,7 +1,8 @@
 // What a module's figures share, whether drawn from its tagged tables
 // (`figures.tsx`) or its declared registers (`register-figures.tsx`): the
-// figure each draws, the served cell and its readers, exact sums and the
-// bounds on how much is drawn. A leaf: it imports neither.
+// figure each draws, the served cell and its readers, exact sums, the bounds
+// on how much is drawn, and the stack and maturity wall both build. A leaf:
+// it imports neither.
 import type {
   BulletRow,
   ChartColor,
@@ -11,7 +12,7 @@ import type {
   RangeRow,
   WaterfallStep,
 } from "@/charts";
-import { fromScaled, placesOf, toScaled } from "@/charts/decimal";
+import { formatDecimal, fromScaled, placesOf, toScaled } from "@/charts/decimal";
 import type { HandoffView } from "@/wire/v1";
 
 /** A served cell, a table's or a register's: its text as written and the
@@ -74,6 +75,11 @@ export function groupBy<T>(rows: readonly T[], key: (row: T) => string): Map<str
 }
 /** Two cells as one key; the separator cannot occur in a served cell's text. */
 export const pair = (a: string, b: string) => `${a}\u0000${b}`;
+/** Each value once, in the order it first appears. */
+export const unique = (values: readonly string[]) => [...new Set(values)];
+/** A maturity's year: the four digits its date starts with, else "Undated",
+    which sorts after every year. */
+export const yearOf = (date: string) => /^\d{4}/.exec(date)?.[0] ?? "Undated";
 
 /** What every figure has, whatever draws it. */
 interface FigureBase {
@@ -161,4 +167,97 @@ export function oversized(key: string, table: string, title: string, marks: numb
     sourceOf: () => null,
     oversized: true,
   };
+}
+
+/** What a stack is built from: each row's category, series and amount. */
+export interface StackSpec {
+  head: Omit<StackFigure, "kind" | "categories" | "series" | "sourceOf">;
+  categoryOf: (row: Row) => string;
+  seriesOf: (row: Row) => string;
+  amountOf: (row: Row) => string | null | undefined;
+  /** Categories sorted (years), else in the order they first appear. */
+  sorted?: boolean;
+  /** A series' label and colour; by default its key, in the ramp's colour. */
+  look?: (series: string) => { label: string; color?: ChartColor };
+  /** A segment's source, from every row it sums (never none). */
+  sourceOf: (rows: readonly Row[]) => string | null;
+}
+
+/** Rows stacked by series over categories, series in the order they first
+    appear. A segment is the exact sum of its rows' amounts (`sumOf`): a
+    category and series with no row is genuinely zero; one whose every row's
+    amount is unstated is unknown, never silently zero. Past `MAX_MARKS` the
+    stack is stated, not drawn. */
+export function stackFigure(rows: readonly Row[], spec: StackSpec): StackFigure {
+  const { head, categoryOf, seriesOf } = spec;
+  const categories = unique(rows.map(categoryOf));
+  if (spec.sorted) categories.sort();
+  const keys = unique(rows.map(seriesOf));
+  const marks = keys.length * categories.length;
+  if (marks > MAX_MARKS) return oversized(head.key, head.table, head.title, marks);
+  const segments = groupBy(rows, (row) => pair(seriesOf(row), categoryOf(row)));
+  const segment = (series: string, category: string): Datum => {
+    const summed = segments.get(pair(series, category));
+    if (!summed) return { value: "0" };
+    const sum = sumOf(summed.map(spec.amountOf));
+    return sum.value === null ? { value: null, reason: "not stated" } : { value: sum.value };
+  };
+  return {
+    ...head,
+    kind: "stack",
+    categories,
+    series: keys.map((key) => ({
+      key,
+      ...(spec.look?.(key) ?? { label: key }),
+      origin: "model" as const,
+      data: categories.map((category) => segment(key, category)),
+    })),
+    // A segment sums every row of its series and category, so it names each
+    // one's stated source, not the first's (rewrite tournament).
+    sourceOf: (selection) => {
+      const summed = segments.get(pair(selection.series, selection.category));
+      return summed ? spec.sourceOf(summed) : null;
+    },
+  };
+}
+
+/** How a maturity wall reads a row, and what it calls its rows. */
+export interface Wall {
+  amountOf: (row: Row) => string | null | undefined;
+  dateOf: (row: Row) => string;
+  nameOf: (row: Row) => string;
+  noun: string;
+}
+
+/** The row falling due first: the earliest of those whose date has a year,
+    else the first by its date's text; `dated` says whether any has a year. */
+export function nearestOf(
+  rows: readonly Row[],
+  dateOf: (row: Row) => string,
+): { row: Row; dated: boolean } {
+  const dated = rows.filter((row) => yearOf(dateOf(row)) !== "Undated");
+  const [row] = [...(dated.length ? dated : rows)].sort((a, b) =>
+    dateOf(a).localeCompare(dateOf(b)),
+  );
+  return { row: row!, dated: dated.length > 0 };
+}
+
+/** A maturity wall's summary (CP-1's): the principal summed exactly, said as
+    known where some is unstated (R24-13), and the nearest dated maturity,
+    chosen whether or not its principal is known. */
+export function wallSummary(rows: readonly Row[], wall: Wall, unit: string | undefined): string {
+  const values = rows.map(wall.amountOf);
+  const total = sumOf(values);
+  const unknown = values.filter((value) => value == null).length;
+  const [n, noun] = [rows.length, wall.noun];
+  const principal =
+    total.value === null
+      ? `Principal unstated for all ${n} ${noun}`
+      : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}${
+          total.complete
+            ? ` principal in ${n} ${noun}`
+            : ` known principal across ${n - unknown} of ${n} ${noun} (${unknown} unstated)`
+        }`;
+  const { row, dated } = nearestOf(rows, wall.dateOf);
+  return `${principal}${dated ? `; the nearest, ${wall.nameOf(row)}, falls due ${wall.dateOf(row)}` : ""}.`;
 }

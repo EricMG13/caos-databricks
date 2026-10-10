@@ -96,38 +96,67 @@ interface Entry {
   index: number;
 }
 
-/** What a figure of one unit's rows is called, and where it comes from. */
+/** What a figure of one group's rows is called, and where it comes from. */
 interface Head {
   key: string;
   table: string;
   title: string;
-  unit: Unit | undefined;
+  unit: string | undefined;
+}
+
+/** How a register's rows split into figures: a row's group (none: the
+    figure whose key and title carry no suffix), the suffix a group adds to
+    its figure's key and title, and the figure's unit. */
+interface Grouping<G extends string> {
+  of: (row: Row) => G | undefined;
+  key: (group: G) => string;
+  title: (group: G) => string;
+  unit: (group: G) => string | undefined;
 }
 
 const UNIT_KEY: Record<Unit, string> = { x: "x", "%": "percent" };
 
-/** A figure per unit, in the order each unit first appears; its title
-    carries the unit. A figure past `MAX_MARKS` is stated, not drawn. */
-function perUnit(
+/** Rows grouped by the unit their figure is written in, `x` or `%`. */
+const bySuffix = (unitOf: (row: Row) => Unit | undefined): Grouping<Unit> => ({
+  of: unitOf,
+  key: (unit) => UNIT_KEY[unit],
+  title: (unit) => unit,
+  unit: (unit) => unit,
+});
+
+/** A register's rows split by `grouping`, in the order each group first
+    appears, each with its figure's head. */
+function groupsOf<G extends string>(
   rows: readonly Row[],
   base: { key: string; table: string; title: string },
-  unitOf: (row: Row) => Unit | undefined,
+  grouping: Grouping<G>,
+): { entries: Entry[]; head: Head }[] {
+  const entries = rows.map((row, index) => ({ row, index }));
+  return [...groupBy(entries, (entry) => grouping.of(entry.row) ?? "").values()].map((group) => {
+    const at = grouping.of(group[0]!.row);
+    const head = {
+      key: at ? `${base.key}-${grouping.key(at)}` : base.key,
+      table: base.table,
+      title: at ? `${base.title}, ${grouping.title(at)}` : base.title,
+      unit: at ? grouping.unit(at) : undefined,
+    };
+    return { entries: group, head };
+  });
+}
+
+/** A figure per group; a figure past `MAX_MARKS` is stated, not drawn. */
+function perGroup<G extends string>(
+  rows: readonly Row[],
+  base: { key: string; table: string; title: string },
+  grouping: Grouping<G>,
   marksPerRow: number,
   draw: (entries: readonly Entry[], head: Head) => Figure,
 ): Figure[] {
-  const entries = rows.map((row, index) => ({ row, index }));
-  return [...groupBy(entries, (entry) => unitOf(entry.row) ?? "").values()].map((group) => {
-    const unit = unitOf(group[0]!.row);
-    const head = {
-      key: unit ? `${base.key}-${UNIT_KEY[unit]}` : base.key,
-      table: base.table,
-      title: unit ? `${base.title}, ${unit}` : base.title,
-      unit,
-    };
-    const marks = group.length * marksPerRow;
+  return groupsOf(rows, base, grouping).map(({ entries, head }) => {
+    const marks = entries.length * marksPerRow;
     return marks > MAX_MARKS
       ? oversized(head.key, head.table, head.title, marks)
-      : draw(group, head);
+      : draw(entries, head);
   });
 }
 
@@ -169,7 +198,7 @@ export function covenantHeadroom(handoff: HandoffView): Figure[] {
   const unitOf = (row: Row) => suffixOf(row["Current Basis"]) ?? suffixOf(row["Threshold"]);
   const base = { key: "covenant-headroom", table: "T4C.4", title: "Covenant headroom" };
   // A bar and a rule a test.
-  return perUnit(rows, base, unitOf, 2, (entries, head) => ({
+  return perGroup(rows, base, bySuffix(unitOf), 2, (entries, head) => ({
     ...head,
     kind: "bullet",
     summary: `Headroom as served: ${entries
@@ -191,7 +220,7 @@ export function covenantHeadroom(handoff: HandoffView): Figure[] {
   }));
 }
 
-type Statistic = "min" | "q1" | "median" | "q3" | "max" | "marker";
+type Statistic = Exclude<keyof RangeRow, "key" | "label" | "origin">;
 
 /** A range strip's statistics, each with the register column it is read from. */
 type Statistics = readonly (readonly [Statistic, string])[];
@@ -235,7 +264,7 @@ export function peerRanges(handoff: HandoffView): Figure[] {
   const unitOf = (row: Row) => suffixOf(row["Borrower Value"]) ?? suffixOf(row["Median"]);
   const marks = rangeMarks(rows[0]!, PEER_STATISTICS);
   const base = { key: "peer-ranges", table: "T4.6", title: "Peer ranges" };
-  return perUnit(rows, base, unitOf, marks, (entries, head) => ({
+  return perGroup(rows, base, bySuffix(unitOf), marks, (entries, head) => ({
     ...head,
     kind: "range",
     summary: `Borrower value as served: ${entries
@@ -270,7 +299,7 @@ export function impliedEv(handoff: HandoffView): Figure[] {
   const unitOf = (row: Row) => suffixOf(row["Implied EV"]) ?? suffixOf(row["Median"]);
   const marks = rangeMarks(rows[0]!, IMPLIED_STATISTICS);
   const base = { key: "implied-ev", table: "T4.10", title: "Implied enterprise value by method" };
-  return perUnit(rows, base, unitOf, marks, (entries, head) => ({
+  return perGroup(rows, base, bySuffix(unitOf), marks, (entries, head) => ({
     ...head,
     kind: "range",
     summary: `Implied EV as served: ${entries

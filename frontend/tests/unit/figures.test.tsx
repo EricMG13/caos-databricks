@@ -12,10 +12,16 @@ import {
   MAX_MARKS,
   datum,
   groupBy,
+  nearestOf,
   oversized,
   pair,
+  stackFigure,
   sumOf,
   text,
+  unique,
+  wallSummary,
+  yearOf,
+  type Row,
 } from "@/sections/analysis/figure-core";
 import {
   accountLines,
@@ -52,6 +58,91 @@ test("test_sumOf_is_exact_and_unitOf_reads_the_register", () => {
   expect(unitOf("USD", "MILLIONS")).toBe("USD m");
   expect(unitOf("", "MILLIONS")).toBeUndefined();
   expect(recordsOf(cp1.tables[0]!)[0]!["period_id"]?.text).toBe("FY2025");
+});
+
+test("stackFigure: a segment sums its rows exactly, no row is zero, no stated amount a gap", () => {
+  const row = (where: string, what: string, amount: string | null, name: string): Row => ({
+    where: { text: where, value: null },
+    what: { text: what, value: null },
+    amount: { text: amount ?? "n/a", value: amount },
+    name: { text: name, value: null },
+  });
+  const rows = [
+    row("2030", "A", "0.1", "a1"),
+    row("2029", "A", "0.2", "a2"),
+    row("2030", "A", "9007199254740993", "a3"),
+    row("2029", "B", null, "b1"),
+  ];
+  const spec = {
+    head: { key: "k", table: "t", title: "T", summary: "S", unit: "u" },
+    categoryOf: (r: Row) => text(r, "where"),
+    seriesOf: (r: Row) => text(r, "what"),
+    amountOf: (r: Row) => r["amount"]?.value,
+    sourceOf: (summed: readonly Row[]) => summed.map((r) => text(r, "name")).join("+"),
+  };
+  const figure = stackFigure(rows, spec);
+  expect(figure).toMatchObject({ kind: "stack", key: "k", summary: "S", unit: "u" });
+  // First-appearance order, unless sorted; a series' label is its key.
+  expect(figure.categories).toEqual(["2030", "2029"]);
+  expect(figure.series).toEqual([
+    {
+      key: "A",
+      label: "A",
+      origin: "model",
+      data: [{ value: "9007199254740993.1" }, { value: "0.2" }],
+    },
+    {
+      key: "B",
+      label: "B",
+      origin: "model",
+      data: [{ value: "0" }, { value: null, reason: "not stated" }],
+    },
+  ]);
+  const at = (series: string, category: string) =>
+    figure.sourceOf({ series, category, index: 0, value: null, origin: "model" });
+  expect(at("A", "2030")).toBe("a1+a3");
+  expect(at("B", "2030")).toBeNull();
+  const sorted = stackFigure(rows, {
+    ...spec,
+    sorted: true,
+    look: () => ({ label: "L", color: "tranche-1l" as const }),
+  });
+  expect(sorted.categories).toEqual(["2029", "2030"]);
+  expect(sorted.series[0]).toMatchObject({ key: "A", label: "L", color: "tranche-1l" });
+  const many = Array.from({ length: MAX_MARKS + 1 }, (_, n) => row(`${n}`, "A", "1", "x"));
+  expect(stackFigure(many, spec)).toMatchObject({ oversized: true, key: "k", title: "T" });
+});
+
+test("wallSummary, nearestOf, yearOf, unique: a maturity wall's words", () => {
+  expect(unique(["b", "a", "b"])).toEqual(["b", "a"]);
+  expect(yearOf("2031-06-30")).toBe("2031");
+  expect(yearOf("June 2031")).toBe("Undated");
+  const row = (name: string, date: string, amount: string | null): Row => ({
+    name: { text: name, value: null },
+    date: { text: date, value: null },
+    amount: { text: amount ?? "n/a", value: amount },
+  });
+  const wall = {
+    amountOf: (r: Row) => r["amount"]?.value,
+    dateOf: (r: Row) => text(r, "date"),
+    nameOf: (r: Row) => text(r, "name"),
+    noun: "loans",
+  };
+  const rows = [
+    row("Later", "2030-01-01", "1.5"),
+    row("Sooner", "2029-06-30", null),
+    row("Open", "", "2"),
+  ];
+  expect(nearestOf(rows, wall.dateOf)).toEqual({ row: rows[1], dated: true });
+  expect(wallSummary(rows, wall, "EUR")).toBe(
+    "3.5 EUR known principal across 2 of 3 loans (1 unstated); the nearest, Sooner, falls due 2029-06-30.",
+  );
+  const undated = [row("B", "TBC", null), row("A", "Bullet", null)];
+  expect(nearestOf(undated, wall.dateOf)).toEqual({ row: undated[1], dated: false });
+  expect(wallSummary(undated, wall, undefined)).toBe("Principal unstated for all 2 loans.");
+  expect(wallSummary([rows[0]!], wall, undefined)).toBe(
+    "1.5 principal in 1 loans; the nearest, Later, falls due 2030-01-01.",
+  );
 });
 
 test("the readers the register figures share: groupBy, pair, text, datum, oversized", () => {
