@@ -14,6 +14,7 @@ import {
   LineChart,
   ProvenanceKeyed,
   RangeStripChart,
+  ScatterChart,
   StackedBarChart,
   Swatch,
   WaterfallChart,
@@ -21,7 +22,9 @@ import {
   type ChartSeries,
   type DumbbellRow,
   type RangeRow,
+  type ScatterPoint,
 } from "@/charts";
+import { readDate } from "@/charts/ScatterChart";
 import { ChartFrame } from "@/charts/ChartFrame";
 import { bandPlot, type BandMarker } from "@/charts/band";
 import { DOT } from "@/charts/marks";
@@ -1411,6 +1414,217 @@ describe("a dumbbell", () => {
   });
 });
 
+// Securities against their maturities, made up: three placed, one with a
+// date no reader should guess, one with a day its month lacks, one unquoted.
+const CURVE: ScatterPoint[] = [
+  {
+    key: "a",
+    label: "Note A",
+    at: "2031-06-15",
+    value: { value: "412.5" },
+    group: "Senior",
+    origin: "model",
+  },
+  {
+    key: "b",
+    label: "Note B",
+    at: "2029-03",
+    value: { value: "275" },
+    group: "Sub",
+    origin: "host",
+  },
+  {
+    key: "c",
+    label: "Note C",
+    at: "2033",
+    value: { value: "-12.25" },
+    group: "Senior",
+    origin: "model",
+  },
+  {
+    key: "d",
+    label: "Note D",
+    at: "03/04/2031",
+    value: { value: "300" },
+    group: "Senior",
+    origin: "model",
+  },
+  {
+    key: "e",
+    label: "Note E",
+    at: "2030-02-30",
+    value: { value: "100" },
+    group: "Sub",
+    origin: "model",
+  },
+  {
+    key: "f",
+    label: "Note F",
+    at: "2032-01-01",
+    value: { value: null, reason: "Not quoted" },
+    group: "Senior",
+    origin: "model",
+  },
+];
+
+function scatter(extra: Partial<Parameters<typeof ScatterChart>[0]> = {}) {
+  return render(
+    <ScatterChart
+      title="Spread against maturity"
+      summary="Each security's spread at its maturity."
+      unit="bps"
+      points={CURVE}
+      xLabel="Maturity"
+      pointLabel="Security"
+      valueLabel="Spread"
+      groupLabel="Seniority"
+      {...extra}
+    />,
+  );
+}
+
+const pointAt = (root: HTMLElement, key: string) =>
+  plotOf(root).querySelector<SVGCircleElement>(`circle[data-mark="${key}"]`);
+const xTicks = (root: HTMLElement) =>
+  [...plotOf(root).querySelectorAll(".recharts-xAxis-tick-labels .chart-tick")].map(
+    (tick) => tick.textContent,
+  );
+
+describe("a scatter chart", () => {
+  test("reads only an ISO date, a month or a year, never a date it would have to guess", () => {
+    expect(readDate("2031-06-15")).toBe(Date.UTC(2031, 5, 15));
+    expect(readDate("2031-06")).toBe(Date.UTC(2031, 5, 1));
+    expect(readDate("2031")).toBe(Date.UTC(2031, 0, 1));
+    for (const unread of ["03/04/2031", "2031-13", "2031-02-29", "31-06-15", "2031-6-15", ""]) {
+      expect(readDate(unread)).toBeNull();
+    }
+    expect(readDate("2032-02-29")).toBe(Date.UTC(2032, 1, 29));
+  });
+
+  test("names each placed point for its security, group, date, exact value and origin, by date", () => {
+    const { container } = scatter();
+    expect(container.querySelector("figure")).toHaveAttribute("data-chart", "scatter");
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Note B, Sub, Maturity 2029-03: 275 bps (host-verified)",
+      "Note A, Senior, Maturity 2031-06-15: 412.5 bps (model-authored)",
+      "Note C, Senior, Maturity 2033: -12.25 bps (model-authored)",
+    ]);
+    expect(plotOf(container).querySelectorAll("circle.chart-point")).toHaveLength(3);
+  });
+
+  test("places each point by its date's time, on a value axis holding zero", () => {
+    const { container } = scatter();
+    const [a, b, c] = ["a", "b", "c"].map((key) => numberOf(pointAt(container, key)!, "cx"));
+    const share =
+      (Date.UTC(2031, 5, 15) - Date.UTC(2029, 2, 1)) /
+      (Date.UTC(2033, 0, 1) - Date.UTC(2029, 2, 1));
+    expect((a! - b!) / (c! - b!)).toBeCloseTo(share, 5);
+    const zero = numberOf(plotOf(container).querySelector(".chart-zero") ?? undefined, "y1");
+    expect(numberOf(pointAt(container, "c")!, "cy")).toBeGreaterThan(zero);
+    expect(numberOf(pointAt(container, "b")!, "cy")).toBeLessThan(zero);
+    expect(xTicks(container)).toEqual(["2029", "2030", "2031", "2032", "2033", "2034"]);
+  });
+
+  test("labels years only, thinned to what fits", () => {
+    const { container } = scatter({
+      points: [
+        { key: "p", label: "P", at: "2000", value: { value: "1" }, group: "G", origin: "model" },
+        {
+          key: "q",
+          label: "Q",
+          at: "2099-12-31",
+          value: { value: "2" },
+          group: "G",
+          origin: "model",
+        },
+      ],
+    });
+    expect(xTicks(container)).toEqual(Array.from({ length: 11 }, (_, n) => `${2000 + 10 * n}`));
+  });
+
+  test("colours points by group as they first appear, neutral past the fifth; the model's hollow", () => {
+    const { container } = scatter();
+    expect(pointAt(container, "a")).toHaveClass("chart-tone-series-1", "chart-hollow");
+    expect(pointAt(container, "b")).toHaveClass("chart-tone-series-2");
+    expect(pointAt(container, "b")).not.toHaveClass("chart-hollow");
+    const legend = screen.getByRole("list", { name: "Legend" });
+    expect(within(legend).getByText("Sub").querySelector("svg.chart-swatch")).toHaveClass(
+      "chart-tone-series-2",
+    );
+    const six = Array.from({ length: 6 }, (_, n): ScatterPoint => ({
+      key: `${n}`,
+      label: `S${n}`,
+      at: `${2030 + n}`,
+      value: { value: "1" },
+      group: `G${n}`,
+      origin: "host",
+    }));
+    const many = scatter({ points: six, title: "Six" }).container;
+    expect(pointAt(many, "4")).toHaveClass("chart-tone-series-5");
+    expect(pointAt(many, "5")).toHaveClass("chart-tone-neutral");
+  });
+
+  test("lists what it could not place with its reason in the table, and counts it in the caption", () => {
+    const { container } = scatter();
+    expect(container.querySelector("[data-chart-note]")).toHaveTextContent(
+      "3 of 6 points not placed, without a readable date or a value; the table lists each.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const table = screen.getByRole("table", { name: "Spread against maturity" });
+    expect(
+      within(table)
+        .getAllByRole("row")
+        .map((row) => [...(row as HTMLTableRowElement).cells].map((cell) => cell.textContent)),
+    ).toEqual([
+      ["Security", "Maturity", "Spread, bps", "Seniority", "Origin", "Not placed"],
+      ["Note B", "2029-03", "275", "Sub", "host-verified", ""],
+      ["Note A", "2031-06-15", "412.5", "Senior", "model-authored", ""],
+      ["Note C", "2033", "-12.25", "Senior", "model-authored", ""],
+      [
+        "Note D",
+        "03/04/2031",
+        "300",
+        "Senior",
+        "model-authored",
+        "No readable date (YYYY-MM-DD, YYYY-MM or YYYY)",
+      ],
+      [
+        "Note E",
+        "2030-02-30",
+        "100",
+        "Sub",
+        "model-authored",
+        "No readable date (YYYY-MM-DD, YYYY-MM or YYYY)",
+      ],
+      ["Note F", "2032-01-01", "n/a: Not quoted", "Senior", "model-authored", "No value"],
+    ]);
+  });
+
+  test("with nothing placed, labels no year and reaches no point", () => {
+    const { container } = scatter({ points: CURVE.slice(3), title: "None placed" });
+    expect(xTicks(container)).toEqual([]);
+    expect(marks(container)).toHaveLength(0);
+    expect(container.querySelector("[data-chart-note]")).toHaveTextContent(/^3 of 3 points/);
+  });
+
+  test("takes its points in date order by the arrow keys; every target 24px", () => {
+    const onSelect = vi.fn();
+    const { container } = scatter({ onSelect });
+    act(() => marks(container)[0]!.focus());
+    fireEvent.keyDown(marks(container)[0]!, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(marks(container)[1]);
+    fireEvent.click(marks(container)[1]!);
+    expect(onSelect).toHaveBeenCalledWith(
+      { series: "Senior", category: "Note A", index: 0, value: "412.5", origin: "model" },
+      marks(container)[1],
+    );
+    for (const button of marks(container)) {
+      expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(24);
+      expect(parseFloat(button.style.height)).toBeGreaterThanOrEqual(24);
+    }
+  });
+});
+
 describe("a value read for a name or a table cell", () => {
   test("said prints it with its unit or n/a and why; cellOf names an origin only where it differs", () => {
     expect(said(readDatum({ value: "1234.5" }), "x")).toBe("1,234.5 x");
@@ -1504,11 +1718,18 @@ describe("every chart form, audited", () => {
           fromLabel="Expected"
           toLabel="Realized"
         />
+        <ScatterChart
+          title="Curve"
+          summary="Against maturity."
+          unit="bps"
+          points={CURVE}
+          xLabel="Maturity"
+        />
       </main>,
     );
     expect(await audit(container)).toEqual([]);
     for (const toggle of screen.getAllByRole("button", { name: "Table" })) fireEvent.click(toggle);
-    expect(screen.getAllByRole("table")).toHaveLength(8);
+    expect(screen.getAllByRole("table")).toHaveLength(9);
     expect(await audit(container)).toEqual([]);
   });
 });

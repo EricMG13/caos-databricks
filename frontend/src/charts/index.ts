@@ -9,6 +9,7 @@ export { DivergingBarChart } from "./DivergingBarChart";
 export { DumbbellChart } from "./DumbbellChart";
 export { LineChart } from "./LineChart";
 export { RangeStripChart } from "./RangeStripChart";
+export { ScatterChart } from "./ScatterChart";
 export { StackedBarChart } from "./StackedBarChart";
 export { WaterfallChart } from "./WaterfallChart";
 export { bridgeOf } from "./bridge";
@@ -26,6 +27,7 @@ export type {
   Orientation,
   Origin,
   RangeRow,
+  ScatterPoint,
   SeriesChartProps,
   WaterfallStep,
 } from "./types";
