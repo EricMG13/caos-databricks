@@ -7,11 +7,13 @@ import { resolve } from "node:path";
 import {
   covenantHeadroom,
   ebitdaQuality,
+  liquidityBridge,
   peerRanges,
   registerFigures,
   registerRows,
+  valueAllocation,
 } from "@/sections/analysis/register-figures";
-import type { Figure } from "@/sections/analysis/figure-core";
+import { negatedMagnitude, type Figure } from "@/sections/analysis/figure-core";
 import { parseAnalysisDocument, type HandoffView } from "@/wire/v1";
 
 const document = parseAnalysisDocument(
@@ -592,4 +594,295 @@ test("the schema's empty bridge, and a register of another module, draw nothing"
     register("T1D.4", QUALITY, [t1d4("Reported EBITDA", c("1", "1"), "Supported", c("1", "1"))]),
   ]);
   expect(registerFigures(cp1d).map((figure) => figure.key)).toEqual(["ebitda-quality"]);
+});
+
+test("negatedMagnitude: a decimal's magnitude negated, exactly, zero unsigned", () => {
+  expect(negatedMagnitude("800")).toBe("-800");
+  expect(negatedMagnitude("-800")).toBe("-800");
+  expect(negatedMagnitude("0")).toBe("0");
+  expect(negatedMagnitude("-0")).toBe("0");
+  expect(negatedMagnitude("-0.00")).toBe("0.00");
+  expect(negatedMagnitude("0.50")).toBe("-0.50");
+  expect(negatedMagnitude("9007199254740993.10")).toBe("-9007199254740993.10");
+});
+
+// CP-2D's T2E.5, as the profile declares it.
+const LIQUIDITY = [
+  "Bridge Item",
+  "Amount",
+  "Source / Calculation",
+  "Status",
+  "Credit Comment",
+  "Source Trace",
+];
+const t2e5 = (item: string, amount: Served, trace = "E-1") => [
+  c(item),
+  amount,
+  c(`Basis of ${item}`),
+  c("Reported"),
+  c(""),
+  c(trace),
+];
+const cp2dWith = (registers: Register[]): HandoffView => ({
+  ...handoffOf("CP-1"),
+  module_id: "CP-2D",
+  tables: [],
+  registers,
+});
+const liquidity = (rows: Served[][]) =>
+  liquidityBridge(cp2dWith([register("T2E.5", LIQUIDITY, rows)])).map(waterfall);
+
+test("liquidityBridge: totals stated, each use drawn as its magnitude subtracted", () => {
+  const [figure, ...rest] = liquidity([
+    t2e5("Beginning cash", c("70", "70")),
+    t2e5("Accessible revolver availability", c("30", "30")),
+    t2e5("  BEGINNING accessible liquidity", c("100", "100")),
+    t2e5("Operating cash inflow/outflow", c("(10)", "-10")),
+    t2e5("Cash interest", c("8", "8"), "E-4"),
+    t2e5("Cash taxes", c("(2)", "-2")),
+    t2e5("Mandatory capex", c("0", "0")),
+    t2e5("Debt amortization/maturities", c("Not disclosed")),
+    t2e5("Other cash uses", c("1.5", "1.5")),
+    t2e5("Committed inflows", c("4", "4")),
+    t2e5("Ending accessible liquidity", c("82.5", "82.5"), "E-9"),
+  ]);
+  expect(rest).toEqual([]);
+  expect(figure!.key).toBe("liquidity-bridge");
+  expect(figure!.table).toBe("T2E.5");
+  expect(figure!.title).toBe("Liquidity bridge, 12 months");
+  const use = (served: string) => `served ${served}, a use the method subtracts`;
+  expect(figure!.steps).toEqual([
+    { key: "0", label: "Beginning cash", kind: "delta", value: "70", origin: "model" },
+    {
+      key: "1",
+      label: "Accessible revolver availability",
+      kind: "delta",
+      value: "30",
+      origin: "model",
+    },
+    {
+      key: "2",
+      label: "BEGINNING accessible liquidity",
+      kind: "total",
+      value: "100",
+      origin: "model",
+    },
+    {
+      key: "3",
+      label: "Operating cash inflow/outflow",
+      kind: "delta",
+      value: "-10",
+      origin: "model",
+    },
+    {
+      key: "4",
+      label: "Cash interest",
+      kind: "delta",
+      value: "-8",
+      origin: "model",
+      note: use("8"),
+    },
+    { key: "5", label: "Cash taxes", kind: "delta", value: "-2", origin: "model", note: use("-2") },
+    {
+      key: "6",
+      label: "Mandatory capex",
+      kind: "delta",
+      value: "0",
+      origin: "model",
+      note: use("0"),
+    },
+    {
+      key: "7",
+      label: "Debt amortization/maturities",
+      kind: "delta",
+      value: null,
+      reason: "Not disclosed",
+      origin: "model",
+    },
+    {
+      key: "8",
+      label: "Other cash uses",
+      kind: "delta",
+      value: "-1.5",
+      origin: "model",
+      note: use("1.5"),
+    },
+    { key: "9", label: "Committed inflows", kind: "delta", value: "4", origin: "model" },
+    {
+      key: "10",
+      label: "Ending accessible liquidity",
+      kind: "total",
+      value: "82.5",
+      origin: "model",
+    },
+  ]);
+  expect(figure!.summary).toBe(
+    "BEGINNING accessible liquidity 100 to Ending accessible liquidity 82.5, as served.",
+  );
+  const pressed = (series: string) => ({
+    series,
+    category: "",
+    index: 0,
+    value: null,
+    origin: "model" as const,
+  });
+  expect(figure!.sourceOf(pressed("4"))).toBe(
+    "Source / Calculation: Basis of Cash interest; Status: Reported; Source Trace: E-4",
+  );
+  expect(figure!.sourceOf(pressed("10:unreconciled"))).toBeNull();
+});
+
+test("a liquidity bridge with no stated ending says so; another module's draws nothing", () => {
+  const [figure] = liquidity([
+    t2e5("Beginning accessible liquidity", c("n/a")),
+    t2e5("Cash interest", c("8", "8")),
+  ]);
+  expect(figure!.summary).toBe(
+    "Beginning accessible liquidity n/a (n/a) to no ending accessible liquidity stated, as served.",
+  );
+  expect(liquidity([])).toEqual([]);
+  const cp1 = withRegisters("CP-1", [
+    register("T2E.5", LIQUIDITY, [t2e5("Cash interest", c("8", "8"))]),
+  ]);
+  expect(liquidityBridge(cp1)).toEqual([]);
+});
+
+// CP-4C's T4E.5 and T4E.6, as the profile declares them.
+const ALLOCATION = [
+  "scenario",
+  "entity",
+  "available value",
+  "priority claim",
+  "allocation",
+  "residual",
+  "legal evidence ID",
+];
+const FULCRUM = [
+  "scenario/EV range",
+  "last covered class",
+  "first impaired class",
+  "fulcrum class/range",
+  "uncertainty",
+];
+const t4e5 = (
+  scenario: string,
+  entity: string,
+  available: Served,
+  claim: string,
+  allocation: Served,
+  residual: Served,
+  id = "L-1",
+) => [c(scenario), c(entity), available, c(claim), allocation, residual, c(id)];
+const t4e6 = (range: string, fulcrum: string) => [c(range), c(""), c(""), c(fulcrum), c("")];
+const cp4cWith = (registers: Register[]): HandoffView => ({
+  ...handoffOf("CP-1"),
+  module_id: "CP-4C",
+  tables: [],
+  registers,
+});
+const allocations = (rows: Served[][], fulcrums: Served[][] = []) =>
+  valueAllocation(
+    cp4cWith([register("T4E.5", ALLOCATION, rows), register("T4E.6", FULCRUM, fulcrums)]),
+  ).map(waterfall);
+
+test("valueAllocation: a waterfall per scenario and entity, each allocation drawn subtracted", () => {
+  const figures = allocations(
+    [
+      t4e5("Low", "HoldCo", c("50", "50"), "Super senior RCF", c("20", "20"), c("30", "30")),
+      t4e5("Base", "HoldCo", c("90", "90"), "Senior", c("60", "60"), c("30", "30"), "L-2"),
+      t4e5("Low", "HoldCo", c("50", "50"), "Senior secured", c("-30", "-30"), c("0", "0"), "L-3"),
+      t4e5("Base", "OpCo", c("40", "40"), "Trade claims", c("n/q"), c("n/q")),
+      t4e5("Base", "HoldCo", c("90", "90"), "Senior notes", c("30", "30"), c("0", "0")),
+    ],
+    [
+      t4e6("Base case (EV 90)", "Senior notes, 0% recovery"),
+      t4e6("low case", "Senior secured term loan"),
+    ],
+  );
+  expect(figures.map((figure) => [figure.key, figure.table, figure.title])).toEqual([
+    ["value-allocation-0", "T4E.5", "Value allocation, Low"],
+    ["value-allocation-1", "T4E.5", "Value allocation, Base, HoldCo"],
+    ["value-allocation-2", "T4E.5", "Value allocation, Base, OpCo"],
+  ]);
+  const [low, base, opco] = figures;
+  const claim = (served: string) => `served ${served}, an allocation of the available value`;
+  expect(low!.steps).toEqual([
+    { key: "opening", label: "Available value", kind: "total", value: "50", origin: "model" },
+    {
+      key: "0",
+      label: "Super senior RCF",
+      kind: "delta",
+      value: "-20",
+      origin: "model",
+      note: claim("20"),
+    },
+    {
+      key: "2",
+      label: "Senior secured (fulcrum)",
+      kind: "delta",
+      value: "-30",
+      origin: "model",
+      note: claim("-30"),
+    },
+    { key: "closing", label: "Residual", kind: "total", value: "0", origin: "model" },
+  ]);
+  expect(low!.summary).toBe(
+    "Available value 50 to Residual 0, as served; fulcrum: Senior secured term loan.",
+  );
+  // The longer claim the fulcrum's text starts with is the fulcrum.
+  expect(base!.steps.map((step) => step.label)).toEqual([
+    "Available value",
+    "Senior",
+    "Senior notes (fulcrum)",
+    "Residual",
+  ]);
+  expect(base!.summary).toBe(
+    "Available value 90 to Residual 0, as served; fulcrum: Senior notes, 0% recovery.",
+  );
+  expect(opco!.steps.slice(1)).toEqual([
+    {
+      key: "3",
+      label: "Trade claims",
+      kind: "delta",
+      value: null,
+      reason: "n/q",
+      origin: "model",
+    },
+    {
+      key: "closing",
+      label: "Residual",
+      kind: "total",
+      value: null,
+      reason: "n/q",
+      origin: "model",
+    },
+  ]);
+  const pressed = (series: string) => ({
+    series,
+    category: "",
+    index: 0,
+    value: null,
+    origin: "model" as const,
+  });
+  expect(low!.sourceOf(pressed("2"))).toBe("legal evidence ID: L-3");
+  expect(base!.sourceOf(pressed("opening"))).toBe("legal evidence ID: L-2");
+  expect(base!.sourceOf(pressed("closing"))).toBe("legal evidence ID: L-1");
+});
+
+test("a scenario T4E.6 names no fulcrum for marks none; each register draws for its own module", () => {
+  const [figure] = allocations(
+    [t4e5("Stress", "HoldCo", c("10", "10"), "Senior", c("10", "10"), c("0", "0"))],
+    [t4e6("Base", "Senior")],
+  );
+  expect(figure!.steps.map((step) => step.label)).toContain("Senior");
+  expect(figure!.summary).toBe(
+    "Available value 10 to Residual 0, as served; T4E.6 names no fulcrum for this scenario.",
+  );
+  expect(allocations([])).toEqual([]);
+  const rows = [t4e5("Low", "HoldCo", c("10", "10"), "Senior", c("10", "10"), c("0", "0"))];
+  expect(valueAllocation(withRegisters("CP-4", [register("T4E.5", ALLOCATION, rows)]))).toEqual([]);
+  const cp4c = cp4cWith([register("T4E.5", ALLOCATION, rows)]);
+  expect(registerFigures(cp4c).map((figure) => figure.key)).toEqual(["value-allocation-0"]);
+  const cp2d = cp2dWith([register("T2E.5", LIQUIDITY, [t2e5("Cash taxes", c("1", "1"))])]);
+  expect(registerFigures(cp2d).map((figure) => figure.key)).toEqual(["liquidity-bridge"]);
 });

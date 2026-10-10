@@ -18,11 +18,14 @@ import {
   MAX_MARKS,
   datum,
   groupBy,
+  negatedMagnitude,
   oversized,
+  pair,
   text,
   type Cell,
   type Figure,
   type Row,
+  type WaterfallFigure,
 } from "./figure-core";
 
 /** A register's rows keyed by the profile column the bundle binds to each
@@ -284,6 +287,42 @@ function bridgeStep(row: Row, index: number, spec: BridgeRegister): WaterfallSte
   return { ...step, ...(color ? { color } : {}), ...(status ? { status } : {}) };
 }
 
+/** A step as a summary says it: its label and its value as served, else
+    n/a and why. */
+const said = (step: WaterfallStep) =>
+  `${step.label} ${step.value === null ? `n/a (${step.reason})` : formatDecimal(step.value)}`;
+
+/** A waterfall figure of `steps`; a pressed step's source is the columns
+    `rowOf` its key states. Past `MAX_MARKS` it is stated, not drawn. */
+function waterfallFigure(
+  head: Omit<WaterfallFigure, "kind" | "steps" | "sourceOf">,
+  steps: WaterfallStep[],
+  rowOf: (key: string) => Row | undefined,
+  columns: readonly string[],
+): Figure {
+  const marks = bridgeOf(steps).length;
+  if (marks > MAX_MARKS) return oversized(head.key, head.table, head.title, marks);
+  // An unreconciled residual is the chart's own: no row stands behind it.
+  const keys = new Set(steps.map((step) => step.key));
+  return {
+    ...head,
+    kind: "waterfall",
+    steps,
+    sourceOf: (selection) => {
+      const row = keys.has(selection.series) ? rowOf(selection.series) : undefined;
+      return row ? stated(row, columns) : null;
+    },
+  };
+}
+
+/** A change drawn as a decrease of the magnitude served, its note saying
+    so; a cell with no figure is a gap, as served. */
+function decrease(cell: Cell | undefined, step: Omit<WaterfallStep, "value">, what: string) {
+  if (cell?.value == null) return { ...step, ...datum(cell) };
+  const note = `served ${formatDecimal(cell.value)}, ${what}`;
+  return { ...step, value: negatedMagnitude(cell.value), note };
+}
+
 /** A bridge register drawn as a waterfall, every figure as served. Where the
     last row is a change and states its running level, that level closes the
     bridge as a total named for its column. The schema's empty bridge (one
@@ -304,10 +343,6 @@ function bridgeFigure(handoff: HandoffView, spec: BridgeRegister): Figure[] {
       origin: "model",
     });
   }
-  const marks = bridgeOf(steps).length;
-  if (marks > MAX_MARKS) return [oversized(spec.key, spec.register, spec.title, marks)];
-  const said = (step: WaterfallStep) =>
-    `${step.label} ${step.value === null ? `n/a (${step.reason})` : formatDecimal(step.value)}`;
   // Only a total may be named as the bridge's end: a last change with no
   // running level of its own is said to state none.
   const [first, end] = [steps[0]!, steps.at(-1)!];
@@ -318,25 +353,16 @@ function bridgeFigure(handoff: HandoffView, spec: BridgeRegister): Figure[] {
       : end.kind === "total"
         ? `${said(first)} to ${said(end)}, as served.`
         : `${said(first)}; the last change, ${end.label}, states no ${level}.`;
-  const rowOf = (key: string) => (key === "closing" ? last : rows[Number(key)]);
   const used = new Set(steps.map((step) => step.color));
   const statuses = spec.status ? STATUSES.filter(({ color }) => used.has(color)) : undefined;
+  const head = { key: spec.key, table: spec.register, title: spec.title, summary };
   return [
-    {
-      key: spec.key,
-      table: spec.register,
-      kind: "waterfall",
-      title: spec.title,
-      summary,
+    waterfallFigure(
+      { ...head, ...(statuses ? { statuses } : {}) },
       steps,
-      ...(statuses ? { statuses } : {}),
-      sourceOf: (selection) => {
-        const row = /^(closing|[0-9]+)$/.test(selection.series)
-          ? rowOf(selection.series)
-          : undefined;
-        return row ? stated(row, ["Basis", "Evidence ID"]) : null;
-      },
-    },
+      (key) => (key === "closing" ? last : rows[Number(key)]),
+      ["Basis", "Evidence ID"],
+    ),
   ];
 }
 
@@ -353,8 +379,146 @@ export function ebitdaQuality(handoff: HandoffView): Figure[] {
   });
 }
 
+// CP-2D's stated totals and the uses its method subtracts
+// (REF_CP-2D_STEPS.md step 05, instruction 5; liquidity_bridge.py), as a
+// `Bridge Item` starts, trimmed and casefolded.
+const LIQUIDITY_TOTALS = ["beginning accessible liquidity", "ending accessible liquidity"] as const;
+const LIQUIDITY_USES = [
+  "cash interest",
+  "cash taxes",
+  "mandatory capex",
+  "debt amortization",
+  "debt amortisation",
+  "other cash uses",
+];
+
+/** CP-2D's 12-month liquidity bridge (`T2E.5`): beginning to ending
+    accessible liquidity, each use drawn as its magnitude subtracted. Rows
+    before the beginning total bridge from zero. */
+export function liquidityBridge(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-2D", "T2E.5");
+  if (!rows?.length) return [];
+  const steps = rows.map((row, index): WaterfallStep => {
+    const label = text(row, "Bridge Item").trim();
+    const item = label.toLowerCase();
+    const base = { key: `${index}`, label, origin: "model" as const };
+    if (LIQUIDITY_TOTALS.some((total) => item.startsWith(total))) {
+      return { ...base, kind: "total", ...datum(row["Amount"]) };
+    }
+    if (LIQUIDITY_USES.some((use) => item.startsWith(use))) {
+      return decrease(row["Amount"], { ...base, kind: "delta" }, "a use the method subtracts");
+    }
+    return { ...base, kind: "delta", ...datum(row["Amount"]) };
+  });
+  const total = (which: string) =>
+    steps.filter((step) => step.kind === "total" && step.label.toLowerCase().startsWith(which));
+  const begin = total(LIQUIDITY_TOTALS[0])[0];
+  const end = total(LIQUIDITY_TOTALS[1]).at(-1);
+  const summary = `${begin ? said(begin) : "No beginning accessible liquidity stated"} to ${
+    end ? said(end) : "no ending accessible liquidity stated"
+  }, as served.`;
+  const head = { key: "liquidity-bridge", table: "T2E.5", title: "Liquidity bridge, 12 months" };
+  return [
+    waterfallFigure({ ...head, summary }, steps, (key) => rows[Number(key)], [
+      "Source / Calculation",
+      "Status",
+      "Source Trace",
+    ]),
+  ];
+}
+
+/** The fulcrum `T4E.6` states for `scenario`: its `fulcrum class/range` on
+    the first row whose `scenario/EV range` starts with the scenario. */
+function fulcrumOf(fulcrums: readonly Row[], scenario: string): string | undefined {
+  const key = scenario.trim().toLowerCase();
+  if (!key) return undefined;
+  const row = fulcrums.find((fulcrum) =>
+    text(fulcrum, "scenario/EV range").trim().toLowerCase().startsWith(key),
+  );
+  return row ? text(row, "fulcrum class/range").trim() || undefined : undefined;
+}
+
+/** The row whose `priority claim` starts the fulcrum's text; the longest
+    such claim, so "Senior" never takes "Senior notes"'s mark. */
+function fulcrumClaim(group: readonly Entry[], fulcrum: string): number | undefined {
+  const named = fulcrum.toLowerCase();
+  let best: Entry | undefined;
+  for (const entry of group) {
+    const claim = text(entry.row, "priority claim").trim().toLowerCase();
+    const length = best ? text(best.row, "priority claim").trim().length : 0;
+    if (claim && named.startsWith(claim) && claim.length > length) best = entry;
+  }
+  return best?.index;
+}
+
+/** CP-4C's priority waterfall (`T4E.5`): per scenario and entity, the
+    available value, each claim's allocation drawn as a decrease, and the
+    residual, the fulcrum `T4E.6` names marked. */
+export function valueAllocation(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-4C", "T4E.5");
+  if (!rows?.length) return [];
+  const fulcrums = registerRows(handoff, "CP-4C", "T4E.6") ?? [];
+  const entries = rows.map((row, index) => ({ row, index }));
+  const groups = [
+    ...groupBy(entries, ({ row }) => pair(text(row, "scenario"), text(row, "entity"))).values(),
+  ];
+  const entities = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
+  return groups.map((group, n) => {
+    const [first, last] = [group[0]!.row, group.at(-1)!.row];
+    const scenario = text(first, "scenario");
+    const entity = entities.get(scenario)!.length > 1 ? `, ${text(first, "entity")}` : "";
+    const fulcrum = fulcrumOf(fulcrums, scenario);
+    const marked = fulcrum ? fulcrumClaim(group, fulcrum) : undefined;
+    const steps: WaterfallStep[] = [
+      {
+        key: "opening",
+        label: "Available value",
+        kind: "total",
+        origin: "model",
+        ...datum(first["available value"]),
+      },
+      ...group.map(({ row, index }) =>
+        decrease(
+          row["allocation"],
+          {
+            key: `${index}`,
+            label: `${text(row, "priority claim").trim()}${index === marked ? " (fulcrum)" : ""}`,
+            kind: "delta",
+            origin: "model",
+          },
+          "an allocation of the available value",
+        ),
+      ),
+      {
+        key: "closing",
+        label: "Residual",
+        kind: "total",
+        origin: "model",
+        ...datum(last["residual"]),
+      },
+    ];
+    const named = fulcrum ? `fulcrum: ${fulcrum}.` : "T4E.6 names no fulcrum for this scenario.";
+    const summary = `${said(steps[0]!)} to ${said(steps.at(-1)!)}, as served; ${named}`;
+    const head = {
+      key: `value-allocation-${n}`,
+      table: "T4E.5",
+      title: `Value allocation, ${scenario}${entity}`,
+      summary,
+    };
+    const rowOf = (key: string) =>
+      key === "opening" ? first : key === "closing" ? last : rows[Number(key)];
+    return waterfallFigure(head, steps, rowOf, ["legal evidence ID"]);
+  });
+}
+
 /** Every figure a handoff's registers support, in reading order. A handoff
     is one module's, so only its own module's figures draw for it. */
 export function registerFigures(handoff: HandoffView): Figure[] {
-  return [...covenantHeadroom(handoff), ...peerRanges(handoff), ...ebitdaQuality(handoff)];
+  return [
+    ...covenantHeadroom(handoff),
+    ...peerRanges(handoff),
+    ...ebitdaQuality(handoff),
+    ...liquidityBridge(handoff),
+    ...valueAllocation(handoff),
+  ];
 }

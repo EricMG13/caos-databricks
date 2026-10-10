@@ -113,6 +113,9 @@ export interface WaterfallStep {
   /** The word the colour stands for, said in the step's name and its table
       row: colour is never the only carrier. */
   status?: string;
+  /** Said after the amount in the step's name and its table row: how the
+      value drawn was read from the one served. */
+  note?: string;
 }
 
 /** One test of a bullet chart: a current basis against its threshold. The
