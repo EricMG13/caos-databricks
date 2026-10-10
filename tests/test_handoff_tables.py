@@ -485,11 +485,59 @@ def test_a_register_past_a_bound_serves_none_as_tables_too_large() -> None:
 def test_every_declared_register_id_fits_the_wires_table_id() -> None:
     checker = CONTRACT.completeness_check
     ids: list[str] = []
-    for path in sorted((REPO / "vendor/deploy-v").glob("skills/*/SKILL.md")):
-        text = path.read_text(encoding="utf-8")
-        for module_id in checker.profile_bodies(text):
-            ids += checker.load_contract(text, module_id)["registers"]
+    for module_id in BUNDLE.physical_modules():
+        text = _skill(module_id)
+        for profile in checker.profile_bodies(text):
+            ids += checker.load_contract(text, profile)["registers"]
     assert ids
     for register_id in ids:
         assert re.fullmatch(r"[A-Za-z0-9_.]+", register_id), register_id
         assert len(register_id) <= tables.TABLE_ID_CHARS, register_id
+
+
+def test_a_register_row_of_another_width_than_its_header_is_malformed() -> None:
+    # Threshold left out: the vendor pads the row, so `3.50x` would sit under
+    # Threshold and `E1` under Notes.
+    row = [
+        *("Net leverage", "Maintenance", "3.50x", "Net debt / EBITDA", "1.50x"),
+        *("Pass", "None", "Margin squeeze", "Low PD", "E1"),
+    ]
+    markdown = _register(
+        "### T4C.4 \u2014 Covenant headroom", [*HEADROOM, "Notes"], [row]
+    )
+    found = handoff_registers(CONTRACT, _skill("CP-4"), "CP-4", markdown)
+    assert found == HandoffRegisters((), "TABLES_MALFORMED")
+
+
+@pytest.mark.parametrize(
+    "header",
+    [["Line Item", "FY2025", "FY2025"], ["Line Item", "", "FY2025"]],
+    ids=["repeated", "empty"],
+)
+def test_a_register_header_with_a_repeated_or_empty_cell_is_malformed(
+    header: list[str],
+) -> None:
+    markdown = _register("### T4.6", header, [["Capex", "9", "11"]])
+    found = handoff_registers(CONTRACT, _skill("CP-1"), "CP-1", markdown)
+    assert found == HandoffRegisters((), "TABLES_MALFORMED")
+
+
+def test_a_cell_two_columns_claim_is_declared_to_the_one_it_spells() -> None:
+    # Without `Test`, the bundle binds `Test` to the `Test Type` cell too.
+    header = HEADROOM[1:]
+    row = [
+        *("Maintenance", "5.00x", "3.50x", "Net debt / EBITDA", "1.50x"),
+        *("Pass", "None", "Margin squeeze", "Low PD", "E1"),
+    ]
+    markdown = _register("### T4C.4 \u2014 Covenant headroom", header, [row])
+    [register] = handoff_registers(CONTRACT, _skill("CP-4"), "CP-4", markdown).registers
+    assert register.declared[0] == "Test Type"
+    assert "Test" not in register.declared
+
+
+@pytest.mark.parametrize("letter", ["\u0130", "\u0131"])
+def test_a_vendor_exception_on_the_answer_is_malformed(letter: str) -> None:
+    # The locator's title match is case-insensitive where its lookup casefolds.
+    markdown = _register(f"#### Company descr{letter}ption", ["a", "b"], [["1", "2"]])
+    found = handoff_registers(CONTRACT, _skill("CP-1A"), "CP-1A", markdown)
+    assert found == HandoffRegisters((), "TABLES_MALFORMED")

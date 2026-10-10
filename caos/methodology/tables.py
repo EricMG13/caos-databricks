@@ -148,14 +148,12 @@ def handoff_registers(
     `markdown` writes, in the profile's order, located as the bundle locates it.
 
     A skill with no output profile declares no registers: that is no table, not
-    a refusal. `TABLES_TOO_LARGE` past a bound serves no register at all, since
-    a partial set would read as the whole one. The locator and the column
-    resolution raise no `ValueError` on an answer's text (they split, match and
-    look up), so there is no `TABLES_MALFORMED` here: a table the bundle could
-    not read is simply not found. The one raise known in the locator, a
-    `KeyError` on a snake_case register's title spelt with a character whose
-    case-insensitive match and casefold disagree (`İ`), is raised by `check()`
-    alike, so acceptance refused that answer and no accepted handoff carries it.
+    a refusal. `TABLES_MALFORMED` where a located register is not a table a
+    reader can key -- a header cell empty or repeated, a row of another width
+    than its header, the rules `parse_tables` holds a tagged table to -- or
+    where the locator raised on the answer's text; `TABLES_TOO_LARGE` past a
+    bound. Both serve no register at all, since a partial set would read as
+    the whole one.
     """
     checker = contract.completeness_check
     try:
@@ -163,24 +161,46 @@ def handoff_registers(
     except ValueError:  # the skill declares no `## Output profile` for the module
         return HandoffRegisters((), None)
     specs: dict[str, dict[str, Any]] = loaded["registers"]
-    # With the module's retired ids too, as `check()` asks it (fork r7, D95).
-    found: dict[str, tuple[list[str], list[dict[str, str]]]] = checker.find_registers(
-        markdown, specs, loaded.get("retired_registers", ())
-    )
-    written = [(reg_id, *found[reg_id]) for reg_id in specs if reg_id in found]
+    # The private `_locate_registers` is `find_registers`' own body, called on
+    # purpose because it also gives each row's own cell count, which
+    # `find_registers` drops after padding a short row and cutting a long one
+    # (cells that would then sit under the wrong column). The precedent is
+    # `handoff._pipe_tables`, which calls `cp_tables._split_row` and
+    # `_row_cells`; the bytes are pinned (invariant 4), so it cannot change
+    # without a re-pin; and it is the location `check()` applied at acceptance,
+    # so a figure reads the table the gate verified. With the module's retired
+    # ids too, as `check()` asks it (fork r7, D95).
+    try:
+        located: dict[str, tuple[list[str], list[dict[str, str]], list[int]]] = (
+            checker._locate_registers(
+                markdown, specs, loaded.get("retired_registers", ())
+            )
+        )
+    except (KeyError, ValueError):  # unread: its message can quote the answer
+        return HandoffRegisters((), "TABLES_MALFORMED")
+    written = [(reg_id, *located[reg_id]) for reg_id in specs if reg_id in located]
+    if not all(_keyable(header, widths) for _, header, _, widths in written):
+        return HandoffRegisters((), "TABLES_MALFORMED")
     if len(written) > TABLES_MAX or not all(
-        _bounded(reg_id, header, rows) for reg_id, header, rows in written
+        _bounded(reg_id, header, rows) for reg_id, header, rows, _ in written
     ):
         return HandoffRegisters((), "TABLES_TOO_LARGE")
+    try:
+        declared = [
+            _declared(contract, specs[reg_id]["columns"], header)
+            for reg_id, header, _, _ in written
+        ]
+    except (KeyError, ValueError):  # unread: its message can quote the answer
+        return HandoffRegisters((), "TABLES_MALFORMED")
     return HandoffRegisters(
         tuple(
             HandoffRegister(
                 register_id=reg_id,
                 columns=tuple(header),
-                declared=_declared(contract, specs[reg_id]["columns"], header),
+                declared=bound,
                 rows=_rows(contract, header, rows),
             )
-            for reg_id, header, rows in written
+            for (reg_id, header, rows, _), bound in zip(written, declared, strict=True)
         ),
         None,
     )
@@ -243,30 +263,55 @@ def _rows(
     )
 
 
+def _keyable(header: Sequence[str], widths: Sequence[int]) -> bool:
+    """A header of nonempty, unique cells and every row exactly as wide.
+
+    The locator keys a row by `dict(zip(header, cells))`, so a repeated header
+    cell would collapse two cells into one, and it pads a short row and cuts a
+    long one, so a cell would be served under another column than it was
+    written under.
+    """
+    return (
+        all(header)
+        and len(set(header)) == len(header)
+        and all(width == len(header) for width in widths)
+    )
+
+
 def _declared(
     contract: VendorContract, columns: Sequence[str], header: Sequence[str]
 ) -> tuple[str | None, ...]:
     """Per header cell, the profile column the bundle binds to it, else None.
 
-    The private `_resolve_columns` is called on purpose, as `handoff._pipe_tables`
-    calls `cp_tables._split_row` and `_row_cells`: its bytes are pinned
-    (invariant 4), so it cannot change without a re-pin, and it is the
+    The private `_resolve_columns` and `_column_key` are called on purpose, for
+    the reasons `_locate_registers` is (see `handoff_registers`): it is the
     resolution `check()` applied at acceptance, so a figure reads the cell the
     gate verified. A template column (`Period 1…N`) stands for every cell no
     other column claims and binds none of them: those cells keep their own
-    header text as their key.
+    header text as their key. The bundle can bind one cell to two columns
+    (`Test`, by containment, to the `Test Type` cell a `Test Type` column
+    names too); such a cell is declared to the column it spells, under
+    `_column_key`, or to none when no one does.
     """
     checker = contract.completeness_check
     resolved: dict[str, list[str]] = checker._resolve_columns(
         list(columns), list(header)
     )
-    bound: dict[str, str] = {}
+    claims: dict[str, list[str]] = {}
     for column, cells in resolved.items():
-        if checker.TEMPLATE_COLUMN_RE.search(column):
-            continue
-        for cell in cells:
-            bound.setdefault(cell, column)
-    return tuple(bound.get(cell) for cell in header)
+        if not checker.TEMPLATE_COLUMN_RE.search(column):
+            for cell in cells:
+                claims.setdefault(cell, []).append(column)
+    return tuple(_claimant(contract, cell, claims.get(cell, [])) for cell in header)
+
+
+def _claimant(contract: VendorContract, cell: str, columns: list[str]) -> str | None:
+    """The one column claiming `cell`, or of several the one that spells it."""
+    if len(columns) == 1:
+        return columns[0]
+    key = contract.completeness_check._column_key
+    spelt = [c for c in columns if key(c) == key(cell)]
+    return spelt[0] if len(spelt) == 1 else None
 
 
 def _exact(cell: str) -> Decimal | None:
