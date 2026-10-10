@@ -21,7 +21,7 @@ const DIRECTION_WORD = { max: "ceiling", min: "floor" } as const;
 
 const LEGEND: readonly LegendEntry[] = [
   { key: "current", label: "Current basis", tone: "series-1", shape: "fill" },
-  { key: "threshold", label: "Threshold", tone: "neutral", shape: "line" },
+  { key: "threshold", label: "Threshold", tone: "neutral", shape: "rule" },
 ];
 
 /** A row read for drawing: each value exact or null with its reason, and the

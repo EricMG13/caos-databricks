@@ -83,6 +83,10 @@ export interface BandSpec {
   percent?: boolean;
   /** Values marked across their rows, reached after their category's bars. */
   markers?: readonly BandMarker[];
+  /** A thin line along the value axis at a band's centre, under its bars and
+      markers, joining two of its values (a range's min and max); drawn only,
+      never a button: the values it joins are marks of their own. */
+  spans?: readonly { category: number; from: number; to: number }[];
   /** Join each bar's end to the next bar that spans that level (a bridge). */
   connect?: boolean;
   /** A vertical chart's height, axes included. */
@@ -146,6 +150,7 @@ function extentOf(spec: BandSpec): [number, number] {
     ...spec.bars.filter((bar) => !bar.gap).flatMap((bar) => [bar.from, bar.to]),
     ...(spec.totals ?? []).map((total) => total.at),
     ...(spec.markers ?? []).filter((marker) => !marker.gap).map((marker) => marker.at),
+    ...(spec.spans ?? []).flatMap((span) => [span.from, span.to]),
   ];
   return [Math.min(...values), Math.max(...values)];
 }
@@ -193,7 +198,7 @@ function layoutOf(spec: BandSpec, width: number): Layout {
       room: { up, down },
       axis,
       step,
-      thick: Math.max(1, Math.min(THICK, (step * BAND_FILL) / spec.slots - GAP)),
+      thick: thickOf(spec, step),
     };
   }
   const widest = Math.max(0, ...spec.categories.map((category) => textWidth(category, TICK_SIZE)));
@@ -218,8 +223,20 @@ function layoutOf(spec: BandSpec, width: number): Layout {
     room: { up, down },
     axis,
     step: row,
-    thick: Math.max(1, Math.min(THICK, (row * BAND_FILL) / spec.slots - GAP)),
+    thick: thickOf(spec, row),
   };
+}
+
+/** A bar's thickness in a band `step` long: its share of the band, at most
+    `THICK`. Where markers share the band, the bars give up `RULE_OVER` each
+    side of the longest rule the band holds (`step - 2 * GAP`), so a rule
+    always reads past both sides of its bars. */
+function thickOf(spec: BandSpec, step: number): number {
+  const share = (step * BAND_FILL) / spec.slots - GAP;
+  const ruled = spec.markers?.length
+    ? (step - 2 * GAP - 2 * RULE_OVER - (spec.slots - 1) * GAP) / spec.slots
+    : share;
+  return Math.max(1, Math.min(THICK, share, ruled));
 }
 
 /** The centre of a category's band, across the band axis. */
@@ -410,6 +427,24 @@ function gapsOf(spec: BandSpec, layout: Layout) {
       ).length;
     return { mark: gap.mark, point: gapPoint(gap.along, layout, earlier) };
   });
+}
+
+/** Each span, a thin line at its band's centre: drawn before the bars, so
+    they lie over it. Decoration only; nothing is reported. */
+function Spans({ spec, layout }: { spec: BandSpec; layout: Layout }) {
+  return (
+    <g className="chart-spans">
+      {(spec.spans ?? []).map((span, index) => {
+        const centre = centreOf(layout, span.category);
+        const from = layout.axis.at(span.from);
+        const to = layout.axis.at(span.to);
+        const ends = layout.vertical
+          ? { x1: centre, x2: centre, y1: from, y2: to }
+          : { x1: from, x2: to, y1: centre, y2: centre };
+        return <line key={index} className="chart-span" data-span={span.category} {...ends} />;
+      })}
+    </g>
+  );
 }
 
 /** A marker drawn in its shape and reported to the frame, so a button can be
@@ -665,6 +700,7 @@ export function bandPlot(spec: BandSpec, kit: PlotKit): Plot {
           />
         </>
       )}
+      <Spans spec={spec} layout={layout} />
       {lanes.map((lane) => (
         <Bar
           key={lane}

@@ -12,10 +12,13 @@ import {
   DivergingBarChart,
   LineChart,
   ProvenanceKeyed,
+  RangeStripChart,
   StackedBarChart,
+  Swatch,
   WaterfallChart,
   type BulletRow,
   type ChartSeries,
+  type RangeRow,
 } from "@/charts";
 import { ChartFrame } from "@/charts/ChartFrame";
 import { bandPlot, type BandMarker } from "@/charts/band";
@@ -646,10 +649,12 @@ describe("a bullet chart", () => {
     expect(numberOf(rule ?? undefined, "x1")).toBe(numberOf(rule ?? undefined, "x2"));
     const top = numberOf(rule ?? undefined, "y1");
     const foot = numberOf(rule ?? undefined, "y2");
-    expect(top).toBeLessThan(numberOf(bar ?? undefined, "y"));
-    expect(foot).toBeGreaterThan(
-      numberOf(bar ?? undefined, "y") + numberOf(bar ?? undefined, "height"),
-    );
+    // The bar is thinner than its rule, which reads at least 4px past each
+    // side of it (the model's outline is inset a further 0.75px).
+    expect(numberOf(bar ?? undefined, "y") - top).toBeGreaterThanOrEqual(4);
+    expect(
+      foot - numberOf(bar ?? undefined, "y") - numberOf(bar ?? undefined, "height"),
+    ).toBeGreaterThanOrEqual(4);
     // The rule stands at 4.50 past the bar's end at 3.25, the bar from zero.
     const zero = numberOf(container.querySelector(".chart-zero") ?? undefined, "x1");
     // The model's outlined edge is drawn half its 1.5px stroke inside the box.
@@ -665,7 +670,10 @@ describe("a bullet chart", () => {
     const legend = screen.getByRole("list", { name: "Legend" });
     expect(within(legend).getByText("Current basis")).toBeInTheDocument();
     expect(within(legend).getByText("Threshold")).toBeInTheDocument();
-    expect(within(legend).getByText("Threshold").querySelector("line.chart-line")).not.toBeNull();
+    // The threshold is keyed as the rule it is: no point on it.
+    const key = within(legend).getByText("Threshold");
+    expect(key.querySelector("line.chart-rule")).not.toBeNull();
+    expect(key.querySelector("circle")).toBeNull();
   });
 
   test("leaves out a value label the rule would cross: the name still says it", () => {
@@ -843,6 +851,303 @@ describe("a band chart's markers", () => {
   });
 });
 
+// Made-up peer ranges: one row per metric, every statistic declared.
+const PEERS: RangeRow[] = [
+  {
+    key: "ev",
+    label: "EV / EBITDA",
+    min: { value: "5.0" },
+    q1: { value: "6.25" },
+    median: { value: "7.5", origin: "model" },
+    q3: { value: "8.75" },
+    max: { value: "11.0" },
+    marker: { value: "9.1" },
+    origin: "host",
+  },
+  {
+    key: "lev",
+    label: "Net leverage",
+    min: { value: "2.0" },
+    q1: { value: null, reason: "NOT_DISCLOSED" },
+    median: { value: "3.5" },
+    q3: { value: "4.0" },
+    max: { value: "5.25" },
+    marker: { value: null, reason: "PEER_ONLY" },
+    origin: "model",
+  },
+];
+// Made-up implied values by method: no quartiles declared, one median absent.
+const METHODS: RangeRow[] = [
+  {
+    key: "trading",
+    label: "Trading multiples",
+    min: { value: "800" },
+    median: { value: "950" },
+    max: { value: "1100" },
+    marker: { value: "990" },
+    origin: "host",
+  },
+  {
+    key: "deals",
+    label: "Precedent deals",
+    min: { value: "900" },
+    max: { value: "1250.5" },
+    marker: { value: "1000" },
+    origin: "model",
+  },
+];
+
+function strips(extra: Partial<Parameters<typeof RangeStripChart>[0]> = {}) {
+  return render(
+    <RangeStripChart
+      title="Peer ranges"
+      summary="The borrower against its peers."
+      unit="x"
+      rows={PEERS}
+      {...extra}
+    />,
+  );
+}
+
+describe("a range strip", () => {
+  test("names each mark with its metric, statistic, exact value and unit, and origin", () => {
+    const { container } = strips();
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "EV / EBITDA: interquartile range 6.25 x to 8.75 x (host-verified)",
+      "EV / EBITDA: min 5.0 x (host-verified)",
+      "EV / EBITDA: median 7.5 x (model-authored)",
+      "EV / EBITDA: max 11.0 x (host-verified)",
+      "EV / EBITDA: Borrower 9.1 x (host-verified)",
+      "Net leverage: interquartile range n/a (Q1: NOT_DISCLOSED) (model-authored)",
+      "Net leverage: min 2.0 x (model-authored)",
+      "Net leverage: median 3.5 x (model-authored)",
+      "Net leverage: max 5.25 x (model-authored)",
+      "Net leverage: Borrower n/a (PEER_ONLY) (model-authored)",
+    ]);
+    expect(container.querySelector("figure")).toHaveAttribute("data-chart", "range");
+  });
+
+  test("floats the interquartile bar from Q1 to Q3, rules min, median and max, dots the marker", () => {
+    const { container } = strips();
+    const bar = container.querySelector('rect[data-mark="ev:iqr"]');
+    expect(bar).toHaveClass("chart-host", "chart-tone-series-1");
+    // An interval, not a magnitude: it starts at Q1, clear of zero, and the
+    // axis still holds zero.
+    const zero = numberOf(container.querySelector(".chart-zero") ?? undefined, "x1");
+    const at = (key: string) =>
+      numberOf(container.querySelector(`[data-mark="${key}"]`) ?? undefined, "x1");
+    const left = numberOf(bar ?? undefined, "x");
+    const right = left + numberOf(bar ?? undefined, "width");
+    expect(left).toBeGreaterThan(zero + 1);
+    expect(at("ev:min")).toBeLessThan(left);
+    expect(at("ev:median")).toBeGreaterThan(left);
+    expect(at("ev:median")).toBeLessThan(right);
+    expect(at("ev:max")).toBeGreaterThan(right);
+    // Each statistic a rule in neutral, dashed where the model authored it.
+    for (const key of ["ev:min", "ev:max"]) {
+      const rule = container.querySelector(`line[data-mark="${key}"]`);
+      expect(rule).toHaveClass("chart-rule", "chart-tone-neutral");
+      expect(rule).not.toHaveClass("chart-dashed");
+    }
+    expect(container.querySelector('line[data-mark="ev:median"]')).toHaveClass("chart-dashed");
+    expect(container.querySelector('line[data-mark="lev:min"]')).toHaveClass("chart-dashed");
+    // The marker a dot in series-3, filled for the host.
+    const dot = container.querySelector('circle[data-mark="ev:marker"]');
+    expect(dot).toHaveClass("chart-point", "chart-tone-series-3");
+    expect(dot).not.toHaveClass("chart-hollow");
+    // A thin line from min to max at the row's centre, under the bar, and
+    // never a button.
+    const span = container.querySelector('line[data-span="0"]');
+    expect(span).toHaveClass("chart-span");
+    expect(numberOf(span ?? undefined, "x1")).toBeCloseTo(at("ev:min"));
+    expect(numberOf(span ?? undefined, "x2")).toBeCloseTo(at("ev:max"));
+    expect(numberOf(span ?? undefined, "y1")).toBe(numberOf(span ?? undefined, "y2"));
+    expect(numberOf(span ?? undefined, "y1")).toBeCloseTo(numberOf(dot ?? undefined, "cy"));
+    expect(span!.compareDocumentPosition(bar!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(marks(container)).toHaveLength(10);
+    // A bar sharing its band with markers is thinner than the rule, which
+    // reads past it by 4px each side.
+    const rule = container.querySelector('line[data-mark="ev:min"]');
+    const top = numberOf(bar ?? undefined, "y");
+    const foot = top + numberOf(bar ?? undefined, "height");
+    expect(top - numberOf(rule ?? undefined, "y1")).toBeCloseTo(4);
+    expect(numberOf(rule ?? undefined, "y2") - foot).toBeCloseTo(4);
+    // The bar wears its quartiles' origin: host-verified ends in a model row
+    // draw it solid, and either end the model's draws it outlined.
+    const ends = (q1: "host" | "model", q3: "host" | "model") =>
+      strips({
+        rows: [
+          { ...PEERS[1]!, q1: { value: "2.5", origin: q1 }, q3: { value: "4.0", origin: q3 } },
+        ],
+      }).container.querySelector('rect[data-mark="lev:iqr"]');
+    expect(ends("host", "host")).toHaveClass("chart-host");
+    expect(ends("host", "model")).toHaveClass("chart-outline");
+  });
+
+  test("marks an unavailable quartile or marker n/a in its row, with its reason", () => {
+    const { container } = strips();
+    const gaps = [...container.querySelectorAll<SVGGElement>("[data-gap]")];
+    expect(gaps.map((gap) => gap.dataset.mark)).toEqual(["lev:iqr", "lev:marker"]);
+    for (const gap of gaps)
+      expect(within(gap as unknown as HTMLElement).getByText("n/a")).toBeInTheDocument();
+    expect(container.querySelector('rect[data-mark="lev:iqr"]')).toBeNull();
+    expect(container.querySelector('circle[data-mark="lev:marker"]')).toBeNull();
+    // The two gaps in one row stand apart.
+    const ticks = gaps.map((gap) => numberOf(gap.querySelector("line") ?? undefined, "x1"));
+    expect(new Set(ticks).size).toBe(2);
+    // Both ends unavailable: each end's reason is said.
+    strips({
+      rows: [
+        {
+          ...PEERS[0]!,
+          q1: { value: null, reason: "NOT_DISCLOSED" },
+          q3: { value: null, reason: "PACKED_CELL" },
+        },
+      ],
+    });
+    expect(
+      screen.getByRole("button", {
+        name: "EV / EBITDA: interquartile range n/a (Q1: NOT_DISCLOSED; Q3: PACKED_CELL) (host-verified)",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("draws nothing for a statistic its register does not declare", () => {
+    const { container } = strips({ rows: METHODS, markerLabel: "Implied EV", unit: "USD m" });
+    // No quartiles: no bar and no gap for one.
+    expect(rects(container)).toHaveLength(0);
+    expect(container.querySelector("[data-gap]")).toBeNull();
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Trading multiples: min 800 USD m (host-verified)",
+      "Trading multiples: median 950 USD m (host-verified)",
+      "Trading multiples: max 1,100 USD m (host-verified)",
+      "Trading multiples: Implied EV 990 USD m (host-verified)",
+      "Precedent deals: min 900 USD m (model-authored)",
+      "Precedent deals: max 1,250.5 USD m (model-authored)",
+      "Precedent deals: Implied EV 1,000 USD m (model-authored)",
+    ]);
+    expect(container.querySelector('circle[data-mark="deals:marker"]')).toHaveClass("chart-hollow");
+    const legend = screen.getByRole("list", { name: "Legend" });
+    expect(within(legend).queryByText("Interquartile range")).toBeNull();
+    expect(within(legend).getByText("Implied EV").querySelector("circle")).not.toBeNull();
+  });
+
+  test("has a table twin of the rows as served, columns no row carries left out", () => {
+    strips();
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const cellsOf = (table: HTMLElement) =>
+      within(table)
+        .getAllByRole("row")
+        .map((row) => [...(row as HTMLTableRowElement).cells].map((cell) => cell.textContent));
+    expect(cellsOf(screen.getByRole("table", { name: "Peer ranges" }))).toEqual([
+      ["Metric", "Min", "Q1", "Median", "Q3", "Max", "Borrower", "Origin"],
+      [
+        "EV / EBITDA",
+        "5.0",
+        "6.25",
+        "7.5 (model-authored)",
+        "8.75",
+        "11.0",
+        "9.1",
+        "host-verified",
+      ],
+      [
+        "Net leverage",
+        "2.0",
+        "n/a: NOT_DISCLOSED",
+        "3.5",
+        "4.0",
+        "5.25",
+        "n/a: PEER_ONLY",
+        "model-authored",
+      ],
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    strips({
+      title: "Implied EV",
+      rows: METHODS,
+      markerLabel: "Implied EV",
+      categoryLabel: "Method",
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Table" })[1]!);
+    expect(cellsOf(screen.getByRole("table", { name: "Implied EV" }))).toEqual([
+      ["Method", "Min", "Median", "Max", "Implied EV", "Origin"],
+      ["Trading multiples", "800", "950", "1,100", "990", "host-verified"],
+      ["Precedent deals", "900", "", "1,250.5", "1,000", "model-authored"],
+    ]);
+  });
+
+  test("keys its marks in their own forms", () => {
+    strips();
+    const legend = screen.getByRole("list", { name: "Legend" });
+    expect(within(legend).getByText("Interquartile range").querySelector("rect")).not.toBeNull();
+    const rule = within(legend).getByText("Min, median, max");
+    expect(rule.querySelector("line.chart-rule")).not.toBeNull();
+    expect(rule.querySelector("circle")).toBeNull();
+    const dot = within(legend).getByText("Borrower");
+    expect(dot.querySelector("circle.chart-point")).not.toBeNull();
+    expect(dot.querySelector("line")).toBeNull();
+  });
+
+  test("takes the bar, then min, median, max and the marker, row by row; every target 24px", () => {
+    const onSelect = vi.fn();
+    const { container } = strips({ onSelect });
+    expect(marks(container).map((button) => button.dataset.mark)).toEqual([
+      "ev:iqr",
+      "ev:min",
+      "ev:median",
+      "ev:max",
+      "ev:marker",
+      "lev:iqr",
+      "lev:min",
+      "lev:median",
+      "lev:max",
+      "lev:marker",
+    ]);
+    act(() => marks(container)[0]!.focus());
+    fireEvent.keyDown(marks(container)[0]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(marks(container)[1]);
+    fireEvent.click(marks(container)[0]!);
+    expect(onSelect).toHaveBeenCalledWith(
+      {
+        series: "interquartile",
+        category: "EV / EBITDA",
+        index: 0,
+        value: null,
+        interval: { from: "6.25", to: "8.75" },
+        origin: "host",
+      },
+      marks(container)[0],
+    );
+    fireEvent.click(marks(container)[4]!);
+    expect(onSelect).toHaveBeenLastCalledWith(
+      { series: "marker", category: "EV / EBITDA", index: 0, value: "9.1", origin: "host" },
+      marks(container)[4],
+    );
+    for (const button of marks(container)) {
+      expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(24);
+      expect(parseFloat(button.style.height)).toBeGreaterThanOrEqual(24);
+    }
+  });
+});
+
+describe("a legend swatch", () => {
+  test("draws a rule dashed for the model and solid for the host, a dot hollow or filled", () => {
+    const swatch = (shape: "rule" | "dot", origin: "host" | "model") =>
+      render(<Swatch tone="neutral" shape={shape} origin={origin} />).container;
+    expect(swatch("rule", "host").querySelector("line")).toHaveClass("chart-rule");
+    expect(swatch("rule", "host").querySelector("line")).not.toHaveClass("chart-dashed");
+    expect(swatch("rule", "model").querySelector("line")).toHaveClass("chart-rule", "chart-dashed");
+    expect(swatch("rule", "model").querySelector("circle")).toBeNull();
+    expect(swatch("dot", "host").querySelector("circle")).not.toHaveClass("chart-hollow");
+    expect(swatch("dot", "model").querySelector("circle")).toHaveClass(
+      "chart-point",
+      "chart-hollow",
+    );
+    expect(swatch("dot", "model").querySelector("line")).toBeNull();
+  });
+});
+
 describe("every chart form, audited", () => {
   // The tags scripts/a11y-axe.mjs audits the workspace with. Colour contrast
   // needs layout jsdom lacks; the stylesheet's own test below holds it.
@@ -892,11 +1197,12 @@ describe("every chart form, audited", () => {
           series={EBITDA}
         />
         <BulletChart title="Headroom" summary="Against thresholds." unit="x" rows={TESTS} />
+        <RangeStripChart title="Ranges" summary="Against peers." unit="x" rows={PEERS} />
       </main>,
     );
     expect(await audit(container)).toEqual([]);
     for (const toggle of screen.getAllByRole("button", { name: "Table" })) fireEvent.click(toggle);
-    expect(screen.getAllByRole("table")).toHaveLength(6);
+    expect(screen.getAllByRole("table")).toHaveLength(7);
     expect(await audit(container)).toEqual([]);
   });
 });
