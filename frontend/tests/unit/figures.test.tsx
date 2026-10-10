@@ -1067,6 +1067,28 @@ test("pressing a security's point names its seniority, security and stated sourc
   );
 });
 
+test("pressing a cell of the risk matrix names both labels and its count", () => {
+  const columns = ["Event ID", "Description", "Probability", "Impact", "P/I Classification"];
+  const events: Register = {
+    register_id: "T5.4",
+    columns,
+    declared: columns,
+    rows: [["EV-1", "Event one", "High", "High", "Critical"].map((cell) => served(cell))],
+  };
+  const container = shown({ ...handoffOf("CP-4"), module_id: "CP-2A", registers: [events] });
+  const figure = container.querySelector("[data-figure='risk-matrix']") as HTMLElement;
+  expect(figure.querySelector("[data-chart='risk-matrix']")).not.toBeNull();
+  fireEvent.click(
+    within(figure).getByRole("button", {
+      name: "Probability High, Impact High: 1 event, EV-1 (model-authored)",
+    }),
+  );
+  const picked = container.querySelector("[data-picked]")!;
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("1");
+  expect(picked).toHaveTextContent("Probability High · Impact High");
+  expect(container.querySelector("[data-figures-key]")).toHaveTextContent("Outlined");
+});
+
 test("the figures' key keys a rule and a dot only where one is drawn", () => {
   const key = (container: HTMLElement) =>
     container.querySelector("[data-figures-key]")!.textContent ?? "";

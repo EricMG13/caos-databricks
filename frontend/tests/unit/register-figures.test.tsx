@@ -26,6 +26,7 @@ import {
   refinancingWall,
   registerFigures,
   registerRows,
+  riskMatrix,
   scenarioMoves,
   scoreRegisters,
   spreadCurve,
@@ -2586,4 +2587,63 @@ test("spreadCurve: another module's T3E.3 draws nothing; past the marks it is st
     key: "spread-curve",
     summary: expect.stringMatching(/^2001 marks/),
   });
+});
+
+// CP-2A's T5.4, as the profile declares it.
+const PI_MATRIX = ["Event ID", "Description", "Probability", "Impact", "P/I Classification"];
+const t54 = (id: string, probability: string, impact: string, classification = "Watch") =>
+  [id, `Event ${id}`, probability, impact, classification].map((cell) => c(cell));
+function matrixOf(figure: Figure) {
+  if (figure.kind !== "matrix") throw new Error(`A ${figure.kind} figure, not a matrix.`);
+  return figure;
+}
+const matrices = (rows: Served[][], module = "CP-2A") =>
+  riskMatrix(moduleWith(module, [register("T5.4", PI_MATRIX, rows)])).map(matrixOf);
+
+test("riskMatrix: an event a row, its labels past their citation markers; High/High counted in the summary", () => {
+  const figures = matrices([
+    t54("EV-1", "High [C1]", "High", "Critical"),
+    t54("EV-2", "Medium", "Low"),
+    t54("", " high", "HIGH \\[C2\\]", "Critical"),
+    t54("EV-4", "Likely", "High"),
+  ]);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit, figure.table])).toEqual([
+    ["risk-matrix", "Probability and impact", undefined, "T5.4"],
+  ]);
+  const [matrix] = figures;
+  expect(matrix!.events[0]).toEqual({
+    key: "0",
+    label: "EV-1",
+    description: "Event EV-1",
+    probability: "High",
+    impact: "High",
+    classification: "Critical",
+    origin: "model",
+  });
+  expect(
+    matrix!.events.map(({ label, probability, impact }) => [label, probability, impact]),
+  ).toEqual([
+    ["EV-1", "High", "High"],
+    ["EV-2", "Medium", "Low"],
+    ["Event ID not stated", " high", "HIGH"],
+    ["EV-4", "Likely", "High"],
+  ]);
+  expect(matrix!.summary).toBe(
+    "High probability and high impact: 2 of 4 events, EV-1, Event ID not stated.",
+  );
+  const pressed = { series: "Probability High", category: "Impact High", index: 2 };
+  expect(matrix!.sourceOf({ ...pressed, value: "2", origin: "model" })).toBeNull();
+});
+
+test("riskMatrix: none High/High is said as none", () => {
+  const [matrix] = matrices([t54("EV-1", "Low", "High")]);
+  expect(matrix!.summary).toBe("High probability and high impact: 0 of 1 event.");
+});
+
+test("riskMatrix: another module's T5.4 draws nothing", () => {
+  const row = t54("EV-1", "High", "High");
+  expect(matrices([row], "CP-2B")).toEqual([]);
+  expect(matrices([])).toEqual([]);
+  const cp2a = moduleWith("CP-2A", [register("T5.4", PI_MATRIX, [row])]);
+  expect(registerFigures(cp2a).map((figure) => figure.key)).toEqual(["risk-matrix"]);
 });

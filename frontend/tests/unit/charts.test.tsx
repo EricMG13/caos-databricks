@@ -14,14 +14,17 @@ import {
   LineChart,
   ProvenanceKeyed,
   RangeStripChart,
+  RiskMatrix,
   ScatterChart,
   StackedBarChart,
   Swatch,
   WaterfallChart,
+  riskLevel,
   type BulletRow,
   type ChartSeries,
   type DumbbellRow,
   type RangeRow,
+  type RiskEvent,
   type ScatterPoint,
 } from "@/charts";
 import { readDate } from "@/charts/ScatterChart";
@@ -1625,6 +1628,136 @@ describe("a scatter chart", () => {
   });
 });
 
+// Made-up events: two High/High, one host-verified beside a model's in one
+// cell, and texts the ordinal labels do not read.
+const EVENTS: RiskEvent[] = [
+  ["e1", "E-01", "Refinancing slips", "High", "High", "Critical"],
+  ["e2", "E-02", "Covenant reset", " high ", "HIGH", "Critical"],
+  ["e3", "E-03", "Supplier exit", "Medium", "Low", "Watch"],
+  ["e4", "E-04", "Tariff change", "Likely", "High", "High"],
+  ["e5", "E-05", "Litigation", "Low", "", "Low"],
+  ["e6", "E-06", "Rate reset", "medium", "low", "Watch"],
+].map(([key, label, description, probability, impact, classification]) => ({
+  key: key!,
+  label: label!,
+  description: description!,
+  probability: probability!,
+  impact: impact!,
+  classification: classification!,
+  origin: key === "e3" ? "host" : "model",
+}));
+
+function matrix(extra: Partial<Parameters<typeof RiskMatrix>[0]> = {}) {
+  return render(
+    <RiskMatrix
+      title="Probability and impact"
+      summary="2 events High/High."
+      events={EVENTS}
+      {...extra}
+    />,
+  );
+}
+
+const cellAt = (root: HTMLElement, key: string) =>
+  plotOf(root).querySelector(`[data-cell="${key}"]`);
+
+describe("a risk matrix", () => {
+  test("reads the four ordinal labels trimmed and case-insensitive, nothing else", () => {
+    expect([" high ", "MEDIUM", "Low", "unknown"].map(riskLevel)).toEqual([
+      "High",
+      "Medium",
+      "Low",
+      "Unknown",
+    ]);
+    for (const other of ["Likely", "", "Med", "High/Medium"]) expect(riskLevel(other)).toBeNull();
+  });
+
+  test("a mark a cell holding events, in reading order, named with both labels, its count and ids", () => {
+    const { container } = matrix();
+    expect(container.querySelector("figure")).toHaveAttribute("data-chart", "risk-matrix");
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Probability High, Impact High: 2 events, E-01, E-02 (model-authored)",
+      "Probability Medium, Impact Low: 2 events, E-03, E-06 (1 host-verified, 1 model-authored)",
+      "Probability Low, Impact Unknown: 1 event, E-05 (impact not stated) (model-authored)",
+      "Probability Unknown, Impact High: 1 event, E-04 (probability as written: Likely) (model-authored)",
+    ]);
+    expect(cellAt(container, "high-high")?.querySelector("[data-count]")).toHaveTextContent("2");
+    expect(cellAt(container, "unknown-high")?.querySelector("[data-count]")).toHaveTextContent("1");
+  });
+
+  test("draws all sixteen cells, an empty one with no mark and no count", () => {
+    const { container } = matrix();
+    const cells = [...plotOf(container).querySelectorAll("[data-cell]")];
+    expect(cells.map((cell) => cell.getAttribute("data-cell"))).toEqual(
+      ["high", "medium", "low", "unknown"].flatMap((p) =>
+        ["low", "medium", "high", "unknown"].map((i) => `${p}-${i}`),
+      ),
+    );
+    expect(cellAt(container, "low-low")?.querySelector("[data-mark], [data-count]")).toBeNull();
+    const ticks = [...plotOf(container).querySelectorAll(".chart-tick")].map((t) => t.textContent);
+    expect(ticks).toEqual([
+      "Probability",
+      "High",
+      "Medium",
+      "Low",
+      "Unknown",
+      "Low",
+      "Medium",
+      "High",
+      "Unknown",
+      "Impact",
+    ]);
+    expect(plotOf(container).querySelectorAll(".chart-grid line")).toHaveLength(10);
+  });
+
+  test("a cell of the model's events is outlined and hatched; of the host's alone, solid", () => {
+    const host = matrix({ events: EVENTS.filter((event) => event.key === "e3") }).container;
+    expect(cellAt(host, "medium-low")?.querySelector("rect[data-mark]")).toHaveClass("chart-host");
+    const { container } = matrix({ title: "Mixed" });
+    const mixed = cellAt(container, "medium-low")?.querySelector("rect[data-mark]");
+    expect(mixed).toHaveClass("chart-outline");
+    expect(mixed?.getAttribute("fill")).toMatch(/^url\(#/);
+  });
+
+  test("its table twin lists each event as written", () => {
+    matrix();
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const table = screen.getByRole("table", { name: "Probability and impact" });
+    const rows = within(table)
+      .getAllByRole("row")
+      .map((row) => [...(row as HTMLTableRowElement).cells].map((cell) => cell.textContent));
+    expect(rows.slice(0, 3)).toEqual([
+      ["Event ID", "Description", "Probability", "Impact", "P/I Classification"],
+      ["E-01", "Refinancing slips", "High", "High", "Critical"],
+      ["E-02", "Covenant reset", " high ", "HIGH", "Critical"],
+    ]);
+    expect(rows).toHaveLength(7);
+  });
+
+  test("takes its cells by the arrow keys; every target 24px; a press hands the cell over", () => {
+    const onSelect = vi.fn();
+    const { container } = matrix({ onSelect });
+    act(() => marks(container)[0]!.focus());
+    fireEvent.keyDown(marks(container)[0]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(marks(container)[1]);
+    fireEvent.click(marks(container)[3]!);
+    expect(onSelect).toHaveBeenCalledWith(
+      {
+        series: "Probability Unknown",
+        category: "Impact High",
+        index: 14,
+        value: "1",
+        origin: "model",
+      },
+      marks(container)[3],
+    );
+    for (const button of marks(container)) {
+      expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(24);
+      expect(parseFloat(button.style.height)).toBeGreaterThanOrEqual(24);
+    }
+  });
+});
+
 describe("a value read for a name or a table cell", () => {
   test("said prints it with its unit or n/a and why; cellOf names an origin only where it differs", () => {
     expect(said(readDatum({ value: "1234.5" }), "x")).toBe("1,234.5 x");
@@ -1723,6 +1856,19 @@ describe("every chart form, audited", () => {
     expect(await audit(container)).toEqual([]);
     for (const toggle of screen.getAllByRole("button", { name: "Table" })) fireEvent.click(toggle);
     expect(screen.getAllByRole("table")).toHaveLength(8);
+    expect(await audit(container)).toEqual([]);
+  });
+
+  // Apart from the others, so no audit nears the 5 s test timeout.
+  test("has no axe violation in a risk matrix, drawn or as its table twin", async () => {
+    const { container } = render(
+      <main>
+        <h1>Charts</h1>
+        <RiskMatrix title="Matrix" summary="By probability and impact." events={EVENTS} />
+      </main>,
+    );
+    expect(await audit(container)).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
     expect(await audit(container)).toEqual([]);
   });
 

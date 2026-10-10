@@ -12,6 +12,7 @@ import {
   LineChart,
   ProvenanceKeyed,
   RangeStripChart,
+  RiskMatrix,
   ScatterChart,
   StackedBarChart,
   Swatch,
@@ -870,6 +871,9 @@ function markOf(figure: Figure, key: string): string | undefined {
     case "scatter":
       // A point's series is its group, as written.
       return key;
+    case "matrix":
+      // A cell's series is its probability, named with its label.
+      return key;
     default:
       return unreachable(figure);
   }
@@ -931,6 +935,15 @@ function Chart({
           pointLabel={figure.pointLabel}
           valueLabel={figure.valueLabel}
           groupLabel={figure.groupLabel}
+        />
+      );
+    case "matrix":
+      return (
+        <RiskMatrix
+          title={figure.title}
+          summary={figure.summary}
+          events={figure.events}
+          onSelect={onSelect}
         />
       );
     case "line":
