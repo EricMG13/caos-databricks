@@ -191,25 +191,41 @@ export function covenantHeadroom(handoff: HandoffView): Figure[] {
   }));
 }
 
-/** A range strip's statistics and the `T4.6` column each is read from. */
-const PEER_STATISTICS = [
+type Statistic = "min" | "q1" | "median" | "q3" | "max" | "marker";
+
+/** A range strip's statistics, each with the register column it is read from. */
+type Statistics = readonly (readonly [Statistic, string])[];
+
+/** A row's range, labelled by its `label` column: each statistic its
+    register declares, as served. */
+const rangeOf =
+  (statistics: Statistics, label: string) =>
+  ({ row, index }: Entry): RangeRow => {
+    const range: RangeRow = { key: `${index}`, label: text(row, label), origin: "model" };
+    for (const [statistic, column] of statistics) {
+      const cell = row[column];
+      if (cell !== undefined) range[statistic] = datum(cell);
+    }
+    return range;
+  };
+
+/** A row's marks: one bar for the quartiles, where either is declared, and a
+    rule or a dot for each other statistic `row` declares. */
+function rangeMarks(row: Row, statistics: Statistics): number {
+  const declared = statistics.filter(([, column]) => row[column] !== undefined);
+  const quartiles = declared.filter(([statistic]) => statistic === "q1" || statistic === "q3");
+  return (quartiles.length ? 1 : 0) + declared.length - quartiles.length;
+}
+
+/** `T4.6`'s statistics. */
+const PEER_STATISTICS: Statistics = [
   ["min", "Min"],
   ["q1", "Q1"],
   ["median", "Median"],
   ["q3", "Q3"],
   ["max", "Max"],
   ["marker", "Borrower Value"],
-] as const;
-
-/** A metric's range: each statistic its register declares, as served. */
-function peerRange({ row, index }: Entry): RangeRow {
-  const range: RangeRow = { key: `${index}`, label: text(row, "Metric"), origin: "model" };
-  for (const [statistic, column] of PEER_STATISTICS) {
-    const cell = row[column];
-    if (cell !== undefined) range[statistic] = datum(cell);
-  }
-  return range;
-}
+];
 
 /** CP-1C's peer statistics (`T4.6`): each metric's peer range, min to max
     with its quartiles and median, the borrower's value marked against it. */
@@ -217,11 +233,7 @@ export function peerRanges(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-1C", "T4.6");
   if (!rows?.length) return [];
   const unitOf = (row: Row) => suffixOf(row["Borrower Value"]) ?? suffixOf(row["Median"]);
-  const declares = (column: string) => rows[0]![column] !== undefined;
-  // One bar for the quartiles, and a rule or a dot for each other statistic.
-  const marks =
-    (declares("Q1") || declares("Q3") ? 1 : 0) +
-    ["Min", "Median", "Max", "Borrower Value"].filter(declares).length;
+  const marks = rangeMarks(rows[0]!, PEER_STATISTICS);
   const base = { key: "peer-ranges", table: "T4.6", title: "Peer ranges" };
   return perUnit(rows, base, unitOf, marks, (entries, head) => ({
     ...head,
@@ -232,12 +244,52 @@ export function peerRanges(handoff: HandoffView): Figure[] {
         return `${text(row, "Metric")} ${served(row["Borrower Value"])}${position ? ` (${position})` : ""}`;
       })
       .join("; ")}.`,
-    ranges: entries.map(peerRange),
+    ranges: entries.map(rangeOf(PEER_STATISTICS, "Metric")),
     markerLabel: "Borrower value",
     categoryLabel: "Metric",
     sourceOf: (selection) => {
       const row = pickedRow(entries, selection);
       return row ? stated(row, ["Peer Avg", "N"]) : null;
+    },
+  }));
+}
+
+/** `T4.10`'s statistics: it states no quartiles. */
+const IMPLIED_STATISTICS: Statistics = [
+  ["min", "Low"],
+  ["median", "Median"],
+  ["max", "High"],
+  ["marker", "Implied EV"],
+];
+
+/** CP-1C's implied enterprise value (`T4.10`): each method's range, low to
+    high with its median, the implied EV it states marked against it. */
+export function impliedEv(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-1C", "T4.10");
+  if (!rows?.length) return [];
+  const unitOf = (row: Row) => suffixOf(row["Implied EV"]) ?? suffixOf(row["Median"]);
+  const marks = rangeMarks(rows[0]!, IMPLIED_STATISTICS);
+  const base = { key: "implied-ev", table: "T4.10", title: "Implied enterprise value by method" };
+  return perUnit(rows, base, unitOf, marks, (entries, head) => ({
+    ...head,
+    kind: "range",
+    summary: `Implied EV as served: ${entries
+      .map(({ row }) => `${text(row, "Method")} ${served(row["Implied EV"])}`)
+      .join("; ")}.`,
+    ranges: entries.map(rangeOf(IMPLIED_STATISTICS, "Method")),
+    markerLabel: "Implied EV",
+    categoryLabel: "Method",
+    sourceOf: (selection) => {
+      const row = pickedRow(entries, selection);
+      return row
+        ? stated(row, [
+            "Multiple Source",
+            "Multiple Value",
+            "Borrower Metric",
+            "Period",
+            "Calc Status",
+          ])
+        : null;
     },
   }));
 }
@@ -379,6 +431,18 @@ export function ebitdaQuality(handoff: HandoffView): Figure[] {
   });
 }
 
+/** CP-1D's adjusted debt bridge (`T1E.3`): reported to adjusted debt, each
+    adjustment as served; the register states no status. */
+export function adjustedDebtBridge(handoff: HandoffView): Figure[] {
+  return bridgeFigure(handoff, {
+    module: "CP-1D",
+    register: "T1E.3",
+    cumulative: "Cumulative Adjusted Debt",
+    key: "adjusted-debt-bridge",
+    title: "Adjusted debt bridge",
+  });
+}
+
 // CP-2D's stated totals and the uses its method subtracts
 // (REF_CP-2D_STEPS.md step 05, instruction 5; liquidity_bridge.py), as a
 // `Bridge Item` starts, trimmed and casefolded.
@@ -517,7 +581,9 @@ export function registerFigures(handoff: HandoffView): Figure[] {
   return [
     ...covenantHeadroom(handoff),
     ...peerRanges(handoff),
+    ...impliedEv(handoff),
     ...ebitdaQuality(handoff),
+    ...adjustedDebtBridge(handoff),
     ...liquidityBridge(handoff),
     ...valueAllocation(handoff),
   ];

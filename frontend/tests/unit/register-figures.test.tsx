@@ -5,8 +5,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  adjustedDebtBridge,
   covenantHeadroom,
   ebitdaQuality,
+  impliedEv,
   liquidityBridge,
   peerRanges,
   registerFigures,
@@ -885,4 +887,170 @@ test("a scenario T4E.6 names no fulcrum for marks none; each register draws for 
   expect(registerFigures(cp4c).map((figure) => figure.key)).toEqual(["value-allocation-0"]);
   const cp2d = cp2dWith([register("T2E.5", LIQUIDITY, [t2e5("Cash taxes", c("1", "1"))])]);
   expect(registerFigures(cp2d).map((figure) => figure.key)).toEqual(["liquidity-bridge"]);
+});
+
+// CP-1D's T1E.3, as the profile declares it.
+const DEBT = ["Step", "Amount", "Basis", "Cumulative Adjusted Debt", "Evidence ID"];
+const t1e3 = (step: string, amount: Served, cumulative: Served, id = "E-1") => [
+  c(step),
+  amount,
+  c(`Basis of ${step}`),
+  cumulative,
+  c(id),
+];
+const debt = (rows: Served[][]) =>
+  adjustedDebtBridge(cp1dWith([register("T1E.3", DEBT, rows)])).map(waterfall);
+
+test("adjustedDebtBridge: T1E.3 read as the EBITDA bridge reads T1D.4, with no status colour", () => {
+  const [figure, ...rest] = debt([
+    t1e3("Reported debt", c("400", "400"), c("400", "400")),
+    t1e3("Leases", c("35.5", "35.5"), c("435.5", "435.5"), "E-2"),
+    t1e3("Cash netting", c("(20)", "-20"), c("415.5", "415.5")),
+    t1e3("Pension deficit", c("Not quantified"), c("")),
+    t1e3("Earn-out", c("4.5", "4.5"), c("420.0", "420.0"), "E-5"),
+  ]);
+  expect(rest).toEqual([]);
+  expect(figure!.key).toBe("adjusted-debt-bridge");
+  expect(figure!.table).toBe("T1E.3");
+  expect(figure!.title).toBe("Adjusted debt bridge");
+  expect(figure!.steps).toEqual([
+    { key: "0", label: "Reported debt", kind: "total", value: "400", origin: "model" },
+    { key: "1", label: "Leases", kind: "delta", value: "35.5", origin: "model" },
+    { key: "2", label: "Cash netting", kind: "delta", value: "-20", origin: "model" },
+    {
+      key: "3",
+      label: "Pension deficit",
+      kind: "delta",
+      value: null,
+      reason: "Not quantified",
+      origin: "model",
+    },
+    { key: "4", label: "Earn-out", kind: "delta", value: "4.5", origin: "model" },
+    {
+      key: "closing",
+      label: "Cumulative Adjusted Debt",
+      kind: "total",
+      value: "420.0",
+      origin: "model",
+    },
+  ]);
+  expect(figure!.statuses).toBeUndefined();
+  expect(figure!.summary).toBe("Reported debt 400 to Cumulative Adjusted Debt 420.0, as served.");
+  const pressed = (series: string) => ({
+    series,
+    category: "",
+    index: 0,
+    value: null,
+    origin: "model" as const,
+  });
+  expect(figure!.sourceOf(pressed("1"))).toBe("Basis: Basis of Leases; Evidence ID: E-2");
+  expect(figure!.sourceOf(pressed("closing"))).toBe("Basis: Basis of Earn-out; Evidence ID: E-5");
+  const [open] = debt([
+    t1e3("Reported debt", c("400", "400"), c("400", "400")),
+    t1e3("Leases", c("35.5", "35.5"), c("n/a")),
+  ]);
+  expect(open!.summary).toBe(
+    "Reported debt 400; the last change, Leases, states no cumulative Adjusted Debt.",
+  );
+});
+
+test("the empty adjusted-debt bridge, and T1E.3 served by another module, draw nothing", () => {
+  expect(debt([t1e3("NONE", c("—"), c("—"))])).toEqual([]);
+  const rows = [t1e3("Reported debt", c("1", "1"), c("1", "1"))];
+  expect(adjustedDebtBridge(withRegisters("CP-1", [register("T1E.3", DEBT, rows)]))).toEqual([]);
+  const cp1d = cp1dWith([register("T1E.3", DEBT, rows)]);
+  expect(registerFigures(cp1d).map((figure) => figure.key)).toEqual(["adjusted-debt-bridge"]);
+});
+
+// CP-1C's T4.10, as the profile declares it.
+const IMPLIED = [
+  "Method",
+  "Multiple Source",
+  "Multiple Value",
+  "Borrower Metric",
+  "Period",
+  "Implied EV",
+  "Low",
+  "Median",
+  "High",
+  "Calc Status",
+  "Limitations",
+];
+const t4_10 = (method: string, ev: Served, low: Served, median: Served, high: Served) => [
+  c(method),
+  c(`Source of ${method}`),
+  c("7.0x", "7.0"),
+  c("LTM EBITDA 50"),
+  c("FY24"),
+  ev,
+  low,
+  median,
+  high,
+  c("Calculated"),
+  c("Small set"),
+];
+const implied = (rows: Served[][]) =>
+  impliedEv(withRegisters("CP-1C", [register("T4.10", IMPLIED, rows)])).map(ranges);
+
+test("impliedEv: each method's low, median and high, its implied EV marked, no quartiles", () => {
+  const [figure, ...rest] = implied([
+    t4_10(
+      "Trading comparables",
+      c("350 [C1]", "350"),
+      c("300", "300"),
+      c("340", "340"),
+      c("410", "410"),
+    ),
+    t4_10("Precedents", c("Not Calculable"), c("320", "320"), c("n/a"), c("450", "450")),
+  ]);
+  expect(rest).toEqual([]);
+  expect(figure!.key).toBe("implied-ev");
+  expect(figure!.table).toBe("T4.10");
+  expect(figure!.title).toBe("Implied enterprise value by method");
+  expect(figure!.unit).toBeUndefined();
+  expect(figure!.markerLabel).toBe("Implied EV");
+  expect(figure!.categoryLabel).toBe("Method");
+  expect(figure!.ranges).toEqual([
+    {
+      key: "0",
+      label: "Trading comparables",
+      origin: "model",
+      min: { value: "300" },
+      median: { value: "340" },
+      max: { value: "410" },
+      marker: { value: "350" },
+    },
+    {
+      key: "1",
+      label: "Precedents",
+      origin: "model",
+      min: { value: "320" },
+      median: { value: null, reason: "n/a" },
+      max: { value: "450" },
+      marker: { value: null, reason: "Not Calculable" },
+    },
+  ]);
+  expect(figure!.summary).toBe(
+    "Implied EV as served: Trading comparables 350; Precedents n/a (Not Calculable).",
+  );
+  expect(
+    figure!.sourceOf({ series: "marker", category: "", index: 1, value: null, origin: "model" }),
+  ).toBe(
+    "Multiple Source: Source of Precedents; Multiple Value: 7.0x; Borrower Metric: LTM EBITDA 50; Period: FY24; Calc Status: Calculated",
+  );
+});
+
+test("implied EV rows split by unit as peer ranges do; another module's T4.10 draws nothing", () => {
+  const figures = implied([
+    t4_10("Multiple", c("7.5x", "7.5"), c("6.0x", "6.0"), c("7.0x", "7.0"), c("8.0x", "8.0")),
+    t4_10("DCF", c("500", "500"), c("450", "450"), c("500", "500"), c("550", "550")),
+  ]);
+  expect(figures.map((figure) => [figure.key, figure.title])).toEqual([
+    ["implied-ev-x", "Implied enterprise value by method, x"],
+    ["implied-ev", "Implied enterprise value by method"],
+  ]);
+  const rows = [t4_10("DCF", c("1", "1"), c("1", "1"), c("1", "1"), c("1", "1"))];
+  expect(impliedEv(withRegisters("CP-1", [register("T4.10", IMPLIED, rows)]))).toEqual([]);
+  const cp1c = withRegisters("CP-1C", [register("T4.10", IMPLIED, rows)]);
+  expect(registerFigures(cp1c).map((figure) => figure.key)).toEqual(["implied-ev"]);
 });
