@@ -13,55 +13,37 @@ import {
   formatDecimal,
   type ChartColor,
   type ChartSelection,
-  type ChartSeries,
   type Datum,
   type Origin,
   type WaterfallStep,
 } from "@/charts";
-import { fromScaled, placesOf, toScaled } from "@/charts/decimal";
 import { hundredfold, plainName } from "@/ds/format";
 import type { HandoffView } from "@/wire/v1";
+import {
+  MAX_FIGURES,
+  MAX_MARKS,
+  datum,
+  groupBy,
+  oversized,
+  pair,
+  sumOf,
+  text,
+  type Cell,
+  type DivergingFigure,
+  type Figure,
+  type LineFigure,
+  type Row,
+  type StackFigure,
+  type WaterfallFigure,
+} from "./figure-core";
 
 type Table = HandoffView["tables"][number];
-type Cell = Table["rows"][number][number];
-type Row = Record<string, Cell | undefined>;
 
 /** A table's rows keyed by column name. */
 export function recordsOf(table: Table): Row[] {
   return table.rows.map((row) =>
     Object.fromEntries(table.columns.map((column, index) => [column, row[index]])),
   );
-}
-
-const text = (row: Row, column: string) => row[column]?.text ?? "";
-const datum = (cell: Cell | undefined): Datum =>
-  cell?.value != null
-    ? { value: cell.value }
-    : { value: null, reason: cell?.text ? cell.text : "not stated" };
-
-/** The exact sum of a set of values that may include unknown members
-    (R24-13): `value` sums only the known ones (null when none are known),
-    and `complete` says whether every member was known -- a caller states
-    this partial-sum distinction rather than let an aggregate stand in
-    silently for a total that may be missing components. */
-export interface PartialSum {
-  value: string | null;
-  complete: boolean;
-}
-
-/** The exact sum of decimal strings, and whether every input was known. */
-export function sumOf(values: readonly (string | null | undefined)[]): PartialSum {
-  const known = values.filter((value): value is string => typeof value === "string");
-  const complete = known.length === values.length;
-  if (known.length === 0) return { value: null, complete };
-  const places = Math.max(...known.map(placesOf));
-  return {
-    value: fromScaled(
-      known.reduce((sum, value) => sum + toScaled(value, places), 0n),
-      places,
-    ),
-    complete,
-  };
 }
 
 /** How many of `values` are unknown (null or undefined). */
@@ -80,45 +62,6 @@ const SCALE: Record<string, string> = {
 export function unitOf(currency: string, scale: string): string | undefined {
   if (!currency) return undefined;
   return `${currency}${SCALE[scale.toUpperCase()] ?? (scale ? ` ${scale.toLowerCase()}` : "")}`;
-}
-
-/** One figure: what it shows, drawn by which chart, from which table. */
-export interface Figure {
-  key: string;
-  table: string;
-  kind: "stack" | "line" | "diverging" | "waterfall";
-  title: string;
-  summary: string;
-  unit?: string;
-  categories: string[];
-  series: ChartSeries[];
-  /** A waterfall's steps, in bridge order; absent on every other kind. */
-  steps?: WaterfallStep[];
-  /** Where the model says a mark's figure came from: its source locator. */
-  sourceOf: (selection: ChartSelection) => string | null;
-  /** Past `MAX_MARKS`: stated, not drawn. */
-  oversized?: boolean;
-}
-
-/** A figure past this many marks is stated, not drawn, and past this many
-    figures a module's are stated too. The tables are model-authored and may
-    run to 2,000 rows: a cross product of two of their columns is millions of
-    marks, and drawing them froze the tab (security review, F327). */
-const MAX_MARKS = 2_000;
-const MAX_FIGURES = 24;
-
-function oversized(key: string, table: string, title: string, marks: number): Figure {
-  return {
-    key,
-    table,
-    kind: "stack",
-    title,
-    summary: `${marks} marks: too many to draw. The Appendix tab lists every row.`,
-    categories: [],
-    series: [],
-    sourceOf: () => null,
-    oversized: true,
-  };
 }
 
 function tableOf(tables: readonly Table[], id: string): Row[] | null {
@@ -146,20 +89,6 @@ function periodUnit(tables: readonly Table[], period: string | undefined): strin
 }
 
 const unique = (values: readonly string[]) => [...new Set(values)];
-/** Rows grouped by `key`, in table order, built once: a `find` or `filter`
-    per mark made the figures cubic in a table's rows. */
-function groupBy<T>(rows: readonly T[], key: (row: T) => string): Map<string, T[]> {
-  const groups = new Map<string, T[]>();
-  for (const row of rows) {
-    const k = key(row);
-    const group = groups.get(k);
-    if (group) group.push(row);
-    else groups.set(k, [row]);
-  }
-  return groups;
-}
-/** Two cells as one key; the separator cannot occur in a served cell's text. */
-const pair = (a: string, b: string) => `${a}\u0000${b}`;
 // A priority the model did not state sorts last, never as NaN.
 const priority = (row: Row) => Number(text(row, "display_priority")) || Number.MAX_SAFE_INTEGER;
 const byPriority = (rows: readonly Row[], key: string) =>
@@ -168,7 +97,7 @@ const locate = (row: Row | undefined) =>
   row ? [text(row, "source_id"), text(row, "source_locator")].filter(Boolean).join(", ") : null;
 
 /** Revenue by segment, stacked by period. */
-export function segmentMix(tables: readonly Table[]): Figure | null {
+export function segmentMix(tables: readonly Table[]): StackFigure | null {
   const rows = tableOf(tables, "cp1.segment_revenue_schedule");
   if (!rows?.length) return null;
   const periods = periodsOf(tables, unique(rows.map((row) => text(row, "period_id"))));
@@ -218,7 +147,7 @@ export function segmentMix(tables: readonly Table[]): Figure | null {
 const KPI_UNIT: Record<string, string> = { UNITS: "units", PERCENT: "%", RATIO: "x" };
 
 /** One line per operating KPI, each on its own axis: their units differ. */
-export function kpiLines(tables: readonly Table[]): Figure[] {
+export function kpiLines(tables: readonly Table[]): LineFigure[] {
   const rows = tableOf(tables, "cp1.operating_kpi_schedule");
   if (!rows?.length) return [];
   const byKpi = groupBy(rows, (row) => text(row, "kpi_id"));
@@ -253,7 +182,7 @@ export function kpiLines(tables: readonly Table[]): Figure[] {
 }
 
 /** The latest period's add-backs, each above or below zero. */
-export function addbacks(tables: readonly Table[]): Figure | null {
+export function addbacks(tables: readonly Table[]): DivergingFigure | StackFigure | null {
   const rows = tableOf(tables, "cp1.adjusted_ebitda_bridge");
   if (!rows?.length) return null;
   const periods = periodsOf(tables, unique(rows.map((row) => text(row, "period_id"))));
@@ -323,7 +252,7 @@ const sentence = (words: string) => words.charAt(0) + words.slice(1).toLowerCase
     classes it belongs to are chosen, so it is not silently missing from the
     chart and cannot silently lose the nearest-date claim to a facility whose
     principal happens to be known. */
-export function maturityLadder(tables: readonly Table[]): Figure | null {
+export function maturityLadder(tables: readonly Table[]): StackFigure | null {
   const rows = tableOf(tables, "cp1.debt_facility_register");
   if (!rows?.length) return null;
   const periods = periodsOf(tables, unique(rows.map((row) => text(row, "period_id"))));
@@ -426,7 +355,7 @@ const BASIS: Record<string, [string, string]> = {
     unit a revenue change and a debt change share, so they sit on one axis.
     A change the bundle could not calculate is a gap with its status, not a
     zero. */
-export function comparatorChanges(tables: readonly Table[]): Figure | null {
+export function comparatorChanges(tables: readonly Table[]): DivergingFigure | StackFigure | null {
   const rows = tableOf(tables, "cp1b.model_comparator_register");
   if (!rows?.length) return null;
   if (rows.length > MAX_MARKS) {
@@ -536,7 +465,7 @@ export function keyFigures(tables: readonly Table[]): KeyFigure[] {
     another module's table), and a row order that put an older period last
     hid a BLOCK in the newer one. The summary counts what the module ruled,
     since a difference inside tolerance still passes. */
-export function addbackValidation(tables: readonly Table[]): Figure | null {
+export function addbackValidation(tables: readonly Table[]): DivergingFigure | StackFigure | null {
   const rows = tableOf(tables, "cp1b.addback_validation_register");
   if (!rows?.length) return null;
   if (rows.length > MAX_MARKS) {
@@ -591,7 +520,7 @@ const CASE_ORDER = ["BASE", "DOWNSIDE"];
     axis. A slot the issuer does not use (`NOT_APPLICABLE` throughout) draws
     nothing. The division is named by its slot: CP-1's allocation that maps
     it to a segment is another module's table. */
-export function forecastDrivers(tables: readonly Table[]): Figure[] {
+export function forecastDrivers(tables: readonly Table[]): LineFigure[] {
   const rows = (tableOf(tables, "cp2g.cp_model_forecast_drivers") ?? []).filter(
     (row) => text(row, "driver_id") === "division_growth",
   );
@@ -731,7 +660,7 @@ function accountLine(
   title: string,
   measure: Measure,
   accounts: readonly Account[],
-): Figure | null {
+): LineFigure | StackFigure | null {
   const { rows, at } = accountCells(tables, accounts);
   const stated = rows.filter((row) => row.value?.value != null);
   if (stated.length === 0) return null;
@@ -777,7 +706,7 @@ function accountLine(
     debt against cash and the revolver at each period end. Every value is the
     register's, as served; nothing is derived from it here (no leverage, no
     net debt). */
-export function accountLines(tables: readonly Table[]): Figure[] {
+export function accountLines(tables: readonly Table[]): (LineFigure | StackFigure)[] {
   return [
     accountLine(tables, "earnings", "EBITDA, reported and adjusted", "flow", [
       { id: "ebitda", label: "EBITDA" },
@@ -791,7 +720,7 @@ export function accountLines(tables: readonly Table[]): Figure[] {
       { id: "rcf_drawn", label: "Drawn" },
       { id: "rcf_commitment", label: "Commitment" },
     ]),
-  ].filter((figure): figure is Figure => figure !== null);
+  ].filter((figure) => figure !== null);
 }
 
 const OPERATING: Account = { id: "cfo_ncfo", label: "Operating cash flow" };
@@ -812,7 +741,7 @@ const NET_CHANGE: Account = { id: "net_cash_change", label: "Net change in cash"
     states both ends; a step the register does not list is left out, one it
     lists without a value is a gap, and where the steps do not reach the
     stated change the chart's residual says by exactly how much. */
-export function cashFlowBridge(tables: readonly Table[]): Figure | null {
+export function cashFlowBridge(tables: readonly Table[]): WaterfallFigure | null {
   const { rows, at } = accountCells(tables, [OPERATING, ...CASH_USES, NET_CHANGE]);
   const ends = (period: string) =>
     at(OPERATING.id, period)?.value?.value != null &&
@@ -836,8 +765,6 @@ export function cashFlowBridge(tables: readonly Table[]): Figure | null {
       `${OPERATING.label} ${amount(OPERATING, false)} to a net change in cash of` +
       ` ${amount(NET_CHANGE, true)}.`,
     unit,
-    categories: [],
-    series: [],
     steps: [
       step(OPERATING, "total"),
       ...CASH_USES.filter((account) => at(account.id, latest)).map((account) =>
@@ -871,7 +798,7 @@ export function figuresOf(handoff: HandoffView): Figure[] {
     compared > KEY_FIGURES ? comparatorChanges(tables) : null,
     addbackValidation(tables),
     ...forecastDrivers(tables),
-  ].filter((figure): figure is Figure => figure !== null);
+  ].filter((figure) => figure !== null);
   if (figures.length <= MAX_FIGURES) return figures;
   const rest = figures.length - (MAX_FIGURES - 1);
   return [
@@ -928,6 +855,26 @@ export interface FigurePick {
   origin: Origin | null;
 }
 
+/** A figure of no kind `Chart` draws: `tsc` refuses the case first. */
+function unreachable(_figure: never): never {
+  throw new Error("No chart draws this figure's kind.");
+}
+
+/** The pressed mark's series, as a reader names it; a waterfall's step is
+    named by its category alone. */
+function markOf(figure: Figure, key: string): string | undefined {
+  switch (figure.kind) {
+    case "stack":
+    case "line":
+    case "diverging":
+      return figure.series.find((entry) => entry.key === key)?.label;
+    case "waterfall":
+      return undefined;
+    default:
+      return unreachable(figure);
+  }
+}
+
 function Chart({
   figure,
   onPick,
@@ -936,12 +883,11 @@ function Chart({
   onPick: (pick: FigurePick, opener: HTMLElement) => void;
 }) {
   const onSelect = (selection: ChartSelection, opener: HTMLElement) => {
-    const series = figure.series.find((entry) => entry.key === selection.series);
     onPick(
       {
         figure: figure.title,
         table: figure.table,
-        label: [series?.label, selection.category].filter(Boolean).join(" · "),
+        label: [markOf(figure, selection.series), selection.category].filter(Boolean).join(" · "),
         value: selection.value,
         unit: figure.unit,
         source: figure.sourceOf(selection),
@@ -951,18 +897,20 @@ function Chart({
     );
   };
   const common = { title: figure.title, summary: figure.summary, unit: figure.unit, onSelect };
-  if (figure.kind === "waterfall") {
-    return <WaterfallChart {...common} steps={figure.steps ?? []} />;
+  switch (figure.kind) {
+    case "waterfall":
+      return <WaterfallChart {...common} steps={figure.steps} />;
+    case "line":
+      return <LineChart {...common} categories={figure.categories} series={figure.series} />;
+    case "diverging":
+      return (
+        <DivergingBarChart {...common} categories={figure.categories} series={figure.series[0]} />
+      );
+    case "stack":
+      return <StackedBarChart {...common} categories={figure.categories} series={figure.series} />;
+    default:
+      return unreachable(figure);
   }
-  if (figure.kind === "line") {
-    return <LineChart {...common} categories={figure.categories} series={figure.series} />;
-  }
-  if (figure.kind === "diverging") {
-    return (
-      <DivergingBarChart {...common} categories={figure.categories} series={figure.series[0]!} />
-    );
-  }
-  return <StackedBarChart {...common} categories={figure.categories} series={figure.series} />;
 }
 
 /** Every figure here is the model's, so one key says so for all of them. */

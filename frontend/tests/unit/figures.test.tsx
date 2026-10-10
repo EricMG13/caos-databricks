@@ -8,6 +8,16 @@ import { MemoryRouter } from "react-router";
 import { AnalysisSection } from "@/sections/analysis/AnalysisSection";
 import { bridgeOf } from "@/charts";
 import {
+  MAX_FIGURES,
+  MAX_MARKS,
+  datum,
+  groupBy,
+  oversized,
+  pair,
+  sumOf,
+  text,
+} from "@/sections/analysis/figure-core";
+import {
   accountLines,
   addbackValidation,
   addbacks,
@@ -19,7 +29,6 @@ import {
   maturityLadder,
   recordsOf,
   segmentMix,
-  sumOf,
   unitOf,
 } from "@/sections/analysis/figures";
 import { parseAnalysisDocument } from "@/wire/v1";
@@ -43,6 +52,34 @@ test("test_sumOf_is_exact_and_unitOf_reads_the_register", () => {
   expect(unitOf("USD", "MILLIONS")).toBe("USD m");
   expect(unitOf("", "MILLIONS")).toBeUndefined();
   expect(recordsOf(cp1.tables[0]!)[0]!["period_id"]?.text).toBe("FY2025");
+});
+
+test("the readers the register figures share: groupBy, pair, text, datum, oversized", () => {
+  // Groups in the order each key first appears, rows in their own order.
+  expect([...groupBy(["b1", "a1", "b2"], (value) => value[0]!)]).toEqual([
+    ["b", ["b1", "b2"]],
+    ["a", ["a1"]],
+  ]);
+  // Two cells as one key: no split of one text into two reads as another.
+  expect(pair("a b", "c")).not.toBe(pair("a", "b c"));
+  const row = {
+    Threshold: { text: "4.50x [C1]", value: "4.50" },
+    Headroom: { text: "", value: null },
+  };
+  expect(text(row, "Threshold")).toBe("4.50x [C1]");
+  expect(text(row, "Formula")).toBe("");
+  expect(datum(row.Threshold)).toEqual({ value: "4.50" });
+  // A gap keeps the cell's text as its reason; an empty or absent cell is
+  // not stated, never zero.
+  expect(datum({ text: "Not Calculable", value: null })).toEqual({
+    value: null,
+    reason: "Not Calculable",
+  });
+  expect(datum(row.Headroom)).toEqual({ value: null, reason: "not stated" });
+  expect(datum(undefined)).toEqual({ value: null, reason: "not stated" });
+  const stated = oversized("k", "T4C.4", "Covenant headroom", MAX_MARKS + 1);
+  expect(stated).toMatchObject({ oversized: true, table: "T4C.4", title: "Covenant headroom" });
+  expect(stated.summary).toBe("2001 marks: too many to draw. The Appendix tab lists every row.");
 });
 
 test("test_segmentMix_stacks_revenue_by_period_in_the_register_order", () => {
@@ -481,6 +518,18 @@ test("a table built to be expensive is stated, not drawn, and costs no more than
   expect(ladder.oversized).toBe(true);
   expect(ladder.series).toEqual([]);
   expect(ladder.summary).toMatch(/^4000000 marks: too many to draw/);
+});
+
+test("past MAX_FIGURES a module's figures are stated, the last saying how many more", () => {
+  // A line a KPI: MAX_FIGURES + 2 KPIs would be as many figures.
+  const rows = Array.from({ length: MAX_FIGURES + 2 }, (_, index) => [`K${index}`, "FY", "1"]);
+  const kpis = table("cp1.operating_kpi_schedule", ["kpi_id", "period_id", "value"], rows);
+  const figures = figuresOf({ ...cp1, tables: [kpis] });
+  expect(figures).toHaveLength(MAX_FIGURES);
+  expect(figures.at(-1)).toMatchObject({ oversized: true, title: "3 more figures" });
+  expect(figures.at(-1)!.summary).toBe(
+    "3 more figures are not drawn. The Appendix tab lists every row.",
+  );
 });
 
 test("forecastDrivers: one figure a division, base against downside, in percent", () => {
