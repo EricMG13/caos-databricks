@@ -1047,6 +1047,27 @@ function Unread({ handoff }: { handoff: HandoffView }) {
   );
 }
 
+/** One figure in a grid: its chart, or past `MAX_MARKS` its title and summary. */
+export function FigureCell({
+  figure,
+  onPick,
+}: {
+  figure: Figure;
+  onPick: (pick: FigurePick, opener: HTMLElement) => void;
+}) {
+  return (
+    <div className={`fig ${figure.kind}`} data-figure={figure.key}>
+      {figure.oversized ? (
+        <p className="note" data-figure-oversized>
+          <b>{figure.title}.</b> {figure.summary}
+        </p>
+      ) : (
+        <Chart figure={figure} onPick={onPick} />
+      )}
+    </div>
+  );
+}
+
 export function Figures({
   handoff,
   calculation,
@@ -1086,15 +1107,7 @@ export function Figures({
         <ProvenanceKeyed value={false}>
           <div className="figgrid">
             {figures.map((figure) => (
-              <div key={figure.key} className={`fig ${figure.kind}`} data-figure={figure.key}>
-                {figure.oversized ? (
-                  <p className="note" data-figure-oversized>
-                    <b>{figure.title}.</b> {figure.summary}
-                  </p>
-                ) : (
-                  <Chart figure={figure} onPick={onPick} />
-                )}
-              </div>
+              <FigureCell key={figure.key} figure={figure} onPick={onPick} />
             ))}
           </div>
         </ProvenanceKeyed>

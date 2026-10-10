@@ -1561,3 +1561,100 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...expectedRealised(handoff),
   ];
 }
+
+/** CP-5's severity scale, in its own order: "All severity values use ONLY:
+    CRITICAL / MATERIAL / MINOR" (CP-5A_SCHEMA_REFERENCE.md, line 27). */
+const SEVERITIES = ["CRITICAL", "MATERIAL", "MINOR"];
+
+/** What a count register is called, the columns it counts by, and what it
+    calls its rows. */
+interface Count {
+  key: string;
+  table: string;
+  title: string;
+  category: string;
+  series: string;
+  noun: [string, string];
+  /** A series' place, where the reference declares an order. */
+  rank?: (series: string) => number;
+  source: readonly string[];
+}
+
+const COUNTED = "a count of the model's rows";
+
+/** A register's rows counted by category and series, a stack whose every
+    segment is an exact integer of rows: computed here, and said so. A blank
+    cell is named as not stated. */
+function countFigure(rows: readonly Row[], spec: Count): Figure {
+  const [one, many] = spec.noun;
+  const said = (row: Row, column: string) =>
+    unmarked(text(row, column)).trim() || `${column} not stated`;
+  const seriesOf = (row: Row) => said(row, spec.series);
+  const tally = [...groupBy(rows, seriesOf)];
+  const { rank } = spec;
+  if (rank) tally.sort(([a], [b]) => rank(a) - rank(b));
+  const figure = stackFigure(rows, {
+    head: {
+      key: spec.key,
+      table: spec.table,
+      title: spec.title,
+      unit: many,
+      computed: COUNTED,
+      categoryLabel: spec.category,
+      summary: `${rows.length} ${rows.length === 1 ? one : many} counted: ${tally
+        .map(([series, group]) => `${group.length} ${series}`)
+        .join(", ")}.`,
+    },
+    categoryOf: (row) => said(row, spec.category),
+    seriesOf,
+    amountOf: () => "1",
+    sourceOf: (counted) => sourcesOf(counted, spec.source),
+  });
+  // The series in the summary's order: the reference's, else first appearance.
+  const order = tally.map(([series]) => series);
+  figure.series.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  return figure;
+}
+
+/** The topic registers CP-L10 may write, each counted where written. */
+const TOPIC_REGISTERS = ["TL10.2", "TL20.2", "TL23.2", "TL30.2", "TL40.2"];
+
+/** The Audit tab's counts: CP-5's issue log (`T5.9`, which consolidates
+    T5.2 to T5.8, so those are not counted again) by module and severity,
+    and each CP-L10 topic register by materiality and disposition. */
+export function auditCounts(handoff: HandoffView): Figure[] {
+  const issues = registerRows(handoff, "CP-5", "T5.9");
+  const counts = issues?.length
+    ? [
+        countFigure(issues, {
+          key: "issue-counts",
+          table: "T5.9",
+          title: "Issues by module and severity, count",
+          category: "Module",
+          series: "Severity",
+          noun: ["issue", "issues"],
+          rank: (severity) => {
+            const at = SEVERITIES.indexOf(severity.toUpperCase());
+            return at < 0 ? SEVERITIES.length : at;
+          },
+          source: [],
+        }),
+      ]
+    : [];
+  for (const id of TOPIC_REGISTERS) {
+    const topics = registerRows(handoff, "CP-L10", id);
+    if (!topics?.length) continue;
+    counts.push(
+      countFigure(topics, {
+        key: `topic-counts-${id}`,
+        table: id,
+        title: `Topics by materiality, count (${id})`,
+        category: "materiality",
+        series: "disposition",
+        noun: ["topic", "topics"],
+        source: ["source_refs"],
+      }),
+    );
+  }
+  return counts;
+}

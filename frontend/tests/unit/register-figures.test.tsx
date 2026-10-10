@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   adjustedDebtBridge,
+  auditCounts,
   basketCapacity,
   cashUses,
   covenantHeadroom,
@@ -2661,4 +2662,126 @@ test("riskMatrix: another module's T5.4 draws nothing", () => {
   expect(matrices([])).toEqual([]);
   const cp2a = moduleWith("CP-2A", [register("T5.4", PI_MATRIX, [row])]);
   expect(registerFigures(cp2a).map((figure) => figure.key)).toEqual(["risk-matrix"]);
+});
+
+// CP-5's T5.9 and CP-L10's topic registers, as the profiles declare them.
+const ISSUE_LOG = [
+  "Issue ID",
+  "Severity",
+  "Module",
+  "Issue Type",
+  "Description",
+  "Required Fix",
+  "Clearance Impact",
+  "Status",
+];
+const t59 = (id: string, severity: string, module: string) =>
+  [id, severity, module, "Citation", "Made up", "Cite it", "None", "Open"].map((cell) => c(cell));
+const TOPICS = [
+  "topic_id",
+  "topic_label",
+  "source_owner_modules",
+  "materiality",
+  "evidence_status",
+  "disposition",
+  "priority_rank",
+  "summary",
+  "source_refs",
+  "upgrade_module_ids",
+];
+const tl = (id: string, materiality: string, disposition: string, refs = "") =>
+  [id, `Topic ${id}`, "CP-1", materiality, "Supported", disposition, "1", "Made up", refs, ""].map(
+    (cell) => c(cell),
+  );
+const counts = (module: string, registers: Register[]) =>
+  auditCounts(moduleWith(module, registers)).map(stack);
+const segments = (figure: Figure) =>
+  stack(figure).series.map((series) => [series.label, series.data.map((datum) => datum.value)]);
+
+test("auditCounts: CP-5's issue log counted by module and severity, in the reference's order", () => {
+  const [figure, ...rest] = counts("CP-5", [
+    register("T5.9", ISSUE_LOG, [
+      t59("I-1", "Minor", "CP-1"),
+      t59("I-2", "CRITICAL", "CP-2"),
+      t59("I-3", "Unrated", "CP-1"),
+      t59("I-4", " minor [C1]", ""),
+      t59("I-5", "", "CP-2"),
+      t59("I-6", "MATERIAL", "CP-1"),
+      t59("I-7", "Minor", "CP-1"),
+    ]),
+    // The issue log consolidates T5.2 to T5.8: they are not counted again.
+    register("T5.2", ["Severity", "Module"], [[c("CRITICAL"), c("CP-1")]]),
+  ]);
+  expect(rest).toEqual([]);
+  expect([figure!.key, figure!.table, figure!.title, figure!.unit]).toEqual([
+    "issue-counts",
+    "T5.9",
+    "Issues by module and severity, count",
+    "issues",
+  ]);
+  expect(figure!.categoryLabel).toBe("Module");
+  expect(figure!.categories).toEqual(["CP-1", "CP-2", "Module not stated"]);
+  // CRITICAL, MATERIAL, MINOR first, read trimmed and casefolded; the rest
+  // as they first appear; every segment an exact integer.
+  expect(segments(figure!)).toEqual([
+    ["CRITICAL", ["0", "1", "0"]],
+    ["MATERIAL", ["1", "0", "0"]],
+    ["Minor", ["2", "0", "0"]],
+    ["minor", ["0", "0", "1"]],
+    ["Unrated", ["1", "0", "0"]],
+    ["Severity not stated", ["0", "1", "0"]],
+  ]);
+  expect(figure!.computed).toBe("a count of the model's rows");
+  expect(figure!.summary).toBe(
+    "7 issues counted: 1 CRITICAL, 1 MATERIAL, 2 Minor, 1 minor, 1 Unrated, 1 Severity not stated.",
+  );
+  // T5.9 declares no source column.
+  expect(figure!.sourceOf({ ...pick("Minor", "CP-1"), value: "2", origin: "model" })).toBeNull();
+});
+
+test("auditCounts: each topic register CP-L10 writes counted by materiality and disposition", () => {
+  const figures = counts("CP-L10", [
+    register("TL30.2", TOPICS, [tl("T-9", "High", "Upgrade")]),
+    register("TL10.2", TOPICS, [
+      tl("T-1", "High", "Retain", "Doc A p.2"),
+      tl("T-2", "Low", "Discard"),
+      tl("T-3", "High", "Retain", "Doc B p.4"),
+      tl("T-4", "", ""),
+    ]),
+  ]);
+  expect(figures.map((figure) => [figure.key, figure.table, figure.title, figure.unit])).toEqual([
+    ["topic-counts-TL10.2", "TL10.2", "Topics by materiality, count (TL10.2)", "topics"],
+    ["topic-counts-TL30.2", "TL30.2", "Topics by materiality, count (TL30.2)", "topics"],
+  ]);
+  const [topics] = figures;
+  expect(topics!.categories).toEqual(["High", "Low", "materiality not stated"]);
+  expect(segments(topics!)).toEqual([
+    ["Retain", ["2", "0", "0"]],
+    ["Discard", ["0", "1", "0"]],
+    ["disposition not stated", ["0", "0", "1"]],
+  ]);
+  expect(topics!.summary).toBe("4 topics counted: 2 Retain, 1 Discard, 1 disposition not stated.");
+  expect(topics!.computed).toBe("a count of the model's rows");
+  expect(topics!.sourceOf({ ...pick("Retain", "High"), value: "2", origin: "model" })).toBe(
+    "source_refs: Doc A p.2; source_refs: Doc B p.4",
+  );
+  expect(figures[1]!.summary).toBe("1 topic counted: 1 Upgrade.");
+});
+
+test("auditCounts: another module's registers count nothing, and no count is a Figure", () => {
+  const log = register("T5.9", ISSUE_LOG, [t59("I-1", "MINOR", "CP-1")]);
+  const topics = register("TL10.2", TOPICS, [tl("T-1", "High", "Retain")]);
+  expect(counts("CP-4", [log, topics])).toEqual([]);
+  expect(counts("CP-5", [register("T5.9", ISSUE_LOG, [])])).toEqual([]);
+  expect(registerFigures(moduleWith("CP-5", [log]))).toEqual([]);
+  expect(registerFigures(moduleWith("CP-L10", [topics]))).toEqual([]);
+});
+
+test("auditCounts: past the marks a count is stated, not drawn", () => {
+  const many = Array.from({ length: 2001 }, (_, n) => t59(`I-${n}`, "MINOR", `CP-${n}`));
+  expect(auditCounts(moduleWith("CP-5", [register("T5.9", ISSUE_LOG, many)]))[0]).toMatchObject({
+    oversized: true,
+    key: "issue-counts",
+    summary: expect.stringMatching(/^2001 marks/),
+  });
 });

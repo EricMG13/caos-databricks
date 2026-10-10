@@ -359,6 +359,7 @@ function ModuleView({
           <UnverifiedFacts entries={handoff.unverified_facts} names={sourceNames(handoffs)} />
         }
         documents={<SourceRegister register={register} />}
+        onPick={(next) => setPick(next)}
       />
       {opener ? (
         <Overlay

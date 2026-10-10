@@ -5,7 +5,7 @@
 // with the state the route left them in.
 import { readFileSync } from "node:fs";
 import type { ReactNode } from "react";
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { composeChrome, words } from "@/chrome/compose";
 import { stamp } from "@/ds/format";
@@ -170,6 +170,42 @@ describe("Analysis", () => {
       ).not.toBeNull();
       unmount();
     }
+  });
+
+  test("the Audit tab counts CP-5's issues, a pressed segment said as computed here", () => {
+    // Made-up issues under a fixture handoff relabelled CP-5.
+    const columns = ["Issue ID", "Severity", "Module", "Issue Type"];
+    const cell = (text: string) => ({ text, value: null });
+    const handoff: HandoffView = {
+      ...complete.body.handoffs[0]!,
+      module_id: "CP-5",
+      registers: [
+        {
+          register_id: "T5.9",
+          columns,
+          declared: columns,
+          rows: [
+            ["I-1", "CRITICAL", "CP-1", "Citation"].map(cell),
+            ["I-2", "MINOR", "CP-1", "Math"].map(cell),
+          ],
+        },
+      ],
+    };
+    const document = { ...complete, body: { ...complete.body, handoffs: [handoff] } };
+    const { container } = mountAt(document, "CP-5");
+    openTab(container, "audit");
+    const audit = container.querySelector('[data-depth-panel="audit"]')!;
+    const group = audit.querySelector('[data-audit-part="Counts"]') as HTMLElement;
+    // After every other group.
+    expect([...audit.querySelectorAll("[data-audit-part]")].at(-1)).toBe(group);
+    expect(group.querySelector("h3")).toHaveTextContent("Counts");
+    const figure = group.querySelector("[data-figure='issue-counts']") as HTMLElement;
+    expect(figure).toHaveTextContent("Issues by module and severity, count");
+    fireEvent.click(within(figure).getByRole("button", { name: /^CRITICAL, CP-1: 1 issues/ }));
+    const picked = container.querySelector("[data-picked]")!;
+    expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("1 issues");
+    expect(picked).toHaveTextContent("Computed here: a count of the model's rows, not served");
+    expect(picked).toHaveTextContent("Issues by module and severity, count");
   });
 
   test("model markup reaches the page as its own text, never as an element", () => {
