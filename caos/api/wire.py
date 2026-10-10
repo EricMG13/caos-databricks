@@ -884,9 +884,9 @@ class TableView(BaseModel):
 
 class RegisterView(BaseModel):
     """One register the module's output profile declares, located by the
-    bundle's own `find_registers`: the header exactly as written, `declared` the
-    profile column the bundle binds to each header cell (`None` where it binds
-    none), then every row in header order."""
+    bundle's own `_locate_registers` (`find_registers`' body): the header
+    exactly as written, `declared` the profile column the bundle binds to each
+    header cell (`None` where it binds none), then every row in header order."""
 
     model_config = _CLOSED
 

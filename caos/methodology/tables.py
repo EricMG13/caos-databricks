@@ -17,12 +17,13 @@ whose exact value would not fit the wire's bound has no value; its text stands.
 A register is the other machine interface: a pipe table a module's output
 profile declares (`T4C.4`), found under the heading that names it, tagged or
 not. The host reads registers with the bundle's own locator, the one the
-acceptance check ran (`completeness_check.find_registers`), so a reader sees the
-table the gate verified and no second reading of the answer. Each header cell
-carries the profile's column the bundle binds to it, so a reader keys a figure
-by the column the method declares (`Headroom`), not by however the model spelt
-it (`Headroom (x)`). The same bounds and the same cells hold as for a tagged
-table.
+acceptance check ran (`completeness_check._locate_registers`,
+`find_registers`' own body, which also returns each row's cell count), so a
+reader sees the table the gate verified and no second reading of the answer.
+Each header cell carries the profile's column the bundle binds to it, so a
+reader keys a figure by the column the method declares (`Headroom`), not by
+however the model spelt it (`Headroom (x)`). The same bounds and the same cells
+hold as for a tagged table.
 
 Pure: no I/O. A vendor exception never leaves here, and its message, which can
 quote the document, is never read (invariant 2).
@@ -97,7 +98,8 @@ class HandoffTables:
 class HandoffRegister:
     """One declared register: its id, its header as written, per header cell
     the profile column the bundle binds to it (None for a cell only a template
-    column such as `Period 1…N` stands for), and every row in header order."""
+    column such as `Period 1…N` stands for, or one two contract columns claim
+    where none spells it), and every row in header order."""
 
     register_id: str
     columns: tuple[str, ...]
@@ -185,13 +187,10 @@ def handoff_registers(
         _bounded(reg_id, header, rows) for reg_id, header, rows, _ in written
     ):
         return HandoffRegisters((), "TABLES_TOO_LARGE")
-    try:
-        declared = [
-            _declared(contract, specs[reg_id]["columns"], header)
-            for reg_id, header, _, _ in written
-        ]
-    except (KeyError, ValueError):  # unread: its message can quote the answer
-        return HandoffRegisters((), "TABLES_MALFORMED")
+    declared = [
+        _declared(contract, specs[reg_id]["columns"], header)
+        for reg_id, header, _, _ in written
+    ]
     return HandoffRegisters(
         tuple(
             HandoffRegister(

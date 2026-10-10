@@ -132,9 +132,11 @@ BLOB_BUDGET = LONGEST_ROUTE_NODES * PER_HANDOFF_BLOBS + BLOCKED_QUOTES_BLOBS
 # already downloaded and verified, by the contract `accepted_handoff` compiled.
 # Its registers cost no store or blob read either: the module's `SKILL.md` is
 # the bundle's own tree, verified on disk (or the host's own, for CP-CF). They
-# do cost CPU: the read locates registers twice per handoff, once in
-# `verify_accepted`'s `check()` and once here, measured 1.7 ms against
-# `check()`'s 2.1 ms on the CP-1A fixture.
+# do cost disk and CPU: each handoff's registers read and hash that `SKILL.md`
+# and re-verify the bundle manifest (`verified_bytes` -> `bundle.verify_manifest`),
+# a second time after `verify_accepted`'s. And CPU: the read locates registers
+# twice per handoff, once in `verify_accepted`'s `check()` and once here,
+# measured 1.7 ms against `check()`'s 2.1 ms on the CP-1A fixture.
 
 router = APIRouter()
 
