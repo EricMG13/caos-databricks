@@ -2654,6 +2654,7 @@ test("riskMatrix: blank ids are told apart by their row; the summary names at mo
     "High probability and high impact: 12 of 12 events, row 1, Event ID not stated, row 2, Event ID not stated, EV-3, EV-4, EV-5, EV-6, EV-7, EV-8, EV-9, EV-10, …and 2 more.",
   );
   expect(matrix!.computed).toBe("a count of the model's rows");
+  expect(matrix!.unitOne).toBe("event");
 });
 
 test("riskMatrix: another module's T5.4 draws nothing", () => {
@@ -2721,22 +2722,23 @@ test("auditCounts: CP-5's issue log counted by module and severity, in the refer
   ]);
   expect(figure!.categoryLabel).toBe("Module");
   expect(figure!.categories).toEqual(["CP-1", "CP-2", "Module not stated"]);
-  // CRITICAL, MATERIAL, MINOR first, read trimmed and casefolded; the rest
-  // as they first appear; every segment an exact integer.
+  // CRITICAL, MATERIAL, MINOR first, each keyed by the reference's term
+  // whatever its case; the rest as written and as they first appear; every
+  // segment an exact integer.
   expect(segments(figure!)).toEqual([
     ["CRITICAL", ["0", "1", "0"]],
     ["MATERIAL", ["1", "0", "0"]],
-    ["Minor", ["2", "0", "0"]],
-    ["minor", ["0", "0", "1"]],
+    ["MINOR", ["2", "0", "1"]],
     ["Unrated", ["1", "0", "0"]],
     ["Severity not stated", ["0", "1", "0"]],
   ]);
   expect(figure!.computed).toBe("a count of the model's rows");
   expect(figure!.summary).toBe(
-    "7 issues counted: 1 CRITICAL, 1 MATERIAL, 2 Minor, 1 minor, 1 Unrated, 1 Severity not stated.",
+    "7 issues counted: 1 CRITICAL, 1 MATERIAL, 3 MINOR, 1 Unrated, 1 Severity not stated.",
   );
   // T5.9 declares no source column.
-  expect(figure!.sourceOf({ ...pick("Minor", "CP-1"), value: "2", origin: "model" })).toBeNull();
+  expect(figure!.sourceOf({ ...pick("MINOR", "CP-1"), value: "2", origin: "model" })).toBeNull();
+  expect(figure!.unitOne).toBe("issue");
 });
 
 test("auditCounts: each topic register CP-L10 writes counted by materiality and disposition", () => {
@@ -2766,6 +2768,7 @@ test("auditCounts: each topic register CP-L10 writes counted by materiality and 
     "source_refs: Doc A p.2; source_refs: Doc B p.4",
   );
   expect(figures[1]!.summary).toBe("1 topic counted: 1 Upgrade.");
+  expect(figures[1]!.unitOne).toBe("topic");
 });
 
 test("auditCounts: another module's registers count nothing, and no count is a Figure", () => {

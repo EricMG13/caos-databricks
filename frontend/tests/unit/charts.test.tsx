@@ -1677,10 +1677,10 @@ describe("a risk matrix", () => {
     const { container } = matrix();
     expect(container.querySelector("figure")).toHaveAttribute("data-chart", "risk-matrix");
     expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Probability High, Impact High: 2 events, E-01, E-02 (model-authored)",
-      "Probability Medium, Impact Low: 2 events, E-03, E-06 (1 host-verified, 1 model-authored)",
-      "Probability Low, Impact Unknown: 1 event, E-05 (impact not stated) (model-authored)",
-      "Probability Unknown, Impact High: 1 event, E-04 (probability as written: Likely) (model-authored)",
+      "Probability High, Impact High: 2 events, E-01, E-02 (a count of the model's rows)",
+      "Probability Medium, Impact Low: 2 events, E-03, E-06 (a count of rows: 1 host-verified, 1 model-authored)",
+      "Probability Low, Impact Unknown: 1 event, E-05 (impact not stated) (a count of the model's rows)",
+      "Probability Unknown, Impact High: 1 event, E-04 (probability as written: Likely) (a count of the model's rows)",
     ]);
     expect(cellAt(container, "high-high")?.querySelector("[data-count]")).toHaveTextContent("2");
     expect(cellAt(container, "unknown-high")?.querySelector("[data-count]")).toHaveTextContent("1");
@@ -1743,7 +1743,7 @@ describe("a risk matrix", () => {
     }));
     const { container } = matrix({ events: twelve });
     expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Probability High, Impact High: 12 events, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, …and 2 more (model-authored)",
+      "Probability High, Impact High: 12 events, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, …and 2 more (a count of the model's rows)",
     ]);
     expect(idList(["A", "B"])).toBe("A, B");
   });

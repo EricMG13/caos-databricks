@@ -1278,6 +1278,7 @@ export function riskMatrix(handoff: HandoffView): Figure[] {
       kind: "matrix",
       unit: "events",
       computed: "a count of the model's rows",
+      unitOne: "event",
       summary: `High probability and high impact: ${[
         `${high.length} of ${events.length} ${noun}`,
         ...(high.length ? [idList(high.map((event) => event.label))] : []),
@@ -1575,8 +1576,8 @@ interface Count {
   category: string;
   series: string;
   noun: [string, string];
-  /** A series' place, where the reference declares an order. */
-  rank?: (series: string) => number;
+  /** The series' terms, in order, where the reference declares them. */
+  vocabulary?: readonly string[];
   source: readonly string[];
 }
 
@@ -1589,16 +1590,25 @@ function countFigure(rows: readonly Row[], spec: Count): Figure {
   const [one, many] = spec.noun;
   const said = (row: Row, column: string) =>
     unmarked(text(row, column)).trim() || `${column} not stated`;
-  const seriesOf = (row: Row) => said(row, spec.series);
-  const tally = [...groupBy(rows, seriesOf)];
-  const { rank } = spec;
-  if (rank) tally.sort(([a], [b]) => rank(a) - rank(b));
+  // A series reading as one of the reference's terms, whatever its case, is
+  // keyed by that term; any other text as written.
+  const terms = spec.vocabulary ?? [];
+  const seriesOf = (row: Row) => {
+    const written = said(row, spec.series);
+    return terms.find((term) => term === written.toUpperCase()) ?? written;
+  };
+  const rank = (series: string) => {
+    const at = terms.indexOf(series);
+    return at < 0 ? terms.length : at;
+  };
+  const tally = [...groupBy(rows, seriesOf)].sort(([a], [b]) => rank(a) - rank(b));
   const figure = stackFigure(rows, {
     head: {
       key: spec.key,
       table: spec.table,
       title: spec.title,
       unit: many,
+      unitOne: one,
       computed: COUNTED,
       categoryLabel: spec.category,
       summary: `${rows.length} ${rows.length === 1 ? one : many} counted: ${tally
@@ -1633,10 +1643,7 @@ export function auditCounts(handoff: HandoffView): Figure[] {
           category: "Module",
           series: "Severity",
           noun: ["issue", "issues"],
-          rank: (severity) => {
-            const at = SEVERITIES.indexOf(severity.toUpperCase());
-            return at < 0 ? SEVERITIES.length : at;
-          },
+          vocabulary: SEVERITIES,
           source: [],
         }),
       ]

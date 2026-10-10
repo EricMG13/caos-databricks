@@ -796,6 +796,7 @@ export function Depth({
   unverifiedFacts,
   documents,
   onPick,
+  picked,
 }: {
   handoff: HandoffView;
   read: Read | null;
@@ -810,6 +811,8 @@ export function Depth({
   documents: ReactNode;
   /** A pressed count, said as the Figures' marks are. */
   onPick: (pick: FigurePick, opener: HTMLElement) => void;
+  /** The pressed count's panel, said in the Counts group. */
+  picked: ReactNode;
 }) {
   const parts: ModuleParts | null = read?.parts ?? null;
   // Counts of the model's rows, the one figure computed here; a refusal
@@ -980,6 +983,7 @@ export function Depth({
                   <FigureCell key={figure.key} figure={figure} onPick={onPick} />
                 ))}
               </div>
+              {picked}
             </section>
           ) : null}
         </TabsContent>

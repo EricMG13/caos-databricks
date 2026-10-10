@@ -108,6 +108,8 @@ interface FigureBase {
   /** What a mark's figure is where this host computed it, not served: "a
       count of the model's rows". Said in place of the mark's origin. */
   computed?: string;
+  /** The unit said of a value of exactly 1: "issue" beside "issues". */
+  unitOne?: string;
 }
 
 /** Bars stacked by series over categories. */

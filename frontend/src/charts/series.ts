@@ -98,13 +98,29 @@ export function cellSelection(cell: Cell): ChartSelection {
   };
 }
 
+/** How a count's mark is named: its unit for a value of exactly 1
+    ("issue"), and what it is in place of its origin ("a count of the
+    model's rows"). */
+export interface Counted {
+  unitOne?: string;
+  computed?: string;
+}
+
 /** "Revenue, Q2 2026: 3,412.0 USD m (model-authored)", or
     "Revenue, Q3 2026: n/a (ZERO_OR_NEGATIVE_DENOMINATOR)". `extra` follows
     the value: a share of a stack. */
-export function cellName(cell: Cell, unit: string | undefined, extra = "", signed = false): string {
+export function cellName(
+  cell: Cell,
+  unit: string | undefined,
+  extra = "",
+  signed = false,
+  counted: Counted = {},
+): string {
   const head = `${cell.series.label}, ${cell.category}`;
   if (cell.value === null) return `${head}: n/a (${cell.reason})`;
-  return `${head}: ${valueText(cell.value, unit, signed)}${extra} (${ORIGIN_WORD[cell.origin]})`;
+  const per = cell.value === "1" && counted.unitOne ? counted.unitOne : unit;
+  const what = counted.computed ?? ORIGIN_WORD[cell.origin];
+  return `${head}: ${valueText(cell.value, per, signed)}${extra} (${what})`;
 }
 
 /** A table cell: the value as the mark prints it, its origin said where it

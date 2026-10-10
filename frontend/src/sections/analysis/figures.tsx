@@ -837,6 +837,8 @@ export interface FigurePick {
   /** What the value is where this host computed it, said in place of its
       origin: "a count of the model's rows". */
   computed?: string;
+  /** The unit said of a value of exactly 1. */
+  unitOne?: string;
 }
 
 /** What a bullet's or a range strip's marks are, by their selection's key. */
@@ -899,6 +901,7 @@ function Chart({
         ...(selection.interval ? { interval: selection.interval } : {}),
         unit: figure.unit,
         ...(figure.computed ? { computed: figure.computed } : {}),
+        ...(figure.unitOne ? { unitOne: figure.unitOne } : {}),
         source: figure.sourceOf(selection),
         origin: selection.origin,
       },
@@ -963,6 +966,8 @@ function Chart({
           categories={figure.categories}
           series={figure.series}
           categoryLabel={figure.categoryLabel}
+          unitOne={figure.unitOne}
+          computed={figure.computed}
         />
       );
     case "bars":
