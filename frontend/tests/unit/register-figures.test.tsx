@@ -6,11 +6,15 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   adjustedDebtBridge,
+  cashUses,
   covenantHeadroom,
   ebitdaQuality,
   impliedEv,
   liquidityBridge,
+  liquiditySources,
   peerRanges,
+  rateMix,
+  refinancingWall,
   registerFigures,
   registerRows,
   valueAllocation,
@@ -1053,4 +1057,277 @@ test("implied EV rows split by unit as peer ranges do; another module's T4.10 dr
   expect(impliedEv(withRegisters("CP-1", [register("T4.10", IMPLIED, rows)]))).toEqual([]);
   const cp1c = withRegisters("CP-1C", [register("T4.10", IMPLIED, rows)]);
   expect(registerFigures(cp1c).map((figure) => figure.key)).toEqual(["implied-ev"]);
+});
+
+/** A figure read as a stack: a figure of any other kind fails the test. */
+function stack(figure: Figure) {
+  if (figure.kind !== "stack") throw new Error(`A ${figure.kind} figure, not a stack.`);
+  return figure;
+}
+const pick = (series: string, category: string) => ({
+  series,
+  category,
+  index: 0,
+  value: null,
+  origin: "model" as const,
+});
+const gap = { value: null, reason: "not stated" };
+
+// CP-2D's T2E.2 and T2E.3, as the profile declares them.
+const SOURCES = [
+  "Liquidity Component",
+  "Source-Supported Amount",
+  "Accessibility Status",
+  "Source Trace",
+  "Limitation / Restriction",
+  "Risk Mechanic",
+  "Credit Implication",
+];
+const t2e2 = (component: string, amount: Served, status: string, trace: string, limit = "") =>
+  [component, amount, status, trace, limit, "", ""].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const USES = [
+  "Cash Use",
+  "Amount",
+  "Timing",
+  "Mandatory / Discretionary",
+  "Source Trace",
+  "Risk Mechanic",
+  "Credit Implication",
+  "Limitation",
+];
+const t2e3 = (use: string, amount: Served, timing: string, kind: string, trace: string) =>
+  [use, amount, timing, kind, trace, "", "", ""].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+
+test("liquiditySources: components stacked by accessibility, a component with no amount a gap", () => {
+  const [figure, ...rest] = liquiditySources(
+    cp2dWith([
+      register("T2E.2", SOURCES, [
+        t2e2("Cash", c("40", "40"), "Accessible", "E-1"),
+        t2e2("Revolver", c("25", "25"), "Accessible", "E-2", "Springing covenant"),
+        t2e2("Trapped cash", c("10", "10"), "Restricted", "E-3", "Offshore"),
+        t2e2("Cash", c("5", "5"), "Restricted", "E-4", "Minimum cash"),
+        t2e2("Delayed draw", c("Not disclosed"), "Conditional", "E-5"),
+      ]),
+    ]),
+  ).map(stack);
+  expect(rest).toEqual([]);
+  expect(figure).toMatchObject({
+    key: "liquidity-sources",
+    table: "T2E.2",
+    title: "Liquidity by accessibility",
+    summary: "Source-Supported Amount, summed over the 4 of 5 rows that state one: 80.",
+    categories: ["Accessible", "Restricted", "Conditional"],
+  });
+  expect(figure!.unit).toBeUndefined();
+  expect(figure!.series).toEqual([
+    {
+      key: "Cash",
+      label: "Cash",
+      origin: "model",
+      data: [{ value: "40" }, { value: "5" }, { value: "0" }],
+    },
+    {
+      key: "Revolver",
+      label: "Revolver",
+      origin: "model",
+      data: [{ value: "25" }, { value: "0" }, { value: "0" }],
+    },
+    {
+      key: "Trapped cash",
+      label: "Trapped cash",
+      origin: "model",
+      data: [{ value: "0" }, { value: "10" }, { value: "0" }],
+    },
+    {
+      key: "Delayed draw",
+      label: "Delayed draw",
+      origin: "model",
+      data: [{ value: "0" }, { value: "0" }, gap],
+    },
+  ]);
+  expect(figure!.sourceOf(pick("Revolver", "Accessible"))).toBe(
+    "Revolver (Source Trace: E-2; Limitation / Restriction: Springing covenant)",
+  );
+  expect(figure!.sourceOf(pick("Revolver", "Restricted"))).toBeNull();
+});
+
+const cashUses2d = (rows: Served[][]) =>
+  cashUses(cp2dWith([register("T2E.3", USES, rows)])).map(stack);
+
+test("cashUses: a segment is the exact sum of its uses, its source naming each one summed", () => {
+  const [figure, ...rest] = cashUses2d([
+    t2e3("Cash interest", c("12.5", "12.5"), "Next 12 months", "Mandatory", "E-1"),
+    t2e3("Amortisation", c("7.5", "7.5"), "Next 12 months", "Mandatory", "E-2"),
+    t2e3("Dividend", c("4", "4"), "Next 12 months", "Discretionary", "E-3"),
+    t2e3("Cash interest", c("TBD"), "Months 13-24", "Mandatory", "E-4"),
+    t2e3("Lease payments", c("3", "3"), "Months 13-24", "Mandatory", "E-5"),
+    t2e3("Tax", c("Not disclosed"), "Months 25-36", "Mandatory", "E-6"),
+  ]);
+  expect(rest).toEqual([]);
+  expect(figure).toMatchObject({
+    key: "cash-uses",
+    table: "T2E.3",
+    title: "Cash uses by timing",
+    summary: "Amount, summed over the 4 of 6 rows that state one: 27.0.",
+    categories: ["Next 12 months", "Months 13-24", "Months 25-36"],
+  });
+  expect(figure!.series.map((series) => [series.key, series.data])).toEqual([
+    ["Mandatory", [{ value: "20.0" }, { value: "3" }, gap]],
+    ["Discretionary", [{ value: "4" }, { value: "0" }, { value: "0" }]],
+  ]);
+  expect(figure!.sourceOf(pick("Mandatory", "Next 12 months"))).toBe(
+    "Sum of 2 rows: Cash interest (Source Trace: E-1); Amortisation (Source Trace: E-2)",
+  );
+  expect(figure!.sourceOf(pick("Mandatory", "Months 13-24"))).toBe(
+    "Sum of 2 rows, 1 stating no amount: Cash interest (Source Trace: E-4);" +
+      " Lease payments (Source Trace: E-5)",
+  );
+  expect(figure!.sourceOf(pick("Discretionary", "Months 13-24"))).toBeNull();
+});
+
+test("cash uses state every amount summed, none unstated; past MAX_MARKS they are stated", () => {
+  const [figure] = cashUses2d([
+    t2e3("Interest", c("1", "1"), "Q1", "Mandatory", "E-1"),
+    t2e3("Capex", c("2", "2"), "Q1", "Discretionary", ""),
+  ]);
+  expect(figure!.summary).toBe("Amount, summed over 2 rows: 3.");
+  expect(figure!.sourceOf(pick("Discretionary", "Q1"))).toBe("Capex");
+  const [none] = cashUses2d([t2e3("Interest", c("TBD"), "Q1", "Mandatory", "E-1")]);
+  expect(none!.summary).toBe("None of 1 rows states a figure for Amount.");
+  const many = Array.from({ length: 2001 }, (_, index) =>
+    t2e3("Interest", c("1", "1"), `Week ${index}`, "Mandatory", "E-1"),
+  );
+  const [oversized] = cashUses2d(many);
+  expect(oversized).toMatchObject({ oversized: true, key: "cash-uses", series: [] });
+});
+
+// CP-2E's T2F.2, as the profile declares it.
+const RATES = [
+  "Debt Instrument",
+  "Amount",
+  "Fixed / Floating",
+  "Base Rate",
+  "Margin / Coupon",
+  "Currency",
+  "Maturity",
+  "Hedge Status",
+  "Source Trace",
+  "Credit Implication",
+];
+const t2f2 = (debt: string, amount: Served, kind: string, rate: string, currency: string) =>
+  [debt, amount, kind, rate, "+3.50%", currency, "2030", "Unhedged", "E-1", ""].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const rates = (rows: Served[][]) =>
+  rateMix({ ...cp2dWith([register("T2F.2", RATES, rows)]), module_id: "CP-2E" }).map(stack);
+
+test("rateMix: a figure per currency, fixed against floating, stacked by instrument", () => {
+  const figures = rates([
+    t2f2("Term loan", c("400", "400"), "Floating", "SOFR", "USD"),
+    t2f2("Notes", c("300", "300"), "Fixed", "n/a", "USD"),
+    t2f2("Euro loan", c("150", "150"), "Floating", "EURIBOR", "EUR"),
+    t2f2("Revolver", c("Undrawn"), "Floating", "SOFR", "USD"),
+    t2f2("Local facility", c("20", "20"), "Floating", "", ""),
+  ]);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["rate-mix-USD", "Fixed and floating debt, USD", "USD"],
+    ["rate-mix-EUR", "Fixed and floating debt, EUR", "EUR"],
+    ["rate-mix", "Fixed and floating debt", undefined],
+  ]);
+  const [usd, eur] = figures;
+  expect(usd!.categories).toEqual(["Floating", "Fixed"]);
+  expect(usd!.series.map((series) => [series.key, series.data])).toEqual([
+    ["Term loan", [{ value: "400" }, { value: "0" }]],
+    ["Notes", [{ value: "0" }, { value: "300" }]],
+    ["Revolver", [gap, { value: "0" }]],
+  ]);
+  expect(usd!.summary).toBe("Amount, summed over the 2 of 3 rows that state one: 700 USD.");
+  expect(eur!.series.map((series) => series.key)).toEqual(["Euro loan"]);
+  expect(usd!.sourceOf(pick("Term loan", "Floating"))).toBe(
+    "Term loan (Base Rate: SOFR; Margin / Coupon: +3.50%; Hedge Status: Unhedged; Source Trace: E-1)",
+  );
+});
+
+// CP-3C's T3D.2, as the profile declares it.
+const WALL = [
+  "Instrument",
+  "Amount",
+  "Currency",
+  "Maturity Date",
+  "Years to Maturity",
+  "Seniority / Lien",
+  "Coupon / Margin",
+  "Fixed / Floating",
+  "Call Date",
+  "Refinancing Pressure",
+  "Credit Implication",
+  "Source Trace",
+];
+const t3d2 = (name: string, amount: Served, currency: string, date: string, lien: string) =>
+  [name, amount, currency, date, "", lien, "", "", "", "", "", `Trace ${name}`].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const cp3cWith = (rows: Served[][]): HandoffView => ({
+  ...cp2dWith([register("T3D.2", WALL, rows)]),
+  module_id: "CP-3C",
+});
+
+test("refinancingWall: a wall per currency, years sorted, Undated last, summed as CP-1's", () => {
+  const figures = refinancingWall(
+    cp3cWith([
+      t3d2("Notes 2031", c("250", "250"), "USD", "2031-06-30", "Senior unsecured"),
+      t3d2("Term loan", c("500", "500"), "USD", "2029-03-31", "First lien"),
+      t3d2("Revolver", c("Undrawn"), "USD", "2028-12-15", "First lien"),
+      t3d2("Second lien loan", c("100.5", "100.5"), "USD", "2029-09-30", "Second lien"),
+      t3d2("Euro notes", c("200", "200"), "EUR", "2030-01-15", "Senior secured"),
+      t3d2("Shareholder loan", c("50", "50"), "USD", "", "Subordinated"),
+      t3d2("Bridge", c("75", "75"), "USD", "2029-01-31", "First lien"),
+    ]),
+  ).map(stack);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["refinancing-wall-USD", "Maturities by seniority, USD", "USD"],
+    ["refinancing-wall-EUR", "Maturities by seniority, EUR", "EUR"],
+  ]);
+  const [usd, eur] = figures;
+  expect(usd!.table).toBe("T3D.2");
+  expect(usd!.categories).toEqual(["2028", "2029", "2031", "Undated"]);
+  expect(usd!.series.map((series) => [series.key, series.data])).toEqual([
+    ["Senior unsecured", [{ value: "0" }, { value: "0" }, { value: "250" }, { value: "0" }]],
+    ["First lien", [gap, { value: "575" }, { value: "0" }, { value: "0" }]],
+    ["Second lien", [{ value: "0" }, { value: "100.5" }, { value: "0" }, { value: "0" }]],
+    ["Subordinated", [{ value: "0" }, { value: "0" }, { value: "0" }, { value: "50" }]],
+  ]);
+  expect(usd!.summary).toBe(
+    "975.5 USD known principal across 5 of 6 instruments (1 unstated); the nearest," +
+      " Revolver, falls due 2028-12-15.",
+  );
+  expect(eur!.summary).toBe(
+    "200 EUR principal in 1 instruments; the nearest, Euro notes, falls due 2030-01-15.",
+  );
+  expect(usd!.sourceOf(pick("First lien", "2029"))).toBe(
+    "Sum of 2 rows: Term loan (Source Trace: Trace Term loan); Bridge (Source Trace: Trace Bridge)",
+  );
+});
+
+test("the stacked registers draw only for their own module", () => {
+  const sources = register("T2E.2", SOURCES, [t2e2("Cash", c("1", "1"), "Accessible", "E-1")]);
+  const uses = register("T2E.3", USES, [t2e3("Tax", c("1", "1"), "Q1", "Mandatory", "E-1")]);
+  expect(registerFigures(cp2dWith([sources, uses])).map((figure) => figure.key)).toEqual([
+    "liquidity-sources",
+    "cash-uses",
+  ]);
+  const cp1 = withRegisters("CP-1", [sources, uses]);
+  expect([...liquiditySources(cp1), ...cashUses(cp1)]).toEqual([]);
+  const rows = [t3d2("Notes", c("1", "1"), "USD", "2030-01-01", "Senior")];
+  expect(refinancingWall({ ...cp3cWith(rows), module_id: "CP-3D" })).toEqual([]);
+  expect(registerFigures(cp3cWith(rows)).map((figure) => figure.key)).toEqual([
+    "refinancing-wall-USD",
+  ]);
+  const debt = register("T2F.2", RATES, [t2f2("Loan", c("1", "1"), "Fixed", "", "GBP")]);
+  expect(rateMix(cp2dWith([debt]))).toEqual([]);
+  expect(registerFigures({ ...cp2dWith([debt]), module_id: "CP-2E" })).toHaveLength(1);
 });

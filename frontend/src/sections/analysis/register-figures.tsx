@@ -4,7 +4,8 @@
 // `T4.6`), so a register is read only for the module that serves it. Like the
 // tagged tables, every value is the model's, printed exactly as served; a
 // float only places a mark. Rows of one unit share a figure, so no axis
-// holds a multiple beside a percentage.
+// holds a multiple beside a percentage, and amounts of one currency share
+// one, so no axis holds a dollar beside a euro.
 import {
   formatDecimal,
   type ChartColor,
@@ -21,10 +22,16 @@ import {
   negatedMagnitude,
   oversized,
   pair,
+  stackFigure,
+  sumOf,
   text,
+  wallSummary,
+  yearOf,
   type Cell,
   type Figure,
   type Row,
+  type StackSpec,
+  type Wall,
   type WaterfallFigure,
 } from "./figure-core";
 
@@ -123,6 +130,15 @@ const bySuffix = (unitOf: (row: Row) => Unit | undefined): Grouping<Unit> => ({
   title: (unit) => unit,
   unit: (unit) => unit,
 });
+
+/** Rows grouped by their `Currency`, as written: one currency's amounts
+    never share an axis with another's. */
+const BY_CURRENCY: Grouping<string> = {
+  of: (row) => text(row, "Currency") || undefined,
+  key: (currency) => currency,
+  title: (currency) => currency,
+  unit: (currency) => currency,
+};
 
 /** A register's rows split by `grouping`, in the order each group first
     appears, each with its figure's head. */
@@ -604,6 +620,144 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
   });
 }
 
+/** A register stacked by its columns: what each row adds where, and how a
+    pressed segment names each row it sums. */
+interface StackColumns {
+  category: string;
+  series: string;
+  amount: string;
+  /** The column naming a row in a segment's source. */
+  name: string;
+  /** The columns a segment's source states for each row. */
+  source: readonly string[];
+}
+
+/** A stack's readers for `columns`. A segment's source names each row it
+    sums with the columns that row states; a segment of several rows says it
+    is their sum, and how many of them state no amount. */
+function byColumns(columns: StackColumns): Omit<StackSpec, "head"> {
+  const amountOf = (row: Row) => row[columns.amount]?.value;
+  return {
+    categoryOf: (row) => text(row, columns.category),
+    seriesOf: (row) => text(row, columns.series),
+    amountOf,
+    sourceOf: (rows) => {
+      const lines = rows.map((row) => {
+        const said = stated(row, columns.source);
+        const name = text(row, columns.name);
+        return name && said ? `${name} (${said})` : name || said || "";
+      });
+      if (rows.length === 1) return lines[0] || null;
+      const unstated = rows.filter((row) => amountOf(row) == null).length;
+      const short = unstated ? `, ${unstated} stating no amount` : "";
+      return `Sum of ${rows.length} rows${short}: ${lines.filter(Boolean).join("; ")}`;
+    },
+  };
+}
+
+/** A register stack's summary: the exact sum of its `column`, labelled as a
+    sum, and how many rows state none. */
+function summed(rows: readonly Row[], column: string, unit: string | undefined): string {
+  const total = sumOf(rows.map((row) => row[column]?.value));
+  if (total.value === null) return `None of ${rows.length} rows states a figure for ${column}.`;
+  const known = rows.filter((row) => row[column]?.value != null).length;
+  const over = total.complete
+    ? `${rows.length} rows`
+    : `the ${known} of ${rows.length} rows that state one`;
+  return `${column}, summed over ${over}: ${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}.`;
+}
+
+/** CP-2D's beginning liquidity (`T2E.2`): each component's source-supported
+    amount, stacked by how accessible it is. */
+export function liquiditySources(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-2D", "T2E.2");
+  if (!rows?.length) return [];
+  const amount = "Source-Supported Amount";
+  const head = { key: "liquidity-sources", table: "T2E.2", title: "Liquidity by accessibility" };
+  return [
+    stackFigure(rows, {
+      head: { ...head, summary: summed(rows, amount, undefined) },
+      ...byColumns({
+        category: "Accessibility Status",
+        series: "Liquidity Component",
+        amount,
+        name: "Liquidity Component",
+        source: ["Source Trace", "Limitation / Restriction"],
+      }),
+    }),
+  ];
+}
+
+/** CP-2D's mandatory cash uses (`T2E.3`): each timing's uses, mandatory
+    stacked against discretionary. */
+export function cashUses(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-2D", "T2E.3");
+  if (!rows?.length) return [];
+  const head = { key: "cash-uses", table: "T2E.3", title: "Cash uses by timing" };
+  return [
+    stackFigure(rows, {
+      head: { ...head, summary: summed(rows, "Amount", undefined) },
+      ...byColumns({
+        category: "Timing",
+        series: "Mandatory / Discretionary",
+        amount: "Amount",
+        name: "Cash Use",
+        source: ["Source Trace"],
+      }),
+    }),
+  ];
+}
+
+/** CP-2E's debt and rate exposure (`T2F.2`): per currency, fixed against
+    floating debt, stacked by instrument. */
+export function rateMix(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-2E", "T2F.2");
+  if (!rows?.length) return [];
+  const base = { key: "rate-mix", table: "T2F.2", title: "Fixed and floating debt" };
+  return groupsOf(rows, base, BY_CURRENCY).map(({ entries, head }) => {
+    const group = entries.map((entry) => entry.row);
+    return stackFigure(group, {
+      head: { ...head, summary: summed(group, "Amount", head.unit) },
+      ...byColumns({
+        category: "Fixed / Floating",
+        series: "Debt Instrument",
+        amount: "Amount",
+        name: "Debt Instrument",
+        source: ["Base Rate", "Margin / Coupon", "Hedge Status", "Source Trace"],
+      }),
+    });
+  });
+}
+
+/** CP-3C's maturity wall (`T3D.2`): per currency, the amount falling due
+    each year, stacked by seniority, said as CP-1's maturity wall is. */
+export function refinancingWall(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-3C", "T3D.2");
+  if (!rows?.length) return [];
+  const wall: Wall = {
+    amountOf: (row) => row["Amount"]?.value,
+    dateOf: (row) => text(row, "Maturity Date"),
+    nameOf: (row) => text(row, "Instrument"),
+    noun: "instruments",
+  };
+  const base = { key: "refinancing-wall", table: "T3D.2", title: "Maturities by seniority" };
+  return groupsOf(rows, base, BY_CURRENCY).map(({ entries, head }) => {
+    const group = entries.map((entry) => entry.row);
+    return stackFigure(group, {
+      head: { ...head, summary: wallSummary(group, wall, head.unit) },
+      ...byColumns({
+        category: "Maturity Date",
+        series: "Seniority / Lien",
+        amount: "Amount",
+        name: "Instrument",
+        source: ["Source Trace"],
+      }),
+      categoryOf: (row) => yearOf(wall.dateOf(row)),
+      sorted: true,
+    });
+  });
+}
+
 /** Every figure a handoff's registers support, in reading order. A handoff
     is one module's, so only its own module's figures draw for it. */
 export function registerFigures(handoff: HandoffView): Figure[] {
@@ -613,7 +767,11 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...impliedEv(handoff),
     ...ebitdaQuality(handoff),
     ...adjustedDebtBridge(handoff),
+    ...liquiditySources(handoff),
+    ...cashUses(handoff),
     ...liquidityBridge(handoff),
+    ...rateMix(handoff),
+    ...refinancingWall(handoff),
     ...valueAllocation(handoff),
   ];
 }
