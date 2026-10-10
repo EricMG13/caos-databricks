@@ -1,9 +1,11 @@
 // A module's figures, drawn from the tagged tables the server read with the
-// bundle's own reader (D32). The tables are the model's, like its prose, so
-// every mark is model-authored: outlined and hatched, printed exactly as
+// bundle's own reader (D32), then from its declared registers
+// (`register-figures.tsx`, N94). The tables are the model's, like its prose,
+// so every mark is model-authored: outlined and hatched, printed exactly as
 // served. Sums are exact (BigInt); a float only places a mark.
 import { useMemo, type ReactNode } from "react";
 import {
+  BulletChart,
   DivergingBarChart,
   LineChart,
   ProvenanceKeyed,
@@ -36,6 +38,7 @@ import {
   type StackFigure,
   type WaterfallFigure,
 } from "./figure-core";
+import { registerFigures } from "./register-figures";
 
 type Table = HandoffView["tables"][number];
 
@@ -777,7 +780,7 @@ export function cashFlowBridge(tables: readonly Table[]): WaterfallFigure | null
 }
 
 /** Every figure a handoff's tables support, in reading order. */
-export function figuresOf(handoff: HandoffView): Figure[] {
+function tableFigures(handoff: HandoffView): Figure[] {
   const tables = handoff.tables;
   // The key figures beside the view already print every comparison when
   // there are no more than they hold; the chart would say them again.
@@ -787,7 +790,7 @@ export function figuresOf(handoff: HandoffView): Figure[] {
   const accounts = accountLines(tables);
   const earnings = accounts.filter((figure) => figure.key === "earnings");
   const balances = accounts.filter((figure) => figure.key !== "earnings");
-  const figures = [
+  return [
     segmentMix(tables),
     ...kpiLines(tables),
     ...earnings,
@@ -799,6 +802,15 @@ export function figuresOf(handoff: HandoffView): Figure[] {
     addbackValidation(tables),
     ...forecastDrivers(tables),
   ].filter((figure) => figure !== null);
+}
+
+/** Every figure a handoff supports, in reading order: its tables', then its
+    registers'. A refusal withholds only the figures of what it refused. */
+export function figuresOf(handoff: HandoffView): Figure[] {
+  const figures = [
+    ...(handoff.tables_unavailable_reason ? [] : tableFigures(handoff)),
+    ...(handoff.registers_unavailable_reason ? [] : registerFigures(handoff)),
+  ];
   if (figures.length <= MAX_FIGURES) return figures;
   const rest = figures.length - (MAX_FIGURES - 1);
   return [
@@ -855,6 +867,12 @@ export interface FigurePick {
   origin: Origin | null;
 }
 
+/** What a bullet's marks are, by their selection's key. */
+const MARK_WORD: Record<string, string> = {
+  current: "Current basis",
+  threshold: "Threshold",
+};
+
 /** A figure of no kind `Chart` draws: `tsc` refuses the case first. */
 function unreachable(_figure: never): never {
   throw new Error("No chart draws this figure's kind.");
@@ -870,6 +888,8 @@ function markOf(figure: Figure, key: string): string | undefined {
       return figure.series.find((entry) => entry.key === key)?.label;
     case "waterfall":
       return undefined;
+    case "bullet":
+      return MARK_WORD[key];
     default:
       return unreachable(figure);
   }
@@ -900,6 +920,8 @@ function Chart({
   switch (figure.kind) {
     case "waterfall":
       return <WaterfallChart {...common} steps={figure.steps} />;
+    case "bullet":
+      return <BulletChart {...common} rows={figure.bullets} categoryLabel={figure.categoryLabel} />;
     case "line":
       return <LineChart {...common} categories={figure.categories} series={figure.series} />;
     case "diverging":
@@ -913,21 +935,35 @@ function Chart({
   }
 }
 
-/** Every figure here is the model's, so one key says so for all of them. */
+type KeyShape = "fill" | "line" | "rule";
+
+/** The forms a drawn figure's marks take: a bar, a line, a rule. */
+function shapesOf(figure: Figure): KeyShape[] {
+  if (figure.kind === "line") return ["line"];
+  if (figure.kind === "bullet") return ["fill", "rule"];
+  return ["fill"];
+}
+
+const KEY_WORD: Record<KeyShape, string> = {
+  fill: "Outlined",
+  line: "Dashed, hollow point",
+  rule: "Dashed rule",
+};
+
+/** Every figure here is the model's, so one key says so for all of them, in
+    each form a drawn mark takes. */
 function ModelKey({ figures }: { figures: readonly Figure[] }) {
-  const drawn = figures.filter((figure) => !figure.oversized);
-  const shapes = [
-    ...(drawn.some((figure) => figure.kind !== "line") ? (["fill"] as const) : []),
-    ...(drawn.some((figure) => figure.kind === "line") ? (["line"] as const) : []),
-  ];
+  const drawn = new Set(
+    figures.filter((figure) => !figure.oversized).flatMap((figure) => shapesOf(figure)),
+  );
+  const shapes = (["fill", "line", "rule"] as const).filter((shape) => drawn.has(shape));
   if (shapes.length === 0) return null;
   return (
     <ul className="chart-legend" aria-label="Key" data-figures-key>
       {shapes.map((shape) => (
         <li key={shape} className="chart-provenance">
           <Swatch tone="neutral" shape={shape} origin="model" />
-          {shape === "fill" ? "Outlined" : "Dashed, hollow point"}: model-authored, not
-          host-verified
+          {KEY_WORD[shape]}: model-authored, not host-verified
         </li>
       ))}
     </ul>

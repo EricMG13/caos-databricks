@@ -31,7 +31,7 @@ import {
   segmentMix,
   unitOf,
 } from "@/sections/analysis/figures";
-import { parseAnalysisDocument } from "@/wire/v1";
+import { parseAnalysisDocument, type HandoffView } from "@/wire/v1";
 
 const document = parseAnalysisDocument(
   JSON.parse(readFileSync(resolve(process.cwd(), "fixtures/analysis.json"), "utf8")),
@@ -746,4 +746,89 @@ test("the account figures read in place, and a residual is said as computed, not
   expect(container.querySelector("[data-picked]")).toHaveTextContent(
     "Model-authored, not host-verified",
   );
+});
+
+// Registers (N94), with made-up values only (N191): CP-4's covenant headroom
+// and CP-1C's peer statistics, each under its profile's own columns.
+type Register = HandoffView["registers"][number];
+const served = (text: string, value: string | null = null) => ({ text, value });
+const COVENANT = [
+  "Test",
+  "Test Type",
+  "Threshold",
+  "Current Basis",
+  "Formula",
+  "Headroom",
+  "Status",
+  "Limitation",
+  "Risk Mechanic",
+  "Credit Implication",
+  "Evidence ID",
+];
+const headroom: Register = {
+  register_id: "T4C.4",
+  columns: COVENANT,
+  declared: COVENANT,
+  rows: [
+    [
+      served("Senior leverage"),
+      served("Maintenance"),
+      served("4.50x", "4.50"),
+      served("3.25x", "3.25"),
+      served("Net debt / EBITDA"),
+      served("1.25x", "1.25"),
+      served("Compliant"),
+      served(""),
+      served(""),
+      served(""),
+      served("E-1"),
+    ],
+  ],
+};
+
+function shown(handoff: HandoffView) {
+  return render(
+    <MemoryRouter>
+      <AnalysisSection
+        document={{ ...document, body: { ...document.body, handoffs: [handoff] } }}
+        tab={handoff.route_node_id}
+      />
+    </MemoryRouter>,
+  ).container;
+}
+
+test("register figures follow the table figures, and each refusal withholds only its own", () => {
+  // CP-1's tables under CP-4's module: a table figure and a register figure.
+  const both = { ...handoffOf("CP-4"), tables: cp1.tables, registers: [headroom] };
+  const tableKeys = figuresOf(cp1).map((figure) => figure.key);
+  expect(figuresOf(both).map((figure) => figure.key)).toEqual([
+    ...tableKeys,
+    "covenant-headroom-x",
+  ]);
+  const noTables = { ...both, tables_unavailable_reason: "TABLES_MALFORMED" as const };
+  const noRegisters = { ...both, registers_unavailable_reason: "TABLES_TOO_LARGE" as const };
+  expect(figuresOf(noTables).map((figure) => figure.key)).toEqual(["covenant-headroom-x"]);
+  expect(figuresOf(noRegisters).map((figure) => figure.key)).toEqual(tableKeys);
+});
+
+test("pressing a covenant's bar names its current basis and stated source", () => {
+  const container = shown({ ...handoffOf("CP-4"), registers: [headroom] });
+  const figure = container.querySelector("[data-figure='covenant-headroom-x']") as HTMLElement;
+  fireEvent.click(within(figure).getByRole("button", { name: /current basis 3\.25 x/ }));
+  const picked = container.querySelector("[data-picked]")!;
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("3.25 x");
+  expect(picked).toHaveTextContent("Current basis · Senior leverage");
+  expect(picked).toHaveTextContent(
+    "Formula: Net debt / EBITDA; Status: Compliant; Evidence ID: E-1",
+  );
+});
+
+test("the figures' key keys a rule and a dot only where one is drawn", () => {
+  const key = (container: HTMLElement) =>
+    container.querySelector("[data-figures-key]")!.textContent ?? "";
+  const bullets = key(shown({ ...handoffOf("CP-4"), registers: [headroom] }));
+  expect(bullets).toContain("Outlined: model-authored, not host-verified");
+  expect(bullets).toContain("Dashed rule: model-authored, not host-verified");
+  expect(bullets).not.toContain("Hollow dot");
+  expect(key(shown(cp1))).not.toContain("rule");
 });
