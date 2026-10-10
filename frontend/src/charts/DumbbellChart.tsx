@@ -4,9 +4,10 @@
 // computed between them. An unavailable end is a gap with its reason, and a
 // row with one is not joined.
 import { ChartFrame } from "./ChartFrame";
-import { bandPlot, type BandMarker } from "./band";
+import { bandPlot, rowMarker, type BandMarker } from "./band";
 import { readDatum, toNumber, type ReadValue } from "./decimal";
-import { ORIGIN_WORD, cellOf, said } from "./series";
+import { DOT } from "./marks";
+import { ORIGIN_WORD, cellOf } from "./series";
 import type { ChartProps, DumbbellRow, LegendEntry, TableTwin, Tone } from "./types";
 
 type End = "from" | "to";
@@ -22,50 +23,48 @@ type Read = Record<End, ReadValue>;
 
 const readRow = (row: DumbbellRow): Read => ({ from: readDatum(row.from), to: readDatum(row.to) });
 
-/** A row's two dots, the first end first. */
+/** How far each of two coinciding dots stands off its band's centre: apart
+    by more than a dot, so neither hides the other. */
+const APART = DOT + 1;
+
+/** Both ends available and at one place on the value axis. */
+const coincide = ({ from, to }: Read): boolean =>
+  from.value !== null && to.value !== null && toNumber(from.value) === toNumber(to.value);
+
+/** A row's two dots, the first end first; two at one value set apart across
+    the band, the first above its centre and the second below. */
 function dotsOf(
   row: DumbbellRow,
   index: number,
+  read: Read,
   unit: string | undefined,
   labels: Record<End, string>,
 ): BandMarker[] {
-  const read = readRow(row);
+  const apart = coincide(read);
   return ENDS.map(([end, tone]) => {
-    const value = read[end];
-    const origin = value.origin ?? row.origin;
-    return {
-      key: `${row.key}:${end}`,
-      category: index,
-      at: value.value === null ? 0 : toNumber(value.value),
-      tone,
-      origin,
-      gap: value.value === null,
-      shape: "dot",
-      name: `${row.label}: ${labels[end]} ${said(value, unit)} (${ORIGIN_WORD[origin]})`,
-      selection: { series: end, category: row.label, index, value: value.value, origin },
-    };
+    const dot = rowMarker(row, index, end, labels[end], read[end], unit, { tone, shape: "dot" });
+    return apart ? { ...dot, offset: end === "from" ? -APART : APART } : dot;
   });
 }
 
 /** The line between a row's two ends, where both are available. */
-function spanOf(row: DumbbellRow, index: number) {
-  const { from, to } = readRow(row);
+function spanOf({ from, to }: Read, index: number) {
   if (from.value === null || to.value === null) return [];
   return [{ category: index, from: toNumber(from.value), to: toNumber(to.value) }];
 }
 
 function tableOf(
-  rows: readonly DumbbellRow[],
+  reads: readonly { row: DumbbellRow; read: Read }[],
   categoryLabel: string,
   labels: Record<End, string>,
 ): TableTwin {
   return {
     head: [categoryLabel, labels.from, labels.to, "Origin"],
-    rows: rows.map((row) => ({
+    rows: reads.map(({ row, read }) => ({
       key: row.key,
       cells: [
         row.label,
-        ...ENDS.map(([end]) => cellOf(readRow(row)[end], row.origin)),
+        ...ENDS.map(([end]) => cellOf(read[end], row.origin)),
         ORIGIN_WORD[row.origin],
       ],
     })),
@@ -91,8 +90,10 @@ export function DumbbellChart({
   categoryLabel?: string;
 }) {
   const labels = { from: fromLabel, to: toLabel };
-  const markers = rows.flatMap((row, index) => dotsOf(row, index, unit, labels));
-  const spans = rows.flatMap(spanOf);
+  // Each row read once, for its dots, its line and its table row.
+  const reads = rows.map((row) => ({ row, read: readRow(row) }));
+  const markers = reads.flatMap(({ row, read }, index) => dotsOf(row, index, read, unit, labels));
+  const spans = reads.flatMap(({ read }, index) => spanOf(read, index));
   const categories = rows.map((row) => row.label);
   const legend: LegendEntry[] = ENDS.map(([end, tone]) => ({
     key: end,
@@ -107,7 +108,7 @@ export function DumbbellChart({
       summary={summary}
       legend={legend}
       provenance="line"
-      table={tableOf(rows, categoryLabel, labels)}
+      table={tableOf(reads, categoryLabel, labels)}
       plot={(kit) =>
         bandPlot({ orientation: "horizontal", categories, slots: 1, bars: [], markers, spans }, kit)
       }

@@ -6,9 +6,9 @@
 // one the register does not declare is not drawn, one it declares null is a
 // gap with its reason.
 import { ChartFrame } from "./ChartFrame";
-import { bandPlot, type BandBar, type BandMarker } from "./band";
+import { bandPlot, rowMarker, type BandBar, type BandMarker } from "./band";
 import { readDatum, toNumber, type ReadValue } from "./decimal";
-import { ORIGIN_WORD, cellOf, said, valueText } from "./series";
+import { ORIGIN_WORD, cellOf, valueText } from "./series";
 import type {
   ChartProps,
   ChartSelection,
@@ -43,16 +43,6 @@ function readRow(row: RangeRow): Read {
 }
 
 const originOf = (value: ReadValue, row: RangeRow): Origin => value.origin ?? row.origin;
-
-function selectionOf(
-  row: RangeRow,
-  index: number,
-  series: string,
-  value: ReadValue,
-  origin: Origin,
-): ChartSelection {
-  return { series, category: row.label, index, value: value.value, origin };
-}
 
 /** The interquartile bar, where either quartile is declared: Q1 to Q3, or a
     gap naming each unavailable end (an undeclared end is "Not served").
@@ -110,29 +100,6 @@ function barOf(row: RangeRow, index: number, read: Read, unit: string | undefine
   ];
 }
 
-function markerOf(
-  row: RangeRow,
-  index: number,
-  statistic: Statistic,
-  word: string,
-  value: ReadValue,
-  unit: string | undefined,
-): BandMarker {
-  const origin = originOf(value, row);
-  const dot = statistic === "marker";
-  return {
-    key: `${row.key}:${statistic}`,
-    category: index,
-    at: value.value === null ? 0 : toNumber(value.value),
-    tone: dot ? "series-3" : "neutral",
-    origin,
-    gap: value.value === null,
-    shape: dot ? "dot" : "rule",
-    name: `${row.label}: ${word} ${said(value, unit)} (${ORIGIN_WORD[origin]})`,
-    selection: selectionOf(row, index, statistic, value, origin),
-  };
-}
-
 /** A row's rules and dot, in the order they are reached: min, median, max,
     then the marker. */
 function markersOf(
@@ -145,7 +112,12 @@ function markersOf(
   const stated = [...RULES, ["marker", markerLabel] as const];
   return stated.flatMap(([statistic, word]) => {
     const value = read[statistic];
-    return value === undefined ? [] : [markerOf(row, index, statistic, word, value, unit)];
+    if (value === undefined) return [];
+    const look =
+      statistic === "marker"
+        ? ({ tone: "series-3", shape: "dot" } as const)
+        : ({ tone: "neutral", shape: "rule" } as const);
+    return [rowMarker(row, index, statistic, word, value, unit, look)];
   });
 }
 
