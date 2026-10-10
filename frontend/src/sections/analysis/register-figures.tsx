@@ -96,38 +96,67 @@ interface Entry {
   index: number;
 }
 
-/** What a figure of one unit's rows is called, and where it comes from. */
+/** What a figure of one group's rows is called, and where it comes from. */
 interface Head {
   key: string;
   table: string;
   title: string;
-  unit: Unit | undefined;
+  unit: string | undefined;
+}
+
+/** How a register's rows split into figures: a row's group (none: the
+    figure whose key and title carry no suffix), the suffix a group adds to
+    its figure's key and title, and the figure's unit. */
+interface Grouping<G extends string> {
+  of: (row: Row) => G | undefined;
+  key: (group: G) => string;
+  title: (group: G) => string;
+  unit: (group: G) => string | undefined;
 }
 
 const UNIT_KEY: Record<Unit, string> = { x: "x", "%": "percent" };
 
-/** A figure per unit, in the order each unit first appears; its title
-    carries the unit. A figure past `MAX_MARKS` is stated, not drawn. */
-function perUnit(
+/** Rows grouped by the unit their figure is written in, `x` or `%`. */
+const bySuffix = (unitOf: (row: Row) => Unit | undefined): Grouping<Unit> => ({
+  of: unitOf,
+  key: (unit) => UNIT_KEY[unit],
+  title: (unit) => unit,
+  unit: (unit) => unit,
+});
+
+/** A register's rows split by `grouping`, in the order each group first
+    appears, each with its figure's head. */
+function groupsOf<G extends string>(
   rows: readonly Row[],
   base: { key: string; table: string; title: string },
-  unitOf: (row: Row) => Unit | undefined,
+  grouping: Grouping<G>,
+): { entries: Entry[]; head: Head }[] {
+  const entries = rows.map((row, index) => ({ row, index }));
+  return [...groupBy(entries, (entry) => grouping.of(entry.row) ?? "").values()].map((group) => {
+    const at = grouping.of(group[0]!.row);
+    const head = {
+      key: at ? `${base.key}-${grouping.key(at)}` : base.key,
+      table: base.table,
+      title: at ? `${base.title}, ${grouping.title(at)}` : base.title,
+      unit: at ? grouping.unit(at) : undefined,
+    };
+    return { entries: group, head };
+  });
+}
+
+/** A figure per group; a figure past `MAX_MARKS` is stated, not drawn. */
+function perGroup<G extends string>(
+  rows: readonly Row[],
+  base: { key: string; table: string; title: string },
+  grouping: Grouping<G>,
   marksPerRow: number,
   draw: (entries: readonly Entry[], head: Head) => Figure,
 ): Figure[] {
-  const entries = rows.map((row, index) => ({ row, index }));
-  return [...groupBy(entries, (entry) => unitOf(entry.row) ?? "").values()].map((group) => {
-    const unit = unitOf(group[0]!.row);
-    const head = {
-      key: unit ? `${base.key}-${UNIT_KEY[unit]}` : base.key,
-      table: base.table,
-      title: unit ? `${base.title}, ${unit}` : base.title,
-      unit,
-    };
-    const marks = group.length * marksPerRow;
+  return groupsOf(rows, base, grouping).map(({ entries, head }) => {
+    const marks = entries.length * marksPerRow;
     return marks > MAX_MARKS
       ? oversized(head.key, head.table, head.title, marks)
-      : draw(group, head);
+      : draw(entries, head);
   });
 }
 
@@ -169,7 +198,7 @@ export function covenantHeadroom(handoff: HandoffView): Figure[] {
   const unitOf = (row: Row) => suffixOf(row["Current Basis"]) ?? suffixOf(row["Threshold"]);
   const base = { key: "covenant-headroom", table: "T4C.4", title: "Covenant headroom" };
   // A bar and a rule a test.
-  return perUnit(rows, base, unitOf, 2, (entries, head) => ({
+  return perGroup(rows, base, bySuffix(unitOf), 2, (entries, head) => ({
     ...head,
     kind: "bullet",
     summary: `Headroom as served: ${entries
@@ -191,25 +220,41 @@ export function covenantHeadroom(handoff: HandoffView): Figure[] {
   }));
 }
 
-/** A range strip's statistics and the `T4.6` column each is read from. */
-const PEER_STATISTICS = [
+type Statistic = Exclude<keyof RangeRow, "key" | "label" | "origin">;
+
+/** A range strip's statistics, each with the register column it is read from. */
+type Statistics = readonly (readonly [Statistic, string])[];
+
+/** A row's range, labelled by its `label` column: each statistic its
+    register declares, as served. */
+const rangeOf =
+  (statistics: Statistics, label: string) =>
+  ({ row, index }: Entry): RangeRow => {
+    const range: RangeRow = { key: `${index}`, label: text(row, label), origin: "model" };
+    for (const [statistic, column] of statistics) {
+      const cell = row[column];
+      if (cell !== undefined) range[statistic] = datum(cell);
+    }
+    return range;
+  };
+
+/** A row's marks: one bar for the quartiles, where either is declared, and a
+    rule or a dot for each other statistic `row` declares. */
+function rangeMarks(row: Row, statistics: Statistics): number {
+  const declared = statistics.filter(([, column]) => row[column] !== undefined);
+  const quartiles = declared.filter(([statistic]) => statistic === "q1" || statistic === "q3");
+  return (quartiles.length ? 1 : 0) + declared.length - quartiles.length;
+}
+
+/** `T4.6`'s statistics. */
+const PEER_STATISTICS: Statistics = [
   ["min", "Min"],
   ["q1", "Q1"],
   ["median", "Median"],
   ["q3", "Q3"],
   ["max", "Max"],
   ["marker", "Borrower Value"],
-] as const;
-
-/** A metric's range: each statistic its register declares, as served. */
-function peerRange({ row, index }: Entry): RangeRow {
-  const range: RangeRow = { key: `${index}`, label: text(row, "Metric"), origin: "model" };
-  for (const [statistic, column] of PEER_STATISTICS) {
-    const cell = row[column];
-    if (cell !== undefined) range[statistic] = datum(cell);
-  }
-  return range;
-}
+];
 
 /** CP-1C's peer statistics (`T4.6`): each metric's peer range, min to max
     with its quartiles and median, the borrower's value marked against it. */
@@ -217,13 +262,9 @@ export function peerRanges(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-1C", "T4.6");
   if (!rows?.length) return [];
   const unitOf = (row: Row) => suffixOf(row["Borrower Value"]) ?? suffixOf(row["Median"]);
-  const declares = (column: string) => rows[0]![column] !== undefined;
-  // One bar for the quartiles, and a rule or a dot for each other statistic.
-  const marks =
-    (declares("Q1") || declares("Q3") ? 1 : 0) +
-    ["Min", "Median", "Max", "Borrower Value"].filter(declares).length;
+  const marks = rangeMarks(rows[0]!, PEER_STATISTICS);
   const base = { key: "peer-ranges", table: "T4.6", title: "Peer ranges" };
-  return perUnit(rows, base, unitOf, marks, (entries, head) => ({
+  return perGroup(rows, base, bySuffix(unitOf), marks, (entries, head) => ({
     ...head,
     kind: "range",
     summary: `Borrower value as served: ${entries
@@ -232,12 +273,52 @@ export function peerRanges(handoff: HandoffView): Figure[] {
         return `${text(row, "Metric")} ${served(row["Borrower Value"])}${position ? ` (${position})` : ""}`;
       })
       .join("; ")}.`,
-    ranges: entries.map(peerRange),
+    ranges: entries.map(rangeOf(PEER_STATISTICS, "Metric")),
     markerLabel: "Borrower value",
     categoryLabel: "Metric",
     sourceOf: (selection) => {
       const row = pickedRow(entries, selection);
       return row ? stated(row, ["Peer Avg", "N"]) : null;
+    },
+  }));
+}
+
+/** `T4.10`'s statistics: it states no quartiles. */
+const IMPLIED_STATISTICS: Statistics = [
+  ["min", "Low"],
+  ["median", "Median"],
+  ["max", "High"],
+  ["marker", "Implied EV"],
+];
+
+/** CP-1C's implied enterprise value (`T4.10`): each method's range, low to
+    high with its median, the implied EV it states marked against it. */
+export function impliedEv(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-1C", "T4.10");
+  if (!rows?.length) return [];
+  const unitOf = (row: Row) => suffixOf(row["Implied EV"]) ?? suffixOf(row["Median"]);
+  const marks = rangeMarks(rows[0]!, IMPLIED_STATISTICS);
+  const base = { key: "implied-ev", table: "T4.10", title: "Implied enterprise value by method" };
+  return perGroup(rows, base, bySuffix(unitOf), marks, (entries, head) => ({
+    ...head,
+    kind: "range",
+    summary: `Implied EV as served: ${entries
+      .map(({ row }) => `${text(row, "Method")} ${served(row["Implied EV"])}`)
+      .join("; ")}.`,
+    ranges: entries.map(rangeOf(IMPLIED_STATISTICS, "Method")),
+    markerLabel: "Implied EV",
+    categoryLabel: "Method",
+    sourceOf: (selection) => {
+      const row = pickedRow(entries, selection);
+      return row
+        ? stated(row, [
+            "Multiple Source",
+            "Multiple Value",
+            "Borrower Metric",
+            "Period",
+            "Calc Status",
+          ])
+        : null;
     },
   }));
 }
@@ -379,6 +460,18 @@ export function ebitdaQuality(handoff: HandoffView): Figure[] {
   });
 }
 
+/** CP-1D's adjusted debt bridge (`T1E.3`): reported to adjusted debt, each
+    adjustment as served; the register states no status. */
+export function adjustedDebtBridge(handoff: HandoffView): Figure[] {
+  return bridgeFigure(handoff, {
+    module: "CP-1D",
+    register: "T1E.3",
+    cumulative: "Cumulative Adjusted Debt",
+    key: "adjusted-debt-bridge",
+    title: "Adjusted debt bridge",
+  });
+}
+
 // CP-2D's stated totals and the uses its method subtracts
 // (REF_CP-2D_STEPS.md step 05, instruction 5; liquidity_bridge.py), as a
 // `Bridge Item` starts, trimmed and casefolded.
@@ -517,7 +610,9 @@ export function registerFigures(handoff: HandoffView): Figure[] {
   return [
     ...covenantHeadroom(handoff),
     ...peerRanges(handoff),
+    ...impliedEv(handoff),
     ...ebitdaQuality(handoff),
+    ...adjustedDebtBridge(handoff),
     ...liquidityBridge(handoff),
     ...valueAllocation(handoff),
   ];

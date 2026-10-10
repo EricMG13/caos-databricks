@@ -29,16 +29,22 @@ import {
   MAX_MARKS,
   datum,
   groupBy,
+  nearestOf,
   oversized,
   pair,
+  stackFigure,
   sumOf,
   text,
+  unique,
+  wallSummary,
+  yearOf,
   type Cell,
   type DivergingFigure,
   type Figure,
   type LineFigure,
   type Row,
   type StackFigure,
+  type Wall,
   type WaterfallFigure,
 } from "./figure-core";
 import { registerFigures } from "./register-figures";
@@ -94,7 +100,6 @@ function periodUnit(tables: readonly Table[], period: string | undefined): strin
   return row ? unitOf(text(row, "currency"), text(row, "unit")) : undefined;
 }
 
-const unique = (values: readonly string[]) => [...new Set(values)];
 // A priority the model did not state sorts last, never as NaN.
 const priority = (row: Row) => Number(text(row, "display_priority")) || Number.MAX_SAFE_INTEGER;
 const byPriority = (rows: readonly Row[], key: string) =>
@@ -254,10 +259,10 @@ const sentence = (words: string) => words.charAt(0) + words.slice(1).toLowerCase
 
 /** Principal falling due each year, stacked by seniority: the maturity wall.
     A facility with an unknown principal is still a stated maturity (R24-13):
-    it is retained through `own` rather than dropped before the years and
-    classes it belongs to are chosen, so it is not silently missing from the
-    chart and cannot silently lose the nearest-date claim to a facility whose
-    principal happens to be known. */
+    it is retained rather than dropped before the years and classes it
+    belongs to are chosen, so it is not silently missing from the chart and
+    cannot silently lose the nearest-date claim to a facility whose principal
+    happens to be known (`wallSummary`). */
 export function maturityLadder(tables: readonly Table[]): StackFigure | null {
   const rows = tableOf(tables, "cp1.debt_facility_register");
   if (!rows?.length) return null;
@@ -265,78 +270,35 @@ export function maturityLadder(tables: readonly Table[]): StackFigure | null {
   const latest = periods.at(-1)!;
   const own = rows.filter((row) => text(row, "period_id") === latest);
   if (own.length === 0) return null;
-  const yearOf = (row: Row) => /^\d{4}/.exec(text(row, "maturity_date"))?.[0] ?? "Undated";
-  const classOf = (row: Row) => `${text(row, "secured_status")} ${text(row, "seniority")}`;
-  const years = unique(own.map(yearOf)).sort();
-  const classes = unique(own.map(classOf));
-  if (classes.length * years.length > MAX_MARKS) {
-    return oversized(
-      "maturities",
-      "cp1.debt_facility_register",
-      `Debt maturities by seniority, ${latest}`,
-      classes.length * years.length,
-    );
-  }
-  const falling = groupBy(own, (row) => pair(classOf(row), yearOf(row)));
-  // A class/year with no facility at all is genuinely zero; one whose every
-  // facility's principal is unstated is unknown, never silently zero
-  // (`sumOf`'s own `?? "0"` fallback used to conflate the two).
-  const cell = (klass: string, year: string): Datum => {
-    const matched = falling.get(pair(klass, year)) ?? [];
-    if (matched.length === 0) return { value: "0" };
-    const sum = sumOf(matched.map((row) => row.principal?.value));
-    return sum.value === null ? { value: null, reason: "not stated" } : { value: sum.value };
+  const wall: Wall = {
+    amountOf: (row) => row.principal?.value,
+    dateOf: (row) => text(row, "maturity_date"),
+    nameOf: (row) => text(row, "facility_name"),
+    noun: "facilities",
   };
-  const dated = own.filter((row) => yearOf(row) !== "Undated");
-  // The nearest date is chosen from every dated facility, independently of
-  // whether its principal is known: principal availability is not what makes
-  // a maturity date the nearest one (R24-13).
-  const nearest = [...(dated.length ? dated : own)].sort((a, b) =>
-    text(a, "maturity_date").localeCompare(text(b, "maturity_date")),
-  )[0]!;
+  const { row: nearest } = nearestOf(own, wall.dateOf);
   const unit = periodUnit(tables, latest) ?? unitOf(text(nearest, "currency"), "");
-  const values = own.map((row) => row.principal?.value);
-  const total = sumOf(values);
-  const unknown = unknownCount(values);
-  const amount =
-    total.value === null ? null : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}`;
-  const principal =
-    amount === null
-      ? `Principal unstated for all ${own.length} facilities`
-      : total.complete
-        ? `${amount} principal in ${own.length} facilities`
-        : `${amount} known principal across ${own.length - unknown} of ${own.length}` +
-          ` facilities (${unknown} unstated)`;
-  return {
-    key: "maturities",
-    table: "cp1.debt_facility_register",
-    kind: "stack",
-    title: `Debt maturities by seniority, ${latest}`,
-    summary: `${principal}${
-      dated.length
-        ? `; the nearest, ${text(nearest, "facility_name")}, falls due ${text(nearest, "maturity_date")}`
-        : ""
-    }.`,
-    unit,
-    categories: years,
-    series: classes.map((klass) => ({
-      key: klass,
+  return stackFigure(own, {
+    head: {
+      key: "maturities",
+      table: "cp1.debt_facility_register",
+      title: `Debt maturities by seniority, ${latest}`,
+      summary: wallSummary(own, wall, unit),
+      unit,
+    },
+    categoryOf: (row) => yearOf(wall.dateOf(row)),
+    seriesOf: (row) => `${text(row, "secured_status")} ${text(row, "seniority")}`,
+    amountOf: wall.amountOf,
+    sorted: true,
+    look: (klass) => ({
       // Every underscore, and a status said once: `NOT_STATED NOT_STATED`
       // reads "Not stated".
       label: sentence(unique(klass.split(" ")).join(" ").replaceAll("_", " ")),
-      origin: "model" as const,
       color: TRANCHE[klass] ?? "neutral",
-      data: years.map((year) => cell(klass, year)),
-    })),
-    // A segment sums every facility of its class falling due that year, so it
-    // names each one's stated source, not the first's (rewrite tournament).
-    sourceOf: (selection) => {
-      const summed = falling.get(pair(selection.series, selection.category)) ?? [];
-      return summed.length
-        ? summed.map((row) => `${text(row, "facility_name")}: ${locate(row)}`).join("; ")
-        : null;
-    },
-  };
+    }),
+    sourceOf: (summed) =>
+      summed.map((row) => `${text(row, "facility_name")}: ${locate(row)}`).join("; "),
+  });
 }
 
 /** A rate as the percent a reader reads. The model may write it either way:
