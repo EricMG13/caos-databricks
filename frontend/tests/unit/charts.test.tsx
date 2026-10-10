@@ -1436,6 +1436,9 @@ describe("a dumbbell", () => {
 
   test("has a table twin of both ends as served, and keys its two dots", () => {
     dumbbells({ categoryLabel: "Outcome" });
+    // Its marks are dots: the provenance key names a hollow dot, not a line.
+    expect(screen.getByText("Hollow dot: model-authored, not host-verified")).toBeInTheDocument();
+    expect(screen.queryByText(/^Dashed line/)).toBeNull();
     const legend = screen.getByRole("list", { name: "Legend" });
     for (const [label, tone] of [
       ["Expected", "chart-tone-neutral"],
@@ -1479,6 +1482,16 @@ describe("a dumbbell", () => {
       marks(container).find((button) => button.dataset.mark === key),
     );
     expect(parseFloat(low!.style.top) - parseFloat(high!.style.top)).toBeGreaterThan(2 * DOT);
+    // A short line across the row joins the two, so they read as one row's.
+    const join = container.querySelector('line[data-span="2"]') ?? undefined;
+    expect([numberOf(join, "x1"), numberOf(join, "x2")]).toEqual([
+      numberOf(from, "cx"),
+      numberOf(to, "cx"),
+    ]);
+    expect([numberOf(join, "y1"), numberOf(join, "y2")]).toEqual([
+      numberOf(from, "cy"),
+      numberOf(to, "cy"),
+    ]);
     // Ends apart in value keep the row's centre.
     expect(
       numberOf(container.querySelector('circle[data-mark="growth:from"]') ?? undefined, "cy"),
@@ -1719,7 +1732,7 @@ describe("a scatter chart", () => {
     fireEvent.click(screen.getByRole("button", { name: "Table" }));
     const row = screen.getByRole("row", { name: /Note G/ });
     expect([...(row as HTMLTableRowElement).cells].at(-1)?.textContent).toBe(
-      "Value too large to place",
+      "Value too large in magnitude to place",
     );
   });
 
@@ -1728,6 +1741,19 @@ describe("a scatter chart", () => {
     fireEvent.click(screen.getByRole("button", { name: "Table" }));
     const row = screen.getByRole("row", { name: /Note A/ }) as HTMLTableRowElement;
     expect([...row.cells].at(-1)?.textContent).toBe("stated twice: 2031, 2032");
+  });
+
+  test("keys its groups in the order their colours were given, not by date; a hollow dot is the model's", () => {
+    scatter({
+      points: [
+        { key: "p", label: "P", at: "2035", value: { value: "1" }, group: "Late", origin: "model" },
+        { key: "q", label: "Q", at: "2030", value: { value: "2" }, group: "Early", origin: "host" },
+      ],
+    });
+    const legend = screen.getByRole("list", { name: "Legend" });
+    const groups = [...legend.querySelectorAll("li:not(.chart-provenance)")];
+    expect(groups.map((item) => item.textContent)).toEqual(["Late", "Early"]);
+    expect(within(legend).getByText("Hollow dot: model-authored, not host-verified")).toBeTruthy();
   });
 
   test("colours and keys only the groups of placed points", () => {
@@ -1766,6 +1792,13 @@ describe("a scatter chart", () => {
       ...plotOf(container).querySelectorAll(".recharts-yAxis-tick-labels .chart-tick"),
     ];
     expect(ticks.map((tick) => tick.textContent)).toContain("0");
+  });
+
+  test("one point of one not placed is said in the singular", () => {
+    const { container } = scatter({ points: CURVE.slice(3, 4), title: "One" });
+    expect(container.querySelector("[data-chart-note]")).toHaveTextContent(
+      "1 of 1 point not placed; the table lists each with its reason.",
+    );
   });
 
   test("with nothing placed, labels no year and reaches no point", () => {
@@ -1910,6 +1943,20 @@ describe("a risk matrix", () => {
       "Probability High, Impact High: 12 events, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, …and 2 more (a count of the model's rows)",
     ]);
     expect(idList(["A", "B"])).toBe("A, B");
+  });
+
+  test("a cell's hit box is its inner area, so pressing its printed count presses the cell", () => {
+    const { container } = matrix();
+    const across = [...plotOf(container).querySelectorAll(".chart-grid line")].slice(5);
+    const width = numberOf(across[1], "x1") - numberOf(across[0], "x1");
+    const button = marks(container)[0]!;
+    const [left, wide] = [parseFloat(button.style.left), parseFloat(button.style.width)];
+    expect([wide, parseFloat(button.style.height)]).toEqual([Math.max(24, width - 8), 44 - 8]);
+    const count = numberOf(
+      cellAt(container, "high-high")?.querySelector("[data-count]") ?? undefined,
+      "x",
+    );
+    expect(count > left && count + 8 < left + wide).toBe(true);
   });
 
   test("takes its cells by the arrow keys; every target 24px; a press hands the cell over", () => {
