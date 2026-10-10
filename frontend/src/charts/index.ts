@@ -6,6 +6,7 @@ export { BulletChart } from "./BulletChart";
 export { ProvenanceKeyed } from "./ChartFrame";
 export { Swatch } from "./marks";
 export { DivergingBarChart } from "./DivergingBarChart";
+export { DumbbellChart } from "./DumbbellChart";
 export { LineChart } from "./LineChart";
 export { RangeStripChart } from "./RangeStripChart";
 export { StackedBarChart } from "./StackedBarChart";
@@ -20,6 +21,7 @@ export type {
   ChartSeries,
   Datum,
   Decimal,
+  DumbbellRow,
   OnSelect,
   Orientation,
   Origin,

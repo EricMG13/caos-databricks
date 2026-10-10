@@ -8,6 +8,7 @@ import {
   BarChart,
   BulletChart,
   DivergingBarChart,
+  DumbbellChart,
   LineChart,
   ProvenanceKeyed,
   RangeStripChart,
@@ -863,6 +864,8 @@ function markOf(figure: Figure, key: string): string | undefined {
       return MARK_WORD[key];
     case "range":
       return key === "marker" ? figure.markerLabel : MARK_WORD[key];
+    case "dumbbell":
+      return key === "from" ? figure.fromLabel : figure.toLabel;
     default:
       return unreachable(figure);
   }
@@ -905,6 +908,16 @@ function Chart({
           categoryLabel={figure.categoryLabel}
         />
       );
+    case "dumbbell":
+      return (
+        <DumbbellChart
+          {...common}
+          rows={figure.dumbbells}
+          fromLabel={figure.fromLabel}
+          toLabel={figure.toLabel}
+          categoryLabel={figure.categoryLabel}
+        />
+      );
     case "line":
       return <LineChart {...common} categories={figure.categories} series={figure.series} />;
     case "diverging":
@@ -941,6 +954,7 @@ type KeyShape = "fill" | "line" | "rule" | "dot";
 function shapesOf(figure: Figure): KeyShape[] {
   if (figure.kind === "line") return ["line"];
   if (figure.kind === "bullet") return ["fill", "rule"];
+  if (figure.kind === "dumbbell") return ["dot"];
   if (figure.kind !== "range") return ["fill"];
   const declares = (statistics: readonly (keyof RangeRow)[]) =>
     figure.ranges.some((row) => statistics.some((statistic) => row[statistic]));
