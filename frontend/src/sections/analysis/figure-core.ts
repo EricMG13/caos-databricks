@@ -9,6 +9,7 @@ import type {
   ChartSelection,
   ChartSeries,
   Datum,
+  Orientation,
   RangeRow,
   WaterfallStep,
 } from "@/charts";
@@ -117,6 +118,8 @@ export interface BarsFigure extends FigureBase {
   kind: "bars";
   categories: string[];
   series: ChartSeries[];
+  /** Which way the bars run; upright where unsaid. */
+  orientation?: Orientation;
   /** What the categories are, heading the table twin. */
   categoryLabel?: string;
 }
