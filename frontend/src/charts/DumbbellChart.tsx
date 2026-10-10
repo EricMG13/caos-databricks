@@ -1,8 +1,9 @@
 // Two values of one metric, a row each: each a dot on one value axis (an
 // expected value and the one realised), joined by a thin line where both are
-// available. Each is the register's own figure, printed as served; nothing is
-// computed between them. An unavailable end is a gap with its reason, and a
-// row with one is not joined.
+// available, or, where the two coincide and are set apart, by a short line
+// across the row. Each is the register's own figure, printed as served;
+// nothing is computed between them. An unavailable end is a gap with its
+// reason, and a row with one is not joined.
 import { ChartFrame } from "./ChartFrame";
 import { bandPlot, rowMarker, type BandMarker } from "./band";
 import { readDatum, toNumber, type ReadValue } from "./decimal";
@@ -47,10 +48,13 @@ function dotsOf(
   });
 }
 
-/** The line between a row's two ends, where both are available. */
-function spanOf({ from, to }: Read, index: number) {
+/** The line between a row's two ends, where both are available: across
+    the row where they coincide and are set apart. */
+function spanOf(read: Read, index: number) {
+  const { from, to } = read;
   if (from.value === null || to.value === null) return [];
-  return [{ category: index, from: toNumber(from.value), to: toNumber(to.value) }];
+  const across = coincide(read) ? { across: APART } : {};
+  return [{ category: index, from: toNumber(from.value), to: toNumber(to.value), ...across }];
 }
 
 function tableOf(
@@ -107,7 +111,7 @@ export function DumbbellChart({
       title={title}
       summary={summary}
       legend={legend}
-      provenance="line"
+      provenance="dot"
       table={tableOf(reads, categoryLabel, labels)}
       plot={(kit) =>
         bandPlot({ orientation: "horizontal", categories, slots: 1, bars: [], markers, spans }, kit)

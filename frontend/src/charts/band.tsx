@@ -86,9 +86,11 @@ export interface BandSpec {
   /** Values marked across their rows, reached after their category's bars. */
   markers?: readonly BandMarker[];
   /** A thin line along the value axis at a band's centre, under its bars and
-      markers, joining two of its values (a range's min and max); drawn only,
-      never a button: the values it joins are marks of their own. */
-  spans?: readonly { category: number; from: number; to: number }[];
+      markers, joining two of its values (a range's min and max), or, with
+      `across`, a line across the band that far either side of its centre
+      at `from` (two equal values set apart); drawn only, never a button:
+      the values it joins are marks of their own. */
+  spans?: readonly { category: number; from: number; to: number; across?: number }[];
   /** Join each bar's end to the next bar that spans that level (a bridge). */
   connect?: boolean;
   /** A vertical chart's height, axes included. */
@@ -465,10 +467,12 @@ function Spans({ spec, layout }: { spec: BandSpec; layout: Layout }) {
       {(spec.spans ?? []).map((span, index) => {
         const centre = centreOf(layout, span.category);
         const from = layout.axis.at(span.from);
-        const to = layout.axis.at(span.to);
+        const [to, side] = span.across
+          ? [from, [centre - span.across, centre + span.across]]
+          : [layout.axis.at(span.to), [centre, centre]];
         const ends = layout.vertical
-          ? { x1: centre, x2: centre, y1: from, y2: to }
-          : { x1: from, x2: to, y1: centre, y2: centre };
+          ? { x1: side[0], x2: side[1], y1: from, y2: to }
+          : { x1: from, x2: to, y1: side[0], y2: side[1] };
         return <line key={index} className="chart-span" data-span={span.category} {...ends} />;
       })}
     </g>

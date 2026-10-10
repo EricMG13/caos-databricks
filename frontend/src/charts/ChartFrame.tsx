@@ -165,6 +165,7 @@ const PROVENANCE = {
     "Solid line, filled point: host-verified",
     "Dashed line, hollow point: model-authored, not host-verified",
   ],
+  dot: ["Filled dot: host-verified", "Hollow dot: model-authored, not host-verified"],
 } as const;
 
 export function ChartFrame({
@@ -185,8 +186,8 @@ export function ChartFrame({
   /** A finding the chart itself made, said beside the summary. */
   note?: string | null;
   legend: readonly LegendEntry[];
-  /** Which provenance key the marks need: bars or lines. */
-  provenance: "fill" | "line";
+  /** Which provenance key the marks need: bars, lines or dots alone. */
+  provenance: "fill" | "line" | "dot";
   table: TableTwin;
   /** The drawing at a width; called on every render, so it stays pure. */
   plot: (kit: PlotKit) => Plot;

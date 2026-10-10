@@ -34,7 +34,7 @@ const HEIGHT = 240;
 const YEAR_STEPS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
 const DATE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 const UNDATED = "No readable date (YYYY-MM-DD, YYYY-MM or YYYY)";
-const UNPLACEABLE = "Value too large to place";
+const UNPLACEABLE = "Value too large in magnitude to place";
 
 /** The first instant of a day, UTC; years below 100 kept as written. */
 function dayStart(year: number, month = 1, day = 1): Date {
@@ -100,12 +100,17 @@ function readPoints(points: readonly ScatterPoint[]): Read[] {
   });
 }
 
-/** The placed points in date order, coloured by group as the groups first
-    appear among them. */
+/** The groups of the placed points, in the order they first appear among
+    them, which gives each its colour. */
+const groupsOf = (reads: readonly Read[]) => [
+  ...new Set(reads.filter(placeable).map((read) => read.point.group)),
+];
+
+/** The placed points in date order, each in its group's colour. */
 function placedOf(reads: readonly Read[]): Placed[] {
-  const drawn = reads.filter(placeable);
-  const groups = [...new Set(drawn.map((read) => read.point.group))];
-  return drawn
+  const groups = groupsOf(reads);
+  return reads
+    .filter(placeable)
     .map((read) => ({ ...read, color: seriesColor({}, groups.indexOf(read.point.group)) }))
     .sort((a, b) => a.time - b.time || a.index - b.index);
 }
@@ -308,9 +313,13 @@ export function ScatterChart({
   const placed = placedOf(reads);
   const unplaced = reads.filter((read) => read.unplaced);
   const spec: ScatterSpec = { placed, unit, xLabel };
-  const legend: LegendEntry[] = [...new Map(placed.map((read) => [read.point.group, read]))].map(
-    ([group, read]) => ({ key: group, label: group, tone: read.color, shape: "dot" }),
-  );
+  // Keyed in the order the colours were given, not by date.
+  const legend: LegendEntry[] = groupsOf(reads).map((group, index) => ({
+    key: group,
+    label: group,
+    tone: seriesColor({}, index),
+    shape: "dot",
+  }));
   const note = unplaced.length
     ? `${unplaced.length} of ${reads.length} points not placed; the table lists each with its reason.`
     : null;
@@ -322,7 +331,7 @@ export function ScatterChart({
       summary={summary}
       note={note}
       legend={legend}
-      provenance="line"
+      provenance="dot"
       table={tableOf([...placed, ...unplaced], labels, unit)}
       plot={(kit) => scatterPlot(spec, kit)}
       onSelect={onSelect}
