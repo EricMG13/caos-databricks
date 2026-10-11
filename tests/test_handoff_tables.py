@@ -366,7 +366,20 @@ def test_the_demo_cp1_tables_carry_the_bundles_column_names_literally() -> None:
     for table_id, columns in served.items():
         # In the order and spelling REF_CP-1_13 declares them.
         assert "`" + " | ".join(columns) + "`" in reference, table_id
-        assert set(columns) == stable.get(table_id, set(columns)), table_id
+        # Every column CP-MODEL requires; fork r14's six debt rate and
+        # amortisation terms are beyond them, so an older run stays readable.
+        assert stable.get(table_id, set()) <= set(columns), table_id
+    debt = set(served["cp1.debt_facility_register"])
+    assert debt - stable["cp1.debt_facility_register"] == {
+        "rate_type",
+        "reference_rate",
+        "spread_bps",
+        "floor_bps",
+        "fixed_rate",
+        "annual_amortisation",
+    }
+    for table_id in set(served) - {"cp1.debt_facility_register"}:
+        assert set(served[table_id]) == stable.get(table_id, set(served[table_id]))
 
 
 def _skill(module_id: str) -> str:

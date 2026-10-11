@@ -112,7 +112,8 @@ def earnings_pack(facts: EarningsFacts) -> bytes:
     )
     facility = (
         "FY2025 term debt carrying value, principal, drawn amount and commitment "
-        "580 USD million; secured senior fixed rate; maturity 2030-12-31\n"
+        "580 USD million; secured senior fixed rate 6.500%, bullet; "
+        "maturity 2030-12-31\n"
     )
     return (
         "Acme Holdings plc annual results\n"
@@ -455,7 +456,7 @@ def _cp1_stable_tables(
         ),
         "cp1.debt_facility_register": (
             cols(
-                "facility_id|facility_name|period_id|facility_type|carrying_value|principal|drawn_amount|commitment|secured_status|seniority|currency|margin_or_coupon|maturity_date|lease_classification|source_id|source_locator"
+                "facility_id|facility_name|period_id|facility_type|carrying_value|principal|drawn_amount|commitment|secured_status|seniority|currency|margin_or_coupon|maturity_date|lease_classification|rate_type|reference_rate|spread_bps|floor_bps|fixed_rate|annual_amortisation|source_id|source_locator"
             ),
             [
                 [
@@ -470,9 +471,15 @@ def _cp1_stable_tables(
                     "SECURED",
                     "SENIOR",
                     "USD",
-                    "fixed",
+                    "6.500% fixed",
                     "2030-12-31",
                     "NOT_LEASE",
+                    "FIXED",
+                    "NONE",
+                    "null",
+                    "null",
+                    "6.500",
+                    "0",
                     "annual-results",
                     "FY2025 annual results",
                 ]

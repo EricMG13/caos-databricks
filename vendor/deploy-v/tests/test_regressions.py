@@ -274,7 +274,7 @@ class ForkR3Tests(unittest.TestCase):
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.4', ['Line Item', 'FY2025', 'FY2024']),
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.10', ['KPI Category', 'Metric Name', 'FY2025', 'FY2024', 'Trend Direction', 'Analyst Note']),
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.14', pipes('period_id | fiscal_year | fiscal_quarter | period_type | start_date | end_date | day_count | audit_status | currency | unit | accounting_basis | entity_perimeter | source_id | source_locator | component_period_ids')),
-            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.18', pipes('facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | source_id | source_locator')),
+            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.18', pipes('facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | rate_type | reference_rate | spread_bps | floor_bps | fixed_rate | annual_amortisation | source_id | source_locator')),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.5', ['KPI Category', 'Metric Name', 'FY2025', 'FY2024', 'YoY Change', 'Trend Direction',
                                                        'Calculation Status', 'Analyst Note']),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.6', ['Metric', 'Comparison Basis', 'Prior Value', 'Current Value', 'Abs Change', '% Change', 'Mgmt Driver', 'Analyst Driver', 'Credit Implication']),
@@ -1696,6 +1696,94 @@ class ForkR13Tests(unittest.TestCase):
         self.assertEqual([v for v in complete.check(skill, empty, 'CP-3C')[0] if v.startswith('T3D.2')],
                          ["T3D.2 row 1: critical column 'Source Trace' holds a disqualifying placeholder ''"])
         self.assertEqual(t3d2(12, 13), [])
+
+
+class ForkR14Tests(unittest.TestCase):
+    """Deployment fork r14 (owner-authorised 2026-10-10): CP-1 carries what a host credit model needs -- rate and
+    amortisation terms on each debt row, the lease and interest classification ids, total debt without leases,
+    and an optional pro forma adjustment register."""
+
+    CP1 = 'cp-1-canonical-data-foundation'
+    OLD_DEBT = ('facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | '
+                'commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | '
+                'lease_classification | source_id | source_locator').split(' | ')
+    TERMS = ['rate_type', 'reference_rate', 'spread_bps', 'floor_bps', 'fixed_rate', 'annual_amortisation']
+    NEW_IDS = ('operating_lease_cost', 'lease_payments_in_financing', 'interest_paid_in_financing')
+    PRO_FORMA = 'cp1.pro_forma_adjustment_register'
+
+    def steps(self):
+        return (ROOT / 'skills' / self.CP1 / 'references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+
+    def test_the_debt_register_carries_rate_and_amortisation_terms_in_order(self):
+        debt = self.OLD_DEBT[:14] + self.TERMS + self.OLD_DEBT[14:]
+        skill = skill_text(self.CP1)
+        self.assertEqual(complete.load_contract(skill, 'CP-1')['registers']['T4.18']['columns'], debt)
+        self.assertIn('`' + ' | '.join(debt) + '`', self.steps())
+        schema = (ROOT / 'skills' / self.CP1 / 'references/CP-1_SCHEMA_REFERENCE.md').read_text(encoding='utf-8')
+        self.assertIn('| T4.18 | Debt Facility Register | ' + ', '.join(debt) + ' |', schema)
+        # New output must carry the terms; a register written without them is refused for each one.
+        self.assertEqual(about(complete.check(skill, register('T4.18', debt, [['x'] * len(debt)]), 'CP-1')[0],
+                               'T4.18'), [])
+        refused = about(complete.check(skill, register('T4.18', self.OLD_DEBT, [['x'] * 16]), 'CP-1')[0], 'T4.18')
+        for column in self.TERMS:
+            with self.subTest(column=column):
+                self.assertTrue([v for v in refused if column in v], refused)
+        # CP-MODEL still reads an older run's register, which has none of them.
+        required = model_inputs.STABLE_TABLE_REQUIRED_COLUMNS['cp1.debt_facility_register']
+        self.assertEqual(required & set(self.TERMS), set())
+        self.assertEqual(required, set(self.OLD_DEBT))
+
+    def test_debt_terms_tell_a_bullet_and_an_unsourced_reference_from_unknown(self):
+        # Fix round 1: `null` amortisation read both "bullet" and "not stated"; `NONE` both "fixed" and "unsourced".
+        terms = ' '.join(self.steps().partition('Rate and amortisation terms')[2]
+                         .partition('A lease liability is')[0].split())
+        self.assertIn('- `reference_rate`: `SOFR`, `TERM_SOFR`, `EURIBOR`, `SONIA`, `NONE` or `NOT_STATED`. '
+                      '`NONE` is a fixed-rate or no-reference instrument; `NOT_STATED` is a floating instrument '
+                      'whose reference rate is not sourced;', terms)
+        self.assertIn('`0` for a bullet or an instrument with no scheduled amortisation, and `null` only when the '
+                      'amortisation is not stated.', terms)
+        self.assertIn('An `annual_amortisation` of `null` is always a gap: a bullet is `0`.', terms)
+        self.assertIn('`floor_bps` with no floor stated, `fixed_rate` on a `FLOATING` row, `spread_bps` on a `FIXED` '
+                      'row.', terms)
+        self.assertNotIn('`null` for a bullet', terms)
+        skill = skill_text(self.CP1)
+        self.assertIn("A bullet's `annual_amortisation` is `0`; `null` there means not stated and is a gap.", skill)
+        schema = ' '.join((ROOT / 'skills' / self.CP1 / 'references/CP-1_SCHEMA_REFERENCE.md')
+                          .read_text(encoding='utf-8').split())
+        self.assertIn('`reference_rate` is `SOFR`, `TERM_SOFR`, `EURIBOR`, `SONIA`, `NONE` (a fixed-rate or '
+                      'no-reference instrument) or `NOT_STATED` (a floating instrument whose reference rate is not '
+                      'sourced); `annual_amortisation` is `0` for a bullet or no scheduled amortisation and `null` '
+                      'only when not stated.', schema)
+
+    def test_the_debt_and_lease_account_ids_are_controlled_and_optional(self):
+        for metric_id in self.NEW_IDS:
+            with self.subTest(metric_id=metric_id):
+                self.assertIn(metric_id, model_inputs.METRIC_IDS)
+                self.assertNotIn(metric_id, model_inputs.MANDATORY_ACCOUNT_METRICS)
+                self.assertIn(f'`{metric_id}`', self.steps().partition('Controlled metric IDs:')[2]
+                              .partition('## Segment, EBITDA and debt registers')[0])
+
+    def test_total_debt_excludes_lease_liabilities_and_pro_forma_is_optional(self):
+        steps = self.steps()
+        flat = ' '.join(steps.split())
+        self.assertIn('The account metric `total_debt` excludes lease liabilities.', flat)
+        self.assertIn('the sum of the carrying values of the `NOT_LEASE` and `NOT_STATED` rows, plus any '
+                      '`DEBT ADJUSTMENT` row, equals `total_debt`', flat)
+        self.assertIn('`DEBT_TOTAL_EX_LEASES`', steps)
+        self.assertIn(f'<!-- table-id: {self.PRO_FORMA} -->', steps)
+        self.assertIn('`adjustment_id | label | period_id | effective_date | classification | metric_id | value | '
+                      'source_id | source_locator`', steps)
+        for value in ('ACQUISITION', 'DISPOSAL', 'REFINANCING', 'SUBSEQUENT_EVENT', 'LENDER_UPDATE', 'OTHER_EXPLICIT',
+                      '`facility:`'):
+            with self.subTest(value=value):
+                self.assertIn(value, steps.partition('## Pro forma adjustment register')[2])
+        self.assertIn('Income taxes paid that the issuer classified outside operating activities have no metric ID: '
+                      'record the classification as a limitation in Gaps & Conflicts.', flat)
+        skill = skill_text(self.CP1)
+        self.assertIn(f'**conditional_stable_table**: {self.PRO_FORMA} — ', skill)
+        self.assertNotIn(self.PRO_FORMA, complete.load_contract(skill, 'CP-1')['unconditional_stable_tables'])
+        schema = (ROOT / 'skills' / self.CP1 / 'references/CP-1_SCHEMA_REFERENCE.md').read_text(encoding='utf-8')
+        self.assertIn(f'| `{self.PRO_FORMA}` |', schema)
 
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
