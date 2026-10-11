@@ -5,6 +5,7 @@
 // served. Sums are exact (BigInt); a float only places a mark.
 import { useMemo, type ReactNode } from "react";
 import {
+  BarChart,
   BulletChart,
   DivergingBarChart,
   LineChart,
@@ -855,6 +856,7 @@ function unreachable(_figure: never): never {
 function markOf(figure: Figure, key: string): string | undefined {
   switch (figure.kind) {
     case "stack":
+    case "bars":
     case "line":
     case "diverging":
       return figure.series.find((entry) => entry.key === key)?.label;
@@ -913,7 +915,23 @@ function Chart({
         <DivergingBarChart {...common} categories={figure.categories} series={figure.series[0]} />
       );
     case "stack":
-      return <StackedBarChart {...common} categories={figure.categories} series={figure.series} />;
+      return (
+        <StackedBarChart
+          {...common}
+          categories={figure.categories}
+          series={figure.series}
+          categoryLabel={figure.categoryLabel}
+        />
+      );
+    case "bars":
+      return (
+        <BarChart
+          {...common}
+          categories={figure.categories}
+          series={figure.series}
+          categoryLabel={figure.categoryLabel}
+        />
+      );
     default:
       return unreachable(figure);
   }

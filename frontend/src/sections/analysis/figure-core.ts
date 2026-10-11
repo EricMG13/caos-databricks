@@ -99,6 +99,17 @@ export interface StackFigure extends FigureBase {
   kind: "stack";
   categories: string[];
   series: ChartSeries[];
+  /** What the categories are, heading the table twin. */
+  categoryLabel?: string;
+}
+
+/** A bar per series in each category, grouped side by side. */
+export interface BarsFigure extends FigureBase {
+  kind: "bars";
+  categories: string[];
+  series: ChartSeries[];
+  /** What the categories are, heading the table twin. */
+  categoryLabel?: string;
 }
 
 /** A line per series over categories. */
@@ -144,7 +155,13 @@ export interface RangeFigure extends FigureBase {
 /** One figure: what it shows, drawn by which chart, from which table. Each
     kind carries its own rows, so a figure without them does not build. */
 export type Figure =
-  StackFigure | LineFigure | DivergingFigure | WaterfallFigure | BulletFigure | RangeFigure;
+  | StackFigure
+  | BarsFigure
+  | LineFigure
+  | DivergingFigure
+  | WaterfallFigure
+  | BulletFigure
+  | RangeFigure;
 
 /** A figure past this many marks is stated, not drawn, and past this many
     figures a module's are stated too. The tables are model-authored and may
@@ -227,6 +244,8 @@ export interface Wall {
   dateOf: (row: Row) => string;
   nameOf: (row: Row) => string;
   noun: string;
+  /** What the register calls its amount; by default CP-1's "principal". */
+  word?: string;
 }
 
 /** The row falling due first: the earliest of those whose date has a year,
@@ -242,21 +261,21 @@ export function nearestOf(
   return { row: row!, dated: dated.length > 0 };
 }
 
-/** A maturity wall's summary (CP-1's): the principal summed exactly, said as
+/** A maturity wall's summary (CP-1's): its amount summed exactly, said as
     known where some is unstated (R24-13), and the nearest dated maturity,
-    chosen whether or not its principal is known. */
+    chosen whether or not its amount is known. */
 export function wallSummary(rows: readonly Row[], wall: Wall, unit: string | undefined): string {
   const values = rows.map(wall.amountOf);
   const total = sumOf(values);
   const unknown = values.filter((value) => value == null).length;
-  const [n, noun] = [rows.length, wall.noun];
+  const [n, noun, word] = [rows.length, wall.noun, wall.word ?? "principal"];
   const principal =
     total.value === null
-      ? `Principal unstated for all ${n} ${noun}`
+      ? `${word.charAt(0).toUpperCase()}${word.slice(1)} unstated for all ${n} ${noun}`
       : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}${
           total.complete
-            ? ` principal in ${n} ${noun}`
-            : ` known principal across ${n - unknown} of ${n} ${noun} (${unknown} unstated)`
+            ? ` ${word} in ${n} ${noun}`
+            : ` known ${word} across ${n - unknown} of ${n} ${noun} (${unknown} unstated)`
         }`;
   const { row, dated } = nearestOf(rows, wall.dateOf);
   return `${principal}${dated ? `; the nearest, ${wall.nameOf(row)}, falls due ${wall.dateOf(row)}` : ""}.`;

@@ -975,6 +975,24 @@ test("pressing a covenant's bar names its current basis and stated source", () =
   );
 });
 
+test("grouped bars draw a bar per case, each named and pressed for its class", () => {
+  const columns = ["Creditor Class", "Exposure: Base Case", "Exposure: Stress Case"];
+  const exposure: Register = {
+    register_id: "T3D.8",
+    columns,
+    declared: columns,
+    rows: [[served("Senior secured"), served("100", "100"), served("120", "120")]],
+  };
+  const container = shown({ ...handoffOf("CP-4"), module_id: "CP-3C", registers: [exposure] });
+  const figure = container.querySelector("[data-figure='lme-exposure']") as HTMLElement;
+  expect(figure.querySelector("[data-chart='bar']")).not.toBeNull();
+  fireEvent.click(within(figure).getByRole("button", { name: /^Stress, Senior secured: 120/ }));
+  const picked = container.querySelector("[data-picked]")!;
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("120");
+  expect(picked).toHaveTextContent("Stress · Senior secured");
+  expect(picked).toHaveTextContent("T3D.8");
+});
+
 test("the figures' key keys a rule and a dot only where one is drawn", () => {
   const key = (container: HTMLElement) =>
     container.querySelector("[data-figures-key]")!.textContent ?? "";
@@ -986,4 +1004,18 @@ test("the figures' key keys a rule and a dot only where one is drawn", () => {
   expect(ranges).toContain("Dashed rule: model-authored, not host-verified");
   expect(ranges).toContain("Hollow dot: model-authored, not host-verified");
   expect(key(shown(cp1))).not.toContain("rule");
+});
+
+test("a register stack's table twin heads its first column with what the categories are", () => {
+  const columns = ["Basket / Test", "Usage", "Remaining Capacity"];
+  const baskets: Register = {
+    register_id: "T4C.5",
+    columns,
+    declared: columns,
+    rows: [[served("General basket"), served("10", "10"), served("40", "40")]],
+  };
+  const container = shown({ ...handoffOf("CP-4"), tables: [], registers: [baskets] });
+  const figure = container.querySelector<HTMLElement>("[data-figure='basket-capacity']")!;
+  fireEvent.click(within(figure).getByRole("button", { name: "Table" }));
+  expect(figure.querySelector("thead th:first-child")).toHaveTextContent("Basket / Test");
 });
