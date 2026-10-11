@@ -742,10 +742,14 @@ def test_a_fiscal_year_without_four_digits_is_labelled_by_its_last_two() -> None
         "Q2 25",
         "Q3 25",
         "Q4 25",
+        "PYTD H1 25",
         "YTD H1 26",
         "LTM Q2 26",
     ]
-    # No year to count back from: no PYTD, and no trailing quarters.
+    # No year to count back from: no LTM year and no trailing quarters; the
+    # PYTD is still found by its dates, twelve months before the YTD.
+    ltm = account_frame(regs, columns)["LTM:H1_2026"]["acct:revenue"]
+    assert ltm == Cell(None, "COMPONENT_MISSING")
     frames = ltm_frames(regs, columns)
     assert frames["Q:Q4_2025"]["acct:revenue"] == Cell(None, "COMPONENT_MISSING")
 
@@ -794,13 +798,17 @@ def test_a_ytd_ending_on_the_fy_end_is_left_out() -> None:
     assert [c.kind for c in historical_columns(regs)] == ["FY", "LTM"]
 
 
-def test_a_ytd_without_a_fiscal_quarter_is_labelled_by_its_id() -> None:
+def test_a_ytd_without_a_fiscal_quarter_is_labelled_by_its_months() -> None:
     regs = _regs(fy={"FY2025": {"revenue": 12}}, ytd={"H1_2026": {"revenue": 6}})
     fy, h1 = regs.periods
-    regs = replace(regs, periods=(fy, replace(h1, fiscal_quarter=None)))
+    unlabelled = replace(regs, periods=(fy, replace(h1, fiscal_quarter=None)))
 
-    columns = historical_columns(regs)
+    columns = historical_columns(unlabelled)
 
+    assert [c.label for c in columns] == ["YTD H1 26", "FY25", "LTM Q2 26"]
+    # Five months are no fiscal quarter: labelled by its id.
+    five = replace(h1, fiscal_quarter=None, end_date="2026-05-31", day_count=151)
+    columns = historical_columns(replace(regs, periods=(fy, five)))
     assert [c.label for c in columns] == ["YTD H1_2026", "FY25", "LTM H1_2026"]
 
 
@@ -1154,7 +1162,10 @@ def test_an_addback_without_a_row_for_a_period_counts_zero_in_a_sum() -> None:
     resolved = account_frame(halves, historical_columns(halves))
     assert resolved["YTD:H1_2026"][key].value == 3
     assert resolved["LTM:LTM_Q2_2026"][key].value == 21 - 3
-    assert ltm_frames(regs, columns)["Q:Q2_2026"][key].value == 12 + 3 + 3
+    # Q2 2026 has no row beside three stated quarters: never 12 + 3 + 3.
+    assert ltm_frames(regs, columns)["Q:Q2_2026"][key] == Cell(
+        None, "COMPONENT_MISSING", note=history.PARTLY_STATED
+    )
     assert ltm_frames(regs, columns)["Q:Q2_2026"]["acct:revenue"].value == 11654
 
 
@@ -1179,13 +1190,20 @@ def _costs(regs: Cp1Registers) -> dict[str, Cell]:
 
 def test_a_sparse_item_resolves_each_period_bottom_up() -> None:
     regs = example_registers()
-    # (a) rows only for Q1 2025 and H1 2025: FY2025 is its quarters (3), the
-    # LTM is 3 + nothing - 3.
+    # (a) rows only for Q1 2025 and H1 2025: FY2025 is its quarters (3); the
+    # PYTD is stated and the YTD has no row, so the LTM is never 3 + 0 - 3.
     probe = _costs(_sparse_rows(regs, {"Q1_2025": 3, "H1_2025": 3}))
+    # Q3 and Q4 2025 have no row: nothing, and named.
     assert probe["FY:FY2025"] == Cell(
-        Decimal(3), basis="CALCULATED", sources=probe["Q:Q1_2025"].sources
+        Decimal(3),
+        basis="CALCULATED",
+        sources=probe["Q:Q1_2025"].sources,
+        note="not stated, treated as zero (Q3_2025); "
+        "not stated, treated as zero (Q4_2025)",
     )
-    assert probe["LTM:LTM_Q2_2026"].value == 0
+    assert probe["LTM:LTM_Q2_2026"] == Cell(
+        None, "COMPONENT_MISSING", note=history.PARTLY_STATED
+    )
     assert probe["YTD:H1_2026"] == Cell(None, "NOT_SOURCED")
     assert probe["Q:Q2_2025"] == Cell(None, "NOT_SOURCED")
     # (b) only Q3 2025 and FY2025: the LTM keeps the 12, the YTD has none.
@@ -1251,11 +1269,13 @@ def test_a_sparse_period_resolves_only_through_dated_existing_parts() -> None:
     )
     periods = {p.period_id: p for p in regs.periods}
     # A quarter without a start date (nor a day count to derive one) is not
-    # within the year.
+    # within the year: its days are a gap, so Q1 + Q4 is not the year.
     undated = _periods_changed(
         regs, replace(periods["Q3_2025"], start_date=None, day_count=None)
     )
-    assert _costs(undated)["FY:FY2025"].value == 8
+    assert _costs(undated)["FY:FY2025"] == Cell(
+        None, "COMPONENT_MISSING", note=UNSPANNED
+    )
     # A year without dates has no quarters; a quarter is never its own part.
     no_end = _periods_changed(regs, replace(periods["FY2025"], end_date=None))
     assert _costs(no_end)["FY:FY2025"] == Cell(None, "NOT_SOURCED")
@@ -1297,11 +1317,12 @@ def test_a_flow_that_is_not_sparse_never_resolves_from_its_parts() -> None:
 
 def test_a_sparse_period_is_covered_greedily_by_its_longest_parts() -> None:
     regs = example_registers()
-    # (a) H1 2025 and Q3 2025 only: FY2025 is H1 + Q3 + nothing for Q4.
+    # (a) H1 2025 and Q3 2025 only: FY2025 is H1 + Q3 + nothing for Q4; the
+    # YTD has no row beside a stated PYTD, so the LTM is not built.
     probe = _costs(_sparse_rows(regs, {"H1_2025": 6, "Q3_2025": 12}))
     assert probe["FY:FY2025"].value == 18
     assert probe["PYTD:H1_2025"].value == 6
-    assert probe["LTM:LTM_Q2_2026"].value == 12
+    assert probe["LTM:LTM_Q2_2026"].note == history.PARTLY_STATED
     # (b) a 9M row and Q4: FY = 9M + Q4.
     h1 = next(p for p in regs.periods if p.period_id == "H1_2025")
     nine = replace(
@@ -1337,10 +1358,11 @@ def test_a_sparse_period_is_covered_greedily_by_its_longest_parts() -> None:
     stub = replace(regs, periods=(*regs.periods, overlap))
     covered = _costs(_sparse_rows(stub, {"H1_2025": 6, "STUB_2025": 100}))
     assert covered["FY:FY2025"].value == 6
-    # (c) round 2's probe: rows for Q1 2025 and H1 2025 only, LTM nothing.
+    # (c) round 2's probe: rows for Q1 2025 and H1 2025 only; a stated PYTD
+    # beside no YTD row, so the LTM is not built.
     first = _costs(_sparse_rows(regs, {"Q1_2025": 3, "H1_2025": 3}))
     assert first["FY:FY2025"].value == 3
-    assert first["LTM:LTM_Q2_2026"].value == 0
+    assert first["LTM:LTM_Q2_2026"].note == history.PARTLY_STATED
 
 
 def test_a_sparse_own_row_wins_and_is_noted_where_its_parts_differ() -> None:
@@ -1397,13 +1419,14 @@ def test_outflow_metrics_are_cp1s_sign_agnostic_outflows() -> None:
         "depreciation_amortization",
         "cash_interest_paid",
         "cash_lease_payments",
-        "cash_taxes_paid",
         "capex_and_intangible_investment",
         "operating_lease_cost",
         "lease_payments_in_financing",
         "interest_paid_in_financing",
         "dividends_paid",
     }
+    # Cash taxes are signed: a refund is an inflow (CP-1's sign convention).
+    assert "cash_taxes_paid" in FLOW_METRICS - OUTFLOW_METRICS
     assert OUTFLOW_METRICS <= FLOW_METRICS
     assert SIGN_NORMALISED == "sign normalised"
 
@@ -1675,14 +1698,14 @@ def test_an_ltm_whose_fiscal_year_does_not_meet_its_ytd_is_missing() -> None:
         None, "COMPONENT_MISSING", note=UNSPANNED
     )
     assert frame["LTM:LTM_Q2_2026"]["acct:total_debt"].value == 13846
-    # A PYTD that does not start with the fiscal year.
+    # A PYTD that does not start with the fiscal year, by more than a week.
     late = replace(
         regs,
         periods=tuple(
             replace(
                 p,
-                start_date="2025-01-02",
-                day_count=180,
+                start_date="2025-01-09",
+                day_count=173,
                 component_period_ids=(),
             )
             if p.period_id == "H1_2025"
@@ -1690,11 +1713,46 @@ def test_an_ltm_whose_fiscal_year_does_not_meet_its_ytd_is_missing() -> None:
             for p in regs.periods
         ),
     )
-    late_frame = account_frame(late, historical_columns(late))
-    assert late_frame["PYTD:H1_2025"]["acct:revenue"].value == 5750
-    assert late_frame["LTM:LTM_Q2_2026"]["acct:revenue"] == Cell(
-        None, "COMPONENT_MISSING", note=UNSPANNED
+    # A day late is within a week of a year earlier, so it is the PYTD; but
+    # it does not start with the fiscal year (that meeting is exact), so the
+    # LTM is not built.
+    day_late = replace(
+        regs,
+        periods=tuple(
+            replace(p, start_date="2025-01-02", day_count=180, component_period_ids=())
+            if p.period_id == "H1_2025"
+            else p
+            for p in regs.periods
+        ),
     )
+    day_late_columns = historical_columns(day_late)
+    assert [c.column_id for c in day_late_columns if c.kind == "PYTD"] == [
+        "PYTD:H1_2025"
+    ]
+    assert account_frame(day_late, day_late_columns)["LTM:LTM_Q2_2026"][
+        "acct:revenue"
+    ] == Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
+    # It is not H1 2026's months a year earlier, so it is never the PYTD:
+    # the quarters to date are, and the LTM is built from them.
+    late_columns = historical_columns(late)
+    assert [c.column_id for c in late_columns if c.kind == "PYTD"] == ["PYTD:Q2_2025"]
+    late_frame = account_frame(late, late_columns)
+    revenue = {k: _value(late_frame[k]["acct:revenue"]) for k in late_frame}
+    assert revenue["LTM:LTM_Q2_2026"] == (
+        revenue["FY:FY2025"] + revenue["YTD:H1_2026"] - revenue["PYTD:Q2_2025"]
+    )
+    # Without those quarters there is no PYTD, and the LTM is not built.
+    alone = replace(
+        late,
+        periods=tuple(
+            p for p in late.periods if p.period_id not in {"Q1_2025", "Q2_2025"}
+        ),
+    )
+    alone_columns = historical_columns(alone)
+    assert "PYTD" not in [c.kind for c in alone_columns]
+    assert account_frame(alone, alone_columns)["LTM:LTM_Q2_2026"][
+        "acct:revenue"
+    ] == Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
     # An undated fiscal year cannot be shown to meet it either.
     undated = replace(
         regs,
@@ -1959,7 +2017,7 @@ def test_a_ytd_built_from_quarters_with_a_gap_does_not_meet_the_year() -> None:
         regs, periods=tuple(p for p in regs.periods if p.period_id != "H1_2026")
     )
     whole = account_frame(built, historical_columns(built))
-    assert whole["LTM:LTM_Q2_2026"]["acct:revenue"].value is not None
+    assert whole["LTM:LTM_Q2_2026"]["acct:revenue"].value == 11654
     gap = replace(
         built,
         periods=tuple(

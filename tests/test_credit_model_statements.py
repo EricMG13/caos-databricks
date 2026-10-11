@@ -19,6 +19,7 @@ from caos.calculators.credit_model._cells import (
 from caos.calculators.credit_model.frame import Cell, Column, Frame, SourceRef
 from caos.calculators.credit_model.history import (
     OUTFLOW_METRICS,
+    PARTLY_STATED,
     account_frame,
     historical_columns,
 )
@@ -36,7 +37,6 @@ _OUTFLOWS = (
     "depreciation_amortization",
     "cash_interest_paid",
     "cash_lease_payments",
-    "cash_taxes_paid",
     "capex_and_intangible_investment",
     "operating_lease_cost",
     "lease_payments_in_financing",
@@ -490,9 +490,12 @@ def test_every_bridge_reconciles_for_any_consistent_accounts(
         addbacks = tuple(key for key in cells if key.startswith("addback:"))
         _equal(cells, ("adjusted_ebitda",), ("ebitda", *addbacks))
         _equal(cells, ("undrawn_rcf", "acct:rcf_drawn"), ("acct:rcf_commitment",))
-        for key in ("cogs", "da", "cash_interest", "cash_taxes", "capex"):
+        for key in ("cogs", "da", "cash_interest", "capex"):
             value = cells[key].value
             assert value is not None and value <= 0, key
+    # Cash taxes keep CP-1's sign: a refund is an inflow.
+    q2 = frame[_columns(regs)["Q2 26"].column_id]
+    assert q2["cash_taxes"].value == figures["cash_taxes_paid"]
 
 
 def test_pro_forma_new_facility_unknown_metric_and_a_missing_line() -> None:
@@ -774,12 +777,18 @@ def test_a_sparse_addback_and_financing_line_resolve_bottom_up() -> None:
         ),
     )
     ltm = _cells(probe, "LTM Q2 26")
-    assert ltm["addback:transaction_costs"].value == 0
-    assert ltm["adjusted_ebitda"].value == 3904 + 32 + 92 + 40
+    # A PYTD row beside no YTD row: the add-back's LTM is not built, and the
+    # adjusted EBITDA that adds it is missing too.
+    assert ltm["addback:transaction_costs"] == Cell(
+        None, "COMPONENT_MISSING", note=PARTLY_STATED
+    )
+    assert ltm["adjusted_ebitda"].value is None
+    assert ltm["ebitda"].value == 3904
     lease = _without(regs, "lease_payments_in_financing", "Q2_2026", "H1_2026")
     ytd = _cells(lease, "YTD H1 26")
     assert ytd["cfo_adjusted"].value == 1504 - 4
-    assert ytd["cfo_adjusted"].note is None
+    # Q2 2026 has no row inside the YTD: nothing there, and named.
+    assert ytd["cfo_adjusted"].note == treated_as_zero("Q2_2026")
 
 
 def test_an_all_absent_financing_line_with_a_stated_figure_counts_zero() -> None:

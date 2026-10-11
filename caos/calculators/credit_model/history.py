@@ -7,20 +7,38 @@ H1 - Q1, 9M - H1 or FY - 9M when both periods exist.
 The anchor is the latest end date of a quarter, YTD or FY period. At a
 fiscal-year end there is no YTD and the LTM is that FY. Otherwise the YTD is
 the YTD period ending at the anchor, else the anchor year's quarters to date
-when every one is a column; the PYTD is the prior year's YTD period of the
-same length, else the prior year's same quarters; and the LTM is FY + YTD -
-PYTD with the FY of the prior year, the PYTD's, so the months always number
-twelve. CP-1's LTM row ending at the anchor names the LTM column and supplies
-the stated figures; one ending later than the anchor keeps its own column,
+when every one is a column (a YTD's fiscal quarter is its register label, else,
+as CP-1 leaves it null on every period that is not a QUARTER, its whole
+months as quarters: 6 months is H1); the PYTD is the prior year's YTD period of the
+same fiscal quarter, else (by its dates, its fiscal quarter not required) the
+one YTD period of the same whole months starting a year earlier, else
+the prior year's same quarters; and the LTM is FY + YTD - PYTD with the FY of
+the prior year, the PYTD's, so the months always number twelve. A period is
+n whole months when the day after it ends lies within `SLACK_DAYS` (7) days
+of its first day plus n months, and a year earlier is within as many days of
+twelve months earlier, so 52/53-week calendars resolve; periods that follow
+one another meet exactly (end + 1 day = next start). The dates
+leave the PYTD ambiguous where a YTD period ends before the YTD starts, or
+has no dates, but not exactly one dated period is that one (or the YTD is
+not whole months); without the prior year's quarters either, the LTM's flows
+are then `COMPONENT_MISSING`, noted `UNSPANNED`.
+CP-1's LTM row ending at the anchor names the LTM column and supplies the
+stated figures; one ending later than the anchor keeps its own column,
 its flows `COMPONENT_MISSING` with CP-1's figure as `stated` (spec M4: the
 host recomputes, it never adopts CP-1's arithmetic).
 
 The LTM's FY must end the day before its YTD starts, and its PYTD start
 with that FY; otherwise its flows are `COMPONENT_MISSING`, noted
-`UNSPANNED`.
+`UNSPANNED`. A sparse item's interim without a row counts as nothing in that
+LTM only when the other interim has none either (the LTM is then the FY's);
+with some of its FY, YTD and PYTD stated and another without a row, its LTM
+is `COMPONENT_MISSING`, noted `PARTLY_STATED`, never a sum over 18 or 6
+months. (An FY without a row beside a stated PYTD inside it already resolves
+`COMPONENT_MISSING`, noted `UNSPANNED`, by its cover.)
 
-Every row of an outflow account in `OUTFLOW_METRICS` is read as minus its
-absolute value before anything is summed, so CP-1 writing a quarter positive
+Every row of an outflow account in `OUTFLOW_METRICS` (cash taxes are signed:
+a positive one is a refund) is read as minus its absolute value before
+anything is summed, so CP-1 writing a quarter positive
 and a year negative reads one way; a cell whose figure came from a row
 written positive is noted `SIGN_NORMALISED`, and so is every sum of it.
 
@@ -44,12 +62,17 @@ where its parts disagree beyond its rounding: often an add-back is disclosed
 only for a half or a year, so that row is the only figure), else the sum of
 its components, or else of its cover: from its start date, the longest other
 period starting then and ending within it that has a figure (a half or 9M
-before its quarters), a quarter without a row being nothing, repeated after
-the part taken ends; a part with the period's own dates gives only its own
-row. Every part without a row is `NOT_SOURCED`, and a part with a null
-figure `COMPONENT_MISSING`. Each period is resolved once per item, so the
-work is polynomial in the periods. Columns then add and subtract these
-resolved figures (the LTM is FY + YTD - PYTD of them).
+before its quarters), else the shortest such period without a row, which is
+nothing, repeated from the day after the part taken ends; a part with the
+period's own dates gives only its own row. A cover counts only where its
+parts tile the period to its end date: a day on which no part starts is a
+gap. Over a gap the period's own row stands un-noted, and a period without
+a row is `COMPONENT_MISSING`, noted `UNSPANNED` (`NOT_SOURCED` where no part
+has a row): a partial sum is never the period's figure. Every part without
+a row is `NOT_SOURCED`, and a part with a null figure `COMPONENT_MISSING`.
+Each period is resolved once per item, so the work is polynomial in the
+periods. Columns then add and subtract these resolved figures (the LTM is
+FY + YTD - PYTD of them).
 
 For any other flow, a component that is itself a YTD or FY with components
 is their sum, one level deep. A balance is the observation at the column's
@@ -71,6 +94,8 @@ Pure: Decimal only, no I/O, no rounding.
 
 from __future__ import annotations
 
+import calendar
+import operator
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date
@@ -81,13 +106,17 @@ from caos.calculators.credit_model._cells import (
     ABSENT,
     CONTEXT,
     DIFFERS,
+    OTHER_FOOTING,
     SIGN_NORMALISED,
     UNSPANNED,
+    anchor_period,
     beyond_rounding,
     calc,
     join_notes,
     no_negative_zero,
+    off_footing,
     refs,
+    treated_as_zero,
 )
 from caos.calculators.credit_model.frame import Cell, Column, Frame, SourceRef
 from caos.methodology.model_inputs import (
@@ -128,6 +157,8 @@ FLOW_METRICS = frozenset(
 )
 # The expense and outflow accounts, sign-agnostic in CP-1's register: each
 # row is read as minus its absolute value (`statements.OUTFLOW_METRICS`).
+# Cash taxes are not one: CP-1 writes inflows positive, so a positive cash
+# tax is a refund and keeps its sign.
 OUTFLOW_METRICS = frozenset(
     {
         "cogs",
@@ -135,7 +166,6 @@ OUTFLOW_METRICS = frozenset(
         "depreciation_amortization",
         "cash_interest_paid",
         "cash_lease_payments",
-        "cash_taxes_paid",
         "capex_and_intangible_investment",
         "operating_lease_cost",
         "lease_payments_in_financing",
@@ -160,13 +190,17 @@ BALANCE_METRICS = frozenset(
 _YTD_LABELS = {1: "Q1", 2: "H1", 3: "9M", 4: "12M"}
 _QUARTERS = {f"{prefix}{n}": n for n in range(1, 5) for prefix in ("", "Q")}
 _ADDITIVE = frozenset({"YTD", "FY"})
+# A period is n whole months when the day after it ends lies within this many
+# days of its first day plus n months, and a year earlier within this many
+# days of twelve months earlier: 52/53-week calendars shift by days. Periods
+# that follow one another still meet exactly (end + 1 day = next start).
+SLACK_DAYS = 7
 
 # "sparse" is a flow CP-1 writes only for the periods it occurred in (an
 # add-back, a lease or interest payment classed in financing): a period
 # without a row is its parts' sum, and a quarter without one is nothing.
 # "flow" needs a row for every period it sums.
 _Kind = Literal["flow", "sparse", "balance", "exact"]
-_RANK = {"FY": 0, "YTD": 1, "QUARTER": 2}  # which period at the anchor date
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +242,11 @@ class _Register:
     # Start date -> the dated flow periods starting then, register order:
     # what a sparse item's cover of a period is chosen from.
     starting: dict[str, tuple[PeriodRow, ...]]
+    # Every dated period as (first day, last day, id), shortest first, then
+    # in register order: the order `_resolve_within` works periods out in.
+    shortest: tuple[tuple[int, int, str], ...] = ()
+    # The periods on another footing (`off_footing`): in no other's figure.
+    off: frozenset[str | None] = frozenset()
 
 
 def _quarter_number(period: PeriodRow) -> int | None:
@@ -215,6 +254,19 @@ def _quarter_number(period: PeriodRow) -> int | None:
     if period.fiscal_quarter is None:
         return None
     return _QUARTERS.get(period.fiscal_quarter.upper())
+
+
+def _ytd_quarter(period: PeriodRow) -> int | None:
+    """A period's fiscal quarter (`_quarter_number`). CP-1 leaves it null
+    on every period that is not a QUARTER, so a YTD without one takes it
+    from its whole months since the fiscal year began (`_whole_months`), as
+    quarters: 3 months is 1, 6 is 2, 9 is 3 and 12 is 4. Else None."""
+    if period.fiscal_quarter is not None or period.period_type != "YTD":
+        return _quarter_number(period)
+    months = _whole_months(_dated(period))
+    if months is None or months[1] % 3:
+        return None
+    return _QUARTERS.get(str(months[1] // 3))
 
 
 def _year(period: PeriodRow) -> int | None:
@@ -238,13 +290,21 @@ def _of_type(regs: Cp1Registers, period_type: str) -> list[PeriodRow]:
 def _by_quarter(
     periods: Iterable[PeriodRow],
 ) -> dict[tuple[int | None, int], PeriodRow]:
-    """Each (fiscal year, quarter) to its period: one each, `cp1_registers`
-    refuses a second."""
+    """Each (fiscal year, quarter: `_ytd_quarter`) to its period. Neither of
+    two periods for one is (`cp1_registers` refuses a second only where
+    both are labelled)."""
     index: dict[tuple[int | None, int], PeriodRow] = {}
+    seen: set[tuple[int | None, int]] = set()
     for period in periods:
-        number = _quarter_number(period)
-        if number is not None:
-            index[_year(period), number] = period
+        number = _ytd_quarter(period)
+        if number is None:
+            continue
+        key = (_year(period), number)
+        if key in seen:
+            index.pop(key, None)
+        else:
+            index[key] = period
+        seen.add(key)
     return index
 
 
@@ -289,7 +349,9 @@ def _term_ids(terms: tuple[_Term, ...] | None) -> str:
 
 def _calculated_quarters(regs: Cp1Registers) -> list[_Spec]:
     """Q2 = H1 - Q1, Q3 = 9M - H1 and Q4 = FY - 9M, where the register has
-    no such quarter and both periods exist."""
+    no such quarter and both periods exist; unbuilt, noted `UNSPANNED`,
+    unless the two start together and the remainder is three whole months
+    (`_whole_months`)."""
     reported = _by_quarter(_of_type(regs, "QUARTER"))
     ytd = _by_quarter(_of_type(regs, "YTD"))
     fiscal = {_year(p): p for p in _of_type(regs, "FY")}
@@ -306,8 +368,27 @@ def _calculated_quarters(regs: Cp1Registers) -> list[_Spec]:
             terms = ((minuend.period_id, 1), (subtrahend.period_id, -1))
             spec = _quarter_spec(minuend, number, None, terms)
             days = _days(minuend, subtrahend)
-            specs.append(replace(spec, column=replace(spec.column, days=days)))
+            quarter = _remainder_months(_dated(minuend), _dated(subtrahend)) == 3
+            specs.append(
+                replace(
+                    spec,
+                    column=replace(spec.column, days=days),
+                    unbuilt=None if quarter else UNSPANNED,
+                )
+            )
     return specs
+
+
+def _remainder_months(
+    whole: tuple[int, int] | None, part: tuple[int, int] | None
+) -> int | None:
+    """The whole months (`_whole_months`) from the day after `part` ends to
+    the day `whole` ends, where the two spans (ordinals) start together;
+    else None."""
+    if whole is None or part is None or whole[0] != part[0]:
+        return None
+    months = _whole_months((part[1] + 1, whole[1]))
+    return None if months is None else months[1]
 
 
 def _quarters(regs: Cp1Registers) -> list[_Spec]:
@@ -320,7 +401,7 @@ def _quarters(regs: Cp1Registers) -> list[_Spec]:
 
 def _period_spec(period: PeriodRow, kind: Literal["PYTD", "YTD", "FY"]) -> _Spec:
     """A register period's column; derived when it names its components."""
-    number = _quarter_number(period)
+    number = _ytd_quarter(period)
     if kind == "FY":
         label = f"FY{_yy(period.fiscal_year)}"
     elif number is None:
@@ -345,20 +426,6 @@ def _period_spec(period: PeriodRow, kind: Literal["PYTD", "YTD", "FY"]) -> _Spec
     )
 
 
-def _anchor(regs: Cp1Registers) -> PeriodRow | None:
-    """The period at the latest end date of a quarter, YTD or FY: an FY
-    ending then, else a YTD, else a quarter, first in register order. An end
-    that is not a `YYYY-MM-DD` date is none (its text would sort anywhere)."""
-    candidates = [p for p in regs.periods if p.period_type in _RANK]
-    ends = [day.isoformat() for p in candidates if (day := iso_date(p.end_date))]
-    if not ends:
-        return None
-    return min(
-        (p for p in candidates if p.end_date == max(ends)),
-        key=lambda p: _RANK[p.period_type],
-    )
-
-
 def _quarter_index(specs: Iterable[_Spec]) -> dict[tuple[int, int], _Spec]:
     """Each (fiscal year, quarter) to its quarter column: one each, as
     `cp1_registers` refuses a second period for one fiscal quarter."""
@@ -368,11 +435,13 @@ def _quarter_index(specs: Iterable[_Spec]) -> dict[tuple[int, int], _Spec]:
 def _summed(
     kind: Literal["PYTD", "YTD"],
     quarters: dict[tuple[int, int], _Spec],
-    year: int,
-    number: int,
+    known: tuple[int, int],
+    periods: Mapping[str | None, PeriodRow],
 ) -> _Spec | None:
-    """The year's quarters 1 to `number` as one column; None unless every
-    one is a column."""
+    """The fiscal year's quarters 1 to the quarter `known` as one column;
+    None unless every one is a column; unbuilt, noted `UNSPANNED`, unless
+    they tile by their dates (`_tiles`)."""
+    year, number = known
     specs = []
     for n in range(1, number + 1):
         spec = quarters.get((year, n))
@@ -382,6 +451,7 @@ def _summed(
     last = specs[-1].column
     terms: tuple[_Term, ...] = tuple((spec, 1) for spec in specs)
     return _Spec(
+        unbuilt=None if _tiles(specs, periods) else UNSPANNED,
         column=Column(
             column_id=f"{kind}:{last.column_id.removeprefix('Q:')}",
             kind=kind,
@@ -397,27 +467,164 @@ def _summed(
     )
 
 
+def _plus_months(day: date, months: int) -> date | None:
+    """`day` moved by `months` calendar months, on the same day of the month
+    or that month's last; None beyond the calendar."""
+    index = day.year * 12 + day.month - 1 + months
+    year, month = divmod(index, 12)
+    if not 1 <= year <= date.max.year:
+        return None
+    return date(year, month + 1, min(day.day, calendar.monthrange(year, month + 1)[1]))
+
+
+def _whole_months(dated: tuple[int, int] | None) -> tuple[int, int] | None:
+    """A span (ordinals) as its first day and its number of whole months:
+    the n (at least 1) where the day after its last lies within `SLACK_DAYS`
+    days of its first day plus n months; None where no n does, or for no
+    span. One n at most: months differ by more than twice the slack."""
+    if dated is None or not 1 <= dated[0] <= dated[1] < date.max.toordinal():
+        return None
+    first, following = date.fromordinal(dated[0]), dated[1] + 1
+    after = date.fromordinal(following)
+    guess = after.year * 12 + after.month - first.year * 12 - first.month
+    for months in (guess - 1, guess, guess + 1):
+        moved = _plus_months(first, months) if months >= 1 else None
+        if moved is not None and abs(moved.toordinal() - following) <= SLACK_DAYS:
+            return dated[0], months
+    return None
+
+
+def _year_before(prior: tuple[int, int] | None, months: tuple[int, int] | None) -> bool:
+    """Whether `prior` (first day, whole months: `_whole_months`) is as many
+    months as `months`, starting within `SLACK_DAYS` days of twelve months
+    before it."""
+    if prior is None or months is None or prior[1] != months[1]:
+        return False
+    shifted = _plus_months(date.fromordinal(months[0]), -12)
+    return shifted is not None and abs(shifted.toordinal() - prior[0]) <= SLACK_DAYS
+
+
+def _spec_dated(
+    spec: _Spec, periods: Mapping[str | None, PeriodRow]
+) -> tuple[int, int] | None:
+    """A column's first day (`_start`) and end date as ordinals; None where
+    either is unknown."""
+    first, end = _start(spec, periods), iso_date(spec.column.end_date)
+    if first is None or end is None:
+        return None
+    return first, end.toordinal()
+
+
+def _spec_months(
+    spec: _Spec, periods: Mapping[str | None, PeriodRow]
+) -> tuple[int, int] | None:
+    """A column's first day and whole months (`_whole_months`); None where
+    they are not whole months."""
+    return _whole_months(_spec_dated(spec, periods))
+
+
+def _tiles(specs: Iterable[_Spec], periods: Mapping[str | None, PeriodRow]) -> bool:
+    """Whether the quarter columns, in time order, each span three whole
+    months (`_whole_months`), each starting the day after the one before
+    ends."""
+    following = None
+    for spec in specs:
+        dated = _spec_dated(spec, periods)
+        months = _whole_months(dated)
+        if dated is None or months is None or months[1] != 3:
+            return False
+        if following not in (None, dated[0]):
+            return False
+        following = dated[1] + 1
+    return True
+
+
+def _dated_prior(regs: Cp1Registers, ytd: _Spec | None) -> tuple[_Spec | None, bool]:
+    """The PYTD of `ytd` by dates: the one other YTD period of the same whole
+    months starting a year before it (`_year_before`). Else None, and whether the dates
+    leave it ambiguous: a YTD period ends before `ytd` starts, or has no
+    dates, while none or several are that one."""
+    if ytd is None:
+        return None, False
+    periods: dict[str | None, PeriodRow] = {p.period_id: p for p in regs.periods}
+    first = _start(ytd, periods)
+    months = _spec_months(ytd, periods)
+    before = [
+        p
+        for p in _of_type(regs, "YTD")
+        if p.period_id != ytd.own
+        and ((dated := _dated(p)) is None or first is None or dated[1] < first)
+    ]
+    found = [p for p in before if _year_before(_whole_months(_dated(p)), months)]
+    if len(found) == 1 and None not in map(_dated, before):
+        return _period_spec(found[0], "PYTD"), False
+    return None, bool(before)
+
+
 def _to_date(
     regs: Cp1Registers,
     quarters: dict[tuple[int, int], _Spec],
     anchor: PeriodRow | None,
-) -> tuple[_Spec | None, _Spec | None]:
-    """(PYTD, YTD) to the anchor; neither at a fiscal-year end."""
+) -> tuple[_Spec | None, _Spec | None, bool]:
+    """(PYTD, YTD) to the anchor, neither at a fiscal-year end; and whether
+    no PYTD was found because the dates leave it ambiguous."""
     if anchor is None or anchor.period_type == "FY":
-        return None, None
-    ytds = _of_type(regs, "YTD")
-    row = next((p for p in ytds if p.end_date == anchor.end_date), None)
-    year, number = _year(anchor), _quarter_number(row or anchor)
-    if year is None or number is None:
-        return None, _period_spec(row, "YTD") if row else None
-    ytd = _period_spec(row, "YTD") if row else _summed("YTD", quarters, year, number)
-    prior = next(
-        (p for p in ytds if _year(p) == year - 1 and _quarter_number(p) == number),
+        return None, None, False
+    row = next(
+        (p for p in _of_type(regs, "YTD") if p.end_date == anchor.end_date), None
+    )
+    year, number = _year(anchor), _ytd_quarter(row or anchor)
+    known = None if year is None or number is None else (year, number)
+    if row is not None:
+        ytd: _Spec | None = _period_spec(row, "YTD")
+    else:
+        periods: dict[str | None, PeriodRow] = {p.period_id: p for p in regs.periods}
+        ytd = None if known is None else _summed("YTD", quarters, known, periods)
+    pytd, ambiguous = _prior_to_date(regs, quarters, ytd, known)
+    return pytd, ytd, ambiguous
+
+
+def _labelled_prior(regs: Cp1Registers, known: tuple[int, int] | None) -> _Spec | None:
+    """The PYTD column of the prior fiscal year's YTD period of the quarter
+    `known` (the anchor's fiscal year and quarter); None without one."""
+    if known is None:
+        return None
+    year, number = known
+    labelled = next(
+        (
+            p
+            for p in _of_type(regs, "YTD")
+            if _year(p) == year - 1 and _quarter_number(p) == number
+        ),
         None,
     )
-    if prior is not None:
-        return _period_spec(prior, "PYTD"), ytd
-    return _summed("PYTD", quarters, year - 1, number), ytd
+    return None if labelled is None else _period_spec(labelled, "PYTD")
+
+
+def _prior_to_date(
+    regs: Cp1Registers,
+    quarters: dict[tuple[int, int], _Spec],
+    ytd: _Spec | None,
+    known: tuple[int, int] | None,
+) -> tuple[_Spec | None, bool]:
+    """The PYTD of `ytd`, the anchor's fiscal year and quarter `known`: the
+    prior year's YTD period of that quarter; else the one by its dates
+    (`_dated_prior`); else the prior year's quarters to that one. A labelled
+    period or quarters to date count only with `ytd`'s whole months, a year
+    earlier (`_year_before`; without `ytd` there is nothing to match). And whether
+    none was found because the dates leave it ambiguous or a candidate's
+    months differ."""
+    periods: dict[str | None, PeriodRow] = {p.period_id: p for p in regs.periods}
+    months = None if ytd is None else _spec_months(ytd, periods)
+    dated, ambiguous = _dated_prior(regs, ytd)
+    candidates = [_labelled_prior(regs, known), dated]
+    if known is not None:
+        candidates.append(_summed("PYTD", quarters, (known[0] - 1, known[1]), periods))
+    found = [c for c in candidates if c is not None]
+    for spec in found:
+        if ytd is None or _year_before(_spec_months(spec, periods), months):
+            return spec, False
+    return None, ambiguous or bool(found)
 
 
 def _ltm_label(period: PeriodRow, number: int | None) -> str:
@@ -524,7 +731,7 @@ def _host_ltm(
         number: int | None = 4
     else:
         terms, unbuilt = _rolled(regs, anchor, fiscal, to_date)
-        number = _quarter_number(anchor)
+        number = _ytd_quarter(anchor)
     stated = next(
         (p for p in _of_type(regs, "LTM") if p.end_date == anchor.end_date), None
     )
@@ -570,12 +777,13 @@ def _unadopted_ltm(period: PeriodRow) -> _Spec:
 
 def _plan(regs: Cp1Registers) -> tuple[_Spec, ...]:
     quarters = _quarters(regs)
-    anchor = _anchor(regs)
-    pytd, ytd = _to_date(regs, _quarter_index(quarters), anchor)
+    anchor = anchor_period(regs)
+    pytd, ytd, ambiguous = _to_date(regs, _quarter_index(quarters), anchor)
     fiscal = [_period_spec(p, "FY") for p in _by_end(_of_type(regs, "FY"))]
     specs = [*quarters, *(s for s in (pytd, ytd) if s is not None), *fiscal]
     if anchor is not None:
-        specs.append(_host_ltm(regs, anchor, fiscal, (pytd, ytd)))
+        ltm = _host_ltm(regs, anchor, fiscal, (pytd, ytd))
+        specs.append(replace(ltm, unbuilt=UNSPANNED) if ambiguous else ltm)
     end = anchor.end_date if anchor is not None else None
     specs.extend(
         _unadopted_ltm(p)
@@ -667,11 +875,18 @@ def _register(regs: Cp1Registers) -> _Register:
                 *ending.get(period.end_date, ()),
                 period.period_id,
             )
-    return _Register(periods, ending, starting)
+    spans = [
+        (*span, p.period_id) for p in regs.periods if (span := _dated(p)) is not None
+    ]
+    shortest = tuple(sorted(spans, key=lambda found: found[1] - found[0]))
+    return _Register(periods, ending, starting, shortest, off_footing(regs))
 
 
 _MISSING = Cell(None, "COMPONENT_MISSING")  # a part not stated, or no period
 _FROM_PARTS = "differs from components"
+# Twelve months whose parts (FY, YTD and PYTD; or four quarters) are stated
+# on some but not all: a sum of them would span more or fewer months.
+PARTLY_STATED = "twelve months not all stated"
 # The periods a sparse item's cover is chosen from.
 _COVERING = frozenset({"QUARTER", "YTD", "FY", "LTM"})
 _UNSTATED = Cell(None, "NOT_STATED")  # a row without a figure
@@ -701,6 +916,19 @@ def _sum(series: _Series, parts: Iterable[tuple[Cell, int]]) -> Cell:
     return calc((cell, sign) for cell, sign in cells if cell.value is not None)
 
 
+def _named_sum(series: _Series, parts: Iterable[tuple[str, Cell, int]]) -> Cell:
+    """`_sum` of the named parts; with a figure, noted with each part it took
+    as nothing (`treated_as_zero`: in a sparse series, a part without a
+    row)."""
+    named = list(parts)
+    total = _sum(series, ((cell, sign) for _, cell, sign in named))
+    nothing = [name for name, cell, _ in named if cell.reason == "NOT_SOURCED"]
+    if total.value is None or not nothing:
+        return total
+    notes = (total.note, *map(treated_as_zero, nothing))
+    return replace(total, note=join_notes(notes))
+
+
 def _spans(register: _Register, period: PeriodRow) -> bool:
     """Whether the period's components are distinct periods, each starting
     the day after the one before ends, from its start date to its end
@@ -719,6 +947,7 @@ def _spans(register: _Register, period: PeriodRow) -> bool:
 
 
 _UNSPANNED_PARTS = Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
+_OFF = Cell(None, "COMPONENT_MISSING", note=OTHER_FOOTING)
 
 
 def _component(series: _Series, register: _Register, period_id: str | None) -> Cell:
@@ -728,6 +957,8 @@ def _component(series: _Series, register: _Register, period_id: str | None) -> C
     period = register.periods.get(period_id)
     if period is None:
         return _MISSING
+    if period_id in register.off:
+        return _OFF
     if series.kind == "sparse":
         return _resolved(series, register, period.period_id)
     parts: tuple[str, ...] = (period.period_id,)
@@ -735,13 +966,17 @@ def _component(series: _Series, register: _Register, period_id: str | None) -> C
         if not _spans(register, period):
             return _UNSPANNED_PARTS
         parts = period.component_period_ids
+        if not register.off.isdisjoint(parts):
+            return _OFF
     return _sum(series, ((_reported(series, part), 1) for part in parts))
 
 
 def _resolved(series: _Series, register: _Register, period_id: str | None) -> Cell:
-    """A sparse item's cell for a period: its own row, noted where its parts
-    differ beyond its rounding; else its parts' (`NOT_SOURCED` when none has
-    a row). Worked out once per period."""
+    """A sparse item's cell for a period: its own row, noted where parts that
+    tile it differ beyond its rounding; else its parts' where they tile it
+    (`NOT_SOURCED` when none has a row), and `COMPONENT_MISSING`, noted
+    `UNSPANNED`, where they leave a gap but one has a figure. Worked out once
+    per period."""
     known = series.resolved.get(period_id)
     if known is not None:
         return known
@@ -750,51 +985,98 @@ def _resolved(series: _Series, register: _Register, period_id: str | None) -> Ce
     if period is None or period_id in series.started:
         return own
     series.started.add(period_id)
-    parts = _parts(series, register, period)
-    if own.value is None or parts.value is None:
-        cell = parts if own.reason == "NOT_SOURCED" else own
+    _resolve_within(series, register, period)
+    parts, tiled = _parts(series, register, period)
+    if own.value is not None:
+        differs = (
+            tiled
+            and parts.value is not None
+            and beyond_rounding(own.value, parts.value)
+        )
+        cell = replace(
+            own, note=join_notes((own.note, _FROM_PARTS if differs else None))
+        )
+    elif own.reason != "NOT_SOURCED":
+        cell = own
+    elif tiled or parts.value is None:
+        cell = parts
     else:
-        differs = beyond_rounding(own.value, parts.value)
-        note = join_notes((own.note, _FROM_PARTS if differs else None))
-        cell = replace(own, note=note)
+        cell = _UNSPANNED_PARTS  # a partial sum is never the period's figure
     series.resolved[period_id] = cell
     return cell
 
 
-def _parts(series: _Series, register: _Register, period: PeriodRow) -> Cell:
-    """A sparse item's figure for a period from its parts: its components
-    where it names them (`COMPONENT_MISSING`, noted, where they do not span
-    it), else its cover."""
+def _resolve_within(series: _Series, register: _Register, period: PeriodRow) -> None:
+    """Works out every period within `period`'s dates and shorter, shortest
+    first, before `period` itself: every cover part and spanning component
+    is one, so each is then already resolved and the walk never nests deeper
+    than a chain of equal spans (`MAX_NESTING`), however many periods cover
+    one another."""
+    whole = _dated(period)
+    if whole is None:
+        return
+    for first, last, inner in register.shortest:
+        if last - first >= whole[1] - whole[0]:
+            return
+        if whole[0] <= first and last <= whole[1] and inner not in series.resolved:
+            _resolved(series, register, inner)
+
+
+def _parts(
+    series: _Series, register: _Register, period: PeriodRow
+) -> tuple[Cell, bool]:
+    """A sparse item's figure for a period from its parts, and whether they
+    tile it: its components where it names them (`COMPONENT_MISSING`, noted,
+    where they do not span it), else its cover."""
     if period.component_period_ids:
         if not _spans(register, period):
-            return _UNSPANNED_PARTS
+            return _UNSPANNED_PARTS, False
+        if not register.off.isdisjoint(period.component_period_ids):
+            return _OFF, False
         cells = [
-            _resolved(series, register, part) for part in period.component_period_ids
+            (part, _resolved(series, register, part))
+            for part in period.component_period_ids
         ]
+        tiled = True
     else:
-        cells = _cover(series, register, period)
-    return _sum(series, ((cell, 1) for cell in cells))
+        cells, tiled = _cover(series, register, period)
+    return _named_sum(series, ((name, cell, 1) for name, cell in cells)), tiled
 
 
-def _cover(series: _Series, register: _Register, period: PeriodRow) -> list[Cell]:
-    """The period from its start date, greedily: at each start date not yet
-    covered, the longest other period starting then and ending within it
-    that has a figure (a quarter without a row is nothing, so is skipped)."""
-    first = _first_day(period)
-    if first is None or period.end_date is None:
-        return []
-    start = first.isoformat()
-    cells: list[Cell] = []
-    covered = ""  # the end date of the last part taken; before any date
-    for day in sorted(register.starting):
-        if day < start or day <= covered:
+def _cover(
+    series: _Series, register: _Register, period: PeriodRow
+) -> tuple[list[tuple[str, Cell]], bool]:
+    """The period's parts (named, those taken as nothing `NOT_SOURCED`) from
+    its start date, one `_step` at a time from the day after the last part
+    ends, and whether they tile it to its end date:
+    a day on which no part starts is a gap, and the cover goes on from the
+    next day a period starts (so a part with a figure past a gap is still
+    seen)."""
+    whole = _dated(period)
+    if whole is None:
+        return [], False
+    cells: list[tuple[str, Cell]] = []
+    tiled = True
+    day = whole[0]
+    while day <= whole[1]:
+        step = _step(series, register, (period, (day, whole[1])))
+        if step is None:
+            tiled = False
+            day = _next_start(register, day, whole[1] + 1)
             continue
-        chosen = _longest(series, register, (period, day))
-        if chosen is not None:
-            part, cell = chosen
-            cells.append(cell)
-            covered = str(part.end_date)
-    return cells
+        last, name, cell = step
+        cells.append((name, cell))
+        day = last + 1
+    return cells, tiled
+
+
+def _next_start(register: _Register, day: int, beyond: int) -> int:
+    """The first day after `day` (ordinals) on which a period starts; else
+    `beyond`."""
+    after = date.fromordinal(day).isoformat()
+    later = (start for start in sorted(register.starting) if start > after)
+    following = next(later, None)
+    return beyond if following is None else date.fromisoformat(following).toordinal()
 
 
 def _part(
@@ -802,41 +1084,76 @@ def _part(
 ) -> Cell:
     """A cover part's cell: resolved, except a part with the period's own
     dates, which gives its own row only (so neither resolves the other)."""
-    twin = (_first_day(part), part.end_date) == (_first_day(period), period.end_date)
-    if twin:
+    if _dated(part) == _dated(period):
         return _reported(series, part.period_id)
     return _resolved(series, register, part.period_id)
 
 
-def _longest(
-    series: _Series, register: _Register, at: tuple[PeriodRow, str]
-) -> tuple[PeriodRow, Cell] | None:
-    """The longest other period starting on `at`'s date and ending within
-    `at`'s period that has a figure: not one without a row, nor one whose
-    components do not span it."""
-    period, day = at
+def _step(
+    series: _Series, register: _Register, at: tuple[PeriodRow, tuple[int, int]]
+) -> tuple[int, str, Cell] | None:
+    """The cover part starting on `at`'s day (ordinal), as its last day, its
+    id and its cell: the longest other period starting then and ending by
+    `at`'s last day that has a figure; else the shortest without a row, which
+    is nothing (`NOT_SOURCED`); else one whose components do not span it,
+    which leaves its days without a figure; None where no period starts then
+    (a gap). A part with the period's own dates and no row is never
+    nothing."""
+    period, (day, end) = at
     fitting = sorted(
         (
-            p
-            for p in register.starting[day]
-            if p.period_id != period.period_id
-            and str(p.end_date) <= str(period.end_date)
+            (span[1], part)
+            for part in register.starting.get(date.fromordinal(day).isoformat(), ())
+            if part.period_id != period.period_id
+            and part.period_id not in register.off
+            and (span := _dated(part)) is not None
+            and span[1] <= end
         ),
-        key=lambda p: str(p.end_date),
+        key=lambda found: found[0],
         reverse=True,
     )
-    for part in fitting:
+    nothing: tuple[int, str, Cell] | None = None
+    unspanned: tuple[int, str, Cell] | None = None
+    for last, part in fitting:
         cell = _part(series, register, period, part)
-        if cell.reason != "NOT_SOURCED" and cell != _UNSPANNED_PARTS:
-            return part, cell
-    return None
+        if cell == _UNSPANNED_PARTS:
+            unspanned = unspanned or (last, part.period_id, cell)
+        elif cell.reason != "NOT_SOURCED":
+            return last, part.period_id, cell
+        elif _dated(part) != _dated(period):
+            nothing = (last, part.period_id, ABSENT)
+    return nothing or unspanned
 
 
 def _term(series: _Series, register: _Register, ref: str | _Spec | None) -> Cell:
-    """A term's cell: a column's, or a register period's."""
+    """A term's cell: a column's, or a register period's; `COMPONENT_MISSING`,
+    noted `OTHER_FOOTING`, for a column whose own period is on another
+    footing."""
     if isinstance(ref, _Spec):
+        if ref.own is not None and ref.own in register.off:
+            return _OFF
         return _flow(series, register, ref)
     return _component(series, register, ref)
+
+
+def _term_name(ref: str | _Spec | None) -> str:
+    """A term's name in a note: its period's id, else its column's."""
+    if isinstance(ref, _Spec):
+        return ref.own or ref.column.column_id
+    return str(ref)
+
+
+def _partly_stated(spec: _Spec, cells: list[tuple[Cell, int]]) -> bool:
+    """Whether an LTM built as FY + YTD - PYTD has some of the three stated
+    and another without a row (`NOT_SOURCED`), except both interims without
+    one (the LTM is then the FY's). A part missing otherwise is `_sum`'s."""
+    if spec.column.kind != "LTM" or len(cells) != 3:
+        return False
+    found = [cell.value is not None for cell, _ in cells]
+    absent = [cell.reason == "NOT_SOURCED" for cell, _ in cells]
+    if not any(found) or not all(map(operator.or_, found, absent)):
+        return False
+    return any(absent) and not (absent[1] and absent[2])
 
 
 def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
@@ -847,8 +1164,14 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
     stated = _reported(series, spec.stated).value
     if spec.unbuilt is not None:
         return Cell(None, "COMPONENT_MISSING", stated=stated, note=spec.unbuilt)
-    terms = ((_term(series, register, ref), sign) for ref, sign in spec.terms)
-    total = _sum(series, terms)
+    terms = [(_term(series, register, ref), sign) for ref, sign in spec.terms]
+    if series.kind == "sparse" and _partly_stated(spec, terms):
+        return Cell(None, "COMPONENT_MISSING", stated=stated, note=PARTLY_STATED)
+    names = (_term_name(ref) for ref, _ in spec.terms)
+    total = _named_sum(
+        series,
+        ((name, cell, sign) for name, (cell, sign) in zip(names, terms, strict=True)),
+    )
     if total.value is None:
         return Cell(None, total.reason, stated=stated, note=total.note)
     differs = stated is not None and beyond_rounding(stated, total.value)
@@ -858,9 +1181,13 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
 
 def _balance(series: _Series, register: _Register, spec: _Spec) -> Cell:
     """The first observation at the column's end date: its own period's, then
-    any period's ending that day, in register order."""
+    any period's ending that day, in register order; none on another footing,
+    and only its own where it is."""
     ending = register.ending.get(spec.column.end_date, ())
-    cells = [_reported(series, period_id) for period_id in (spec.own, *ending)]
+    if spec.own in register.off:
+        ending = ()
+    on = (period_id for period_id in ending if period_id not in register.off)
+    cells = [_reported(series, period_id) for period_id in (spec.own, *on)]
     found = next((cell for cell in cells if cell.value is not None), None)
     if found is not None:
         return found
@@ -904,20 +1231,65 @@ def _earlier(spec: _Spec, quarters: dict[tuple[int, int], _Spec]) -> list[_Spec 
     return earlier
 
 
-def _ltm_cell(
-    series: _Series, register: _Register, spec: _Spec, earlier: list[_Spec | None]
-) -> Cell:
-    """A flow over the quarter and the three before it is their sum; a
-    balance is the quarter's; a rate has no observation for twelve months."""
+@dataclass(frozen=True, slots=True)
+class _Window:
+    """The twelve months ending a quarter column: the column, the three
+    quarters before it (None where one is not a column), whether the four
+    tile twelve whole months, and the FY period of exactly those months."""
+
+    spec: _Spec
+    earlier: list[_Spec | None]
+    tiled: bool
+    year: str | None
+
+
+def _fiscal_year_of(spec: _Spec, register: _Register) -> str | None:
+    """The FY period of twelve whole months (`_whole_months`) ending the day
+    the quarter column ends (a fiscal Q4's); None without one."""
+    end = iso_date(spec.column.end_date)
+    return next(
+        (
+            p.period_id
+            for p in register.periods.values()
+            if p.period_type == "FY"
+            and (dated := _dated(p)) is not None
+            and end is not None
+            and dated[1] == end.toordinal()
+            and (months := _whole_months(dated)) is not None
+            and months[1] == 12
+        ),
+        None,
+    )
+
+
+def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
+    """A flow over the quarter and the three before it is their sum,
+    `UNSPANNED` where they do not tile; a balance is the quarter's; a rate
+    has no observation for twelve months. A sparse item over a fiscal year's
+    twelve months is that FY's, as its column reads it; over others it is
+    `COMPONENT_MISSING`, noted `PARTLY_STATED`, where some quarters have a
+    figure and others no row."""
     if series.kind == "balance":
-        return _balance(series, register, spec)
+        return _balance(series, register, window.spec)
     if series.kind == "exact":
         return Cell(None, "NOT_SOURCED")
-    quarters = (
-        (_MISSING if quarter is None else _flow(series, register, quarter), 1)
-        for quarter in (spec, *earlier)
-    )
+    if series.kind == "sparse" and window.year is not None:
+        return _component(series, register, window.year)
+    if not window.tiled:
+        return _UNSPANNED_PARTS
+    quarters = [
+        (_MISSING if quarter is None else _term(series, register, quarter), 1)
+        for quarter in (window.spec, *window.earlier)
+    ]
+    if series.kind == "sparse" and _some_unstated(quarters):
+        return Cell(None, "COMPONENT_MISSING", note=PARTLY_STATED)
     return _sum(series, quarters)
+
+
+def _some_unstated(cells: list[tuple[Cell, int]]) -> bool:
+    """Whether some cells have a figure and others no row (`NOT_SOURCED`)."""
+    found = any(cell.value is not None for cell, _ in cells)
+    return found and any(cell.reason == "NOT_SOURCED" for cell, _ in cells)
 
 
 def ltm_frames(
@@ -926,17 +1298,26 @@ def ltm_frames(
     """For each quarter column in `columns`, the cells of the twelve months
     ending with it: flows summed over it and the three quarters before it,
     `COMPONENT_MISSING` without all four (an add-back's absent quarter adds
-    nothing)."""
+    nothing only where none of the four has a figure: `_ltm_cell`), and noted
+    `UNSPANNED` where the four do not tile twelve whole months by their dates
+    (`_tiles`)."""
     with localcontext(CONTEXT):
         plan = {spec.column.column_id: spec for spec in _plan(regs)}
         quarters = _quarter_index(plan.values())
         series = _series(regs)
         register = _register(regs)
         frames: dict[str, dict[str, Cell]] = {}
+        periods = register.periods
         for spec in (plan[c.column_id] for c in columns if c.kind == "QUARTER"):
             earlier = _earlier(spec, quarters)
+            found = [q for q in (*reversed(earlier), spec) if q is not None]
+            window = _Window(
+                spec,
+                earlier,
+                tiled=len(found) < 4 or _tiles(found, periods),
+                year=_fiscal_year_of(spec, register),
+            )
             frames[spec.column.column_id] = {
-                key: _ltm_cell(one, register, spec, earlier)
-                for key, one in series.items()
+                key: _ltm_cell(one, register, window) for key, one in series.items()
             }
         return frames
