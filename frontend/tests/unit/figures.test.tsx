@@ -1007,6 +1007,27 @@ test("grouped bars draw a bar per case, each named and pressed for its class", (
   expect(picked).toHaveTextContent("T3D.8");
 });
 
+test("pressing a dumbbell's end names which end it is, its metric and stated source", () => {
+  const columns = ["Metric", "Expected", "Realized", "Variance (direction + magnitude)"];
+  const outcomes: Register = {
+    register_id: "T7.4",
+    columns,
+    declared: columns,
+    rows: [[served("Leverage"), served("4.0x", "4.0"), served("4.6x", "4.6"), served("Up 0.6x")]],
+  };
+  const container = shown({ ...handoffOf("CP-4"), module_id: "CP-8", registers: [outcomes] });
+  const figure = container.querySelector("[data-figure='expected-realised-x']") as HTMLElement;
+  expect(figure.querySelector("[data-chart='dumbbell']")).not.toBeNull();
+  fireEvent.click(within(figure).getByRole("button", { name: /^Leverage: Realized 4\.6 x/ }));
+  const picked = container.querySelector("[data-picked]")!;
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("4.6 x");
+  expect(picked).toHaveTextContent("Realized · Leverage");
+  expect(picked).toHaveTextContent("Variance (direction + magnitude): Up 0.6x");
+  expect(container.querySelector("[data-figures-key]")).toHaveTextContent(
+    "Hollow dot: model-authored, not host-verified",
+  );
+});
+
 test("the figures' key keys a rule and a dot only where one is drawn", () => {
   const key = (container: HTMLElement) =>
     container.querySelector("[data-figures-key]")!.textContent ?? "";

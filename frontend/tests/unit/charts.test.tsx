@@ -10,6 +10,7 @@ import {
   BarChart,
   BulletChart,
   DivergingBarChart,
+  DumbbellChart,
   LineChart,
   ProvenanceKeyed,
   RangeStripChart,
@@ -18,6 +19,7 @@ import {
   WaterfallChart,
   type BulletRow,
   type ChartSeries,
+  type DumbbellRow,
   type RangeRow,
 } from "@/charts";
 import { ChartFrame } from "@/charts/ChartFrame";
@@ -1294,6 +1296,121 @@ describe("a range strip", () => {
   });
 });
 
+// Made-up expected and realised values: one realised value host-verified,
+// one unavailable.
+const OUTCOMES: DumbbellRow[] = [
+  {
+    key: "growth",
+    label: "Revenue growth",
+    from: { value: "4.0" },
+    to: { value: "2.5", origin: "host" },
+    origin: "model",
+  },
+  {
+    key: "margin",
+    label: "EBITDA margin",
+    from: { value: "18.0" },
+    to: { value: null, reason: "NOT_REPORTED" },
+    origin: "model",
+  },
+];
+
+function dumbbells(extra: Partial<Parameters<typeof DumbbellChart>[0]> = {}) {
+  return render(
+    <DumbbellChart
+      title="Expected against realised"
+      summary="Each metric's expected value against its realised one."
+      unit="%"
+      rows={OUTCOMES}
+      fromLabel="Expected"
+      toLabel="Realized"
+      {...extra}
+    />,
+  );
+}
+
+describe("a dumbbell", () => {
+  test("names each end with its metric, which end, exact value and unit, and origin", () => {
+    const { container } = dumbbells();
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Revenue growth: Expected 4.0 % (model-authored)",
+      "Revenue growth: Realized 2.5 % (host-verified)",
+      "EBITDA margin: Expected 18.0 % (model-authored)",
+      "EBITDA margin: Realized n/a (NOT_REPORTED) (model-authored)",
+    ]);
+    expect(container.querySelector("figure")).toHaveAttribute("data-chart", "dumbbell");
+  });
+
+  test("dots each end, the first neutral and the second series-1, joined by a thin line", () => {
+    const { container } = dumbbells();
+    const from = container.querySelector('circle[data-mark="growth:from"]');
+    const to = container.querySelector('circle[data-mark="growth:to"]');
+    expect(from).toHaveClass("chart-point", "chart-tone-neutral", "chart-hollow");
+    expect(to).toHaveClass("chart-point", "chart-tone-series-1");
+    expect(to).not.toHaveClass("chart-hollow");
+    expect(rects(container)).toHaveLength(0);
+    const span = container.querySelector('line[data-span="0"]');
+    expect(span).toHaveClass("chart-span");
+    expect(numberOf(span ?? undefined, "x1")).toBeCloseTo(numberOf(from ?? undefined, "cx"));
+    expect(numberOf(span ?? undefined, "x2")).toBeCloseTo(numberOf(to ?? undefined, "cx"));
+    expect(numberOf(span ?? undefined, "y1")).toBeCloseTo(numberOf(from ?? undefined, "cy"));
+    expect(span!.compareDocumentPosition(from!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // One end unavailable: a gap with its reason, and no line.
+    expect(container.querySelector('line[data-span="1"]')).toBeNull();
+    expect(container.querySelector('circle[data-mark="margin:to"]')).toBeNull();
+    const gap = container.querySelector<SVGGElement>('[data-gap][data-mark="margin:to"]');
+    expect(within(gap as unknown as HTMLElement).getByText("n/a")).toBeInTheDocument();
+    expect(container.querySelector('circle[data-mark="margin:from"]')).not.toBeNull();
+  });
+
+  test("has a table twin of both ends as served, and keys its two dots", () => {
+    dumbbells({ categoryLabel: "Outcome" });
+    const legend = screen.getByRole("list", { name: "Legend" });
+    for (const [label, tone] of [
+      ["Expected", "chart-tone-neutral"],
+      ["Realized", "chart-tone-series-1"],
+    ] as const) {
+      const swatch = within(legend).getByText(label).querySelector("svg.chart-swatch");
+      expect(swatch).toHaveClass(tone);
+      expect(swatch?.querySelector("circle.chart-point")).not.toBeNull();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const table = screen.getByRole("table", { name: "Expected against realised" });
+    expect(
+      within(table)
+        .getAllByRole("row")
+        .map((row) => [...(row as HTMLTableRowElement).cells].map((cell) => cell.textContent)),
+    ).toEqual([
+      ["Outcome", "Expected", "Realized", "Origin"],
+      ["Revenue growth", "4.0", "2.5 (host-verified)", "model-authored"],
+      ["EBITDA margin", "18.0", "n/a: NOT_REPORTED", "model-authored"],
+    ]);
+  });
+
+  test("takes each row's two ends in turn; every target 24px", () => {
+    const onSelect = vi.fn();
+    const { container } = dumbbells({ onSelect });
+    expect(marks(container).map((button) => button.dataset.mark)).toEqual([
+      "growth:from",
+      "growth:to",
+      "margin:from",
+      "margin:to",
+    ]);
+    act(() => marks(container)[0]!.focus());
+    fireEvent.keyDown(marks(container)[0]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(marks(container)[1]);
+    fireEvent.click(marks(container)[1]!);
+    expect(onSelect).toHaveBeenCalledWith(
+      { series: "to", category: "Revenue growth", index: 0, value: "2.5", origin: "host" },
+      marks(container)[1],
+    );
+    for (const button of marks(container)) {
+      expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(24);
+      expect(parseFloat(button.style.height)).toBeGreaterThanOrEqual(24);
+    }
+  });
+});
+
 describe("a value read for a name or a table cell", () => {
   test("said prints it with its unit or n/a and why; cellOf names an origin only where it differs", () => {
     expect(said(readDatum({ value: "1234.5" }), "x")).toBe("1,234.5 x");
@@ -1379,11 +1496,19 @@ describe("every chart form, audited", () => {
         />
         <BulletChart title="Headroom" summary="Against thresholds." unit="x" rows={TESTS} />
         <RangeStripChart title="Ranges" summary="Against peers." unit="x" rows={PEERS} />
+        <DumbbellChart
+          title="Outcomes"
+          summary="Expected against realised."
+          unit="%"
+          rows={OUTCOMES}
+          fromLabel="Expected"
+          toLabel="Realized"
+        />
       </main>,
     );
     expect(await audit(container)).toEqual([]);
     for (const toggle of screen.getAllByRole("button", { name: "Table" })) fireEvent.click(toggle);
-    expect(screen.getAllByRole("table")).toHaveLength(7);
+    expect(screen.getAllByRole("table")).toHaveLength(8);
     expect(await audit(container)).toEqual([]);
   });
 });

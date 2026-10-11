@@ -148,6 +148,16 @@ export interface RangeRow {
   origin: Origin;
 }
 
+/** One metric of a dumbbell: two of its values, each a dot (an expected
+    value and the one realised), joined where both are available. */
+export interface DumbbellRow {
+  key: string;
+  label: string;
+  from: Datum;
+  to: Datum;
+  origin: Origin;
+}
+
 // What a chart hands its frame: the drawing, and every mark a reader can reach.
 
 export interface Box {
