@@ -35,12 +35,17 @@ otherwise its flows are `COMPONENT_MISSING`, noted `UNSPANNED`. The twelve
 months ending a quarter are its four quarters only where they tile and,
 as one span, are twelve whole months: each part's slack never adds up.
 
-A sparse item's interim without a row counts as nothing in that LTM only
-when the other interim has none either (the LTM is then the FY's);
-with some of its FY, YTD and PYTD stated and another without a row, its LTM
-is `COMPONENT_MISSING`, noted `PARTLY_STATED`, never a sum over 18 or 6
-months. (An FY without a row beside a stated PYTD inside it already resolves
-`COMPONENT_MISSING`, noted `UNSPANNED`, by its cover.)
+A recurring sparse item's (a lease or interest payment classed in
+financing) interim without a row counts as nothing in that LTM only when
+the other interim has none either (the LTM is then the FY's); with some of
+its FY, YTD and PYTD stated and another without a row, its LTM is
+`COMPONENT_MISSING`, noted `PARTLY_STATED`, never a sum over 18 or 6
+months, and so are its twelve months ending a quarter with some quarters
+stated and another without a row. An add-back is a one-off that CP-1 writes
+only for the periods it occurred in: any of these without a row is nothing,
+noted `treated_as_zero` with its name. (An FY without a row beside a stated
+PYTD inside it already resolves `COMPONENT_MISSING`, noted `UNSPANNED`, by
+its cover.)
 
 Every row of an outflow account in `OUTFLOW_METRICS` (cash taxes are signed:
 a positive one is a refund) is read as minus its absolute value before
@@ -259,6 +264,9 @@ class _Series:
     # The footing of each period's figure as worked out, where it has one:
     # its own row's, else its and its parts' (`combined_footing`).
     footed: dict[str | None, Footing] = field(default_factory=dict)
+    # An add-back: a one-off, so twelve months take an interim or a quarter
+    # without a row as nothing, noted (never `PARTLY_STATED`).
+    one_off: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -921,7 +929,10 @@ def _series(regs: Cp1Registers) -> dict[str, _Series]:
     second), read by the kind of the key's first row."""
     series: dict[str, _Series] = {}
     for key, kind, period_id, cell in _entries(regs):
-        series.setdefault(key, _Series(kind, {})).rows[period_id] = cell
+        one_off = key.startswith("addback:")
+        series.setdefault(key, _Series(kind, {}, one_off=one_off)).rows[period_id] = (
+            cell
+        )
     return series
 
 
@@ -1036,24 +1047,25 @@ def _component(series: _Series, register: _Register, period_id: str | None) -> C
         if not _spans(register, period):
             return _UNSPANNED_PARTS
         parts = period.component_period_ids
-        mixed = _footing(series, register, period_id) is None
-        if mixed or not register.off.isdisjoint(parts):
+        if not register.off.isdisjoint(parts):
             return _OFF
     return _sum(series, ((_reported(series, part), 1) for part in parts))
 
 
 def _footing(
-    series: _Series, register: _Register, ref: str | _Spec | None
+    footed: Mapping[str | None, Footing], register: _Register, ref: str | _Spec | None
 ) -> Footing | None:
     """The footing (`combined_footing`) of a term's figure: a column's, of
     its own period's and its terms'; a sparse period's as worked out
-    (`_Series.footed`) where it has a figure; else a period's own and its
-    named components'; not stated for no period. None where two differ."""
+    (`footed`: `_Series.footed`) where it has a figure; else a period's own
+    and its named components'; not stated for no period. None where two
+    differ. (A derived period's figure is only ever summed under its
+    column's, so `_flow` refuses one whose components differ.)"""
     if isinstance(ref, _Spec):
         parts = (ref.own, *(term for term, _ in ref.terms or ()))
-        return combined_footing(_footing(series, register, part) for part in parts)
-    if ref in series.footed:
-        return series.footed[ref]
+        return combined_footing(_footing(footed, register, part) for part in parts)
+    if ref in footed:
+        return footed[ref]
     period = register.periods.get(ref)
     if period is None:
         return UNSTATED_FOOTING
@@ -1139,7 +1151,11 @@ def _parts(
     footing = combined_footing(
         (
             register.footings[period.period_id],
-            *(_footing(series, register, n) for n, c in cells if c.value is not None),
+            *(
+                _footing(series.footed, register, n)
+                for n, c in cells
+                if c.value is not None
+            ),
         )
     )
     if footing is None:
@@ -1270,9 +1286,10 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
     if spec.unbuilt is not None:
         return Cell(None, "COMPONENT_MISSING", stated=stated, note=spec.unbuilt)
     terms = [(_term(series, register, ref), sign) for ref, sign in spec.terms]
-    if _footing(series, register, spec) is None:
+    if _footing(series.footed, register, spec) is None:
         return Cell(None, "COMPONENT_MISSING", stated=stated, note=OTHER_FOOTING)
-    if series.kind == "sparse" and _partly_stated(spec, terms):
+    recurring = series.kind == "sparse" and not series.one_off
+    if recurring and _partly_stated(spec, terms):
         return Cell(None, "COMPONENT_MISSING", stated=stated, note=PARTLY_STATED)
     names = (_term_name(ref) for ref, _ in spec.terms)
     total = _named_sum(
@@ -1377,7 +1394,8 @@ def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
     has no observation for twelve months. A sparse item over a fiscal year's
     twelve months is that FY's, as its column reads it; over others it is
     `COMPONENT_MISSING`, noted `PARTLY_STATED`, where some quarters have a
-    figure and others no row."""
+    figure and others no row, except an add-back's, whose quarter without a
+    row is nothing, named (`_named_sum`)."""
     if series.kind == "balance":
         return _balance(series, register, window.spec)
     if series.kind == "exact":
@@ -1391,11 +1409,19 @@ def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
         (_MISSING if quarter is None else _term(series, register, quarter), 1)
         for quarter in four
     ]
-    if combined_footing(_footing(series, register, q) for q in four) is None:
+    if combined_footing(_footing(series.footed, register, q) for q in four) is None:
         return _OFF
-    if series.kind == "sparse" and _some_unstated(quarters):
+    recurring = series.kind == "sparse" and not series.one_off
+    if recurring and _some_unstated(quarters):
         return Cell(None, "COMPONENT_MISSING", note=PARTLY_STATED)
-    return _sum(series, quarters)
+    names = (_term_name(quarter) for quarter in four)
+    return _named_sum(
+        series,
+        (
+            (name, cell, sign)
+            for name, (cell, sign) in zip(names, quarters, strict=True)
+        ),
+    )
 
 
 def _some_unstated(cells: list[tuple[Cell, int]]) -> bool:
@@ -1413,17 +1439,14 @@ def column_footings(regs: Cp1Registers, columns: tuple[Column, ...]) -> Footings
     plan = {spec.column.column_id: spec for spec in _plan(regs)}
     quarters = _quarter_index(plan.values())
     register = _register(regs)
-    built = _Series("flow", {})  # no sparse figure: the periods as built on
     specs = [plan[column.column_id] for column in columns]
     anchor = anchor_period(regs)
     return Footings(
         anchor=UNSTATED_FOOTING if anchor is None else footing_of(anchor),
-        columns={
-            spec.column.column_id: _footing(built, register, spec) for spec in specs
-        },
+        columns={spec.column.column_id: _footing({}, register, spec) for spec in specs},
         windows={
             spec.column.column_id: combined_footing(
-                _footing(built, register, quarter)
+                _footing({}, register, quarter)
                 for quarter in (spec, *_earlier(spec, quarters))
             )
             for spec in specs
