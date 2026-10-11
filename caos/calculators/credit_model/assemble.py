@@ -55,16 +55,18 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal, localcontext
 from typing import Any
 
+from caos.calculators.credit_model._cells import CONTEXT
 from caos.calculators.credit_model.debt import notes_of
-from caos.calculators.credit_model.frame import Column, Frame
+from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.calculators.credit_model.history import (
     account_frame,
     historical_columns,
     ltm_frames,
 )
-from caos.calculators.credit_model.layout import BANDS, Line, layout
+from caos.calculators.credit_model.layout import BANDS, UNALLOCATED, Line, layout
 from caos.calculators.credit_model.metrics import metric_frame
 from caos.calculators.credit_model.projection import (
     ProjectionInputs,
@@ -212,3 +214,213 @@ def credit_model(inputs: ModelInputs) -> CreditModel:
         rate_deck_id=deck.deck_id if deck else None,
         limitations=_limitations(inputs, every, lines),
     )
+
+
+_Parts = tuple[tuple[str, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _Bridge:
+    """`total` equals the `parts` and the `optional` parts (zero when
+    absent), each added (+1) or subtracted (-1)."""
+
+    name: str
+    total: str
+    parts: _Parts
+    optional: _Parts = ()
+
+
+def _ids(lines: list[Line]) -> _Parts:
+    return tuple((line.line_id, 1) for line in lines)
+
+
+def _in_band(lines: tuple[Line, ...], band: str, kind: str) -> list[Line]:
+    return [line for line in lines if line.band == band and line.kind == kind]
+
+
+def _stack(lines: tuple[Line, ...]) -> list[Line]:
+    """The debt band's lines down to total debt."""
+    band = [line for line in lines if line.band == _DEBT_BAND]
+    ids = [line.line_id for line in band]
+    return band[: ids.index("total_debt")]
+
+
+def _summed(stack: list[Line]) -> list[Line]:
+    """The stack's lines in total debt: each facility in totals and the PF
+    rows beneath it, the PF rows for debt the stack has no facility for, and
+    the unallocated movements; a facility in another currency and its PF
+    rows are in none. A PF row counts with the line above it: its facility,
+    or the unallocated movements for the rows above total debt."""
+    summed: list[Line] = []
+    counted = False
+    for line in stack:
+        if line.line_id.startswith("fac:"):
+            counted = line.kind == "ACCOUNT"
+        elif line.kind != "PF":
+            counted = line.line_id == UNALLOCATED
+        if counted:
+            summed.append(line)
+    return summed
+
+
+def _debt_bridges(lines: tuple[Line, ...]) -> list[_Bridge]:
+    """Each rank's subtotal as its facilities and their PF rows, total debt
+    as every line in it, and the roll-forward."""
+    stack = _stack(lines)
+    summed = _summed(stack)
+    ranks = [
+        _Bridge(
+            line.line_id,
+            line.line_id,
+            (),
+            _ids([part for part in summed if part.rank == line.rank]),
+        )
+        for line in stack
+        if line.kind == "SUBTOTAL"
+    ]
+    rolled = [line for line in lines if line.line_id.startswith("rollforward:pf:")]
+    return [
+        *ranks,
+        _Bridge("total_debt", "total_debt", (), _ids(summed)),
+        _Bridge(
+            "debt_rollforward",
+            "debt_closing",
+            (
+                ("debt_opening", 1),
+                ("rollforward:debt_raised_net", 1),
+                ("debt_non_cash", 1),
+            ),
+            _ids(rolled),
+        ),
+    ]
+
+
+def _bridges(lines: tuple[Line, ...]) -> list[_Bridge]:
+    addbacks = [
+        line
+        for line in _in_band(lines, _ADJUSTED_BAND, "ACCOUNT")
+        if line.line_id.startswith("addback:")
+    ]
+    return [
+        _Bridge(
+            "ebitda",
+            "ebitda",
+            (("ebit", 1), ("da", -1)),
+            _ids(_in_band(lines, _OPEX_BAND, "PF")),
+        ),
+        _Bridge(
+            "adjusted_ebitda",
+            "adjusted_ebitda",
+            (("ebitda", 1),),
+            _ids(addbacks + _in_band(lines, _ADJUSTED_BAND, "PF")),
+        ),
+        _Bridge(
+            "ffo",
+            "ffo",
+            (
+                ("adjusted_ebitda", 1),
+                ("cash_interest", 1),
+                ("cash_taxes", 1),
+                ("other_operating", 1),
+            ),
+            (("lease_cash_not_in_ebitda", 1),),
+        ),
+        _Bridge("cfo", "cfo_adjusted", (("ffo", 1), ("working_capital_change", 1))),
+        _Bridge("fcf", "fcf", (("cfo_adjusted", 1), ("capex", 1))),
+        _Bridge(
+            "ncf",
+            "ncf",
+            (
+                ("fcf", 1),
+                ("acquisitions_net", 1),
+                ("debt_raised_net", 1),
+                ("equity_raised_net", 1),
+                ("dividends", 1),
+            ),
+            (("other_investing_financing", 1),),
+        ),
+        _Bridge(
+            "cash",
+            "cash_closing",
+            (("cash_opening", 1), ("ncf", 1)),
+            (("fx_and_other_cash", 1),),
+        ),
+        _Bridge(
+            "liquidity",
+            "liquidity",
+            (("cash_closing", 1), ("undrawn_rcf", 1)),
+            _ids(_in_band(lines, _LIQUIDITY_BAND, "PF")),
+        ),
+        *_debt_bridges(lines),
+    ]
+
+
+def _sum(cells: Mapping[str, Cell], bridge: _Bridge) -> Decimal | None:
+    """The bridge's parts added; None when one has no figure (an optional
+    part absent adds zero)."""
+    total = Decimal(0)
+    for key, sign in bridge.parts:
+        value = cells[key].value
+        if value is None:
+            return None
+        total += value * sign
+    for key, sign in bridge.optional:
+        cell = cells[key]
+        if cell.value is not None:
+            total += cell.value * sign
+        elif cell.reason not in _ZERO_WHEN_ABSENT:
+            return None
+    return total
+
+
+def _unit(value: Decimal) -> Decimal:
+    """A unit in the 38th significant digit of `value` (`CONTEXT.prec`)."""
+    return Decimal(1).scaleb(value.adjusted() - CONTEXT.prec + 1)
+
+
+def _interest_closes(cells: Mapping[str, Cell]) -> bool:
+    """Projected cash interest is minus the rate times the opening
+    interest-bearing debt, to the 38 digits each is computed to; not checked
+    without all three. Interest is `-(weighted x base / weights)`, the rate
+    `weighted / weights`, so they part by at most a unit of the rate times
+    the base, the product's rounding to 38 digits (`interest x 10^-37`) and
+    a unit of the interest."""
+    interest = cells["cash_interest"].value
+    rate = cells["wa_rate"].value
+    base = cells["interest_bearing_debt_opening"].value
+    if interest is None or rate is None or base is None:
+        return True
+    gap = abs(interest + rate * base)
+    rounding = abs(interest).scaleb(1 - CONTEXT.prec)
+    return gap <= abs(base) * _unit(rate) + rounding + _unit(interest)
+
+
+def _column_faults(
+    column: Column, cells: Mapping[str, Cell], bridges: list[_Bridge]
+) -> list[str]:
+    faults: list[str] = []
+    for bridge in bridges:
+        total = cells[bridge.total].value
+        summed = _sum(cells, bridge)
+        if total is not None and summed is not None and total != summed:
+            faults.append(f"{column.column_id}:{bridge.name}")
+    if not _interest_closes(cells):
+        faults.append(f"{column.column_id}:interest")
+    return faults
+
+
+def reconciliation_faults(model: CreditModel) -> tuple[str, ...]:
+    """Every bridge that does not close on a column, as
+    `"<column_id>:<bridge>"`; empty when every bridge closes. The bridges:
+    those the module docstring lists, and only those."""
+    bridges = _bridges(model.lines)
+    with localcontext(CONTEXT):
+        return tuple(
+            fault
+            for index, column in enumerate(model.columns)
+            for fault in _column_faults(
+                column,
+                {line.line_id: line.cells[index] for line in model.lines},
+                bridges,
+            )
+        )

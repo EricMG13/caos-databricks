@@ -7,6 +7,7 @@ from dataclasses import replace
 from decimal import Decimal, localcontext
 from typing import Any
 
+import pytest
 from credit_model_fixture import (
     example_deck,
     example_growth,
@@ -15,12 +16,17 @@ from credit_model_fixture import (
     example_slots,
     with_figures,
 )
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from caos.calculators.credit_model._cells import CONTEXT
 from caos.calculators.credit_model.assemble import (
+    NO_PROJECTIONS,
+    NOT_APPLIED,
     CreditModel,
     ModelInputs,
     credit_model,
+    reconciliation_faults,
 )
 from caos.calculators.credit_model.frame import Cell, Column
 from caos.calculators.credit_model.history import account_frame, historical_columns
@@ -32,7 +38,7 @@ from caos.calculators.credit_model.layout import (
 )
 from caos.calculators.credit_model.metrics import metric_frame
 from caos.calculators.credit_model.statements import statement_frame
-from caos.methodology.model_inputs import Cp1Registers
+from caos.methodology.model_inputs import Cp1Registers, PfAdjustmentRow
 
 _PF = "PF:LTM_Q2_2026"
 _LTM = "LTM:LTM_Q2_2026"
@@ -110,6 +116,14 @@ def _nudged(model: CreditModel, line_id: str, column_id: str) -> CreditModel:
     return _with_cell(model, line_id, column_id, replace(cell, value=cell.value + 1))
 
 
+def test_the_worked_example_reconciles_with_no_faults() -> None:
+    model = _model()
+    assert reconciliation_faults(model) == ()
+    assert model.currency == "USD"
+    assert model.unit == "MILLIONS"
+    assert model.rate_deck_id == "deck-1"
+
+
 def test_columns_run_history_pf_then_base_years_then_downside_years() -> None:
     request = example_request()
     request["periods"] = sorted(request["periods"], key=lambda p: p["case"] == "BASE")
@@ -134,6 +148,24 @@ def test_columns_run_history_pf_then_base_years_then_downside_years() -> None:
     ]
 
 
+def test_a_rank_with_one_facility_has_no_subtotal() -> None:
+    model = _model()
+    subtotals = [
+        line.line_id for line in model.lines if line.line_id.startswith("rank:")
+    ]
+    assert subtotals == ["rank:Senior secured", "rank:Senior unsecured"]
+    regs = example_registers()
+    regs = replace(
+        regs, facilities=tuple(f for f in regs.facilities if f.facility_id != "sun32")
+    )
+    model = _model(regs=regs)
+    subtotals = [
+        line.line_id for line in model.lines if line.line_id.startswith("rank:")
+    ]
+    assert subtotals == ["rank:Senior secured"]
+    assert reconciliation_faults(model) == ()
+
+
 def test_a_rank_subtotal_sums_its_facilities_on_every_column() -> None:
     model = _model()
     for column in model.columns:
@@ -147,6 +179,19 @@ def test_a_rank_subtotal_sums_its_facilities_on_every_column() -> None:
     assert _value(model, "rank:Senior secured", _PF) == 2316 + 2000 + 1600
     assert _value(model, "rank:Senior secured", _BASE) == (2328 - 24) + 2000 + 1000
     assert _cell(model, "rank:Senior secured", _LTM).basis == "CALCULATED"
+
+
+def test_a_run_without_cp_cf_has_no_projection_columns() -> None:
+    model = _model(projected=False)
+    assert all(column.kind != "PROJECTED" for column in model.columns)
+    assert model.columns[-1].column_id == _PF
+    assert model.limitations[0] == NO_PROJECTIONS
+    assert model.rate_deck_id is None
+    assert _line(model, "reference_rate").label == "Reference rate"
+    for key in ("reference_rate", "interest_bearing_debt_opening", "wa_rate"):
+        assert {cell.reason for cell in _line(model, key).cells} == {"NOT_APPLICABLE"}
+    assert reconciliation_faults(model) == ()
+    assert NO_PROJECTIONS not in _model().limitations
 
 
 def test_limitations_list_each_note_once() -> None:
@@ -165,6 +210,205 @@ def test_limitations_list_each_note_once() -> None:
     ]
     assert residuals == ["debt_non_cash"]
     assert len(model.limitations) == len(notes)
+
+
+@pytest.mark.parametrize("addback", ["addback:run_rate_cost_savings"])
+def test_exclude_unrealised_drops_unrealised_addbacks_from_adjusted_ebitda_everywhere(
+    addback: str,
+) -> None:
+    included = _model()
+    excluded = _model(exclude_unrealised=True)
+    assert _line(included, addback).kind == "ACCOUNT"
+    assert _line(excluded, addback).kind == "MEMO"
+    assert _line(excluded, addback).label == (
+        "Add-back: Run-rate cost savings (unrealised), excluded"
+    )
+    dropped = 0
+    for column in excluded.columns:
+        if column.kind == "PROJECTED":
+            assert _cell(excluded, "adjusted_ebitda", column.column_id) == _cell(
+                included, "adjusted_ebitda", column.column_id
+            )
+            continue
+        savings = _value(included, addback, column.column_id)
+        dropped += savings != 0
+        assert _value(excluded, "adjusted_ebitda", column.column_id) == (
+            _value(included, "adjusted_ebitda", column.column_id) - savings
+        )
+    assert dropped > 0
+    # The quarters' leverage reads the LTM ending them, dropped there too.
+    with localcontext(CONTEXT):
+        leverage = _value(excluded, "total_debt", "Q:Q2_2026") / Decimal(4089 - 40)
+    assert _value(excluded, "metric:total_leverage_adjusted", "Q:Q2_2026") == leverage
+    assert reconciliation_faults(excluded) == ()
+    assert any(text.startswith("excluded: ") for text in excluded.limitations)
+
+
+_BRIDGES = (
+    ("ebitda", "FY:FY2024", "ebitda"),
+    ("ebit", _LTM, "ebitda"),
+    ("adjusted_ebitda", "YTD:H1_2026", "adjusted_ebitda"),
+    ("addback:restructuring", _PF, "adjusted_ebitda"),
+    ("pf:silverlake_ebitda", _PF, "adjusted_ebitda"),
+    ("ffo", "Q:Q3_2025", "ffo"),
+    ("lease_cash_not_in_ebitda", "FY:FY2025", "ffo"),
+    ("cfo_adjusted", "PYTD:H1_2025", "cfo"),
+    ("fcf", _BASE, "fcf"),
+    ("capex", "Q:Q2_2024", "fcf"),
+    ("ncf", "DOWNSIDE:2027", "ncf"),
+    ("other_investing_financing", "FY:FY2023", "ncf"),
+    ("cash_closing", "BASE:2028", "cash"),
+    ("fx_and_other_cash", "Q:Q4_2025", "cash"),
+    ("liquidity", _PF, "liquidity"),
+    ("undrawn_rcf", "DOWNSIDE:2026", "liquidity"),
+    ("rank:Senior secured", "Q:Q1_2026", "rank:Senior secured"),
+    ("fac:sun32", "Q:Q1_2026", "rank:Senior unsecured"),
+    ("total_debt", _PF, "total_debt"),
+    ("total_debt", _BASE, "total_debt"),
+    ("debt:unallocated", "DOWNSIDE:2028", "total_debt"),
+    ("pf:silverlake_notes", _PF, "rank:Senior secured"),
+    ("pf:silverlake_cash", _PF, "liquidity"),
+    ("fac:sub27", "FY:FY2025", "total_debt"),
+    ("debt_closing", "BASE:2027", "debt_rollforward"),
+    ("debt_opening", "Q:Q2_2026", "debt_rollforward"),
+    ("rollforward:debt_raised_net", "Q:Q2_2026", "debt_rollforward"),
+    ("cash_interest", "DOWNSIDE:2028", "interest"),
+    ("wa_rate", _BASE, "interest"),
+)
+
+
+@pytest.mark.parametrize(("line_id", "column_id", "bridge"), _BRIDGES)
+def test_each_bridge_reports_a_figure_that_breaks_it(
+    line_id: str, column_id: str, bridge: str
+) -> None:
+    faults = reconciliation_faults(_nudged(_model(), line_id, column_id))
+    assert f"{column_id}:{bridge}" in faults
+
+
+def test_a_fault_names_only_the_bridges_the_figure_is_in() -> None:
+    faults = reconciliation_faults(_nudged(_model(), "da", "Q:Q1_2024"))
+    assert faults == ("Q:Q1_2024:ebitda",)
+    faults = reconciliation_faults(_nudged(_model(), "fcf", "Q:Q1_2024"))
+    assert faults == ("Q:Q1_2024:fcf", "Q:Q1_2024:ncf")
+
+
+def test_a_bridge_with_a_line_without_a_figure_is_not_checked() -> None:
+    model = _nudged(_model(), "ebitda", "FY:FY2024")
+    unchecked = _with_cell(model, "ebit", "FY:FY2024", Cell(None, "NOT_STATED"))
+    assert "FY:FY2024:ebitda" not in reconciliation_faults(unchecked)
+    missing = _with_cell(
+        model, "addback:restructuring", "FY:FY2024", Cell(None, "COMPONENT_MISSING")
+    )
+    assert "FY:FY2024:adjusted_ebitda" not in reconciliation_faults(missing)
+    absent = _with_cell(
+        _model(), "addback:restructuring", "FY:FY2024", Cell(None, "NOT_SOURCED")
+    )
+    assert reconciliation_faults(absent) == ("FY:FY2024:adjusted_ebitda",)
+    total = _with_cell(model, "ebitda", "FY:FY2024", Cell(None, "NOT_STATED"))
+    assert "FY:FY2024:ebitda" not in reconciliation_faults(total)
+    rate = _with_cell(
+        _nudged(_model(), "cash_interest", _BASE),
+        "wa_rate",
+        _BASE,
+        Cell(None, "COMPONENT_MISSING"),
+    )
+    assert f"{_BASE}:interest" not in reconciliation_faults(rate)
+    base = _with_cell(
+        _nudged(_model(), "cash_interest", _BASE),
+        "interest_bearing_debt_opening",
+        _BASE,
+        Cell(None, "COMPONENT_MISSING"),
+    )
+    assert f"{_BASE}:interest" not in reconciliation_faults(base)
+
+
+def test_projected_stack_foots_through_unallocated_movements() -> None:
+    model = _model()
+    line = _line(model, "debt:unallocated")
+    assert (line.label, line.kind, line.rank) == (
+        "Unallocated movements (CP-CF)",
+        "ACCOUNT",
+        None,
+    )
+    ids = [line.line_id for line in model.lines]
+    assert ids.index("debt:unallocated") + 1 == ids.index("total_debt")
+    for column in model.columns:
+        cell = _cell(model, "debt:unallocated", column.column_id)
+        if column.kind != "PROJECTED":
+            assert cell.reason == "NOT_APPLICABLE"
+            continue
+        facilities = sum(
+            _value(model, line.line_id, column.column_id)
+            for line in model.lines
+            if line.line_id.startswith("fac:") and line.kind == "ACCOUNT"
+        )
+        with localcontext(CONTEXT):
+            unallocated = _value(model, "total_debt", column.column_id) - facilities
+        assert cell.value == unallocated
+        assert cell.basis == "CALCULATED"
+    # Base sweeps 822 of cash to optional repayment in FY2026.
+    assert _value(model, "debt:unallocated", _BASE) == -822
+    assert reconciliation_faults(model) == ()
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            replace(f, carrying_value=None)
+            if f.facility_id == "sun29" and f.period_id in {"Q4_2025", "FY2025"}
+            else f
+            for f in regs.facilities
+        ),
+    )
+    missing = _model(regs=regs)
+    assert _cell(missing, "debt:unallocated", _BASE).reason == "COMPONENT_MISSING"
+
+
+def test_pf_ltm_accounts_show_the_ltm_with_pf_rows_beneath() -> None:
+    model = _model()
+    for key in ("fac:ssn31", "cash_interest", "cash_closing", "fac:tlb"):
+        assert _cell(model, key, _PF) == _cell(model, key, _LTM), key
+    assert _value(model, "fac:ssn31", _PF) == 1000
+    assert _value(model, "pf:silverlake_notes", _PF) == 600
+    assert _value(model, "rank:Senior secured", _PF) == 2316 + 2000 + 1600
+    assert _value(model, "total_debt", _PF) == (_value(model, "total_debt", _LTM) + 600)
+    assert _value(model, "cash_closing", _PF) == 1000
+    assert _value(model, "liquidity", _PF) == 950 + 2200
+    assert _value(model, "less_cash", _PF) == -950
+    assert _value(model, "adjusted_ebitda", _PF) == (
+        _value(model, "adjusted_ebitda", _LTM) + 45
+    )
+    assert _value(model, "cash_interest", _PF) == -862
+    assert reconciliation_faults(model) == ()
+
+
+def test_business_units_that_do_not_sum_to_revenue_are_noted() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        segments=tuple(
+            replace(s, revenue=Decimal(3000))
+            if s.segment_id == "digital" and s.period_id == "Q1_2024"
+            else s
+            for s in regs.segments
+        ),
+    )
+    model = _model(regs=regs)
+    note = "business units do not sum to revenue"
+    assert _cell(model, "revenue", "Q:Q1_2024").note == note
+    assert _cell(model, "revenue", "FY:FY2024").note is None
+    assert f"{note}: Q:Q1_2024" in model.limitations
+    assert reconciliation_faults(model) == ()
+    assert all(cell.note != note for cell in _line(_model(), "revenue").cells)
+    rounded = replace(
+        regs,
+        segments=tuple(
+            replace(s, revenue=Decimal("270.4"))
+            if s.segment_id == "digital" and s.period_id == "Q1_2024"
+            else s
+            for s in example_registers().segments
+        ),
+    )
+    assert _cell(_model(regs=rounded), "revenue", "Q:Q1_2024").note is None
 
 
 def test_a_note_on_revenue_keeps_cp1s_own() -> None:
@@ -322,6 +566,219 @@ def test_every_metric_in_the_frame_has_one_line() -> None:
     assert metrics - set(ids) == {"bu_growth:corporate_eliminations"}
 
 
+def test_a_foreign_facility_is_a_memo_outside_its_rank_total() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            replace(f, currency="EUR") if f.facility_id == "ssn29" else f
+            for f in regs.facilities
+        ),
+    )
+    regs = replace(
+        regs, pro_forma=(*regs.pro_forma, _adjustment("eur", "facility:ssn29", 70))
+    )
+    model = _model(regs=regs)
+    assert _line(model, "fac:ssn29").kind == "MEMO"
+    assert _value(model, "pf:eur", _PF) == 70
+    assert _line(model, "fac:ssn29").rank == "Senior secured"
+    assert _value(model, "rank:Senior secured", _LTM) == 2316 + 1000
+    assert _value(model, "rank:Senior secured", _PF) == 2316 + 1600
+    assert reconciliation_faults(model) == ()
+    one = replace(
+        regs,
+        facilities=tuple(
+            replace(f, currency="EUR") if f.facility_id == "ssn31" else f
+            for f in regs.facilities
+        ),
+    )
+    assert "rank:Senior secured" not in {
+        line.line_id for line in _model(regs=one).lines
+    }
+
+
+def _adjustment(adjustment_id: str, metric_id: str, value: int) -> PfAdjustmentRow:
+    return PfAdjustmentRow(
+        adjustment_id=adjustment_id,
+        label=f"{adjustment_id} label",
+        period_id="LTM_Q2_2026",
+        classification="ACQUISITION",
+        metric_id=metric_id,
+        value=Decimal(value),
+        source=None,
+    )
+
+
+def test_pf_rows_sit_by_the_line_they_adjust_and_reconcile() -> None:
+    regs = example_registers()
+    leases = tuple(
+        replace(
+            f,
+            facility_id="opl",
+            facility_name="Operating leases",
+            lease_classification="OPERATING_LEASE",
+        )
+        for f in regs.facilities
+        if f.facility_id == "finl"
+    )
+    regs = replace(
+        regs,
+        # Left out or placed nowhere first, so the rest are still read.
+        facilities=(*leases, *regs.facilities),
+        pro_forma=(
+            replace(_adjustment("old", "revenue", 1), period_id="FY2025"),
+            _adjustment("capex", "capex_and_intangible_investment", -5),
+            *regs.pro_forma,
+            _adjustment("rev", "revenue", 70),
+            _adjustment("ebitda_pf", "ebitda", 20),
+            _adjustment("new_loan", "facility:new_loan", 300),
+            _adjustment("debt", "total_debt", 15),
+            _adjustment("lease", "facility:opl", 9),
+        ),
+    )
+    model = _model(regs=regs)
+    ids = [line.line_id for line in model.lines]
+
+    def before(first: str, second: str) -> bool:
+        return ids.index(first) + 1 == ids.index(second)
+
+    assert before("pf:rev", "revenue")
+    assert before("pf:ebitda_pf", "ebitda")
+    assert before("fac:disc", "debt:unallocated")
+    assert before("debt:unallocated", "pf:new_loan")
+    assert before("pf:new_loan", "pf:debt")
+    assert before("pf:debt", "total_debt")
+    assert before("lease_liabilities", "pf:lease")
+    assert "fac:opl" not in ids
+    assert _cell(model, "lease_liabilities", _PF) == _cell(
+        model, "lease_liabilities", _LTM
+    )
+    assert _value(model, "lease_adjusted_debt", _PF) == (
+        _value(model, "total_debt", _PF) + 260 + 9
+    )
+    assert "pf:capex" not in ids
+    assert "pf:old" not in ids
+    assert _line(model, "pf:new_loan").rank is None
+    assert _line(model, "pf:silverlake_notes").rank == "Senior secured"
+    assert [i for i in ids if i.startswith("rollforward:pf:")] == [
+        "rollforward:pf:silverlake_notes",
+        "rollforward:pf:new_loan",
+        "rollforward:pf:debt",
+    ]
+    assert _value(model, "total_debt", _PF) == _value(model, "total_debt", _LTM) + 915
+    assert reconciliation_faults(model) == ()
+    assert f"{NOT_APPLIED}: capex label" in model.limitations
+    assert not any("old label" in text for text in model.limitations)
+    broken = _nudged(model, "pf:new_loan", _PF)
+    assert reconciliation_faults(broken) == (f"{_PF}:total_debt",)
+    assert _cell(model, "revenue", _PF).note is None
+    broken = _nudged(model, "pf:ebitda_pf", _PF)
+    assert reconciliation_faults(broken) == (f"{_PF}:ebitda",)
+    broken = _nudged(model, "pf:lease", _PF)
+    assert reconciliation_faults(broken) == ()
+
+
+def test_a_model_without_segments_notes_nothing_on_revenue() -> None:
+    regs = replace(example_registers(), segments=())
+    model = _model(regs=regs, projected=False)
+    assert not any(line.line_id.startswith("bu") for line in model.lines)
+    assert all(cell.note is None for cell in _line(model, "revenue").cells)
+    broken = _nudged(model, "revenue", "FY:FY2024")
+    assert reconciliation_faults(broken) == ()
+
+
+def _figures(low: int = -30000) -> st.SearchStrategy[Decimal | None]:
+    """A figure in tenths up to 3,000.0, from `low` tenths; about one in 33
+    has none, and a zero is written "(0)" (negative zero) half the time.
+    Hypothesis shrinks it."""
+    return st.tuples(
+        st.integers(min_value=0, max_value=32),
+        st.integers(min_value=low, max_value=30000),
+    ).map(_figure)
+
+
+def _figure(drawn: tuple[int, int]) -> Decimal | None:
+    flag, tenths = drawn
+    if flag == 0:
+        return None
+    return Decimal("-0") if tenths == 0 and flag % 2 else Decimal(tenths) / 10
+
+
+_STATUSES = st.sampled_from(("REALIZED", "UNREALIZED", "NOT_STATED"))
+
+
+@st.composite
+def _registers(draw: st.DrawFn) -> Cp1Registers:
+    """The example's registers with every figure redrawn; each period's
+    revenue is its business units' sum, as CP-1's segment check requires."""
+    regs = example_registers()
+    segments = tuple(replace(s, revenue=draw(_figures(0))) for s in regs.segments)
+    sums: dict[str, Decimal | None] = {}
+    for segment in segments:
+        held = sums.get(segment.period_id, Decimal(0))
+        sums[segment.period_id] = (
+            None if held is None or segment.revenue is None else held + segment.revenue
+        )
+    accounts = tuple(
+        replace(
+            a,
+            value=sums.get(a.period_id)
+            if a.metric_id == "revenue"
+            else draw(_figures()),
+        )
+        for a in regs.accounts
+    )
+    addbacks = tuple(
+        replace(a, value=draw(_figures()), realization_status=draw(_STATUSES))
+        for a in regs.addbacks
+    )
+    facilities = tuple(
+        replace(f, carrying_value=draw(_figures(-2000))) for f in regs.facilities
+    )
+    pro_forma = tuple(
+        replace(p, value=draw(_figures()) or Decimal(1)) for p in regs.pro_forma
+    )
+    return replace(
+        regs,
+        segments=segments,
+        accounts=accounts,
+        addbacks=addbacks,
+        facilities=facilities,
+        pro_forma=pro_forma,
+    )
+
+
+@st.composite
+def _requests(draw: st.DrawFn) -> dict[str, Any]:
+    """CP-CF's example request with every driver redrawn."""
+    request = example_request()
+    flows = st.integers(min_value=0, max_value=9000).map(str)
+    debt = st.integers(min_value=0, max_value=900).map(str)
+    for driver in request["drivers"]:
+        for name in (
+            "revenue",
+            "ebitda",
+            "cfo",
+            "capex",
+            "cash_taxes",
+            "distributions",
+        ):
+            driver[name] = draw(flows)
+        driver["optional_repayment"] = draw(debt)
+        driver["issuance"] = draw(debt)
+    return request
+
+
+@settings(max_examples=40, deadline=None)
+@given(regs=_registers(), request=_requests(), exclude=st.booleans())
+def test_any_consistent_inputs_reconcile(
+    regs: Cp1Registers, request: dict[str, Any], exclude: bool
+) -> None:
+    model = _model(regs=regs, request=request, exclude_unrealised=exclude)
+    assert reconciliation_faults(model) == ()
+    assert _signed_zeros(model) == []
+
+
 def test_growth_lines_read_their_growth() -> None:
     model = _model()
     with localcontext(CONTEXT):
@@ -352,6 +809,43 @@ def test_projected_interest_reads_the_rate_deck() -> None:
     assert _cell(model, "reference_rate", "DOWNSIDE:2026").value == Decimal("0.0480")
 
 
+def test_registers_without_periods_give_a_model_without_columns() -> None:
+    regs = replace(example_registers(), periods=())
+    model = _model(regs=regs, projected=False)
+    assert model.columns == ()
+    assert all(line.cells == () for line in model.lines)
+    assert model.limitations == (NO_PROJECTIONS,)
+    assert reconciliation_faults(model) == ()
+
+
+def test_debt_bridges_count_a_facility_absent_at_a_date_as_nothing() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            f
+            for f in regs.facilities
+            if not (f.facility_id == "sun29" and f.period_id in {"Q4_2024", "FY2024"})
+        ),
+    )
+    model = _model(regs=regs)
+    assert _cell(model, "fac:sun29", "FY:FY2024").reason == "NOT_SOURCED"
+    assert _value(model, "rank:Senior unsecured", "FY:FY2024") == 3500
+    assert reconciliation_faults(model) == ()
+    for line_id, bridge in (
+        ("rank:Senior unsecured", "rank:Senior unsecured"),
+        ("total_debt", "total_debt"),
+    ):
+        faults = reconciliation_faults(_nudged(model, line_id, "FY:FY2024"))
+        assert f"FY:FY2024:{bridge}" in faults
+
+
+def test_the_roll_forward_adds_its_pf_rows() -> None:
+    model = _model()
+    stray = _with_cell(model, "rollforward:pf:silverlake_notes", _LTM, Cell(Decimal(1)))
+    assert reconciliation_faults(stray) == (f"{_LTM}:debt_rollforward",)
+
+
 def test_a_period_without_revenue_notes_nothing() -> None:
     regs = example_registers()
     regs = replace(
@@ -367,12 +861,81 @@ def test_a_period_without_revenue_notes_nothing() -> None:
     assert (cell.value, cell.note) == (None, None)
 
 
+# Fix wave B (the adversary audit of b64facb7) and the Task 7 minors.
+
+_BU_NOT_SUMMED = "business units do not sum to revenue"
+_EXCLUDES_FOREIGN = "excludes facility in another currency"
 _EXCLUDES_UNALLOCATED = "excludes unallocated CP-CF movements"
 
 
 def _on(model: CreditModel) -> dict[str, str]:
     """Each limitation's note and the columns it is on."""
     return dict(text.split(": ", 1) for text in model.limitations if ": " in text)
+
+
+def test_projected_metrics_read_cp_cf_revenue_not_a_partial_segment_sum() -> None:
+    regs = example_registers()
+    partial = replace(
+        regs,
+        segments=tuple(
+            s for s in regs.segments if s.segment_id in {"las_vegas", "regional"}
+        ),
+    )
+    model = _model(regs=partial)
+
+    revenue = _cell(model, "revenue", _BASE)
+    assert (revenue.value, revenue.basis) == (Decimal(11809), "DRIVER")
+    assert revenue.note == _BU_NOT_SUMMED
+    with localcontext(CONTEXT):
+        assert _value(model, "metric:capex_to_revenue", _BASE) == Decimal(
+            1700
+        ) / Decimal(11809)
+        assert _value(model, "metric:adjusted_ebitda_margin", _BASE) == Decimal(
+            4136
+        ) / Decimal(11809)
+        assert (
+            _value(model, "revenue_growth", _BASE)
+            == Decimal(11809) / Decimal(11519) - 1
+        )
+    assert _value(model, "bu:las_vegas", _BASE) == Decimal(4213) * Decimal("1.025")
+    assert _cell(_model(), "revenue", _BASE).note is None
+    assert reconciliation_faults(model) == ()
+
+
+def test_a_foreign_facility_is_noted_on_debt_interest_and_their_metrics() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        accounts=tuple(a for a in regs.accounts if a.metric_id != "total_debt"),
+        facilities=tuple(
+            replace(f, currency="EUR") if f.facility_id == "sun29" else f
+            for f in regs.facilities
+        ),
+    )
+    model = _model(regs=regs)
+
+    for column_id, line_id in (
+        (_LTM, "total_debt"),
+        (_LTM, "net_debt"),
+        (_LTM, "metric:total_leverage_adjusted"),
+        (_LTM, "metric:liquidity_to_debt"),
+        (_PF, "total_debt"),
+        (_PF, "metric:net_leverage_adjusted"),
+        (_BASE, "total_debt"),
+        (_BASE, "interest_bearing_debt_opening"),
+        (_BASE, "cash_interest"),
+        (_BASE, "metric:interest_coverage_adjusted"),
+        ("DOWNSIDE:2028", "metric:fcf_to_debt"),
+    ):
+        assert _EXCLUDES_FOREIGN in (_cell(model, line_id, column_id).note or ""), (
+            column_id,
+            line_id,
+        )
+    # Historical interest is CP-1's own: nothing is left out of it.
+    assert _cell(model, "metric:interest_coverage_adjusted", _LTM).note is None
+    on = _on(model)
+    assert _LTM in on[_EXCLUDES_FOREIGN].split(", ")
+    assert reconciliation_faults(model) == ()
 
 
 def test_projected_secured_metrics_note_unallocated_movements() -> None:
@@ -411,6 +974,17 @@ def test_no_cell_is_a_negative_zero() -> None:
 
     assert _signed_zeros(model) == []
     assert _value(model, "dividends", "DOWNSIDE:2026") == 0
+
+
+def test_projected_interest_is_exact_and_its_bridge_still_bites() -> None:
+    model = _model()
+    assert _value(model, "cash_interest", _BASE) == Decimal("-858.984")
+    assert reconciliation_faults(model) == ()
+    cell = _cell(model, "cash_interest", _BASE)
+    off = replace(cell, value=Decimal("-858.984001"))
+    assert reconciliation_faults(_with_cell(model, "cash_interest", _BASE, off)) == (
+        f"{_BASE}:interest",
+    )
 
 
 def test_a_compound_note_is_listed_under_each_of_its_notes() -> None:
