@@ -58,6 +58,7 @@ from caos.calculators.credit_model._cells import (
     CONTEXT,
     OTHER_FOOTING,
     UNSTATED_FOOTING,
+    Footing,
     Footings,
     combined_footing,
     join_notes,
@@ -272,13 +273,10 @@ def _prior(column: Column, columns: tuple[Column, ...]) -> Column | None:
 _Prior = tuple[Column, Mapping[str, Cell], bool]
 
 
-def _apart(footings: Footings, column: Column, prior: Column, window: bool) -> bool:
-    """Whether the prior (the twelve months ending it, for `window`) is on
-    another footing: its footing and the column's, or its and the anchor's,
-    differ (`combined_footing`)."""
+def _apart(footings: Footings, column: Column, before: Footing | None) -> bool:
+    """Whether a prior of footing `before` is on another footing: it and the
+    column's, or it and the anchor's, differ (`combined_footing`)."""
     own = footings.columns.get(column.column_id, UNSTATED_FOOTING)
-    read = footings.windows if window else footings.columns
-    before = read.get(prior.column_id, UNSTATED_FOOTING)
     together = combined_footing((own, before))
     return together is None or combined_footing((before, footings.anchor)) is None
 
@@ -295,7 +293,8 @@ def _prior_cells(
     LTM ending the quarter that ends then."""
     prior = _prior(column, columns)
     if prior is not None:
-        apart = _apart(footings, column, prior, window=False)
+        before = footings.columns.get(prior.column_id, UNSTATED_FOOTING)
+        apart = _apart(footings, column, before)
         return prior, frame[prior.column_id], apart
     if column.kind != "LTM":
         return None
@@ -305,7 +304,8 @@ def _prior_cells(
     )
     if quarter is None:
         return None
-    apart = _apart(footings, column, quarter, window=True)
+    window = footings.windows.get(quarter.column_id, UNSTATED_FOOTING)
+    apart = _apart(footings, column, window)
     return quarter, ltm_ending[quarter.column_id], apart
 
 
