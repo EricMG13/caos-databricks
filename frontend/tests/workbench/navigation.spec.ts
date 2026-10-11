@@ -126,6 +126,8 @@ test("demo Model, Report, and Committee routes render parsed v1 content", async 
   await expect(page.locator("[data-unverified-marker]")).toContainText("unverified – page 9");
   // The signed record, every line_text in it, is closed until asked for.
   await page.keyboard.press("Escape");
+  // The drawer keeps the page inert until focus is back on its opener; only then can the summary take focus.
+  await expect(marker).toBeFocused();
   const record = page.locator("[data-committee-artifact-record]").first();
   await expect(record).toBeHidden();
   await page.locator("[data-artifact-record-disclosure] > summary").first().focus();
