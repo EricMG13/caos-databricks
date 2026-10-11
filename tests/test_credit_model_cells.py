@@ -92,10 +92,10 @@ def test_opening_date_reaches_the_first_representable_day() -> None:
 
 
 def test_join_notes_keeps_each_note_once_in_order() -> None:
-    assert join_notes() is None
-    assert join_notes(None, None) is None
-    assert join_notes("a", None, "b", "a") == "a; b"
-    assert join_notes("a; b", "b", "c") == "a; b; c"
+    assert join_notes(()) is None
+    assert join_notes((None, None)) is None
+    assert join_notes(("a", None, "b", "a")) == "a; b"
+    assert join_notes(("a; b", "b", "c")) == "a; b; c"
 
 
 def test_calc_carries_a_sign_normalised_part_and_no_other_note() -> None:
@@ -150,7 +150,7 @@ def test_no_note_contains_the_note_separator() -> None:
 
     assert notes["_cells.FOREIGN"] == "different currency, not converted"
     assert {name for name, text in notes.items() if "; " in text} == set()
-    assert join_notes(_cells.FOREIGN, "held flat") == (
+    assert join_notes((_cells.FOREIGN, "held flat")) == (
         "different currency, not converted; held flat"
     )
 
