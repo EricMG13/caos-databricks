@@ -9,20 +9,27 @@ import {
   basketCapacity,
   cashUses,
   covenantHeadroom,
+  creditPath,
+  downsideSensitivities,
   ebitdaQuality,
+  forecastCases,
   impliedEv,
   liquidityBridge,
   liquiditySources,
   lmeExposure,
   peerRanges,
   rateMix,
+  rateSensitivities,
+  ratingTriggers,
   recoveryByClass,
   refinancingWall,
   registerFigures,
   registerRows,
+  scenarioMoves,
+  scoreRegisters,
   valueAllocation,
 } from "@/sections/analysis/register-figures";
-import { negatedMagnitude, type Figure } from "@/sections/analysis/figure-core";
+import { caseRank, negatedMagnitude, type Figure } from "@/sections/analysis/figure-core";
 import { parseAnalysisDocument, type HandoffView } from "@/wire/v1";
 
 const document = parseAnalysisDocument(
@@ -1611,4 +1618,700 @@ test("the grouped registers draw only for their own module, and past MAX_MARKS a
     t3d8(`Class ${index}`, c("1", "1"), c("1", "1"), c("1", "1"), "E-1"),
   );
   expect(exposures(many)[0]).toMatchObject({ oversized: true, key: "lme-exposure" });
+});
+
+// CP-2G's T2H.4 and T2H.6, as the profile declares them.
+const FORECAST = [
+  "period",
+  "case",
+  "revenue",
+  "EBITDA",
+  "margin",
+  "CFO",
+  "capex",
+  "FCF",
+  "evidence/assumption IDs",
+];
+const t2h4 = (period: string, kase: string, revenue: Served, ebitda: Served, fcf: Served) =>
+  [period, kase, revenue, ebitda, "", "", "", fcf, `A-${period}`].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const CREDIT_PATH = [
+  "period",
+  "case",
+  "gross/net leverage",
+  "coverage",
+  "FCF/debt",
+  "liquidity runway",
+  "definition IDs",
+];
+const t2h6 = (period: string, kase: string, leverage: Served, coverage: Served, ratio: Served) =>
+  [period, kase, leverage, coverage, ratio, "18 months", `D-${period}`].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const cp2gWith = (registers: Register[], module = "CP-2G"): HandoffView => ({
+  ...handoffOf("CP-1"),
+  module_id: module,
+  tables: [],
+  registers,
+});
+function line(figure: Figure) {
+  if (figure.kind !== "line") throw new Error(`A ${figure.kind} figure, not a line.`);
+  return figure;
+}
+
+test("caseRank: BASE, then DOWNSIDE, then any other case, trimmed and case-insensitive", () => {
+  const cases = ["Stress", " downside", "Upside", "base "];
+  expect([...cases].sort((a, b) => caseRank(a) - caseRank(b))).toEqual([
+    "base ",
+    " downside",
+    "Stress",
+    "Upside",
+  ]);
+});
+
+test("forecastCases: a line figure a metric, base then downside then the rest, as served", () => {
+  const figures = forecastCases(
+    cp2gWith([
+      register("T2H.4", FORECAST, [
+        t2h4("FY26", "Upside", c("130", "130"), c("30", "30"), c("12", "12")),
+        t2h4("FY26", " downside ", c("90", "90"), c("15", "15"), c("TBD")),
+        t2h4("FY26", "Base", c("100", "100"), c("20", "20"), c("8", "8")),
+        t2h4("FY27", "Base", c("110", "110"), c("22", "22"), c("9", "9")),
+        t2h4("FY27", " downside ", c("80", "80"), c("12", "12"), c("-2", "-2")),
+      ]),
+    ]),
+  ).map(line);
+  expect(figures.map((figure) => [figure.key, figure.table, figure.title, figure.unit])).toEqual([
+    ["forecast-cases-revenue", "T2H.4", "Revenue, base and downside", undefined],
+    ["forecast-cases-ebitda", "T2H.4", "EBITDA, base and downside", undefined],
+    ["forecast-cases-fcf", "T2H.4", "FCF, base and downside", undefined],
+  ]);
+  const [revenue, , fcf] = figures;
+  expect(revenue!.categories).toEqual(["FY26", "FY27"]);
+  expect(revenue!.series.map((series) => [series.key, series.label, series.origin])).toEqual([
+    ["BASE", "Base", "model"],
+    ["DOWNSIDE", "downside", "model"],
+    ["UPSIDE", "Upside", "model"],
+  ]);
+  expect(said(revenue!)).toEqual([
+    [{ value: "100" }, { value: "110" }],
+    [{ value: "90" }, { value: "80" }],
+    [{ value: "130" }, { value: null, reason: "not stated" }],
+  ]);
+  expect(said(fcf!)[1]).toEqual([{ value: null, reason: "TBD" }, { value: "-2" }]);
+  expect(revenue!.summary).toBe(
+    "Revenue as served, Base / downside / Upside: FY26 100 / 90 / 130;" +
+      " FY27 110 / 80 / n/a (not stated).",
+  );
+  expect(revenue!.sourceOf(pick("DOWNSIDE", "FY27"))).toBe("evidence/assumption IDs: A-FY27");
+  expect(revenue!.sourceOf(pick("UPSIDE", "FY27"))).toBeNull();
+});
+
+test("creditPath: leverage, coverage and FCF/debt, a packed leverage cell a gap (N192)", () => {
+  const figures = creditPath(
+    cp2gWith([
+      register("T2H.6", CREDIT_PATH, [
+        t2h6("FY26", "BASE", c("4.2x / 3.9x"), c("2.5x", "2.5"), c("10%", "10")),
+        t2h6("FY27", "BASE", c("3.8x", "3.8"), c("2.8x", "2.8"), c("12%", "12")),
+        t2h6("FY26", "DOWNSIDE", c("5.1x", "5.1"), c("1.9x", "1.9"), c("6%", "6")),
+      ]),
+    ]),
+  ).map(line);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["credit-path-gross-net-leverage", "Gross/net leverage, base and downside", "x"],
+    ["credit-path-coverage", "Coverage, base and downside", "x"],
+    ["credit-path-fcf-debt", "FCF/debt, base and downside", "%"],
+  ]);
+  const [leverage] = figures;
+  expect(leverage!.series.map((series) => series.key)).toEqual(["BASE", "DOWNSIDE"]);
+  expect(said(leverage!)).toEqual([
+    [{ value: null, reason: "4.2x / 3.9x" }, { value: "3.8" }],
+    [{ value: "5.1" }, { value: null, reason: "not stated" }],
+  ]);
+  expect(leverage!.sourceOf(pick("BASE", "FY26"))).toBe("definition IDs: D-FY26");
+});
+
+test("a metric written in two units draws a figure per unit, each cell in its own", () => {
+  const figures = creditPath(
+    cp2gWith([
+      register("T2H.6", CREDIT_PATH, [
+        t2h6("FY26", "Base", c("4x", "4"), c("2x", "2"), c("10%", "10")),
+        t2h6("FY27", "Base", c("3x", "3"), c("2x", "2"), c("0.5x", "0.5")),
+      ]),
+    ]),
+  ).map(line);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["credit-path-gross-net-leverage", "Gross/net leverage, base and downside", "x"],
+    ["credit-path-coverage", "Coverage, base and downside", "x"],
+    ["credit-path-fcf-debt-percent", "FCF/debt, base and downside, %", "%"],
+    ["credit-path-fcf-debt-x", "FCF/debt, base and downside, x", "x"],
+  ]);
+  const [, , percent, multiple] = figures;
+  expect(said(percent!)).toEqual([
+    [{ value: "10" }, { value: null, reason: "0.5x, drawn in its unit's figure" }],
+  ]);
+  expect(said(multiple!)).toEqual([
+    [{ value: null, reason: "10%, drawn in its unit's figure" }, { value: "0.5" }],
+  ]);
+});
+
+test("the case lines draw only for CP-2G, and past MAX_MARKS are stated", () => {
+  const forecast = register("T2H.4", FORECAST, [
+    t2h4("FY26", "Base", c("1", "1"), c("1", "1"), c("1", "1")),
+  ]);
+  const credit = register("T2H.6", CREDIT_PATH, [
+    t2h6("FY26", "Base", c("1x", "1"), c("1x", "1"), c("1%", "1")),
+  ]);
+  const keys = (module: string) =>
+    registerFigures(cp2gWith([forecast, credit], module)).map((figure) => figure.key);
+  expect(keys("CP-2G")).toEqual([
+    "forecast-cases-revenue",
+    "forecast-cases-ebitda",
+    "forecast-cases-fcf",
+    "credit-path-gross-net-leverage",
+    "credit-path-coverage",
+    "credit-path-fcf-debt",
+  ]);
+  expect(keys("CP-2D")).toEqual([]);
+  // Two cases over 1,001 periods are 2,002 points.
+  const many = Array.from({ length: 1001 }, (_, index) => [
+    t2h4(`P${index}`, "Base", c("1", "1"), c("1", "1"), c("1", "1")),
+    t2h4(`P${index}`, "Downside", c("1", "1"), c("1", "1"), c("1", "1")),
+  ]).flat();
+  expect(forecastCases(cp2gWith([register("T2H.4", FORECAST, many)]))[0]).toMatchObject({
+    oversized: true,
+    key: "forecast-cases-revenue",
+  });
+});
+
+test("a period and case stated twice draws a gap naming both, unless they agree", () => {
+  const [leverage, coverage] = creditPath(
+    cp2gWith([
+      register("T2H.6", CREDIT_PATH, [
+        t2h6("FY26", "Base", c("4.0x", "4.0"), c("2x", "2"), c("10%", "10")),
+        t2h6("FY26", "Base", c("5.0x", "5.0"), c("2x", "2"), c("10%", "10")),
+        t2h6("FY27", "Base", c("3.0x", "3.0"), c("2.5x", "2.5"), c("11%", "11")),
+      ]),
+    ]),
+  ).map(line);
+  expect(said(leverage!)).toEqual([
+    [{ value: null, reason: "stated twice: 4.0x, 5.0x" }, { value: "3.0" }],
+  ]);
+  expect(said(coverage!)).toEqual([[{ value: "2" }, { value: "2.5" }]]);
+  // Both rows name the one definition: a point's source states it once.
+  expect(leverage!.sourceOf(pick("BASE", "FY26"))).toBe("definition IDs: D-FY26");
+  expect(leverage!.summary).toBe(
+    "Gross/net leverage as served, Base: FY26 n/a (stated twice: 4.0x, 5.0x); FY27 3.0.",
+  );
+});
+
+test("cases group trimmed and case-insensitive, periods trimmed, a blank case named", () => {
+  const [revenue] = forecastCases(
+    cp2gWith([
+      register("T2H.4", FORECAST, [
+        t2h4("FY26 ", "Base", c("100", "100"), c("20", "20"), c("8", "8")),
+        t2h4("FY27", "BASE", c("110", "110"), c("22", "22"), c("9", "9")),
+        t2h4("FY26", " ", c("70", "70"), c("10", "10"), c("1", "1")),
+      ]),
+    ]),
+  ).map(line);
+  expect(revenue!.categories).toEqual(["FY26", "FY27"]);
+  expect(revenue!.series.map((series) => [series.key, series.label])).toEqual([
+    ["BASE", "Base"],
+    ["not-stated", "Case not stated"],
+  ]);
+  expect(said(revenue!)).toEqual([
+    [{ value: "100" }, { value: "110" }],
+    [{ value: "70" }, { value: null, reason: "not stated" }],
+  ]);
+  expect(revenue!.sourceOf(pick("BASE", "FY27"))).toBe("evidence/assumption IDs: A-FY27");
+});
+
+// CP-2E's T2F.5, CP-2A's T2B.6, CP-3D's T3E.8 and CP-2H's T2R.4, as the
+// profiles declare them.
+const RATE_SENSITIVITY = [
+  "Sensitivity",
+  "Formula",
+  "Source Inputs",
+  "Estimated Cash Impact",
+  "FCF / Liquidity Implication",
+  "Status",
+  "Source Trace",
+];
+const t2f5 = (name: string, impact: Served, trace = `S-${name}`) =>
+  [name, "Debt x shift", "", impact, "", "Calculated", trace].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const DOWNSIDE_SENSITIVITY = [
+  "Sensitivity",
+  "Input Basis",
+  "Formula / Method",
+  "Result",
+  "Credit Interpretation",
+  "Status",
+  "Source Trace",
+];
+const t2b6 = (name: string, result: Served) =>
+  [name, "", "EBITDA less 10%", result, "", "Supported", `S-${name}`].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const MOVES = [
+  "scenario",
+  "driver",
+  "spread/yield/price assumption",
+  "calculated move",
+  "convexity/call limitation",
+];
+const t3e8 = (scenario: string, driver: string, move: Served) =>
+  [scenario, driver, `+50bp ${driver}`, move, "Callable at par"].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const TRIGGERS = [
+  "agency",
+  "rating type",
+  "trigger direction",
+  "metric",
+  "threshold",
+  "case/period value",
+  "headroom",
+  "status",
+];
+const t2r4 = (
+  agency: string,
+  type: string,
+  direction: string,
+  metric: string,
+  threshold: Served,
+  current: Served,
+  headroom: Served,
+  status = "Within range",
+) =>
+  [agency, type, direction, metric, threshold, current, headroom, status].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const moduleWith = (module: string, registers: Register[]) => cp2gWith(registers, module);
+function diverging(figure: Figure) {
+  if (figure.kind !== "diverging") throw new Error(`A ${figure.kind} figure, not diverging.`);
+  return figure;
+}
+
+test("rateSensitivities: a tornado, largest first by size, a gap last, every value as served", () => {
+  const figures = rateSensitivities(
+    moduleWith("CP-2E", [
+      register("T2F.5", RATE_SENSITIVITY, [
+        t2f5("Rates +100bp", c("(12.5)", "-12.5")),
+        t2f5("Commodity", c("TBD")),
+        t2f5("FX 10% EUR", c("30", "30")),
+        t2f5("Rates -100bp", c("8", "8")),
+      ]),
+    ]),
+  ).map(diverging);
+  expect(figures).toHaveLength(1);
+  const [figure] = figures;
+  expect([figure!.key, figure!.table, figure!.title, figure!.unit]).toEqual([
+    "rate-sensitivities",
+    "T2F.5",
+    "Rate and FX sensitivities",
+    undefined,
+  ]);
+  expect(figure!.categories).toEqual(["FX 10% EUR", "Rates +100bp", "Rates -100bp", "Commodity"]);
+  expect(figure!.series.map((series) => [series.key, series.label, series.origin])).toEqual([
+    ["value", "Estimated Cash Impact", "model"],
+  ]);
+  expect(said(figure!)).toEqual([
+    [{ value: "30" }, { value: "-12.5" }, { value: "8" }, { value: null, reason: "TBD" }],
+  ]);
+  expect(figure!.summary).toBe(
+    "Estimated Cash Impact as served, largest first: FX 10% EUR 30; Rates +100bp -12.5;" +
+      " Rates -100bp 8; Commodity n/a (TBD).",
+  );
+  expect(figure!.sourceOf(pick("value", "Rates -100bp"))).toBe(
+    "Formula: Debt x shift; Status: Calculated; Source Trace: S-Rates -100bp",
+  );
+  expect(figure!.sourceOf(pick("value", "Nothing"))).toBeNull();
+});
+
+test("a sensitivity stated twice is a gap naming both, unless they agree; units split", () => {
+  const [plain, percent] = rateSensitivities(
+    moduleWith("CP-2E", [
+      register("T2F.5", RATE_SENSITIVITY, [
+        t2f5("Rates +100bp", c("5", "5"), "S-1"),
+        t2f5("Rates +100bp", c("7", "7"), "S-2"),
+        t2f5("FX", c("4", "4"), "S-3"),
+        t2f5("FX", c("4", "4"), "S-3"),
+        t2f5("Margin", c("2%", "2")),
+        t2f5(" ", c("1", "1")),
+      ]),
+    ]),
+  ).map(diverging);
+  expect(plain!.categories).toEqual(["FX", "Sensitivity not stated", "Rates +100bp"]);
+  expect(said(plain!)).toEqual([
+    [{ value: "4" }, { value: "1" }, { value: null, reason: "stated twice: 5, 7" }],
+  ]);
+  // Both rows are named, each source once.
+  expect(plain!.sourceOf(pick("value", "Rates +100bp"))).toBe(
+    "Formula: Debt x shift; Status: Calculated; Source Trace: S-1; " +
+      "Formula: Debt x shift; Status: Calculated; Source Trace: S-2",
+  );
+  expect(plain!.sourceOf(pick("value", "FX"))).toBe(
+    "Formula: Debt x shift; Status: Calculated; Source Trace: S-3",
+  );
+  expect([percent!.key, percent!.title, percent!.unit, percent!.categories]).toEqual([
+    "rate-sensitivities-percent",
+    "Rate and FX sensitivities, %",
+    "%",
+    ["Margin"],
+  ]);
+});
+
+test("downsideSensitivities: CP-2A's results as a tornado, its own sources", () => {
+  const [figure] = downsideSensitivities(
+    moduleWith("CP-2A", [
+      register("T2B.6", DOWNSIDE_SENSITIVITY, [
+        t2b6("EBITDA -10%", c("4.1x", "4.1")),
+        t2b6("EBITDA -20%", c("-5.0x", "-5.0")),
+      ]),
+    ]),
+  ).map(diverging);
+  expect([figure!.key, figure!.table, figure!.title, figure!.unit]).toEqual([
+    "downside-sensitivities-x",
+    "T2B.6",
+    "Downside sensitivities, x",
+    "x",
+  ]);
+  expect(figure!.categories).toEqual(["EBITDA -20%", "EBITDA -10%"]);
+  expect(said(figure!)).toEqual([[{ value: "-5.0" }, { value: "4.1" }]]);
+  expect(figure!.sourceOf(pick("value", "EBITDA -10%"))).toBe(
+    "Formula / Method: EBITDA less 10%; Status: Supported; Source Trace: S-EBITDA -10%",
+  );
+});
+
+test("scenarioMoves: a tornado per scenario, its drivers by the size of their move", () => {
+  const figures = scenarioMoves(
+    moduleWith("CP-3D", [
+      register("T3E.8", MOVES, [
+        t3e8("Widening", "Spread", c("-3.5", "-3.5")),
+        t3e8("Widening", "Rates", c("-1.25", "-1.25")),
+        t3e8(" Tightening", "Spread", c("2", "2")),
+        t3e8("Widening", "Call", c("n/a")),
+        t3e8("Tightening ", "Rates", c("4", "4")),
+      ]),
+    ]),
+  ).map(diverging);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.categories])).toEqual([
+    ["scenario-moves-0", "Scenario moves, Widening", ["Spread", "Rates", "Call"]],
+    ["scenario-moves-1", "Scenario moves, Tightening", ["Rates", "Spread"]],
+  ]);
+  expect(said(figures[0]!)).toEqual([
+    [{ value: "-3.5" }, { value: "-1.25" }, { value: null, reason: "n/a" }],
+  ]);
+  expect(figures[1]!.sourceOf(pick("value", "Spread"))).toBe(
+    "spread/yield/price assumption: +50bp Spread; convexity/call limitation: Callable at par",
+  );
+});
+
+function triggers(rows: Served[][]) {
+  return ratingTriggers(moduleWith("CP-2H", [register("T2R.4", TRIGGERS, rows)])).map(bullets);
+}
+
+test("ratingTriggers: bullets per agency, direction only as the bundle reads it", () => {
+  const figures = triggers([
+    t2r4(
+      "Agency A",
+      "Issuer",
+      "Max-Ratio",
+      "Leverage",
+      c("5.0x", "5.0"),
+      c("4.0x", "4.0"),
+      c("1.0x", "1.0"),
+    ),
+    t2r4(
+      "Agency B",
+      "Issuer",
+      "Floor",
+      "Coverage",
+      c("2.0x", "2.0"),
+      c("3.0x", "3.0"),
+      c("1.0x", "1.0"),
+    ),
+    // An agency's words, not a side the bundle reads: never inferred.
+    t2r4(
+      "Agency A",
+      "Senior",
+      "Downgrade",
+      "Max leverage",
+      c("6.0x", "6.0"),
+      c("4.2x / 3.9x"),
+      c("TBD"),
+      "Not Calculable",
+    ),
+  ]);
+  expect(figures.map((figure) => [figure.key, figure.table, figure.title, figure.unit])).toEqual([
+    ["rating-triggers-0-x", "T2R.4", "Rating triggers, Agency A, x", "x"],
+    ["rating-triggers-1-x", "T2R.4", "Rating triggers, Agency B, x", "x"],
+  ]);
+  const [a, b] = figures;
+  expect(a!.bullets).toEqual([
+    {
+      key: "0",
+      label: "Leverage (Issuer, max-ratio)",
+      direction: "max",
+      threshold: { value: "5.0" },
+      current: { value: "4.0" },
+      headroom: { value: "1.0" },
+      origin: "model",
+    },
+    // Keyed by its place among its agency's rows.
+    {
+      key: "1",
+      label: "Max leverage (Senior, downgrade)",
+      direction: null,
+      threshold: { value: "6.0" },
+      current: { value: null, reason: "4.2x / 3.9x" },
+      headroom: { value: null, reason: "TBD" },
+      origin: "model",
+    },
+  ]);
+  expect(b!.bullets![0]!.direction).toBe("min");
+  expect(a!.summary).toBe(
+    "Headroom as served: Leverage (Issuer, max-ratio) 1.0; Max leverage (Senior, downgrade) n/a (TBD).",
+  );
+  expect(
+    a!.sourceOf({
+      series: "current",
+      category: "Max leverage (Senior, downgrade)",
+      index: 1,
+      value: null,
+      origin: "model",
+    }),
+  ).toBe("status: Not Calculable");
+});
+
+test("a trigger stated twice in one agency is a gap naming both; other modules draw nothing", () => {
+  const [figure] = triggers([
+    // An upgrade and a downgrade trigger on one metric are two triggers.
+    t2r4("A", "", "Ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1")),
+    t2r4("A", "", "minimum", "Leverage", c("3.5", "3.5"), c("4", "4"), c("0.5", "0.5")),
+    // The same metric, rating type and direction, however spelt: one trigger.
+    t2r4("A", "", " ceiling ", "Leverage", c("6", "6"), c("4", "4"), c("2", "2")),
+  ]);
+  expect(figure!.bullets).toEqual([
+    {
+      key: "0",
+      label: "Leverage (ceiling)",
+      direction: "max",
+      threshold: { value: null, reason: "stated twice: 5, 6" },
+      current: { value: "4" },
+      headroom: { value: null, reason: "stated twice: 1, 2" },
+      origin: "model",
+    },
+    {
+      key: "1",
+      label: "Leverage (minimum)",
+      direction: "min",
+      threshold: { value: "3.5" },
+      current: { value: "4" },
+      headroom: { value: "0.5" },
+      origin: "model",
+    },
+  ]);
+  const t2r = register("T2R.4", TRIGGERS, [
+    t2r4("A", "", "ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1")),
+  ]);
+  const t2f = register("T2F.5", RATE_SENSITIVITY, [t2f5("FX", c("4", "4"))]);
+  const t2b = register("T2B.6", DOWNSIDE_SENSITIVITY, [t2b6("FX", c("4", "4"))]);
+  const t3e = register("T3E.8", MOVES, [t3e8("Base", "FX", c("4", "4"))]);
+  const keys = (module: string) =>
+    registerFigures(moduleWith(module, [t2r, t2f, t2b, t3e])).map((figure) => figure.key);
+  expect(keys("CP-2H")).toEqual(["rating-triggers-0"]);
+  // A blank metric is named, never an empty mark; a blank direction is left out.
+  const [blank] = triggers([t2r4("A", "Issuer", "", " ", c("5", "5"), c("4", "4"), c("1", "1"))]);
+  expect(blank!.bullets![0]!.label).toBe("metric not stated (Issuer)");
+  expect(keys("CP-2E")).toEqual(["rate-sensitivities"]);
+  expect(keys("CP-2A")).toEqual(["downside-sensitivities"]);
+  expect(keys("CP-3D")).toEqual(["scenario-moves-0"]);
+  expect(keys("CP-2G")).toEqual([]);
+  // A bar a sensitivity: 2,001 are too many to draw.
+  const many = Array.from({ length: 2001 }, (_, index) => t2f5(`S${index}`, c("1", "1")));
+  expect(
+    rateSensitivities(moduleWith("CP-2E", [register("T2F.5", RATE_SENSITIVITY, many)]))[0],
+  ).toMatchObject({ oversized: true, key: "rate-sensitivities" });
+});
+
+const FACTORS = [
+  "Category",
+  "Factor",
+  "Weight",
+  "Raw Score 1–5",
+  "Weighted Score",
+  "Confidence",
+  "Evidence",
+  "Risk Mechanic",
+  "Credit Implication",
+];
+const t33 = (factor: string, weighted: Served, category = "Business") =>
+  [category, factor, "20%", "4", weighted, "High", "E-1", "m", "i"].map((cell) =>
+    typeof cell === "string" ? c(cell) : cell,
+  );
+const scores = (module: string, registers: Register[]) =>
+  scoreRegisters(moduleWith(module, registers)).map(bars);
+
+test("scoreRegisters: CP-3's factors as horizontal bars, the highest and lowest named as served", () => {
+  const figures = scores("CP-3", [
+    register("T3.3", FACTORS, [
+      t33("Scale", c("0.80", "0.80")),
+      t33("Leverage", c("1.2", "1.2"), "Financial"),
+      t33("Liquidity", c("0.4", "0.4"), "Financial"),
+      t33("Governance", c("TBD")),
+    ]),
+  ]);
+  expect(figures).toHaveLength(1);
+  const [figure] = figures;
+  expect([figure!.key, figure!.table, figure!.title, figure!.orientation]).toEqual([
+    "weighted-factor-scores",
+    "T3.3",
+    "Weighted factor scores",
+    "horizontal",
+  ]);
+  expect(figure!.categories).toEqual(["Scale", "Leverage", "Liquidity", "Governance"]);
+  expect(figure!.series.map((series) => [series.key, series.label, series.origin])).toEqual([
+    ["score", "Weighted Score", "model"],
+  ]);
+  expect(said(figure!)).toEqual([
+    [{ value: "0.80" }, { value: "1.2" }, { value: "0.4" }, { value: null, reason: "TBD" }],
+  ]);
+  expect(figure!.summary).toBe(
+    "Weighted Score as served. Highest: Leverage 1.2. Lowest: Liquidity 0.4.",
+  );
+  expect(figure!.sourceOf(pick("score", "Liquidity"))).toBe(
+    "Category: Financial; Weight: 20%; Raw Score 1–5: 4; Confidence: High",
+  );
+});
+
+test("scoreRegisters: a factor stated twice is one bar, a gap naming each text where they differ", () => {
+  const [figure] = scores("CP-3", [
+    register("T3.3", FACTORS, [
+      t33("Scale", c("0.8", "0.8")),
+      t33("Scale", c("0.8", "0.8")),
+      t33("Leverage", c("1", "1")),
+      t33("Leverage", c("2", "2")),
+    ]),
+  ]);
+  expect(figure!.categories).toEqual(["Scale", "Leverage"]);
+  expect(said(figure!)).toEqual([
+    [{ value: "0.8" }, { value: null, reason: "stated twice: 1, 2" }],
+  ]);
+  expect(figure!.summary).toBe("Weighted Score as served. Highest: Scale 0.8. Lowest: Scale 0.8.");
+});
+
+test("scoreRegisters: no row states a score, the summary says so", () => {
+  const [figure] = scores("CP-3", [register("T3.3", FACTORS, [t33("Scale", c("TBD"))])]);
+  expect(figure!.summary).toBe("Weighted Score as served. No row states a score.");
+});
+
+const RANKING = [
+  "Rank",
+  "Issuer",
+  "Security / Tranche",
+  "Composite Score /100",
+  "Normalized /5.0",
+  "Credit Tier",
+  "Fundamental View",
+  "Relative Value View",
+  "Final Recommendation",
+];
+const t37 = (rank: string, issuer: string, tranche: string, score: Served) => [
+  c(rank, /^[0-9]+$/.test(rank) ? rank : null),
+  c(issuer),
+  c(tranche),
+  score,
+  c("3.5", "3.5"),
+  c("Tier 2"),
+  c("f"),
+  c("r"),
+  c("Buy"),
+];
+
+test("scoreRegisters: CP-3's composite scores in rank order, a rank that is no number last", () => {
+  const [figure] = scores("CP-3", [
+    register("T3.7", RANKING, [
+      t37("2", "Alpha", "Sr Notes", c("71.5", "71.5")),
+      t37("n/a", "Delta", "TL", c("40", "40")),
+      t37("tbd", "Omega", "RCF", c("10", "10")),
+      t37("1", "Beta", "2L", c("88", "88")),
+      t37("3", "Gamma", "Sub", c("55.25", "55.25")),
+    ]),
+  ]);
+  expect([figure!.key, figure!.title, figure!.orientation]).toEqual([
+    "composite-score",
+    "Composite score /100",
+    "horizontal",
+  ]);
+  expect(figure!.categories).toEqual([
+    "Beta 2L",
+    "Alpha Sr Notes",
+    "Gamma Sub",
+    "Delta TL",
+    "Omega RCF",
+  ]);
+  expect(figure!.series[0]!.label).toBe("Composite Score /100");
+  expect(said(figure!)).toEqual([
+    [{ value: "88" }, { value: "71.5" }, { value: "55.25" }, { value: "40" }, { value: "10" }],
+  ]);
+  expect(figure!.summary).toBe(
+    "Composite Score /100 as served. Highest: Beta 2L 88. Lowest: Omega RCF 10.",
+  );
+  expect(figure!.sourceOf(pick("score", "Beta 2L"))).toBe(
+    "Credit Tier: Tier 2; Final Recommendation: Buy",
+  );
+});
+
+test("scoreRegisters: CP-4's legal areas and CP-6's debate dimensions, each its own columns", () => {
+  const legal = scores("CP-4", [
+    register(
+      "T4.11",
+      [
+        "Area",
+        "Score 1–5",
+        "Evidence",
+        "Risk Mechanic",
+        "Credit Implication",
+        "Confidence",
+        "Evidence ID",
+      ],
+      [
+        [c("Security"), c("4", "4"), c("e"), c("m"), c("i"), c("Med"), c("L-1")],
+        [c("Priming"), c("2", "2"), c("e"), c("m"), c("i"), c("Low"), c("L-2")],
+      ],
+    ),
+  ]);
+  expect(legal.map((f) => [f.key, f.table, f.title, f.categories, f.series[0]!.label])).toEqual([
+    [
+      "legal-area-scores",
+      "T4.11",
+      "Legal area scores, 1 to 5",
+      ["Security", "Priming"],
+      "Score 1–5",
+    ],
+  ]);
+  expect(legal[0]!.sourceOf(pick("score", "Priming"))).toBe("Confidence: Low; Evidence ID: L-2");
+  const debate = scores("CP-6", [
+    register(
+      "T6A.6",
+      ["Dimension", "Score (1-5)", "Bull Evidence", "Bear Evidence", "Chair Assessment"],
+      [[c("Cash flow"), c("3.5", "3.5"), c("b"), c("r"), c("Balanced")]],
+    ),
+  ]);
+  expect(debate.map((f) => [f.key, f.title, f.series[0]!.label, f.orientation])).toEqual([
+    ["debate-scores", "Debate scores by dimension, 1 to 5", "Score (1-5)", "horizontal"],
+  ]);
+  expect(debate[0]!.sourceOf(pick("score", "Cash flow"))).toBe("Chair Assessment: Balanced");
+  expect(debate[0]!.summary).toBe(
+    "Score (1-5) as served. Highest: Cash flow 3.5. Lowest: Cash flow 3.5.",
+  );
+});
+
+test("scoreRegisters: a register of another module draws nothing", () => {
+  expect(scores("CP-2A", [register("T3.3", FACTORS, [t33("Scale", c("1", "1"))])])).toEqual([]);
 });

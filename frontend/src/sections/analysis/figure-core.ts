@@ -9,6 +9,7 @@ import type {
   ChartSelection,
   ChartSeries,
   Datum,
+  Orientation,
   RangeRow,
   WaterfallStep,
 } from "@/charts";
@@ -81,6 +82,15 @@ export const unique = (values: readonly string[]) => [...new Set(values)];
     which sorts after every year. */
 export const yearOf = (date: string) => /^\d{4}/.exec(date)?.[0] ?? "Undated";
 
+const CASE_ORDER = ["BASE", "DOWNSIDE"];
+/** A forecast case's place among its lines: BASE, then DOWNSIDE, then any
+    case the bundle does not name, never before BASE; read trimmed and
+    case-insensitive. */
+export function caseRank(kase: string): number {
+  const at = CASE_ORDER.indexOf(kase.trim().toUpperCase());
+  return at < 0 ? CASE_ORDER.length : at;
+}
+
 /** What every figure has, whatever draws it. */
 interface FigureBase {
   key: string;
@@ -108,6 +118,8 @@ export interface BarsFigure extends FigureBase {
   kind: "bars";
   categories: string[];
   series: ChartSeries[];
+  /** Which way the bars run; upright where unsaid. */
+  orientation?: Orientation;
   /** What the categories are, heading the table twin. */
   categoryLabel?: string;
 }
