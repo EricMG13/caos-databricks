@@ -10,26 +10,90 @@ from typing import Any
 import pytest
 from credit_model_fixture import (
     example_deck,
+    example_growth,
     example_registers,
+    example_request,
+    example_slots,
 )
 
+from caos.calculators.cash_flow import cash_flow_forecast
 from caos.calculators.credit_model._cells import CONTEXT
+from caos.calculators.credit_model.frame import Column, Frame
+from caos.calculators.credit_model.history import account_frame, historical_columns
 from caos.calculators.credit_model.projection import (
+    ProjectionInputs,
     RateDeck,
     RateDeckYear,
     facility_rate,
+    projection,
     rate_for,
 )
-from caos.methodology.model_inputs import FacilityRow
+from caos.calculators.credit_model.statements import statement_frame
+from caos.methodology.model_inputs import Cp1Registers, FacilityRow
 
 # CP-CF opens at FY2025, the balances' column. Its stack,
 # finance lease and discount aside, is 14,028.
 _FIXED = {"ssn29": "0.065", "ssn31": "0.07", "sun29": "0.04625", "sun32": "0.06"}
 
 
+def _history(regs: Cp1Registers) -> Frame:
+    columns = historical_columns(regs)
+    return statement_frame(account_frame(regs, columns), columns, regs)
+
+
+def _inputs(
+    regs: Cp1Registers | None = None,
+    request: dict[str, Any] | None = None,
+    deck: RateDeck | None = None,
+    *,
+    no_deck: bool = False,
+) -> ProjectionInputs:
+    regs = regs or example_registers()
+    return ProjectionInputs(
+        regs=regs,
+        request=request or example_request(),
+        growth=example_growth(),
+        slots=example_slots(),
+        deck=None if no_deck else deck or example_deck(),
+        history=_history(regs),
+    )
+
+
+def _frame(inputs: ProjectionInputs) -> Frame:
+    return projection(inputs)[1]
+
+
 def _row(facility_id: str) -> FacilityRow:
     regs = example_registers()
     return next(r for r in regs.facilities if r.facility_id == facility_id)
+
+
+def test_the_example_request_is_one_cash_flow_accepts() -> None:
+    assert cash_flow_forecast(example_request())["status"] == "complete"
+
+
+def test_columns_are_one_per_case_and_projected_year() -> None:
+    columns, frame = projection(_inputs())
+
+    assert [(c.column_id, c.label, c.case, c.kind) for c in columns] == [
+        ("BASE:2026", "FY26E", "BASE", "PROJECTED"),
+        ("BASE:2027", "FY27E", "BASE", "PROJECTED"),
+        ("BASE:2028", "FY28E", "BASE", "PROJECTED"),
+        ("DOWNSIDE:2026", "FY26E", "DOWNSIDE", "PROJECTED"),
+        ("DOWNSIDE:2027", "FY27E", "DOWNSIDE", "PROJECTED"),
+        ("DOWNSIDE:2028", "FY28E", "DOWNSIDE", "PROJECTED"),
+    ]
+    assert columns[0] == Column(
+        column_id="BASE:2026",
+        kind="PROJECTED",
+        label="FY26E",
+        period_id="FY2026",
+        fiscal_year="2026",
+        end_date="2026-12-31",
+        days=365,
+        case="BASE",
+    )
+    assert list(frame) == [c.column_id for c in columns]
 
 
 def test_a_floating_facility_uses_deck_rate_floor_and_spread() -> None:
