@@ -843,6 +843,87 @@ def test_a_temp_runs_table_does_not_let_a_run_be_pinned_late(
     assert deck_for_run(conn, bare) is None
 
 
+def test_a_temp_rate_decks_table_does_not_let_a_deck_gain_a_rate(
+    case: tuple[StoreConnection, UUID],
+) -> None:
+    conn, _case_id = case
+    deck_id = save_deck(conn, uuid4(), date(2026, 10, 1), _years())
+    conn.commit()
+    with _dml_role(conn) as role:
+        with pytest.raises(psycopg.errors.RaiseException):
+            _as(
+                conn,
+                role,
+                [
+                    (
+                        "CREATE TEMP TABLE rate_decks (deck_id uuid, saved_xact xid8)"
+                        " ON COMMIT DROP",
+                        None,
+                    ),
+                    (
+                        "INSERT INTO pg_temp.rate_decks"
+                        " VALUES (%s, pg_current_xact_id())",
+                        (deck_id,),
+                    ),
+                    (
+                        f"INSERT INTO {STORE_SCHEMA}.rate_deck_rates"
+                        " VALUES (%s, 'SONIA', 3, 0.09, 0.09)",
+                        (deck_id,),
+                    ),
+                ],
+            )
+    latest = latest_deck(conn)
+    assert latest is not None and latest.years == _ordered(_years())
+
+
+def test_a_temp_pg_locks_and_sequence_do_not_let_a_deck_jump_the_queue(
+    case: tuple[StoreConnection, UUID],
+) -> None:
+    """The deck guard reads the catalog's own `pg_locks` and the real
+    identity sequence: a temporary view faking the save lock and a temporary
+    table drawing a huge identity are both ignored."""
+    conn, _case_id = case
+    save_deck(conn, uuid4(), date(2026, 10, 1), _years())
+    conn.commit()
+    rogue = uuid4()
+    with _dml_role(conn) as role:
+        with pytest.raises(psycopg.errors.RaiseException):
+            _as(
+                conn,
+                role,
+                [
+                    (
+                        "CREATE TEMP VIEW pg_locks AS SELECT 'advisory'::text AS"
+                        " locktype, pg_backend_pid() AS pid, true AS granted,"
+                        f" {SAVE_LOCK}::oid AS classid, 0::oid AS objid,"
+                        " 2::int2 AS objsubid, 'ExclusiveLock'::text AS mode",
+                        None,
+                    ),
+                    (
+                        "CREATE TEMP TABLE rate_decks (deck_seq bigint GENERATED"
+                        " ALWAYS AS IDENTITY (START 9000000000000000001),"
+                        " deck_id uuid, saved_xact xid8)",
+                        None,
+                    ),
+                    (
+                        "INSERT INTO pg_temp.rate_decks (deck_id, saved_xact)"
+                        " VALUES (%s, pg_current_xact_id())",
+                        (rogue,),
+                    ),
+                    (
+                        f"INSERT INTO {STORE_SCHEMA}.rate_decks"
+                        " (deck_id, deck_seq, as_of, saved_by, saved_at, rates_sha256)"
+                        " OVERRIDING SYSTEM VALUE"
+                        " VALUES (%s, 9000000000000000001, '2020-01-01', %s,"
+                        " now(), %s)",
+                        (rogue, uuid4(), rates_digest(_years())),
+                    ),
+                ],
+            )
+    latest = latest_deck(conn)
+    assert latest is not None and latest.deck_id != str(rogue)
+
+
 def test_a_temp_shadow_does_not_let_a_run_claim_another_creator(
     case: tuple[StoreConnection, UUID],
 ) -> None:
@@ -889,6 +970,28 @@ def test_every_deck_guard_pins_its_search_path(
     assert len(rows) == 6
     for name, config in rows:
         assert config == ["search_path=pg_catalog, pg_temp"], name
+
+
+def test_a_rewound_deck_sequence_cannot_put_a_save_behind_the_latest(
+    case: tuple[StoreConnection, UUID],
+) -> None:
+    """Even the owner moving the identity sequence back cannot make a new
+    save draw an identity at or below the latest: the save is refused rather
+    than written where it would never be the latest."""
+    conn, _case_id = case
+    save_deck(conn, uuid4(), date(2026, 9, 1), _years())
+    conn.commit()
+    save_deck(conn, uuid4(), date(2026, 9, 2), _years())
+    conn.rollback()  # a gap: the rolled-back save drew an identity
+    latest = save_deck(conn, uuid4(), date(2026, 9, 3), _years())
+    conn.commit()
+    conn.execute("SELECT setval(pg_get_serial_sequence('rate_decks', 'deck_seq'), 1)")
+    conn.commit()
+    with pytest.raises(psycopg.errors.RaiseException):
+        save_deck(conn, uuid4(), date(2026, 10, 1), _years())
+    conn.rollback()
+    found = latest_deck(conn)
+    assert found is not None and found.deck_id == str(latest)
 
 
 def test_a_run_cannot_be_deleted(case: tuple[StoreConnection, UUID]) -> None:

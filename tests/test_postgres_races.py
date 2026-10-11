@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
@@ -64,7 +64,7 @@ from caos.store.outcomes import (
     record_outcome,
     record_refusal,
 )
-from caos.store.rate_decks import deck_for_run, save_deck
+from caos.store.rate_decks import deck_for_run, latest_deck, save_deck
 from caos.store.runs import (
     Accepted,
     accept_attempt,
@@ -1949,6 +1949,42 @@ def test_a_re_attempts_drop_billed_after_another_workers_read_makes_no_third_cal
 
 def _deck_rows(rate: str) -> tuple[RateDeckYear, ...]:
     return (RateDeckYear("SOFR", 1, Decimal(rate), Decimal("0.0450")),)
+
+
+def test_two_deck_saves_are_stamped_in_commit_order(empty_database: str) -> None:
+    """ "Latest" moves only forward: a save that began first and committed
+    last is still the latest deck.
+
+    B's transaction is open before A saves, so a deck stamped with the
+    transaction's start (`now()`) would put B before A although B committed
+    after it -- and the deck the admin saved last would never be the latest.
+    B instead waits at the save lock while A holds it, and is stamped with the
+    clock read under the lock, so `saved_at` order is commit order."""
+    with connect(empty_database) as first, connect(empty_database) as second:
+        apply_schema(first)
+        first.commit()
+        second.execute("SELECT 1")  # B's transaction is open from here
+        a = save_deck(first, uuid4(), date(2026, 10, 1), _deck_rows("0.0380"))
+        b_saved = Event()
+
+        def save_second() -> UUID:
+            deck = save_deck(second, uuid4(), date(2026, 10, 2), _deck_rows("0.04"))
+            b_saved.set()
+            second.commit()
+            return deck
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            b = pool.submit(save_second)
+            assert not b_saved.wait(1), "B saved while A held the save lock"
+            first.commit()
+            b_deck = b.result(30)
+
+        latest = latest_deck(first)
+        assert latest is not None and latest.deck_id == str(b_deck)
+        stamps: dict[UUID, datetime] = dict(
+            first.execute("SELECT deck_id, saved_at FROM rate_decks").fetchall()
+        )
+        assert stamps[b_deck] > stamps[a]
 
 
 def test_twin_deck_saves_under_one_key_keep_one_deck(empty_database: str) -> None:
