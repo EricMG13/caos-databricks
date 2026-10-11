@@ -86,15 +86,17 @@ from caos.store.run_inputs import (
     research_text,
     valid_subject,
 )
-from caos.store.runs import start_run
+from caos.store.runs import started_run
 from caos.store.source_sets import snapshot_in
 
 # Statements (and cursors) per success path, measured by
 # `tests/test_run_commands.py`. A case lock is two statements, a run lock four.
 REPLAY_IO = 2  # standing, receipt lookup
 UNIT_IO = 8  # case lock, chain head, standing, receipt check; receipt, audit x2
-# `start_run` 3; `pin_route_in` 12 (run lock, route, attempts, insert, event 5).
-CREATE_RUN_IO = REPLAY_IO + UNIT_IO + 15
+# `started_run` 7 (case lock 2, insert, the rate deck pin 4: bound, wait,
+# unbound, insert); `pin_route_in` 12 (run lock, route, attempts, insert,
+# event 5).
+CREATE_RUN_IO = REPLAY_IO + UNIT_IO + 19
 # A successor (§72) selects the run it answers `FOR SHARE` before the insert.
 SUCCESSOR_RUN_IO = CREATE_RUN_IO + 1
 # Ownership 1; `snapshot_in` over an earlier, different set 8;
@@ -210,16 +212,34 @@ def create_run(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bun
     price = started_on(body.model)
     selection = body.model_dump(mode="json")
 
+    # Completed inside the unit: the deck the run pinned is known only once
+    # the run exists, and `governed_write` digests the payload after `write`.
+    payload: dict[str, object] = {
+        **selection,
+        "model": None if price is None else price.model,
+        "route_digest": route_digest(route),
+    }
+
     def write(unit: StoreConnection) -> tuple[int, RunCreated]:
-        run_id = start_run(
+        started = started_run(
             unit,
             case_id,
             supersedes=body.supersedes,
             budget_ceiling=ceiling,
             price=price,
         )
-        pinned = pin_route_in(unit, run_id, route)
-        return 201, RunCreated(case_id=case_id, run_id=run_id, route_digest=pinned)
+        payload["rate_deck"] = (
+            None
+            if started.deck is None
+            else {
+                "deck_id": str(started.deck.deck_id),
+                "rates_sha256": started.deck.rates_sha256,
+            }
+        )
+        pinned = pin_route_in(unit, started.run_id, route)
+        return 201, RunCreated(
+            case_id=case_id, run_id=started.run_id, route_digest=pinned
+        )
 
     return governed(
         conn,
@@ -231,11 +251,7 @@ def create_run(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bun
             actor_id=actor.user_id,
             action="RUN_CREATED",
             requires=Standing.WRITER,
-            payload={
-                **selection,
-                "model": None if price is None else price.model,
-                "route_digest": route_digest(route),
-            },
+            payload=payload,
         ),
         write=write,
         model=RunCreated,
