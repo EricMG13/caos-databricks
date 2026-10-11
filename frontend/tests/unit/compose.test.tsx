@@ -211,7 +211,6 @@ test("an empty directory and a run with no forecast say so, and what to do", () 
   expect(empty.verdict.conclusion).toBe("No cases yet");
   const model = load("model.json");
   model.body.forecast = null;
-  model.body.unavailable_reason = "NO_ACCEPTED_FORECAST";
   const none = composeChrome("model", parseModelDocument(model));
   expect(none.brief.action).toBe("Run a route that includes CP-CF.");
   expect(none.brief.headline).toBeNull();

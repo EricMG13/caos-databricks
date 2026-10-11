@@ -1,5 +1,7 @@
-// The accepted CP-CF projection, read only. Values are server strings: this
-// view deliberately performs no model arithmetic or evidence navigation.
+// The credit model and the accepted CP-CF projection, read only. Values are
+// server strings: this view deliberately performs no model arithmetic or
+// evidence navigation. The credit model is a plain table until the grid
+// replaces it (Plan 2 Task 3).
 import { LineChart, type ChartSeries } from "@/charts";
 import { NoteRows } from "@/ds/atoms";
 import type { ModelDocument } from "@/wire/v1";
@@ -117,30 +119,84 @@ export function forecastSeries(
   });
 }
 
+type ModelBody = ModelDocument["body"];
+
+/** The credit model's lines, one row each, a column per period: the
+    server's figure rounded for reading (its exact decimal is the title), or
+    a dash with the reason as the title. */
+function CreditModelTable({ body }: { body: ModelBody }) {
+  if (!body.lines.length) return null;
+  return (
+    <section className="pnl" data-model-lines>
+      <header>
+        <h2>Credit model</h2>
+        <span className="tag">
+          {body.currency} · {body.unit}
+        </span>
+      </header>
+      <div className="pb flush scroll" tabIndex={0} role="region" aria-label="Credit model lines">
+        <table className="dense">
+          <thead>
+            <tr>
+              <th className="l">Line</th>
+              {body.columns.map((column) => (
+                <th key={column.column_id}>{column.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {body.lines.map((line) => (
+              <tr key={line.line_id}>
+                <td className="l">{line.label}</td>
+                {line.cells.map((cell, index) => (
+                  <td
+                    key={body.columns[index]?.column_id ?? index}
+                    title={cell.value ?? cell.reason ?? undefined}
+                  >
+                    {cell.value !== null ? displayDecimal(cell.value) : "—"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="pb">
+        <dl className="kv">
+          <NoteRows label="Model limitations" values={body.limitations} data-model-limitations />
+        </dl>
+      </div>
+    </section>
+  );
+}
+
 export function ModelSection({ document }: { document: ModelDocument; tab: string | null }) {
   const { body } = document;
   const forecast = body.forecast;
   if (!forecast) {
     return (
-      <section className="pnl" data-model-v1 data-run={body.displayed_run_id ?? ""}>
-        <header>
-          <h2>Model</h2>
-          <span className="cp">CP-CF</span>
-        </header>
-        {/* Why there is none, not only that there is none: an ended run is not
-            waiting for a forecast, and a verdict that ended it has a name. */}
-        <div className="pb note" data-model-unavailable>
-          {body.unavailable_reason}
-          {body.displayed_run_status !== null && body.displayed_run_status !== "RUNNING"
-            ? ` · the run ended ${body.displayed_run_status}`
-            : ""}
-          {body.blocked_by ? ` on ${body.blocked_by.module_id}` : ""}
-        </div>
-      </section>
+      <div className="col" data-model-v1 data-run={body.displayed_run_id ?? ""}>
+        <CreditModelTable body={body} />
+        <section className="pnl">
+          <header>
+            <h2>Model</h2>
+            <span className="cp">CP-CF</span>
+          </header>
+          {/* Whether one is still coming: an ended run is not waiting for a
+              forecast. */}
+          <div className="pb note" data-model-unavailable>
+            No accepted CP-CF forecast
+            {body.displayed_run_status !== null && body.displayed_run_status !== "RUNNING"
+              ? ` · the run ended ${body.displayed_run_status}`
+              : ""}
+          </div>
+        </section>
+      </div>
     );
   }
   return (
     <div className="col" data-model-v1 data-run={body.displayed_run_id ?? ""}>
+      <CreditModelTable body={body} />
       <section className="pnl">
         <header>
           <h2>Accepted forecast</h2>

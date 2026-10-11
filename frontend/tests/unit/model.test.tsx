@@ -11,9 +11,15 @@ function model(overrides: Record<string, unknown> = {}): ModelDocument {
     case_id: CASE,
     latest_run_id: RUN,
     displayed_run_id: RUN,
-    subject: null,
     displayed_run_status: "COMPLETE",
-    blocked_by: null,
+    subject: null,
+    currency: null,
+    unit: null,
+    exclude_unrealised: false,
+    rate_deck: null,
+    columns: [],
+    lines: [],
+    limitations: [],
     forecast: {
       route_node_id: "CP-CF",
       artifact_sha256: HASH,
@@ -44,7 +50,6 @@ function model(overrides: Record<string, unknown> = {}): ModelDocument {
         },
       ],
     },
-    unavailable_reason: null,
     ...overrides,
   };
   return parseModelDocument({
@@ -91,53 +96,81 @@ describe("Model v1", () => {
     expect(container.querySelector("button, input, select, textarea")).toBeNull();
   });
 
-  test("renders the declared no-forecast reason without projecting a value", () => {
-    const { container } = render(
-      <ModelSection
-        document={model({ forecast: null, unavailable_reason: "NO_ACCEPTED_FORECAST" })}
-        tab={null}
-      />,
-    );
+  test("says there is no accepted forecast without projecting a value", () => {
+    const { container } = render(<ModelSection document={model({ forecast: null })} tab={null} />);
     expect(container.querySelector("[data-model-unavailable]")).toHaveTextContent(
-      "NO_ACCEPTED_FORECAST",
+      "No accepted CP-CF forecast",
     );
     expect(screen.queryByText("123.45")).toBeNull();
   });
 
-  test("test_an_absent_forecast_says_whether_the_run_can_still_produce_one", () => {
-    // "No accepted forecast" reads as "not yet" on a run that has ended, which
-    // is the same blindness the Analysis page carried until it named the node
-    // whose verdict stopped the run.
+  test("renders the credit model's lines as server strings, a gap where a cell has none", () => {
+    const cell = (value: string | null) => ({
+      value,
+      reason: value === null ? ("NOT_SOURCED" as const) : null,
+      basis: value === null ? null : ("REPORTED" as const),
+      stated: null,
+      note: null,
+      sources: [],
+    });
+    const column = (column_id: string, label: string) => ({
+      column_id,
+      kind: "FY" as const,
+      label,
+      period_id: column_id.slice(3),
+      fiscal_year: column_id.slice(5),
+      end_date: null,
+      days: null,
+      case: null,
+    });
     const { container } = render(
       <ModelSection
         document={model({
-          forecast: null,
-          unavailable_reason: "NO_ACCEPTED_FORECAST",
-          displayed_run_status: "BLOCKED",
-          blocked_by: {
-            route_node_id: "rn-cp-5",
-            module_id: "CP-5",
-            attempt_id: RUN,
-            quotes_recorded: false,
-            quotes_refusal: null,
-            verified: [],
-            unverified: [],
-          },
+          currency: "USD",
+          unit: "MILLIONS",
+          columns: [column("FY:FY2024", "FY24"), column("FY:FY2025", "FY25")],
+          lines: [
+            {
+              line_id: "revenue",
+              band: "Revenue by business unit",
+              label: "Total revenue",
+              kind: "SUBTOTAL",
+              unit: "MONEY",
+              unit_label: null,
+              rank: null,
+              terms: null,
+              cells: [cell(null), cell("1000")],
+            },
+          ],
+          limitations: ["No projections: this route did not run CP-2G/CP-CF"],
         })}
+        tab={null}
+      />,
+    );
+    const lines = container.querySelector("[data-model-lines]")!;
+    expect(lines).toHaveTextContent("Total revenue");
+    expect(lines).toHaveTextContent("FY25");
+    expect(within(lines as HTMLElement).getByTitle("1000")).toBeInTheDocument();
+    expect(within(lines as HTMLElement).getByTitle("NOT_SOURCED")).toHaveTextContent("—");
+    expect(container.querySelector("[data-model-limitations]")).toHaveTextContent(
+      "No projections: this route did not run CP-2G/CP-CF",
+    );
+  });
+
+  test("test_an_absent_forecast_says_whether_the_run_can_still_produce_one", () => {
+    // "No accepted forecast" reads as "not yet" on a run that has ended.
+    const { container } = render(
+      <ModelSection
+        document={model({ forecast: null, displayed_run_status: "BLOCKED" })}
         tab={null}
       />,
     );
     const note = container.querySelector("[data-model-unavailable]")!;
     expect(note).toHaveTextContent("the run ended BLOCKED");
-    expect(note).toHaveTextContent("on CP-5");
 
     const { container: working } = render(
       <ModelSection
-        document={model({
-          forecast: null,
-          unavailable_reason: "NO_ACCEPTED_FORECAST",
-          displayed_run_status: "RUNNING",
-        })}
+        document={model({ forecast: null, displayed_run_status: "RUNNING" })}
         tab={null}
       />,
     );

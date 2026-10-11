@@ -1,16 +1,60 @@
 {
   "chrome": {
-    "subject": { "case_id": "00000000-0000-4000-8000-000000000001", "title": "Carvana Co." },
-    "served_role": { "global_role": "READER", "standing": "READER" },
+    "subject": {
+      "case_id": "00000000-0000-4000-8000-000000000001",
+      "title": "Carvana Co."
+    },
+    "served_role": {
+      "global_role": "READER",
+      "standing": "READER"
+    },
     "actions": []
   },
   "body": {
     "case_id": "00000000-0000-4000-8000-000000000001",
     "latest_run_id": "00000000-0000-4000-8000-0000000000a1",
     "displayed_run_id": "00000000-0000-4000-8000-0000000000a1",
-    "subject": null,
     "displayed_run_status": "COMPLETE",
-    "blocked_by": null,
+    "subject": null,
+    "currency": "USD",
+    "unit": "MILLIONS",
+    "exclude_unrealised": false,
+    "rate_deck": null,
+    "columns": [
+      {
+        "column_id": "FY:FY2025",
+        "kind": "FY",
+        "label": "FY25",
+        "period_id": "FY2025",
+        "fiscal_year": "2025",
+        "end_date": "2025-12-31",
+        "days": 365,
+        "case": null
+      }
+    ],
+    "lines": [
+      {
+        "line_id": "revenue",
+        "band": "Revenue by business unit",
+        "label": "Total revenue",
+        "kind": "SUBTOTAL",
+        "unit": "MONEY",
+        "unit_label": null,
+        "rank": null,
+        "terms": null,
+        "cells": [
+          {
+            "value": "1000",
+            "reason": null,
+            "basis": "REPORTED",
+            "stated": null,
+            "note": null,
+            "sources": []
+          }
+        ]
+      }
+    ],
+    "limitations": [],
     "forecast": {
       "route_node_id": "CP-CF",
       "artifact_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -29,7 +73,12 @@
           "fiscal_year": "2026",
           "days": "90",
           "values": [
-            { "name": "cash", "unit": "MONEY", "value": "123.45", "unavailable_reason": null },
+            {
+              "name": "cash",
+              "unit": "MONEY",
+              "value": "123.45",
+              "unavailable_reason": null
+            },
             {
               "name": "coverage",
               "unit": "MULTIPLE",
@@ -40,8 +89,7 @@
           "unavailable_reason": null
         }
       ]
-    },
-    "unavailable_reason": null
+    }
   },
   "observed_at": "2026-09-14T10:00:00Z",
   "observed_empty": false,
