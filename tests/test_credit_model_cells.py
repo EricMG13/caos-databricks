@@ -9,19 +9,26 @@ from pathlib import Path
 
 import pytest
 from credit_model_fixture import example_registers
+from hypothesis import given
+from hypothesis import strategies as st
 
 from caos.calculators.credit_model import _cells
 from caos.calculators.credit_model._cells import (
     SIGN_NORMALISED,
+    UNSTATED_FOOTING,
+    Footing,
     beyond_rounding,
     calc,
+    combined_footing,
     flipped,
+    footing_of,
     join_notes,
     no_negative_zero,
     opening_date,
     periods_at,
     refs,
     treated_as_zero,
+    uncombined_periods,
     zeroed,
 )
 from caos.calculators.credit_model.frame import Cell, Column, SourceRef
@@ -189,3 +196,89 @@ def test_no_negative_zero_reads_a_parenthesised_zero_as_zero() -> None:
     for written, read in (("-0", "0"), ("-0.00", "0.00"), ("0", "0"), ("-1", "-1")):
         value = no_negative_zero(Decimal(written))
         assert (str(value), value.is_signed()) == (read, read.startswith("-"))
+
+
+def test_footing_of_reads_basis_and_perimeter_as_compared() -> None:
+    period = replace(
+        example_registers().periods[0],
+        accounting_basis="US_GAAP",
+        entity_perimeter=" Continuing-Operations ",
+    )
+    assert footing_of(period) == ("us gaap", "continuing operations")
+    unstated = replace(period, accounting_basis=None, entity_perimeter=None)
+    assert footing_of(unstated) == UNSTATED_FOOTING == (None, None)
+
+
+def test_combined_footing_takes_what_is_stated_and_refuses_two() -> None:
+    assert combined_footing([]) == UNSTATED_FOOTING
+    assert combined_footing([("a", None), (None, "p"), ("a", None)]) == ("a", "p")
+    assert combined_footing([("a", None), (None, None), ("b", None)]) is None
+    assert combined_footing([(None, "p"), ("a", "q")]) is None
+    assert combined_footing([("a", "p"), None]) is None  # already refused
+    assert combined_footing([("", None), (None, None)]) == ("", None)
+    assert combined_footing([("", None), ("a", None)]) is None
+
+
+_KEYS = st.sampled_from([None, "a", "b"])
+
+
+@given(st.lists(st.tuples(_KEYS, _KEYS), max_size=6))
+def test_combined_footing_is_pairwise(footings: list[Footing]) -> None:
+    """None exactly where two footings state one basis, or one perimeter,
+    differently; else each the one stated."""
+    clash = any(
+        x[i] is not None and y[i] is not None and x[i] != y[i]
+        for x in footings
+        for y in footings
+        for i in (0, 1)
+    )
+    result = combined_footing(footings)
+    if clash:
+        assert result is None
+    else:
+        stated = [
+            next((f[i] for f in footings if f[i] is not None), None) for i in (0, 1)
+        ]
+        assert result == (stated[0], stated[1])
+
+
+def test_uncombined_periods_add_pairs_the_anchor_does_not_state() -> None:
+    regs = example_registers()
+
+    def footed(**bases: tuple[str | None, str | None]) -> frozenset[str]:
+        periods = tuple(
+            replace(
+                p,
+                accounting_basis=bases.get(p.period_id, (None, None))[0],
+                entity_perimeter=bases.get(p.period_id, (None, None))[1],
+            )
+            for p in regs.periods
+        )
+        return uncombined_periods(replace(regs, periods=periods))
+
+    assert footed() == frozenset()
+    # The anchor (H1 2026) states the basis: only those off it.
+    assert footed(H1_2026=("A", None), FY2025=("B", None), FY2024=("A", None)) == {
+        "FY2025"
+    }
+    # It states none: every period stating one, where two differ.
+    assert footed(FY2025=("A", None), H1_2025=("B", None), FY2024=("A", None)) == {
+        "FY2025",
+        "H1_2025",
+        "FY2024",
+    }
+    assert footed(FY2025=("A", None), FY2024=("A", None)) == frozenset()
+    # Perimeters the anchor does not state, beside a basis it does.
+    assert footed(
+        H1_2026=("A", None), FY2025=("A", "p"), H1_2025=("A", "q"), FY2024=("A", None)
+    ) == {"FY2025", "H1_2025"}
+    # No anchor: pairs alone.
+    assert uncombined_periods(replace(regs, periods=())) == frozenset()
+    undated = tuple(
+        replace(p, end_date=None, accounting_basis=b)
+        for p, b in zip(regs.periods[:2], ("A", "B"), strict=True)
+    )
+    assert uncombined_periods(replace(regs, periods=undated)) == {
+        regs.periods[0].period_id,
+        regs.periods[1].period_id,
+    }

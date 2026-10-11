@@ -37,7 +37,10 @@ for an LTM without one, the LTM ending the quarter that ends then, from
 `ltm_ending`), and a projection with its case's prior year, else the
 historical FY of that year. Without such a column, and on a PYTD or PF-LTM,
 it is `NOT_APPLICABLE`, as is a `bu_growth:` for a corporate or eliminations
-segment (`corporate`).
+segment (`corporate`). Against a prior on another footing it is
+`COMPONENT_MISSING`, noted `OTHER_FOOTING`: the prior's footing differs from
+the column's or from the anchor's, or either column's own periods differ
+(`_cells.Footings`; a column it does not name is not stated).
 
 Pure: Decimal only, no I/O, no rounding.
 """
@@ -50,7 +53,16 @@ from datetime import date
 from decimal import Decimal, localcontext
 from typing import Literal
 
-from caos.calculators.credit_model._cells import ABSENT, CONTEXT, join_notes, refs
+from caos.calculators.credit_model._cells import (
+    ABSENT,
+    CONTEXT,
+    OTHER_FOOTING,
+    UNSTATED_FOOTING,
+    Footings,
+    combined_footing,
+    join_notes,
+    refs,
+)
 from caos.calculators.credit_model.debt import carried
 from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.methodology.model_inputs import fiscal_year_number
@@ -131,6 +143,7 @@ _YEAR = 365
 _WEEK = 7  # a 52- or 53-week year ends within a week of the calendar year
 _NOT_APPLICABLE = Cell(None, "NOT_APPLICABLE")
 _NOT_PROJECTED = Cell(None, "NOT_PROJECTED")
+_OTHER_FOOTING = Cell(None, "COMPONENT_MISSING", note=OTHER_FOOTING)
 
 
 def unit_of(key: str) -> Unit:
@@ -254,7 +267,20 @@ def _prior(column: Column, columns: tuple[Column, ...]) -> Column | None:
     )
 
 
-_Prior = tuple[Column, Mapping[str, Cell]]
+# The like period a year earlier, its cells, and whether it is on another
+# footing than the column (`_apart`).
+_Prior = tuple[Column, Mapping[str, Cell], bool]
+
+
+def _apart(footings: Footings, column: Column, prior: Column, window: bool) -> bool:
+    """Whether the prior (the twelve months ending it, for `window`) is on
+    another footing: its footing and the column's, or its and the anchor's,
+    differ (`combined_footing`)."""
+    own = footings.columns.get(column.column_id, UNSTATED_FOOTING)
+    read = footings.windows if window else footings.columns
+    before = read.get(prior.column_id, UNSTATED_FOOTING)
+    together = combined_footing((own, before))
+    return together is None or combined_footing((before, footings.anchor)) is None
 
 
 def _prior_cells(
@@ -262,19 +288,25 @@ def _prior_cells(
     columns: tuple[Column, ...],
     frame: Frame,
     ltm_ending: Mapping[str, dict[str, Cell]],
+    footings: Footings,
 ) -> _Prior | None:
-    """The like period a year earlier and its cells: for an LTM without an
-    LTM column then, the LTM ending the quarter that ends then."""
+    """The like period a year earlier, its cells and whether it is on
+    another footing (`_apart`): for an LTM without an LTM column then, the
+    LTM ending the quarter that ends then."""
     prior = _prior(column, columns)
     if prior is not None:
-        return prior, frame[prior.column_id]
+        apart = _apart(footings, column, prior, window=False)
+        return prior, frame[prior.column_id], apart
     if column.kind != "LTM":
         return None
     quarter = next(
         (c for c in columns if c.kind == "QUARTER" and _year_before(column, c)),
         None,
     )
-    return None if quarter is None else (quarter, ltm_ending[quarter.column_id])
+    if quarter is None:
+        return None
+    apart = _apart(footings, column, quarter, window=True)
+    return quarter, ltm_ending[quarter.column_id], apart
 
 
 def _growth(
@@ -284,7 +316,8 @@ def _growth(
     corporate: frozenset[str],
 ) -> dict[str, Cell]:
     """`revenue_growth`, `adjusted_ebitda_growth` and each `bu_growth:`
-    against the prior period's cells."""
+    against the prior period's cells; `COMPONENT_MISSING`, noted
+    `OTHER_FOOTING`, against a prior on another footing."""
     segments = [key.removeprefix("bu:") for key in own if key.startswith("bu:")]
     keys = {
         **{f"{key}_growth": key for key in _GROWTH},
@@ -296,7 +329,10 @@ def _growth(
         if prior is None or segment:
             cells[growth_key] = _NOT_APPLICABLE
             continue
-        before, before_cells = prior
+        before, before_cells, apart = prior
+        if apart:
+            cells[growth_key] = _OTHER_FOOTING
+            continue
         ratio = _ratio(
             ((_get(own, key, column), 1),),
             ((_get(before_cells, key, before), 1),),
@@ -313,17 +349,21 @@ def metric_frame(
     ltm_ending: Mapping[str, dict[str, Cell]],
     *,
     corporate: frozenset[str] = frozenset(),
+    footings: Footings | None = None,
 ) -> Frame:
     """Each column's cells in `frame` plus its `metric:<name>` keys,
     `revenue_growth`, `adjusted_ebitda_growth` and a `bu_growth:<segment>`
     for each of its `bu:` keys. `ltm_ending[column_id]` is the statements of
     the LTM ending a quarter column (`statement_frame` over `ltm_frames`);
-    `corporate` the corporate and eliminations segments, never grown."""
+    `corporate` the corporate and eliminations segments, never grown;
+    `footings` the columns' (`history.column_footings`), none stated
+    without."""
+    found = Footings() if footings is None else footings
     with localcontext(CONTEXT):
         result: Frame = {}
         for column in columns:
             own = frame[column.column_id]
-            prior = _prior_cells(column, columns, frame, ltm_ending)
+            prior = _prior_cells(column, columns, frame, ltm_ending, found)
             result[column.column_id] = {
                 **own,
                 **_metrics(column, own, ltm_ending),

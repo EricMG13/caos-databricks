@@ -26,10 +26,13 @@ currency is held flat and left out (spec B13: no FX); operating leases are
 not projected. A rate term outside CP-1's value set or its range is never
 used: a spread outside 0-2,000 bp or a floor outside 0-1,000 bp, either not a
 whole number of basis points (a percent read as basis points), or a fixed
-coupon outside 0-30 percent (from 0: a zero-coupon convertible), or any term
-CP-1 wrote so (a spread or floor written with `%`, `terms_out_of_range`). The rate falls
-back to the implied rate, and a negative amortisation to none, each noted
-"term out of range".
+coupon (as `model_inputs` reads it) outside 0-30 percent (from 0, a
+zero-coupon convertible; 0.5-30 where read as a fraction), or any term CP-1
+wrote so (a spread or floor written with `%`, `terms_out_of_range`). The
+rate falls back to the implied rate, and a negative amortisation to none,
+each noted "term out of range". A `FIXED` coupon `model_inputs` read as a
+fraction (`0.065` as 6.5 percent) is priced at the percent read, noted
+"coupon read as a fraction".
 
 Interest is the weighted rate of the interest-bearing facilities, weighted
 on their scheduled opening balances, times the interest base: the year's
@@ -104,6 +107,7 @@ from caos.methodology.model_inputs import (
     DivisionGrowth,
     FacilityRow,
     SlotAllocation,
+    coupon_in_range,
     fiscal_year_number,
 )
 from caos.refusals import Refusal, RefusalCode
@@ -111,6 +115,7 @@ from caos.refusals import Refusal, RefusalCode
 IMPLIED = "implied rate"
 NO_DECK = "no rate deck"
 OUT_OF_RANGE = "term out of range"
+COUPON_AS_FRACTION = "coupon read as a fraction"
 AMORTISATION_NOT_STATED = "amortisation not stated"
 REFINANCED = "assumed refinanced"
 HELD_FLAT = "held flat"
@@ -135,10 +140,9 @@ _DEBT_ADJUSTMENT = "DEBT ADJUSTMENT"
 _NON_CASH = ("pik", "capitalised_interest", "fx_perimeter")
 _BPS = Decimal(10_000)
 _PERCENT = Decimal(100)
-# Each term's range, and whether it is a whole number: basis points are.
-_SPREAD = (Decimal(0), Decimal(2000), True)
-_FLOOR = (Decimal(0), Decimal(1000), True)
-_COUPON = (Decimal(0), Decimal(30), False)  # from 0: zero-coupon convertibles
+# Each basis-point term's range; a basis-point term is a whole number.
+_SPREAD = (Decimal(0), Decimal(2000))
+_FLOOR = (Decimal(0), Decimal(1000))
 # CP-CF's decimal strings (`cash_flow._NUMBER`) and whole day counts.
 _NUMBER = re.compile(r"-?(0|[1-9][0-9]{0,17})(\.[0-9]{1,6})?")
 _WHOLE = re.compile(r"[1-9][0-9]{0,2}")
@@ -227,26 +231,25 @@ def _deck_note(deck: RateDeck, reference_rate: str, offset: int) -> str | None:
     return None if offset in offsets else DECK_YEAR_MISSING
 
 
-def _term_in_range(term: Decimal | None, bounds: tuple[Decimal, Decimal, bool]) -> bool:
-    """A term not stated, or one inside its range (a whole number where it
-    is basis points)."""
-    low, high, whole = bounds
+def _term_in_range(term: Decimal | None, bounds: tuple[Decimal, Decimal]) -> bool:
+    """A basis-point term not stated, or a whole number inside its range."""
+    low, high = bounds
     if term is None:
         return True
-    return low <= term <= high and (not whole or term == term.to_integral_value())
+    return low <= term <= high and term == term.to_integral_value()
 
 
 def _rate_terms_in_range(row: FacilityRow) -> bool:
-    terms = (
-        (row.spread_bps, _SPREAD),
-        (row.floor_bps, _FLOOR),
-        (row.fixed_rate, _COUPON),
-    )
+    terms = ((row.spread_bps, _SPREAD), (row.floor_bps, _FLOOR))
     return (
         not row.terms_out_of_range
         and row.rate_type in _RATE_TYPES
         and row.reference_rate in _REFERENCE_RATES
         and all(_term_in_range(term, bounds) for term, bounds in terms)
+        and (
+            row.fixed_rate is None
+            or coupon_in_range(row.fixed_rate, as_fraction=row.coupon_as_fraction)
+        )
     )
 
 
@@ -258,7 +261,8 @@ def facility_rate(
     implied: Decimal | None,
 ) -> tuple[Decimal | None, str | None]:
     """The facility's all-in rate as a decimal, and the note when it is not
-    its own terms': a `FIXED` coupon (percent) / 100; a `FLOATING` rate on a
+    its own terms': a `FIXED` coupon (percent) / 100, noted "coupon read as
+    a fraction" where `model_inputs` read it so; a `FLOATING` rate on a
     deck reference rate, `max(deck rate, floor) + spread`, noted where the
     deck year is held ("last deck rate held flat", "deck year missing");
     else `implied`, noted "implied rate", "no rate deck", "reference rate
@@ -268,7 +272,8 @@ def facility_rate(
         if not _rate_terms_in_range(row):
             return implied, OUT_OF_RANGE
         if row.rate_type == "FIXED" and row.fixed_rate is not None:
-            return row.fixed_rate / _PERCENT, None
+            note = COUPON_AS_FRACTION if row.coupon_as_fraction else None
+            return row.fixed_rate / _PERCENT, note
         floating = row.rate_type == "FLOATING" and row.reference_rate in _DECK_RATES
         if not floating or row.spread_bps is None:
             return implied, IMPLIED

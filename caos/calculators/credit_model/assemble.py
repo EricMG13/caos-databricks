@@ -45,8 +45,9 @@ reads `"<column_id>:<bridge>"`.
 
 The limitations count the PF adjustments to a period the model has no PF
 column for (CP-1's LTM the grid does not show), name the periods on another
-accounting basis or perimeter
-than the anchor's, which no figure combines (`_cells.off_footing`), and list
+accounting basis or perimeter than the anchor's, or, on one the anchor does
+not state, than another period's, which no figure combines
+(`_cells.uncombined_periods`), and list
 each component of a compound cell note ("a; b") under
 its own note, with the columns it is on, and say where the PF register
 states both an `ebitda` and an `adjusted_ebitda` adjustment to the PF-LTM (a
@@ -62,11 +63,12 @@ from dataclasses import dataclass
 from decimal import Decimal, localcontext
 from typing import Any
 
-from caos.calculators.credit_model._cells import CONTEXT, off_footing
+from caos.calculators.credit_model._cells import CONTEXT, uncombined_periods
 from caos.calculators.credit_model.debt import notes_of
 from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.calculators.credit_model.history import (
     account_frame,
+    column_footings,
     historical_columns,
     ltm_frames,
 )
@@ -175,11 +177,11 @@ def _limitations(
     inputs: ModelInputs, columns: tuple[Column, ...], lines: tuple[Line, ...]
 ) -> tuple[str, ...]:
     """The missing projections; the periods on another footing
-    (`off_footing`), in register order; the pro forma limitations; then each
+    (`uncombined_periods`), in register order; the pro forma limitations; then each
     distinct cell note (each component of a compound one) with the columns
     it is on, in line order."""
     model = [] if inputs.request is not None else [NO_PROJECTIONS]
-    off = off_footing(inputs.registers)
+    off = uncombined_periods(inputs.registers)
     if off:
         ids = [p.period_id for p in inputs.registers.periods if p.period_id in off]
         model.append(f"{NOT_COMBINED}: {', '.join(ids)}")
@@ -223,7 +225,13 @@ def credit_model(inputs: ModelInputs) -> CreditModel:
         if row.segment_type == "CORPORATE_ELIMINATION"
     )
     every = tuple(columns)
-    metrics = metric_frame(every, frame, ltm_ending, corporate=corporate)
+    metrics = metric_frame(
+        every,
+        frame,
+        ltm_ending,
+        corporate=corporate,
+        footings=column_footings(regs, historical),
+    )
     deck = inputs.deck if inputs.request is not None else None
     lines = layout(regs, every, metrics, exclude, deck.as_of if deck else None)
     return CreditModel(
