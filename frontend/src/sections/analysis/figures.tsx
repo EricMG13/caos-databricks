@@ -927,6 +927,7 @@ function Chart({
           categories={figure.categories}
           series={figure.series}
           categoryLabel={figure.categoryLabel}
+          orientation={figure.orientation}
         />
       );
     default:

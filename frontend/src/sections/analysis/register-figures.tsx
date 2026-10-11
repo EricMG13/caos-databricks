@@ -1257,6 +1257,133 @@ export function ratingTriggers(handoff: HandoffView): Figure[] {
   });
 }
 
+/** A score register: its module and id, the column naming a row's bar (or
+    the columns joined to name it), the column holding the score, the title
+    and key, and the columns a bar's source states. */
+interface Scores {
+  module: string;
+  register: string;
+  key: string;
+  title: string;
+  category: readonly string[];
+  value: string;
+  source: readonly string[];
+  /** Orders the rows, where the register states a rank. */
+  rank?: string;
+}
+
+/** A row's rank as a float, which only orders it; none for a rank that is no number. */
+const rankOf = (row: Row, column: string) => {
+  const value = row[column]?.value;
+  return value == null ? Number.MAX_VALUE : toNumber(value);
+};
+
+/** A score register as one horizontal bar figure, a bar a category, every
+    score as served; the summary names the highest and the lowest (a float
+    orders them, never states one). A category stated twice is one bar, a gap
+    naming each text where they differ. Past `MAX_MARKS` it is stated, not drawn. */
+function scoreFigure(handoff: HandoffView, spec: Scores): Figure[] {
+  const rows = registerRows(handoff, spec.module, spec.register);
+  if (!rows?.length) return [];
+  const { rank } = spec;
+  const ordered = rank
+    ? [...rows].sort((a, b) => Math.sign(rankOf(a, rank) - rankOf(b, rank)) || 0)
+    : rows;
+  const nameOf = (row: Row) =>
+    spec.category
+      .map((column) => text(row, column).trim())
+      .filter(Boolean)
+      .join(" ") || `${spec.category[0]} not stated`;
+  const named = groupBy(ordered, nameOf);
+  const head = { key: spec.key, table: spec.register, title: spec.title };
+  if (named.size > MAX_MARKS) return [oversized(head.key, head.table, head.title, named.size)];
+  const bars = [...named].map(([category, group]) => ({
+    category,
+    point: pointOf(group, spec.value, datum),
+  }));
+  const drawn = bars.flatMap(({ category, point }) =>
+    point.value === null ? [] : [{ category, value: point.value, size: toNumber(point.value) }],
+  );
+  // The first of equals: a tie names the bar that comes first.
+  const [high, low] = drawn.reduce<[(typeof drawn)[number]?, (typeof drawn)[number]?]>(
+    ([hi, lo], bar) => [!hi || bar.size > hi.size ? bar : hi, !lo || bar.size < lo.size ? bar : lo],
+    [],
+  );
+  const said = (bar: (typeof drawn)[number]) => `${bar.category} ${formatDecimal(bar.value)}`;
+  const summary =
+    high && low
+      ? `${spec.value} as served. Highest: ${said(high)}. Lowest: ${said(low)}.`
+      : `${spec.value} as served. No row states a score.`;
+  return [
+    {
+      ...head,
+      kind: "bars",
+      orientation: "horizontal",
+      summary,
+      categories: bars.map(({ category }) => category),
+      series: [
+        {
+          key: "score",
+          label: spec.value,
+          origin: "model",
+          data: bars.map(({ point }) => point),
+        },
+      ],
+      categoryLabel: spec.category.join(" "),
+      sourceOf: (selection) => {
+        const group = named.get(selection.category);
+        return group ? sourcesOf(group, spec.source) : null;
+      },
+    },
+  ];
+}
+
+/** CP-3, CP-4 and CP-6's score registers as horizontal bars: CP-3's weighted
+    factor scores (`T3.3`) and composite scores in rank order (`T3.7`), CP-4's
+    legal areas (`T4.11`) and CP-6's debate dimensions (`T6A.6`). */
+export function scoreRegisters(handoff: HandoffView): Figure[] {
+  const specs: readonly Scores[] = [
+    {
+      module: "CP-3",
+      register: "T3.3",
+      key: "weighted-factor-scores",
+      title: "Weighted factor scores",
+      category: ["Factor"],
+      value: "Weighted Score",
+      source: ["Category", "Weight", "Raw Score 1–5", "Confidence"],
+    },
+    {
+      module: "CP-3",
+      register: "T3.7",
+      key: "composite-score",
+      title: "Composite score /100",
+      category: ["Issuer", "Security / Tranche"],
+      value: "Composite Score /100",
+      source: ["Credit Tier", "Final Recommendation"],
+      rank: "Rank",
+    },
+    {
+      module: "CP-4",
+      register: "T4.11",
+      key: "legal-area-scores",
+      title: "Legal area scores, 1 to 5",
+      category: ["Area"],
+      value: "Score 1–5",
+      source: ["Confidence", "Evidence ID"],
+    },
+    {
+      module: "CP-6",
+      register: "T6A.6",
+      key: "debate-scores",
+      title: "Debate scores by dimension, 1 to 5",
+      category: ["Dimension"],
+      value: "Score (1-5)",
+      source: ["Chair Assessment"],
+    },
+  ];
+  return specs.flatMap((spec) => scoreFigure(handoff, spec));
+}
+
 /** Every figure a handoff's registers support, in reading order. A handoff
     is one module's, so only its own module's figures draw for it. */
 export function registerFigures(handoff: HandoffView): Figure[] {
@@ -1281,5 +1408,6 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...scenarioMoves(handoff),
     ...valueAllocation(handoff),
     ...recoveryByClass(handoff),
+    ...scoreRegisters(handoff),
   ];
 }
