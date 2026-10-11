@@ -3122,3 +3122,11 @@
     padding: 0.25rem 0.5rem 0.5rem;
   }
 }
+
+/* A rate deck cell's refusal, beside the field (Admin). */
+.rate-err {
+  display: block;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--destructive);
+}

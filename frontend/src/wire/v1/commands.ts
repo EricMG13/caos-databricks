@@ -255,6 +255,7 @@ export const parseStandingGranted = (value: unknown): StandingGranted =>
   parse(StandingGranted, value);
 export const parseStandingRevoked = (value: unknown): StandingRevoked =>
   parse(StandingRevoked, value);
+export const parseRateDeckSaved = (value: unknown): RateDeckSaved => parse(RateDeckSaved, value);
 // No `parseVerdictRecorded`: the workspace has no control for it, and a
 // validator nothing calls is coverage without a caller. Its shape is pinned
 // above so the day one arrives it is validated, not cast.

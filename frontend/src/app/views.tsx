@@ -31,10 +31,14 @@ interface V1Documents {
   committee: CommitteeDocument;
 }
 
-/** Admin is unavailable in every mode and is never mounted with a document,
-    so `never` is what its shell is typed on (decision D2). Book left that set
-    when the section began rendering real accepted projections. */
-export type DocumentFor<S extends Section> = S extends keyof V1Documents ? V1Documents[S] : never;
+/** Admin has no section document: its one view takes `undefined` and the
+    workspace mounts it without a read (the rate deck card fetches for itself).
+    Any other section outside the set is never mounted with one (`never`). */
+export type DocumentFor<S extends Section> = S extends keyof V1Documents
+  ? V1Documents[S]
+  : S extends "admin"
+    ? undefined
+    : never;
 
 type ViewFor<S extends Section> = ComponentType<{ document: DocumentFor<S>; tab: string | null }>;
 

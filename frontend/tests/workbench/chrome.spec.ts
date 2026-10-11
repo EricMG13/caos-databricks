@@ -122,11 +122,22 @@ for (const section of SECTIONS) {
       await expect(page.locator(`nav a[data-section='${off}']`)).toContainText("Unavailable");
     }
     if (disabled) {
-      // Disabled in every mode, demo included: no document, no request, no tail.
-      await expect(page.locator("main#body [data-surface-state='unavailable']")).toHaveCount(1);
+      // Admin has no section document: it renders the rate deck card, which
+      // makes exactly two reads (the latest deck and the Directory document
+      // for the viewer's role) and is read-only unless the role is ADMIN.
+      await expect(page.locator("main#body [data-rate-deck]")).toHaveCount(1);
+      // The demo serves no rate deck read, so the card settles unavailable.
+      await expect(
+        page.locator("main#body [data-rate-deck][data-surface-state='unavailable']"),
+      ).toHaveCount(1);
       await expect(page.locator("[data-served-role]")).toHaveCount(0);
       await expect(page.locator("header [data-primary]")).toHaveCount(0);
-      expect(requests).toEqual([]);
+      expect([...requests].sort()).toEqual(["/api/v1/directory", "/api/v1/rate-decks/latest"]);
+      const directory = await (await page.request.get("/api/v1/directory")).json();
+      const editable = directory.chrome.served_role.global_role === "ADMIN";
+      const asOf = page.getByLabel("As of");
+      if (editable) await expect(asOf).not.toHaveAttribute("readonly");
+      else await expect(asOf).toHaveAttribute("readonly", "");
       return;
     }
     const role = page.locator("[data-served-role]");
