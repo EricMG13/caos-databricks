@@ -189,6 +189,7 @@ export const STABLE_TABLES: Readonly<Record<string, { title: string; shape: Shap
   "cp1.adjusted_ebitda_bridge": { title: "Adjusted EBITDA bridge", shape: "bridge" },
   "cp1.cp_model_segment_allocation": { title: "Segment forecast slots", shape: "definitions" },
   "cp1.debt_facility_register": { title: "Debt facilities", shape: "capital" },
+  "cp1.pro_forma_adjustment_register": { title: "Pro forma adjustments", shape: "bridge" },
   "cp1.model_reconciliation_register": { title: "Reconciliation checks", shape: "qa" },
   "cp1.downstream_readiness": { title: "Downstream readiness", shape: "readiness" },
   "cp1a.cp_model_snapshot_fields": { title: "Model snapshot fields", shape: "profile" },

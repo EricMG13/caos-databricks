@@ -210,6 +210,9 @@ METRIC_IDS = {
     "pretax_income",
     "income_tax_expense",
     "effective_tax_rate",
+    "operating_lease_cost",
+    "lease_payments_in_financing",
+    "interest_paid_in_financing",
 }
 
 FLOW_ACCOUNT_METRICS = {

@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_INTEGRITY_v1",
-  "build_id": "d8a307a94ed6b8ef7b89b4a4c90f9f78191d02aa866bda796c6b364a17b90ddc",
+  "build_id": "d73f4b91a090baa82e4cf8388ceba7dbb2fdf9741f82571cf94bb0582fdcc8be",
   "root_file_hashes": {
     ".gitignore": {
       "bytes": 83,
@@ -24,7 +24,7 @@
     },
     "CP_DEPLOY_V_RETRIEVAL_INDEX_v1.json": {
       "bytes": 5437,
-      "sha256": "10f4186290fc76dd9278244e4ea1681ac92a20ce519035ee53689c1a58bdec65"
+      "sha256": "1247957e0d0cb45493ebd70aa74d51dfc6e836bb33f3285382e326fb210a4708"
     },
     "CP_MODULE_PAYLOAD_BASE.schema.txt": {
       "bytes": 1930,
@@ -32,19 +32,19 @@
     },
     "DEPLOY_V_BASELINE.json": {
       "bytes": 58204,
-      "sha256": "2a36d53505f2f8b6103b6c72c3477b5d5bb15fa57530d20b8db6f2c078a8b1d7"
+      "sha256": "61611c5c4e7c70fb978b2de2bcbf26379a6bbed16aacd74f8ccd67cda6c14448"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT.md": {
       "bytes": 11934,
-      "sha256": "1f9f9e6297ac0619832e4696672e2644cfb075b4a6857e25d5a041847eb0918f"
+      "sha256": "39497ddc64836a28e8dc3bc82b9ca3463d1fb5ff0fa65f764ee74c50e45f67d3"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT_URL_BOUND.md": {
       "bytes": 12653,
-      "sha256": "254a816c13d4307828e0b15aa852cca4d048e9c3f6f2949d7c2c6488998a4eb6"
+      "sha256": "3dbbb391eb6ec056912859c6d476eaaeb2e722503a5f5156845a08b97ea69dcb"
     },
     "DEPLOY_V_MANIFEST.json": {
       "bytes": 70399,
-      "sha256": "ede940f26d53960d87e1ec7caac52a5170505c769afe0e6d0b0978eee1c2d309"
+      "sha256": "b06c3a62823677fa990ca070adb8e575b0f7aaa12a7e7bf5189403249012554d"
     },
     "README.md": {
       "bytes": 7233,
@@ -55,8 +55,8 @@
       "sha256": "71fc109b3f90aaba15712c3a80b185115a016a583e827fd50accba1d1a223fc6"
     },
     "tests/test_regressions.py": {
-      "bytes": 119313,
-      "sha256": "018d0b0fc51f2de3be9d261936585e75e4d831fa47145332e24700fc720cb729"
+      "bytes": 125837,
+      "sha256": "a7af1977866e2c4717cd3078e52f2fa804615bf041e5c4daea89b2f9507283be"
     },
     "tests/test_research_workflow.py": {
       "bytes": 19397,
@@ -145,30 +145,30 @@
       "companion_count": 9,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 22864,
-      "entry_sha256": "76468199138d7b446a827e32461cf45576da020c32d233d0e5a9f638b803dd6d",
+      "entry_bytes": 23337,
+      "entry_sha256": "35b865705f9cb4a001c8a227767319bc3f34d274c3659164176ab2e70bf3a345",
       "folder_slug": "cp-1-canonical-data-foundation",
       "module_id": "CP-1",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 22864,
-          "sha256": "76468199138d7b446a827e32461cf45576da020c32d233d0e5a9f638b803dd6d"
+          "bytes": 23337,
+          "sha256": "35b865705f9cb4a001c8a227767319bc3f34d274c3659164176ab2e70bf3a345"
         },
         "references/CP-1_RUNBOOK.md": {
           "bytes": 12030,
           "sha256": "7934e8c562832b8320243cbf08e84b16575a0d2e4974fd918bf094b300fcd4ad"
         },
         "references/CP-1_SCHEMA_REFERENCE.md": {
-          "bytes": 6982,
-          "sha256": "8189b989fc326aa706f93137c38d5fe630403fbca238fb0ed106f7bde5a4e450"
+          "bytes": 7777,
+          "sha256": "356e87cb37a5ed86c96b15a913f42b8aafee544cd70e4f8f2fde01ce58cc7b72"
         },
         "references/CP-1_SYSTEM_REFERENCE.md": {
           "bytes": 2807,
           "sha256": "7af64a9047ffa05e996dbb4cb1741b9a815744ecb7eb7bd3b134a4bccf9d2cd0"
         },
         "references/REF_CP-1_STEPS.md": {
-          "bytes": 39628,
-          "sha256": "42a598d63fcb851a8c5ba01d108bb2e6ae04f0fe70b3a11d11f9b418d2e74231"
+          "bytes": 43468,
+          "sha256": "e9552f0d2b128cbe27ec58cdc2360e0e67c96a9f6ec21a140854f310de201bc1"
         },
         "scripts/completeness_check.py": {
           "bytes": 49508,
@@ -1387,8 +1387,8 @@
           "sha256": "9bba605fd7b6ea23038de15e5a1ae6714b3d3fb14ed2d6e6bedbfb0665ca2122"
         },
         "scripts/validate_cp_model_inputs.py": {
-          "bytes": 77208,
-          "sha256": "db29ae512a4f4745f4e5ec1c5f4c950a2b61239e7fb9e332a922370b40e3eba1"
+          "bytes": 77305,
+          "sha256": "f6d1e6b8cdff252a273f0acb5e415e4de483545d283b3fc59fa2118044b0e64b"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -1720,8 +1720,8 @@
     }
   ],
   "source_hashes": {
-    "deployed_baseline": "2a36d53505f2f8b6103b6c72c3477b5d5bb15fa57530d20b8db6f2c078a8b1d7",
+    "deployed_baseline": "61611c5c4e7c70fb978b2de2bcbf26379a6bbed16aacd74f8ccd67cda6c14448",
     "deployed_child_schema_registry": "6b1766e5698632e277ede71037bee2fcd3e02b726c43b76fc4fe0f8b47c5ef48",
-    "deployed_manifest": "ede940f26d53960d87e1ec7caac52a5170505c769afe0e6d0b0978eee1c2d309"
+    "deployed_manifest": "b06c3a62823677fa990ca070adb8e575b0f7aaa12a7e7bf5189403249012554d"
   }
 }

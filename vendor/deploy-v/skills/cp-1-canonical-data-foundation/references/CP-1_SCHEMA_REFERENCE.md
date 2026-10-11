@@ -19,7 +19,7 @@
 | T4.15 | Model Account Register | metric_id, period_id, value, sign_convention, value_class, calculation_status, source_id, source_locator, conflict_refs, limitation_refs |
 | T4.16 | Segment Revenue Schedule | segment_id, segment_name, segment_type, display_priority, period_id, revenue, status, source_id, source_locator |
 | T4.17 | Adjusted EBITDA Bridge | addback_id, addback_label, addback_classification, realization_status, display_priority, period_id, value, status, source_definition, source_id, source_locator |
-| T4.18 | Debt Facility Register | facility_id, facility_name, period_id, facility_type, carrying_value, principal, drawn_amount, commitment, secured_status, seniority, currency, margin_or_coupon, maturity_date, lease_classification, source_id, source_locator |
+| T4.18 | Debt Facility Register | facility_id, facility_name, period_id, facility_type, carrying_value, principal, drawn_amount, commitment, secured_status, seniority, currency, margin_or_coupon, maturity_date, lease_classification, rate_type, reference_rate, spread_bps, floor_bps, fixed_rate, annual_amortisation, source_id, source_locator |
 | T4.19 | Model Reconciliation Register | check_id, period_id, check_type, reported_value, calculated_value, difference, tolerance, status, explanation, source_refs |
 
 Exact table-ID comments, row shapes, controlled IDs and CP-MODEL readiness
@@ -34,6 +34,7 @@ line item and period the answer reports, FY included, is in them.
 |---|---|---|
 | `cp1.operating_kpi_schedule` | Optional when issuer operating measures are applicable | kpi_id, kpi_label, business_unit, kpi_category, display_priority, period_id, value, unit, value_type, status, source_id, source_locator |
 | `cp1.cp_model_segment_allocation` | Required whenever the segment schedule is non-empty — a condition on the evidence, not on the consumer | slot_id, slot_label, component_segment_ids |
+| `cp1.pro_forma_adjustment_register` | Optional when a source states an adjustment for activity outside the reported LTM; otherwise empty | adjustment_id, label, period_id, effective_date, classification, metric_id, value, source_id, source_locator |
 
 Allocation rows are the stable CP-1 mapping to active `DIVISION_1..3` forecast
 slots. Each row has at least one component, and each stable source segment is
@@ -44,6 +45,13 @@ Do not emit the allocation when the segment schedule is genuinely empty. CP-2G's
 absence is no reason to omit it: CP-1 runs first, and CP-MODEL reads the allocation
 only when CP-2G is supplied. A partially populated segment schedule is not equivalent to
 an empty, undisclosed schedule and blocks CP-MODEL readiness.
+
+T4.18's rate and amortisation terms: `rate_type` is `FIXED`, `FLOATING` or
+`NOT_STATED`; `reference_rate` is `SOFR`, `TERM_SOFR`, `EURIBOR`, `SONIA`,
+`NONE` (a fixed-rate or no-reference instrument) or `NOT_STATED` (a floating
+instrument whose reference rate is not sourced); `annual_amortisation` is `0`
+for a bullet or no scheduled amortisation and `null` only when not stated.
+Values and null rules are binding per `REF_CP-1_13_ModelWorkbookInterface.md`.
 
 Operating KPI `value_type` is `PERIOD_END`, `PERIOD_FLOW` or `RATE`. A rate is
 never averaged to construct YTD/LTM; only a directly sourced exact-period

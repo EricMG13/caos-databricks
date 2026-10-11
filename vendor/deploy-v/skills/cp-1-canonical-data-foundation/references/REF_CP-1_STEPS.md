@@ -307,6 +307,8 @@ Place each comment immediately before its Markdown table:
 - `<!-- table-id: cp1.cp_model_segment_allocation -->` (required whenever the
   canonical segment schedule is non-empty; CP-MODEL reads it when CP-2G is supplied)
 - `<!-- table-id: cp1.operating_kpi_schedule -->` (optional when applicable)
+- `<!-- table-id: cp1.pro_forma_adjustment_register -->` (optional when
+  applicable)
 - `<!-- table-id: cp1.adjusted_ebitda_bridge -->`
 - `<!-- table-id: cp1.debt_facility_register -->`
 - `<!-- table-id: cp1.model_reconciliation_register -->`
@@ -330,8 +332,8 @@ reference columns are `conflict_refs` and `limitation_refs` (T4.15),
 `component_period_ids` on a directly reported period and `fiscal_quarter` on a
 row that is not a QUARTER (T4.14). The readiness table is the separate keyed
 CP-MODEL row; T4.13's Downstream Readiness Matrix (Step 12) covers every
-consumer. The segment allocation, operating KPI schedule and readiness table
-have no T4 register: each is written once, tagged.
+consumer. The segment allocation, operating KPI schedule, pro forma adjustment
+register and readiness table have no T4 register: each is written once, tagged.
 
 Worked skeleton of one interface register, as the handoff writes it (unfenced
 there; T4.15–T4.19 take the same shape with their own columns):
@@ -388,13 +390,30 @@ Controlled metric IDs:
 `net_cash_change`, `cash_and_equivalents`, `rcf_commitment`, `rcf_drawn`,
 `senior_secured_debt`, `unsecured_debt`, `total_debt`,
 `net_accounts_receivable`, `inventory`, `accounts_payable`,
-`pretax_income`, `income_tax_expense`, `effective_tax_rate`.
+`pretax_income`, `income_tax_expense`, `effective_tax_rate`,
+`operating_lease_cost`, `lease_payments_in_financing`,
+`interest_paid_in_financing`.
 
 Cash interest and cash tax mean cash paid, not accrued expense. `cfo_ncfo`
 accepts reported CFO, OCF, NCFO or net cash provided by operating activities.
 Use the canonical sign convention: inflows/positive balances positive and
 outflows negative. Do not emit the model's FFO `Other` residual as a sourced
 metric.
+
+Three IDs record where the issuer put lease and interest cash, so a model can
+bridge between accounting bases. Each is emitted where a source states it, with
+the same sign convention (outflows negative):
+
+- `operating_lease_cost`: lease cost recognised inside operating expenses
+  (ASC 842 operating lease cost; under IFRS 16 only short-term and variable
+  lease expense);
+- `lease_payments_in_financing`: lease cash the issuer classified in financing
+  activities (IFRS 16 principal; ASC 842 finance-lease principal);
+- `interest_paid_in_financing`: interest paid that the issuer classified in
+  financing activities (an IFRS option; `0` under US GAAP).
+
+Income taxes paid that the issuer classified outside operating activities have
+no metric ID: record the classification as a limitation in Gaps & Conflicts.
 
 ## Segment, EBITDA and debt registers
 
@@ -462,7 +481,7 @@ Operating KPI columns:
   non-comparable series or manufacture backlog/N/A values as zero.
 
 Debt columns:
-`facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | source_id | source_locator`
+`facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | rate_type | reference_rate | spread_bps | floor_bps | fixed_rate | annual_amortisation | source_id | source_locator`
 
 Model debt totals use carrying values. Principal and commitment are retained
 separately and are not substitutes. When instrument-level carrying values are
@@ -480,6 +499,56 @@ bucket and exclude it from secured or senior subtotals unless that specific
 classification is sourced. Do not infer security or ranking from the
 instrument name merely to make the workbook ready.
 
+Rate and amortisation terms, each sourced like every other column:
+
+- `rate_type`: `FIXED`, `FLOATING` or `NOT_STATED`;
+- `reference_rate`: `SOFR`, `TERM_SOFR`, `EURIBOR`, `SONIA`, `NONE` or
+  `NOT_STATED`. `NONE` is a fixed-rate or no-reference instrument;
+  `NOT_STATED` is a floating instrument whose reference rate is not sourced;
+- `spread_bps`: an integer basis-point spread over the reference rate, or
+  `null`;
+- `floor_bps`: an integer floor on the reference rate, or `null` when no floor
+  is stated;
+- `fixed_rate`: a decimal percent coupon for `FIXED` (`6.500`), otherwise
+  `null`;
+- `annual_amortisation`: scheduled principal amortisation per year in the
+  register's currency and unit; `0` for a bullet or an instrument with no
+  scheduled amortisation, and `null` only when the amortisation is not stated.
+
+A term no source states is `NOT_STATED` or `null` (a `null` listed in Gaps &
+Conflicts like any value-bearing `null`); it is never inferred from the
+instrument name (a "Term Loan B" is not evidence of `FLOATING`, nor "Senior
+Notes" of `FIXED`). A `null` where a term does not apply is not a gap:
+`floor_bps` with no floor stated, `fixed_rate` on a `FLOATING` row,
+`spread_bps` on a `FIXED` row. An `annual_amortisation` of `null` is always a
+gap: a bullet is `0`.
+
+A lease liability is a debt-register row whose `lease_classification` is
+`FINANCE_LEASE` or `OPERATING_LEASE`. The account metric `total_debt` excludes
+lease liabilities. Reconcile it with a `DEBT_TOTAL_EX_LEASES` check for each
+period: the sum of the carrying values of the `NOT_LEASE` and `NOT_STATED`
+rows, plus any `DEBT ADJUSTMENT` row, equals `total_debt`.
+
+## Pro forma adjustment register
+
+Columns:
+`adjustment_id | label | period_id | effective_date | classification | metric_id | value | source_id | source_locator`
+
+This optional tagged table, `<!-- table-id: cp1.pro_forma_adjustment_register -->`,
+records adjustments a source states for activity outside the reported LTM: a
+lender presentation for a primary transaction, or a post-period acquisition,
+disposal or refinancing. When no source states one, the table is empty; never
+construct an adjustment the source does not state.
+
+- `classification` is one of `ACQUISITION`, `DISPOSAL`, `REFINANCING`,
+  `SUBSEQUENT_EVENT`, `LENDER_UPDATE`, `OTHER_EXPLICIT`;
+- `period_id` names the LTM period the adjustment applies to;
+- `metric_id` is one of `revenue`, `ebitda`, `adjusted_ebitda`,
+  `cash_interest_paid`, `cash_and_equivalents`, `total_debt`, or a facility's
+  `facility_id` prefixed `facility:`;
+- `value` follows the account register's sign convention; a post-period event
+  stays in this table and is never blended into the reported period's figures.
+
 ## Reconciliation and readiness
 
 Reconciliation columns:
@@ -487,7 +556,7 @@ Reconciliation columns:
 
 Required checks include segment revenue to reported revenue, EBITDA bridge,
 adjusted EBITDA bridge at exact `addback_id` granularity, CFO identity, debt
-totals, NCF to cash movement and
+totals (`DEBT_TOTAL_EX_LEASES`), NCF to cash movement and
 reported FY to quarterly sum. A reported-FY difference can be `WARN` when
 audited and unaudited bases differ and the explanation is explicit. It is not
 silently forced to zero.

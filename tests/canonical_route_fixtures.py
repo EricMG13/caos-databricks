@@ -221,6 +221,12 @@ def _cp1() -> dict[str, list[list[str]]]:
                 "5 percent fixed",
                 "2030",
                 "not a lease",
+                "FIXED",
+                "NONE",
+                "null",
+                "null",
+                "5.000",
+                "null",
                 "issuer-pack",
                 "issuer-pack p1",
             ]

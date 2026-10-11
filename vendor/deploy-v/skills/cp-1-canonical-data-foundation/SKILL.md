@@ -80,6 +80,7 @@ conclusions, never shorter reasoning or invented filler.
   - **unconditional_stable_tables_cp_model**: cp1.model_period_register; cp1.model_account_register; cp1.segment_revenue_schedule; cp1.adjusted_ebitda_bridge; cp1.debt_facility_register; cp1.model_reconciliation_register; cp1.downstream_readiness
   - **conditional_stable_table**: cp1.operating_kpi_schedule — when the issuer reports operating KPIs
   - **conditional_stable_table**: cp1.cp_model_segment_allocation — when source segments are present
+  - **conditional_stable_table**: cp1.pro_forma_adjustment_register — when a source states an adjustment for activity outside the reported LTM
   - **cp_model_downstream_consumer**: always listed
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: retained cp-model integration sources do not supply; obtain the complete underwriting source pack
@@ -138,7 +139,7 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 0
     - **T4.18**: structured below
-      - **columns**: facility_id; facility_name; period_id; facility_type; carrying_value; principal; drawn_amount; commitment; secured_status; seniority; currency; margin_or_coupon; maturity_date; lease_classification; source_id; source_locator
+      - **columns**: facility_id; facility_name; period_id; facility_type; carrying_value; principal; drawn_amount; commitment; secured_status; seniority; currency; margin_or_coupon; maturity_date; lease_classification; rate_type; reference_rate; spread_bps; floor_bps; fixed_rate; annual_amortisation; source_id; source_locator
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
@@ -205,7 +206,7 @@ Shared presentation rules:
 
 CP-MODEL interface tables are emitted on every run. They are not conditional on CP-MODEL having been named a downstream consumer when the run started: a handoff that omits them cannot be turned into a workbook later, and conversation text cannot supply a missing stable-table value. Publish each tagged table with real values, or with an explicit null and a gap row — never omit it. The readiness row always names CP-MODEL.
 
-Each of T4.14–T4.19 is one table, written once: its register heading, its `<!-- table-id: -->` comment, then the table (only blank lines between comment and table), which is both the register and the CP-MODEL interface table. Never repeat a register as a second, tagged copy. An absent value in these tables is `null` (every reader also accepts the canon's `—` as null, but write `null`). Every `null` in a value-bearing column is also listed in `## Gaps & Conflicts` with its table, row, column and reason; a `null` in a reference column means none applies, is not a gap and is not listed: `conflict_refs`, `limitation_refs`, `component_period_ids` on a directly reported period, `fiscal_quarter` on a row that is not a QUARTER. A worked skeleton is in `references/REF_CP-1_STEPS.md` § REF_CP-1_13. T4.4–T4.6 hold line-item rows only: never a note row inside them (its empty cells fail the register check); a note goes to T4.12.
+Each of T4.14–T4.19 is one table, written once: its register heading, its `<!-- table-id: -->` comment, then the table (only blank lines between comment and table), which is both the register and the CP-MODEL interface table. Never repeat a register as a second, tagged copy. An absent value in these tables is `null` (every reader also accepts the canon's `—` as null, but write `null`). Every `null` in a value-bearing column is also listed in `## Gaps & Conflicts` with its table, row, column and reason; a `null` in a reference column means none applies, is not a gap and is not listed: `conflict_refs`, `limitation_refs`, `component_period_ids` on a directly reported period, `fiscal_quarter` on a row that is not a QUARTER. On T4.18 the same holds for a rate term that does not apply: `floor_bps` with no floor stated, `fixed_rate` on a `FLOATING` row, `spread_bps` on a `FIXED` row. A bullet's `annual_amortisation` is `0`; `null` there means not stated and is a gap. A worked skeleton is in `references/REF_CP-1_STEPS.md` § REF_CP-1_13. T4.4–T4.6 hold line-item rows only: never a note row inside them (its empty cells fail the register check); a note goes to T4.12.
 
 No consolidated copy. T4.4–T4.6, on the Step 3 basis, are CP-1's normalized financials: write no consolidated T4.7 table, and give them every line item and every period the answer reports, FY included, so no figure exists only in a consolidated table. T4.10 keeps the KPIs T4.9 does not calculate (issuer-reported margins, segment and operating KPIs) beside the calculated ones. T4.15 is the CP-MODEL account interface: keep it complete although T4.4–T4.6 show the same figures, since it is their only machine-readable form.
 

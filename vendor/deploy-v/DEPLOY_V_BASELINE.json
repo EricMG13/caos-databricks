@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_BASELINE",
-  "baseline_digest": "41ccc5c90404c93062c47f7f889d254938fc453040f0ec9844a3cae457d20f23",
+  "baseline_digest": "fcd7d1151722a99d180a5fc28826f95485df67bb63c9cf72a22f559f1645b8c9",
   "packages": {
     "cp-0-source-readiness": {
       "files": {
@@ -65,24 +65,24 @@
     "cp-1-canonical-data-foundation": {
       "files": {
         "SKILL.md": {
-          "bytes": 22864,
-          "sha256": "76468199138d7b446a827e32461cf45576da020c32d233d0e5a9f638b803dd6d"
+          "bytes": 23337,
+          "sha256": "35b865705f9cb4a001c8a227767319bc3f34d274c3659164176ab2e70bf3a345"
         },
         "references/CP-1_RUNBOOK.md": {
           "bytes": 12030,
           "sha256": "7934e8c562832b8320243cbf08e84b16575a0d2e4974fd918bf094b300fcd4ad"
         },
         "references/CP-1_SCHEMA_REFERENCE.md": {
-          "bytes": 6982,
-          "sha256": "8189b989fc326aa706f93137c38d5fe630403fbca238fb0ed106f7bde5a4e450"
+          "bytes": 7777,
+          "sha256": "356e87cb37a5ed86c96b15a913f42b8aafee544cd70e4f8f2fde01ce58cc7b72"
         },
         "references/CP-1_SYSTEM_REFERENCE.md": {
           "bytes": 2807,
           "sha256": "7af64a9047ffa05e996dbb4cb1741b9a815744ecb7eb7bd3b134a4bccf9d2cd0"
         },
         "references/REF_CP-1_STEPS.md": {
-          "bytes": 39628,
-          "sha256": "42a598d63fcb851a8c5ba01d108bb2e6ae04f0fe70b3a11d11f9b418d2e74231"
+          "bytes": 43468,
+          "sha256": "e9552f0d2b128cbe27ec58cdc2360e0e67c96a9f6ec21a140854f310de201bc1"
         },
         "scripts/completeness_check.py": {
           "bytes": 49508,
@@ -1253,8 +1253,8 @@
           "sha256": "9bba605fd7b6ea23038de15e5a1ae6714b3d3fb14ed2d6e6bedbfb0665ca2122"
         },
         "scripts/validate_cp_model_inputs.py": {
-          "bytes": 77208,
-          "sha256": "db29ae512a4f4745f4e5ec1c5f4c950a2b61239e7fb9e332a922370b40e3eba1"
+          "bytes": 77305,
+          "sha256": "f6d1e6b8cdff252a273f0acb5e415e4de483545d283b3fc59fa2118044b0e64b"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
