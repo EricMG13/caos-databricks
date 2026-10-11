@@ -49,6 +49,8 @@ dev = [
   "langchain-openai>=1.0",
   # Property tests on the money arithmetic (D121); pre-approved test tool.
   "hypothesis==6.167.1",
+  # Mutation tests on the credit model's money arithmetic; pre-approved test tool.
+  "mutmut==3.8.0",
 ]
 
 # Virtual project: nothing here is built or installed, so every distribution
@@ -90,6 +92,31 @@ python_version = "3.13"
 strict = true
 mypy_path = "stubs"
 exclude = ["^\\.venv/", "^vendor/"]
+
+# Mutation tests on the credit model's money arithmetic (mutmut 3.8.0 keys):
+# `uv run mutmut run "caos.calculators.credit_model.history.*"` (likewise
+# `.statements.*`, `.debt.*`, `._cells.*`, `.projection.*`, `.metrics.*`,
+# `.layout.*` and `.assemble.*`).
+# The whole package is copied to mutants/ (gitignored) so its imports resolve;
+# only the credit model is mutated, and the rate deck store
+# (`uv run mutmut run "caos.store.rate_decks.*"`, which needs the test
+# Postgres: CAOS_TEST_POSTGRES_URL and CAOS_REQUIRE_POSTGRES=1).
+[tool.mutmut]
+source_paths = ["caos"]
+only_mutate = ["caos/calculators/credit_model/*", "caos/store/rate_decks.py"]
+# The suite's conftest loads the pinned bundle and the agent definitions.
+also_copy = ["vendor", "icm"]
+pytest_add_cli_args = ["--no-cov", "-p", "no:cacheprovider"]
+pytest_add_cli_args_test_selection = [
+  "tests/test_credit_model_history.py",
+  "tests/test_credit_model_statements.py",
+  "tests/test_credit_model_debt.py",
+  "tests/test_credit_model_cells.py",
+  "tests/test_credit_model_projection.py",
+  "tests/test_credit_model_metrics.py",
+  "tests/test_credit_model_assemble.py",
+  "tests/test_rate_decks.py",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

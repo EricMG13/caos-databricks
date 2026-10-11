@@ -25,6 +25,9 @@ export const ENFORCED = [
   "ready_set",
   "benchmark",
   "golden_set",
+  "obligor",
+  "dry_run",
+  "rate_sheet",
 ];
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");

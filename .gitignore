@@ -28,3 +28,6 @@ frontend/test-results/
 
 # Hypothesis example database (D121).
 .hypothesis/
+
+# mutmut's working copy of the mutated package (pyproject [tool.mutmut]).
+mutants/
