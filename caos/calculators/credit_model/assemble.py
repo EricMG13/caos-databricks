@@ -43,7 +43,11 @@ has not, and a facility not in the stack at that date): with reason
 PF-LTM an account shows the LTM's figure, its PF rows beneath. Each fault
 reads `"<column_id>:<bridge>"`.
 
-The limitations list each component of a compound cell note ("a; b") under
+The limitations count the PF adjustments to a period the model has no PF
+column for (CP-1's LTM the grid does not show), name the periods on another
+accounting basis or perimeter
+than the anchor's, which no figure combines (`_cells.off_footing`), and list
+each component of a compound cell note ("a; b") under
 its own note, with the columns it is on, and say where the PF register
 states both an `ebitda` and an `adjusted_ebitda` adjustment to the PF-LTM (a
 PF `ebitda` adjustment already reaches adjusted EBITDA).
@@ -58,7 +62,7 @@ from dataclasses import dataclass
 from decimal import Decimal, localcontext
 from typing import Any
 
-from caos.calculators.credit_model._cells import CONTEXT
+from caos.calculators.credit_model._cells import CONTEXT, off_footing
 from caos.calculators.credit_model.debt import notes_of
 from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.calculators.credit_model.history import (
@@ -84,7 +88,9 @@ from caos.methodology.model_inputs import (
 )
 
 NO_PROJECTIONS = "No projections: this route did not run CP-2G/CP-CF"
+NOT_COMBINED = "Periods on another accounting basis or perimeter, not combined"
 NOT_APPLIED = "PF adjustment to a metric the model has no line for, not applied"
+PF_NOT_SHOWN = "PF adjustments to a period the model has no PF column for, not applied"
 DOUBLE_COUNT = (
     "PF register states both ebitda and adjusted_ebitda adjustments; "
     "check for double counting"
@@ -141,12 +147,21 @@ def _projected(inputs: ModelInputs, history: Frame) -> tuple[tuple[Column, ...],
 def _pro_forma_limitations(
     inputs: ModelInputs, columns: tuple[Column, ...], lines: tuple[Line, ...]
 ) -> list[str]:
-    """Each PF-LTM adjustment to a metric no line takes, and PF-LTM
-    adjustments to both EBITDA and adjusted EBITDA."""
+    """The PF adjustments to each period without a PF column (CP-1's LTM
+    the grid does not show), counted; each PF-LTM adjustment to a metric no
+    line takes; and PF-LTM adjustments to both EBITDA and adjusted EBITDA."""
     ids = {line.line_id for line in lines}
     pro_forma = {c.period_id for c in columns if c.kind == "PF_LTM"}
     applied = [a for a in inputs.registers.pro_forma if a.period_id in pro_forma]
+    dropped: dict[str, int] = {}
+    for row in inputs.registers.pro_forma:
+        if row.period_id not in pro_forma:
+            dropped[row.period_id] = dropped.get(row.period_id, 0) + 1
     found = [
+        f"{PF_NOT_SHOWN}: {period_id} ({n} adjustment{'' if n == 1 else 's'})"
+        for period_id, n in dropped.items()
+    ]
+    found += [
         f"{NOT_APPLIED}: {a.label}"
         for a in applied
         if f"pf:{a.adjustment_id}" not in ids
@@ -159,10 +174,15 @@ def _pro_forma_limitations(
 def _limitations(
     inputs: ModelInputs, columns: tuple[Column, ...], lines: tuple[Line, ...]
 ) -> tuple[str, ...]:
-    """The missing projections; the pro forma limitations; then each
+    """The missing projections; the periods on another footing
+    (`off_footing`), in register order; the pro forma limitations; then each
     distinct cell note (each component of a compound one) with the columns
     it is on, in line order."""
     model = [] if inputs.request is not None else [NO_PROJECTIONS]
+    off = off_footing(inputs.registers)
+    if off:
+        ids = [p.period_id for p in inputs.registers.periods if p.period_id in off]
+        model.append(f"{NOT_COMBINED}: {', '.join(ids)}")
     notes: dict[str, dict[str, None]] = {}
     for line in lines:
         for column, cell in zip(columns, line.cells, strict=True):

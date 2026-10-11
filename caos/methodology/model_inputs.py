@@ -28,8 +28,13 @@ driver written twice for a case, year and slot. The rate and amortisation
 columns the CP-1 fork added (owner-authorised 2026-10-10) are absent from an
 older run's debt register: they read as `NOT_STATED` or no value, never as a
 fault. A rate term written in the wrong unit (a spread or floor written with
-`%` or not a whole number of basis points, a fixed coupon below 0.5 or above
-30 percent) is kept as read, the row flagged `terms_out_of_range`.
+`%` or not a whole number of basis points, a fixed coupon below 0 or above
+30 percent) is kept as read, the row flagged `terms_out_of_range`; a coupon
+from 0 (a zero-coupon convertible) to 30 is as stated.
+An account row whose calculation status is Not Available or Not Calculable
+has no value, whatever figure it carries. A period's accounting basis and
+entity perimeter are read as written, and as not stated where null or where
+the run predates those columns.
 
 Pure: no I/O.
 """
@@ -40,7 +45,7 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Context, Decimal
 
 from caos.calculators.credit_model.frame import Case, SourceRef
 from caos.methodology.citation_markers import unmarked
@@ -80,6 +85,9 @@ _CALCULATION_STATUSES = frozenset(
         "NOT AVAILABLE",
     }
 )
+# The statuses under which an account row has no figure (CP-MODEL's
+# validator: "zero cannot stand in for unavailable/null").
+_UNAVAILABLE = frozenset({"NOT CALCULABLE", "NOT AVAILABLE"})
 _ADDBACK_CLASSIFICATIONS = frozenset(
     {
         "RESTRUCTURING",
@@ -136,12 +144,18 @@ _FIRST_YEAR, _LAST_YEAR = 1900, 2200
 # The longest period two dates in that range can span.
 _MAX_DAYS = (date(_LAST_YEAR, 12, 31) - date(_FIRST_YEAR, 1, 1)).days + 1
 MAX_PERIODS = 200
-# A figure's bounds: below 10^18 in size, at most 10 decimals, so every sum
-# and product the model takes of it stays exact at precision 38.
+# A figure's bounds: below 10^18 in size, at most 10 decimals, so it has at
+# most 28 significant digits and every sum the model takes of such figures
+# stays exact at precision 38; a product or quotient of two can need more,
+# and is rounded half to even at the 38th digit (`_cells.CONTEXT`).
 MAX_FIGURE = Decimal(10) ** 18
 MAX_DECIMALS = 10
-# A fixed coupon in percent; outside it, a decimal read as a percent.
-_COUPON_RANGE = (Decimal("0.5"), Decimal(30))
+_PLACES = Decimal(1).scaleb(-MAX_DECIMALS)
+# Room for any figure's 28 digits, whatever the caller's context.
+_ROUNDING = Context(prec=38, rounding=ROUND_HALF_EVEN)
+# A fixed coupon in percent, as stated from 0 (a zero-coupon convertible) up;
+# above it, a term in the wrong unit.
+_COUPON_RANGE = (Decimal(0), Decimal(30))
 _BPS_TERMS = ("spread_bps", "floor_bps")
 MAX_NESTING = 4  # a period's components, theirs, and so on, at most this deep
 _DEBT_ADJUSTMENT = "DEBT ADJUSTMENT"
@@ -163,6 +177,10 @@ class PeriodRow:
     currency: str
     unit: str
     component_period_ids: tuple[str, ...]
+    # CP-1's `accounting_basis` and `entity_perimeter`: None where not stated
+    # (a null, or a run that predates the columns).
+    accounting_basis: str | None = None
+    entity_perimeter: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,7 +250,7 @@ class FacilityRow:
     annual_amortisation: Decimal | None
     source: SourceRef | None
     # A spread or floor written with `%` or not whole basis points, or a
-    # fixed coupon outside 0.5-30 percent: the terms are not priced.
+    # fixed coupon outside 0-30 percent: the terms are not priced.
     terms_out_of_range: bool = False
 
 
@@ -510,6 +528,8 @@ def _period(row: _Row) -> PeriodRow:
         currency=_enum(row, "currency"),
         unit=_enum(row, "unit", _PERIOD_UNITS),
         component_period_ids=_components(row),
+        accounting_basis=_optional(row, "accounting_basis"),
+        entity_perimeter=_optional(row, "entity_perimeter"),
     )
 
 
@@ -527,16 +547,18 @@ _ACCOUNT_COLUMNS = frozenset(
 
 def _account(row: _Row) -> AccountRow:
     """An account row; a negative RCF commitment or drawing (a balance, never
-    an outflow) is refused."""
+    an outflow) is refused. Under a calculation status in `_UNAVAILABLE` the
+    value is null whatever figure the row carries."""
     metric_id = _text(row, "metric_id")
     value = _figure(row, "value")
     if metric_id in _RCF_BALANCES and value is not None and value < 0:
         raise _malformed()
+    status = _enum(row, "calculation_status", _CALCULATION_STATUSES)
     return AccountRow(
         metric_id=metric_id,
         period_id=_text(row, "period_id"),
-        value=value,
-        calculation_status=_enum(row, "calculation_status", _CALCULATION_STATUSES),
+        value=None if status in _UNAVAILABLE else value,
+        calculation_status=status,
         source=_source(row, "value"),
     )
 
@@ -656,7 +678,7 @@ def _non_negative(row: _Row, column: str) -> Decimal | None:
 def _out_of_range(row: _Row) -> bool:
     """Whether a rate term is written in the wrong unit: a spread or floor
     with `%` in its text or not whole basis points, or a fixed coupon outside
-    0.5-30 percent (a decimal read as a percent)."""
+    0-30 percent."""
     for column in _BPS_TERMS:
         value = _figure(row, column)
         if value is None:
@@ -859,16 +881,21 @@ _DRIVER_COLUMNS = frozenset(
 def _fraction(row: _Row) -> Decimal:
     """A READY growth driver's value as a decimal fraction, CP-MODEL's
     convention (`validate_cp_model_inputs._number`): a cell written with `%`
-    divides by 100, where the host's figure keeps the points. Refused when
-    the unit is not `PERCENT_DECIMAL` or the row has no value."""
+    divides by 100, where the host's figure keeps the points, then is
+    rounded half to even to `MAX_DECIMALS` decimals where that leaves more.
+    Refused when the unit is not `PERCENT_DECIMAL` or the row has no
+    value."""
     value = _figure(row, "value")
     if _enum(row, "unit", _DRIVER_UNITS) != "PERCENT_DECIMAL" or value is None:
         raise _malformed()
-    if "%" in unmarked(row["value"].text):
-        # Exact at any length: the exponent moves, no context rounds it.
-        sign, digits, exponent = value.as_tuple()
-        return Decimal((sign, digits, int(exponent) - 2))
-    return value
+    if "%" not in unmarked(row["value"].text):
+        return value
+    # The exponent moves two places, exactly: no context rounds it.
+    sign, digits, exponent = value.as_tuple()
+    fraction = Decimal((sign, digits, int(exponent) - 2))
+    if -int(fraction.as_tuple().exponent) <= MAX_DECIMALS:
+        return fraction
+    return fraction.quantize(_PLACES, context=_ROUNDING)
 
 
 def _growth(row: _Row) -> DivisionGrowth | None:

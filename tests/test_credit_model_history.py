@@ -19,8 +19,14 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from caos.calculators.credit_model import history
-from caos.calculators.credit_model._cells import SIGN_NORMALISED, UNSPANNED
+from caos.calculators.credit_model._cells import (
+    SIGN_NORMALISED,
+    UNSPANNED,
+    anchor_period,
+    off_footing,
+)
 from caos.calculators.credit_model.assemble import (
+    NOT_COMBINED,
     CreditModel,
     ModelInputs,
     credit_model,
@@ -1967,3 +1973,59 @@ def test_a_ytd_built_from_quarters_with_a_gap_does_not_meet_the_year() -> None:
     assert frame["LTM:LTM_Q2_2026"]["acct:revenue"] == Cell(
         None, "COMPONENT_MISSING", stated=Decimal(11654), note=UNSPANNED
     )
+
+
+def _halves() -> Cp1Registers:
+    """Run 9b9e2b72's shape: Q2 25 and Q2 26, FY24 and FY25, H1 25 and H1 26."""
+    return _regs(
+        quarters={
+            "Q2_2025": {"revenue": "101.5", "cogs": -40},
+            "Q2_2026": {"revenue": "111.25", "cogs": -44},
+        },
+        fy={
+            "FY2024": {"revenue": 380, "cogs": -150},
+            "FY2025": {"revenue": "400.5", "cogs": -160},
+        },
+        ytd={
+            "H1_2025": {"revenue": "200.25", "cogs": -79},
+            "H1_2026": {"revenue": "210.5", "cogs": -83},
+        },
+    )
+
+
+def _footing(
+    regs: Cp1Registers, **others: tuple[str | None, str | None]
+) -> Cp1Registers:
+    """`regs` with every period on US GAAP, consolidated, except the named
+    periods' (basis, perimeter)."""
+
+    def footed(period: PeriodRow) -> PeriodRow:
+        basis, perimeter = others.get(period.period_id, ("US GAAP", "Consolidated"))
+        return replace(period, accounting_basis=basis, entity_perimeter=perimeter)
+
+    return replace(regs, periods=tuple(footed(p) for p in regs.periods))
+
+
+def test_off_footing_names_the_periods_on_another_basis_or_perimeter() -> None:
+    regs = _footing(
+        example_registers(),
+        FY2023=("IFRS", "Consolidated"),
+        Q1_2024=("US GAAP", "Continuing operations"),
+        Q2_2024=("us-gaap", "consolidated"),  # spelling aside, the same
+        Q1_2025=("US_GAAP", " Consolidated "),
+        Q3_2024=(None, "Continuing operations"),
+        Q4_2024=("IFRS", None),
+        FY2024=(None, None),  # not stated combines with anything
+    )
+    anchor = anchor_period(regs)
+    assert anchor is not None and anchor.period_id == "H1_2026"
+    assert off_footing(regs) == {"FY2023", "Q1_2024", "Q3_2024", "Q4_2024"}
+    limits = credit_model(_model_inputs(regs)).limitations
+    assert f"{NOT_COMBINED}: FY2023, Q1_2024, Q3_2024, Q4_2024" in limits
+    # An anchor that states neither: nothing differs from it.
+    unstated = _footing(regs, H1_2026=(None, None), FY2023=("IFRS", "X"))
+    assert off_footing(unstated) == frozenset()
+    assert off_footing(replace(regs, periods=())) == frozenset()
+    # The anchor is the latest end; an FY before a YTD before a quarter.
+    halves = anchor_period(_halves())
+    assert halves is not None and halves.period_id == "H1_2026"

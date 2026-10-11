@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import ast
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_DOWN, Context, Decimal, localcontext
 
 import pytest
 from canonical_fixtures import BUNDLE
 
+from caos.calculators.credit_model.assemble import ModelInputs, credit_model
 from caos.calculators.credit_model.frame import Cell, Column, SourceRef
 from caos.calculators.credit_model.projection import facility_rate
 from caos.methodology import model_inputs
@@ -351,6 +352,8 @@ def test_cp1_registers_reads_each_register_into_typed_rows() -> None:
             currency="USD",
             unit="MILLIONS",
             component_period_ids=("Q1_2026", "H1_2026"),
+            accounting_basis="US GAAP",
+            entity_perimeter="Consolidated",
         ),
     )
     assert registers.accounts == (
@@ -439,6 +442,42 @@ def test_cp1_registers_reads_each_register_into_typed_rows() -> None:
             source=SourceRef("S5", "Lender presentation p.8", "12.5 [C7]"),
         ),
     )
+
+
+def test_a_period_type_written_with_separators_reads_canonically() -> None:
+    row = list(period_row("Q2_2026"))
+    row[PERIOD_COLUMNS.index("period_type")] = cell("period end")
+    row[PERIOD_COLUMNS.index("unit")] = cell("millions_")
+    row[PERIOD_COLUMNS.index("fiscal_quarter")] = NULL
+    row[PERIOD_COLUMNS.index("component_period_ids")] = NULL
+    tables = [t for t in full_set() if t.table_id != "cp1.model_period_register"]
+    (period,) = cp1_registers([*tables, period_table(tuple(row))]).periods
+    assert (period.period_type, period.unit) == ("PERIOD_END", "MILLIONS")
+
+
+def test_a_period_register_without_basis_or_perimeter_reads_them_as_not_stated() -> (
+    None
+):
+    """A run that predates CP-1's accounting basis and entity perimeter
+    columns reads both as not stated; so does a null."""
+    dropped = {"accounting_basis", "entity_perimeter"}
+    keep = [i for i, name in enumerate(PERIOD_COLUMNS) if name not in dropped]
+    row = period_row("Q2_2026")
+    older = HandoffTable(
+        "cp1.model_period_register",
+        tuple(PERIOD_COLUMNS[i] for i in keep),
+        (tuple(row[i] for i in keep),),
+    )
+    tables = [t for t in full_set() if t.table_id != older.table_id] + [older]
+    (period,) = cp1_registers(tables).periods
+    assert (period.accounting_basis, period.entity_perimeter) == (None, None)
+
+    nulls = list(row)
+    for name in dropped:
+        nulls[PERIOD_COLUMNS.index(name)] = NULL
+    tables = [t for t in full_set() if t.table_id != older.table_id]
+    (period,) = cp1_registers([*tables, period_table(tuple(nulls))]).periods
+    assert (period.accounting_basis, period.entity_perimeter) == (None, None)
 
 
 def test_a_debt_register_without_the_rate_columns_reads_them_as_not_stated() -> None:
@@ -719,10 +758,74 @@ def test_a_calculation_status_of_not_available_is_a_status_not_a_null(
 
     accounts = cp1_registers(with_table(table)).accounts
 
+    # Whatever figure the row carries, the value is null (a zero cannot
+    # stand in for unavailable: CP-MODEL's validator's rule).
     assert [(row.calculation_status, row.value) for row in accounts] == [
-        (status.upper(), Decimal("1250.0")),
+        (status.upper(), None),
         (status.upper(), None),
     ]
+
+
+def _capex_model(value: str, status: str) -> tuple[Cell, Cell]:
+    """Capex and FCF on Q2 2026 from CP-1 tables with CFO 500 verified and
+    capex `value` under `status`."""
+    period = (
+        cell("Q2_2026"),
+        figure("2026", "2026"),
+        figure("2", "2"),
+        cell("QUARTER"),
+        cell("2026-04-01"),
+        cell("2026-06-30"),
+        figure("91", "91"),
+        cell("UNAUDITED"),
+        cell("USD"),
+        cell("millions"),
+        cell("US GAAP"),
+        cell("Consolidated"),
+        cell("S1"),
+        cell("10-Q"),
+        NULL,
+    )
+
+    def row(metric: str, text: str, row_status: str) -> tuple[TableCell, ...]:
+        return (
+            cell(metric),
+            cell("Q2_2026"),
+            figure(text, text),
+            cell("NEGATIVE"),
+            cell("FLOW"),
+            cell(row_status),
+            cell("S1"),
+            cell("p. 1"),
+            NULL,
+            NULL,
+        )
+
+    accounts = HandoffTable(
+        account_table().table_id,
+        account_table().columns,
+        (
+            row("cfo_ncfo", "500", "Verified"),
+            row("capex_and_intangible_investment", value, status),
+        ),
+    )
+    regs = cp1_registers([period_table(period), accounts])
+    model = credit_model(ModelInputs(regs, None, (), (), None))
+    at = [c.column_id for c in model.columns].index("Q:Q2_2026")
+    lines = {line.line_id: line.cells[at] for line in model.lines}
+    return lines["capex"], lines["fcf"]
+
+
+@pytest.mark.parametrize("value", ["0", "-120"])
+@pytest.mark.parametrize("status", ["Not Available", "Not Calculable"])
+def test_a_figure_marked_not_available_never_reaches_fcf(
+    value: str, status: str
+) -> None:
+    capex, fcf = _capex_model(value, status)
+    assert capex == Cell(None, "NOT_STATED")
+    assert (fcf.value, fcf.reason) == (None, "COMPONENT_MISSING")
+    capex, fcf = _capex_model(value, "Verified")
+    assert fcf.value == 500 + Decimal(value)
 
 
 def _validator_constant(name: str) -> object:
@@ -986,6 +1089,39 @@ def test_a_percent_division_growth_cell_reads_as_a_fraction() -> None:
         DivisionGrowth("BASE", "2027", "DIVISION_1", Decimal("0.08")),
         DivisionGrowth("BASE", "2027", "DIVISION_2", Decimal("-0.025")),
     )
+
+
+@pytest.mark.parametrize(
+    ("written", "fraction"),
+    [
+        ("1.0000000001", "0.0100000000"),  # 12 decimals, rounded to 10
+        ("2.0000000050", "0.0200000000"),  # half to even: down
+        ("2.0000000150", "0.0200000002"),  # half to even: up
+        ("-1.0000000099", "-0.0100000001"),
+        ("8.25", "0.0825"),  # within 10 decimals: exact, as written
+    ],
+)
+def test_a_percent_growth_cell_is_a_fraction_of_at_most_max_decimals(
+    written: str, fraction: str
+) -> None:
+    """The adversary's MINOR-8: a percent moves the exponent two places, so
+    a figure of `MAX_DECIMALS` decimals would be a fraction of two more."""
+    table = drivers(
+        driver(
+            "division_growth",
+            "DIVISION_1",
+            "BASE",
+            "READY",
+            figure(f"{written}%", written),
+        )
+    )
+
+    (growth,) = division_growth([table])
+    with localcontext(Context(prec=5, rounding=ROUND_DOWN)):  # never the caller's
+        (narrow,) = division_growth([table])
+
+    assert str(growth.value) == str(narrow.value) == fraction
+    assert -int(growth.value.as_tuple().exponent) <= model_inputs.MAX_DECIMALS
 
 
 def test_a_ready_division_growth_row_in_another_unit_is_refused() -> None:
@@ -1270,8 +1406,7 @@ def test_a_growth_row_written_twice_for_one_case_year_and_slot_is_refused() -> N
         ("spread_bps", figure("212.5", "212.5")),  # not a whole basis point
         ("floor_bps", figure("0.50%", "0.50")),
         ("floor_bps", figure("12.5", "12.5")),
-        ("fixed_rate", figure("0.065", "0.065")),  # a decimal, not a percent
-        ("fixed_rate", figure("0.49", "0.49")),
+        ("fixed_rate", figure("-0.01", "-0.01")),
         ("fixed_rate", figure("30.01%", "30.01")),
     ],
 )
@@ -1295,6 +1430,11 @@ def test_a_rate_term_in_the_wrong_unit_is_flagged_out_of_range(
         ("fixed_rate", figure("6.5% [C8]", "6.5")),
         ("fixed_rate", figure("0.5", "0.5")),
         ("fixed_rate", figure("30", "30")),
+        # MINOR-10: from 0 the coupon is as stated; a zero-coupon
+        # convertible is valid.
+        ("fixed_rate", figure("0", "0")),
+        ("fixed_rate", figure("0.49", "0.49")),
+        ("fixed_rate", figure("0.065", "0.065")),
     ],
 )
 def test_a_rate_term_in_its_unit_is_not_flagged(
