@@ -31,8 +31,11 @@ from caos.calculators.credit_model.assemble import (
 from caos.calculators.credit_model.frame import Cell, Column
 from caos.calculators.credit_model.history import account_frame, historical_columns
 from caos.calculators.credit_model.layout import (
+    BANDS,
     FacilityTerms,
     Line,
+    LineKind,
+    Unit,
     facility_terms,
     layout,
 )
@@ -122,6 +125,522 @@ def test_the_worked_example_reconciles_with_no_faults() -> None:
     assert model.currency == "USD"
     assert model.unit == "MILLIONS"
     assert model.rate_deck_id == "deck-1"
+
+
+# (band index, line_id, kind, unit, rank, label), the worked example's order.
+_LAYOUT: tuple[tuple[int, str, LineKind, Unit, str | None, str], ...] = (
+    # Operating KPIs
+    (
+        0,
+        "kpi:lv_room_nights",
+        "ACCOUNT",
+        "KPI",
+        None,
+        "Las Vegas room nights (thousands)",
+    ),
+    (0, "kpi:lv_occupancy", "ACCOUNT", "KPI", None, "Las Vegas hotel occupancy"),
+    (0, "kpi:rewards_members", "ACCOUNT", "KPI", None, "Rewards members, period end"),
+    # Revenue by business unit
+    (1, "bu:las_vegas", "ACCOUNT", "MONEY", None, "Las Vegas"),
+    (1, "bu_growth:las_vegas", "GROWTH", "PERCENT", None, "Las Vegas growth YoY"),
+    (1, "bu:regional", "ACCOUNT", "MONEY", None, "Regional"),
+    (1, "bu_growth:regional", "GROWTH", "PERCENT", None, "Regional growth YoY"),
+    (1, "bu:digital", "ACCOUNT", "MONEY", None, "Digital"),
+    (1, "bu_growth:digital", "GROWTH", "PERCENT", None, "Digital growth YoY"),
+    (1, "bu:managed_other", "ACCOUNT", "MONEY", None, "Managed and other"),
+    (
+        1,
+        "bu_growth:managed_other",
+        "GROWTH",
+        "PERCENT",
+        None,
+        "Managed and other growth YoY",
+    ),
+    (
+        1,
+        "bu:corporate_eliminations",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Corporate and eliminations",
+    ),
+    (1, "revenue", "SUBTOTAL", "MONEY", None, "Total revenue"),
+    (1, "revenue_growth", "GROWTH", "PERCENT", None, "Total revenue growth YoY"),
+    # Gross profit
+    (2, "cogs", "ACCOUNT", "MONEY", None, "Cost of revenue"),
+    (2, "gross_profit", "SUBTOTAL", "MONEY", None, "Gross profit"),
+    (2, "metric:gross_margin", "RATIO", "PERCENT", None, "Gross margin"),
+    # Operating expenses to EBITDA
+    (3, "opex_ex_da", "ACCOUNT", "MONEY", None, "Operating expenses excluding D&A"),
+    (3, "da", "ACCOUNT", "MONEY", None, "Depreciation and amortisation"),
+    (3, "opex_total", "SUBTOTAL", "MONEY", None, "Total operating expenses"),
+    (3, "ebit", "SUBTOTAL", "MONEY", None, "EBIT"),
+    (3, "ebitda", "SUBTOTAL", "MONEY", None, "EBITDA"),
+    (3, "metric:ebitda_margin", "RATIO", "PERCENT", None, "EBITDA margin"),
+    # Adjusted EBITDA
+    (
+        4,
+        "addback:restructuring",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Add-back: Restructuring (realised)",
+    ),
+    (
+        4,
+        "addback:stock_based_compensation",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Add-back: Stock-based compensation (realised)",
+    ),
+    (
+        4,
+        "addback:transaction_costs",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Add-back: Transaction costs (realised)",
+    ),
+    (
+        4,
+        "addback:run_rate_cost_savings",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Add-back: Run-rate cost savings (unrealised)",
+    ),
+    (
+        4,
+        "pf:silverlake_ebitda",
+        "PF",
+        "MONEY",
+        None,
+        "PF adjustment: Silverlake Resort LTM adjusted EBITDA",
+    ),
+    (4, "adjusted_ebitda", "SUBTOTAL", "MONEY", None, "Adjusted EBITDA"),
+    (
+        4,
+        "metric:adjusted_ebitda_margin",
+        "RATIO",
+        "PERCENT",
+        None,
+        "Adjusted EBITDA margin",
+    ),
+    (
+        4,
+        "operating_lease_cost",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Operating lease cost (rent)",
+    ),
+    (4, "adjusted_ebitdar", "SUBTOTAL", "MONEY", None, "Adjusted EBITDAR"),
+    # Adjusted EBITDA to free cash flow
+    (5, "cash_interest", "ACCOUNT", "MONEY", None, "Cash interest paid"),
+    (
+        5,
+        "pf:silverlake_interest",
+        "PF",
+        "MONEY",
+        None,
+        "PF adjustment: Interest on the add-on 7.000% notes",
+    ),
+    (
+        5,
+        "lease_cash_not_in_ebitda",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Lease cash not in EBITDA",
+    ),
+    (5, "cash_taxes", "ACCOUNT", "MONEY", None, "Cash taxes paid"),
+    (
+        5,
+        "other_operating",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Other operating cash items (residual)",
+    ),
+    (5, "ffo", "SUBTOTAL", "MONEY", None, "Funds from operations (FFO)"),
+    (
+        5,
+        "working_capital_change",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Change in working capital",
+    ),
+    (
+        5,
+        "cfo_adjusted",
+        "SUBTOTAL",
+        "MONEY",
+        None,
+        "Cash from operations, after all interest and lease cash",
+    ),
+    (
+        5,
+        "cfo_reported",
+        "MEMO",
+        "MONEY",
+        None,
+        "Memo: cash from operations as reported",
+    ),
+    (5, "capex", "ACCOUNT", "MONEY", None, "Capital expenditure"),
+    (5, "fcf", "SUBTOTAL", "MONEY", None, "Free cash flow (FCF)"),
+    # Net cash flow, cash and liquidity
+    (
+        6,
+        "acquisitions_net",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Acquisitions and disposals, net",
+    ),
+    (6, "debt_raised_net", "ACCOUNT", "MONEY", None, "Debt raised, net of repayments"),
+    (
+        6,
+        "equity_raised_net",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Equity raised, net of buybacks",
+    ),
+    (6, "dividends", "ACCOUNT", "MONEY", None, "Dividends and other distributions"),
+    (
+        6,
+        "other_investing_financing",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Other investing and financing",
+    ),
+    (6, "ncf", "SUBTOTAL", "MONEY", None, "Net cash flow (NCF)"),
+    (6, "cash_opening", "ACCOUNT", "MONEY", None, "Opening cash"),
+    (
+        6,
+        "fx_and_other_cash",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "FX and other cash movements (residual)",
+    ),
+    (6, "cash_closing", "SUBTOTAL", "MONEY", None, "Closing cash and equivalents"),
+    (
+        6,
+        "pf:silverlake_cash",
+        "PF",
+        "MONEY",
+        None,
+        "PF adjustment: Cash used in the acquisition",
+    ),
+    (6, "undrawn_rcf", "ACCOUNT", "MONEY", None, "Undrawn RCF"),
+    (6, "liquidity", "SUBTOTAL", "MONEY", None, "Liquidity"),
+    # Debt stack by payment rank, period end
+    (
+        7,
+        "fac:rcf",
+        "ACCOUNT",
+        "MONEY",
+        "Super senior",
+        "Revolving credit facility ($2,200m commitment)",
+    ),
+    (7, "fac:tlb", "ACCOUNT", "MONEY", "Senior secured", "Term loan B"),
+    (
+        7,
+        "fac:ssn29",
+        "ACCOUNT",
+        "MONEY",
+        "Senior secured",
+        "6.500% senior secured notes",
+    ),
+    (
+        7,
+        "fac:ssn31",
+        "ACCOUNT",
+        "MONEY",
+        "Senior secured",
+        "7.000% senior secured notes",
+    ),
+    (
+        7,
+        "pf:silverlake_notes",
+        "PF",
+        "MONEY",
+        "Senior secured",
+        "PF adjustment: Add-on 7.000% senior secured notes",
+    ),
+    (
+        7,
+        "rank:Senior secured",
+        "SUBTOTAL",
+        "MONEY",
+        "Senior secured",
+        "Total senior secured",
+    ),
+    (7, "fac:sun29", "ACCOUNT", "MONEY", "Senior unsecured", "4.625% senior notes"),
+    (7, "fac:sun32", "ACCOUNT", "MONEY", "Senior unsecured", "6.000% senior notes"),
+    (
+        7,
+        "rank:Senior unsecured",
+        "SUBTOTAL",
+        "MONEY",
+        "Senior unsecured",
+        "Total senior unsecured",
+    ),
+    (
+        7,
+        "fac:sub27",
+        "ACCOUNT",
+        "MONEY",
+        "Subordinated",
+        "8.125% senior subordinated notes",
+    ),
+    (7, "fac:finl", "ACCOUNT", "MONEY", "Finance leases", "Finance lease liabilities"),
+    (
+        7,
+        "fac:disc",
+        "ACCOUNT",
+        "MONEY",
+        "Debt adjustments",
+        "Unamortised discount and issuance costs",
+    ),
+    (
+        7,
+        "debt:unallocated",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Unallocated movements (CP-CF)",
+    ),
+    (7, "total_debt", "SUBTOTAL", "MONEY", None, "Total debt"),
+    (7, "lease_liabilities", "ACCOUNT", "MONEY", None, "Operating lease liabilities"),
+    (7, "lease_adjusted_debt", "SUBTOTAL", "MONEY", None, "Lease-adjusted debt"),
+    (7, "less_cash", "ACCOUNT", "MONEY", None, "Less: cash and equivalents"),
+    (7, "net_debt", "SUBTOTAL", "MONEY", None, "Net debt"),
+    (
+        7,
+        "lease_adjusted_net_debt",
+        "SUBTOTAL",
+        "MONEY",
+        None,
+        "Lease-adjusted net debt",
+    ),
+    # Debt roll-forward
+    (8, "debt_opening", "ACCOUNT", "MONEY", None, "Opening total debt"),
+    (
+        8,
+        "rollforward:debt_raised_net",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Debt raised, net of repayments",
+    ),
+    (
+        8,
+        "debt_non_cash",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Non-cash and lease movements (residual)",
+    ),
+    (
+        8,
+        "rollforward:pf:silverlake_notes",
+        "PF",
+        "MONEY",
+        None,
+        "PF adjustment: Add-on 7.000% senior secured notes",
+    ),
+    (8, "debt_closing", "SUBTOTAL", "MONEY", None, "Closing total debt"),
+    # Interest calculation, projections
+    (
+        9,
+        "reference_rate",
+        "ACCOUNT",
+        "RATE",
+        None,
+        "Reference rate, rate deck 2026-10-01",
+    ),
+    (
+        9,
+        "interest_bearing_debt_opening",
+        "ACCOUNT",
+        "MONEY",
+        None,
+        "Interest-bearing debt, opening",
+    ),
+    (9, "wa_rate", "RATIO", "RATE", None, "Weighted average all-in rate"),
+    # Working capital, period end
+    (10, "accounts_receivable", "ACCOUNT", "MONEY", None, "Accounts receivable"),
+    (10, "inventory", "ACCOUNT", "MONEY", None, "Inventory"),
+    (10, "accounts_payable", "ACCOUNT", "MONEY", None, "Accounts payable"),
+    (10, "dso", "RATIO", "DAYS", None, "DSO"),
+    (10, "dio", "RATIO", "DAYS", None, "DIO"),
+    (10, "dpo", "RATIO", "DAYS", None, "DPO"),
+    (10, "ccc", "RATIO", "DAYS", None, "Cash conversion cycle"),
+    # Credit metrics (leverage and coverage on 12-month EBITDA)
+    (
+        11,
+        "metric:total_leverage_reported",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "Total leverage, reported EBITDA",
+    ),
+    (
+        11,
+        "metric:total_leverage_adjusted",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "Total leverage, adjusted EBITDA",
+    ),
+    (
+        11,
+        "metric:net_leverage_reported",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "Net leverage, reported EBITDA",
+    ),
+    (
+        11,
+        "metric:net_leverage_adjusted",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "Net leverage, adjusted EBITDA",
+    ),
+    (
+        11,
+        "metric:senior_secured_leverage",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "Senior secured leverage, adjusted EBITDA",
+    ),
+    (
+        11,
+        "metric:senior_secured_net_leverage",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "Senior secured net leverage, adjusted EBITDA",
+    ),
+    (
+        11,
+        "metric:lease_adjusted_leverage",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "Lease-adjusted leverage, adjusted EBITDAR",
+    ),
+    (
+        11,
+        "metric:lease_adjusted_net_leverage",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "Lease-adjusted net leverage, adjusted EBITDAR",
+    ),
+    (
+        11,
+        "metric:interest_coverage_reported",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "EBITDA / cash interest, reported",
+    ),
+    (
+        11,
+        "metric:interest_coverage_adjusted",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "Adjusted EBITDA / cash interest",
+    ),
+    (
+        11,
+        "metric:capex_adjusted_coverage",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "(Adjusted EBITDA - capex) / cash interest",
+    ),
+    (
+        11,
+        "metric:ebitdar_coverage",
+        "RATIO",
+        "MULTIPLE",
+        None,
+        "(Adjusted EBITDAR - capex) / (cash interest + rent)",
+    ),
+    (11, "metric:ffo_to_debt", "RATIO", "PERCENT", None, "FFO / total debt"),
+    (
+        11,
+        "metric:ffo_to_lease_adjusted_debt",
+        "RATIO",
+        "PERCENT",
+        None,
+        "FFO / lease-adjusted debt",
+    ),
+    (11, "metric:fcf_to_debt", "RATIO", "PERCENT", None, "FCF / total debt"),
+    (
+        11,
+        "metric:fcf_to_adjusted_ebitda",
+        "RATIO",
+        "PERCENT",
+        None,
+        "FCF / adjusted EBITDA",
+    ),
+    (11, "metric:capex_to_revenue", "RATIO", "PERCENT", None, "Capex / revenue"),
+    (
+        11,
+        "metric:liquidity_to_debt",
+        "RATIO",
+        "PERCENT",
+        None,
+        "Liquidity / total debt",
+    ),
+    (
+        11,
+        "adjusted_ebitda_growth",
+        "GROWTH",
+        "PERCENT",
+        None,
+        "Adjusted EBITDA growth YoY",
+    ),
+)
+
+
+def test_band_and_line_order_matches_the_layout() -> None:
+    model = _model()
+    assert [
+        (
+            BANDS.index(line.band),
+            line.line_id,
+            line.kind,
+            line.unit,
+            line.rank,
+            line.label,
+        )
+        for line in model.lines
+    ] == list(_LAYOUT)
+    assert [line.band for line in model.lines] == sorted(
+        (line.band for line in model.lines), key=BANDS.index
+    )
+    assert {line.band for line in model.lines} == set(BANDS)
+    assert all(len(line.cells) == len(model.columns) for line in model.lines)
+    kpis = {line.line_id: line.unit_label for line in model.lines if line.unit == "KPI"}
+    assert kpis == {
+        "kpi:lv_room_nights": "THOUSANDS",
+        "kpi:lv_occupancy": "PERCENT",
+        "kpi:rewards_members": "MILLIONS",
+    }
+    assert all(line.unit_label is None for line in model.lines if line.unit != "KPI")
 
 
 def test_columns_run_history_pf_then_base_years_then_downside_years() -> None:
@@ -866,6 +1385,10 @@ def test_a_period_without_revenue_notes_nothing() -> None:
 _BU_NOT_SUMMED = "business units do not sum to revenue"
 _EXCLUDES_FOREIGN = "excludes facility in another currency"
 _EXCLUDES_UNALLOCATED = "excludes unallocated CP-CF movements"
+_DOUBLE_COUNT = (
+    "PF register states both ebitda and adjusted_ebitda adjustments; "
+    "check for double counting"
+)
 
 
 def _on(model: CreditModel) -> dict[str, str]:
@@ -951,6 +1474,35 @@ def test_projected_secured_metrics_note_unallocated_movements() -> None:
     assert _on(model)[_EXCLUDES_UNALLOCATED] == "BASE:2026, BASE:2027, BASE:2028"
 
 
+def test_a_pf_register_with_ebitda_and_adjusted_ebitda_rows_is_a_limitation() -> None:
+    regs = example_registers()
+    adjusted = next(a for a in regs.pro_forma if a.metric_id == "adjusted_ebitda")
+    both = replace(
+        regs,
+        pro_forma=(
+            *regs.pro_forma,
+            replace(adjusted, adjustment_id="silverlake_reported", metric_id="ebitda"),
+        ),
+    )
+
+    assert _DOUBLE_COUNT in _model(regs=both).limitations
+    assert _DOUBLE_COUNT not in _model().limitations
+    # Rows for another period than the LTM's are not on the PF-LTM.
+    elsewhere = replace(
+        both,
+        pro_forma=(
+            *regs.pro_forma,
+            replace(
+                adjusted,
+                adjustment_id="silverlake_reported",
+                metric_id="ebitda",
+                period_id="FY2025",
+            ),
+        ),
+    )
+    assert _DOUBLE_COUNT not in _model(regs=elsewhere).limitations
+
+
 def _signed_zeros(model: CreditModel) -> list[tuple[str, str]]:
     return [
         (line.line_id, column.column_id)
@@ -1009,6 +1561,40 @@ def test_a_compound_note_is_listed_under_each_of_its_notes() -> None:
     assert _BASE in on["amortisation not stated"].split(", ")
 
 
+def test_the_pf_ltm_debt_roll_forward_foots() -> None:
+    model = _model()
+    assert _cell(model, "debt_opening", _PF) == _cell(model, "debt_opening", _LTM)
+    assert _cell(model, "debt_non_cash", _PF) == _cell(model, "debt_non_cash", _LTM)
+    assert _cell(model, "rollforward:debt_raised_net", _PF) == _cell(
+        model, "rollforward:debt_raised_net", _LTM
+    )
+    assert _value(model, "debt_closing", _PF) == _value(model, "total_debt", _PF)
+    assert reconciliation_faults(model) == ()
+    assert reconciliation_faults(_nudged(model, "debt_closing", _PF)) == (
+        f"{_PF}:debt_rollforward",
+    )
+
+
+def test_a_debt_adjustment_classified_as_an_operating_lease_is_in_the_stack() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            replace(f, lease_classification="OPERATING_LEASE")
+            if f.facility_id == "disc"
+            else f
+            for f in regs.facilities
+        ),
+    )
+    model = _model(regs=regs)
+
+    line = _line(model, "fac:disc")
+    assert (line.kind, line.rank) == ("ACCOUNT", "Debt adjustments")
+    assert _value(model, "fac:disc", _BASE) == _value(model, "fac:disc", "FY:FY2025")
+    assert _value(model, "debt:unallocated", "DOWNSIDE:2026") == 0
+    assert reconciliation_faults(model) == ()
+
+
 def test_the_unallocated_line_has_no_payment_rank() -> None:
     assert _line(_model(), "debt:unallocated").rank is None
 
@@ -1037,6 +1623,53 @@ def test_an_add_back_label_shows_the_status_that_excludes_it() -> None:
     )
 
 
+def test_a_pf_facility_issued_after_the_ltm_sums_in_its_rank() -> None:
+    regs = example_registers()
+    ssn31 = next(f for f in regs.facilities if f.facility_id == "ssn31")
+    later = next(p for p in regs.periods if p.period_id == "LTM_Q2_2026")
+    post = replace(later, period_id="PE_2026_09", end_date="2026-09-30")
+    new = replace(
+        ssn31,
+        facility_id="ssn33",
+        facility_name="New 2033 notes",
+        period_id="PE_2026_09",
+        carrying_value=Decimal(600),
+    )
+    notes = next(a for a in regs.pro_forma if a.metric_id == "facility:ssn31")
+    regs = replace(
+        regs,
+        periods=(*regs.periods, post),
+        facilities=(*regs.facilities, new),
+        pro_forma=(
+            *(a for a in regs.pro_forma if a is not notes),
+            replace(notes, adjustment_id="ssn33_pf", metric_id="facility:ssn33"),
+        ),
+    )
+    model = _model(regs=regs, projected=False)
+
+    assert _value(model, "rank:Senior secured", _PF) == 2316 + 2000 + 1000 + 600
+    assert reconciliation_faults(model) == ()
+
+
+def test_interest_at_an_implied_rate_reconciles_to_its_last_digits() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            replace(f, spread_bps=Decimal("2.25"))
+            if f.facility_id == "tlb"
+            else replace(f, fixed_rate=Decimal("0.065"))
+            if f.facility_id == "ssn29"
+            else f
+            for f in regs.facilities
+        ),
+    )
+    model = _model(regs=regs)
+
+    assert _cell(model, "fac:tlb", "BASE:2027").note == "term out of range"
+    assert reconciliation_faults(model) == ()
+
+
 def test_business_unit_growth_reads_the_like_period() -> None:
     model = _model()
     with localcontext(CONTEXT):
@@ -1047,6 +1680,51 @@ def test_business_unit_growth_reads_the_like_period() -> None:
         )
     assert _value(model, "bu_growth:las_vegas", "FY:FY2025") == las_vegas
     assert _value(model, "bu_growth:las_vegas", _BASE) == Decimal("0.025")
+
+
+def test_an_acquisition_reconciles_through_the_net_cash_flow() -> None:
+    regs = with_figures(
+        example_registers(), "FY2025", {"acquisitions_disposals": Decimal(-120)}
+    )
+    model = _model(regs=regs)
+    assert _value(model, "acquisitions_net", "FY:FY2025") == -120
+    assert reconciliation_faults(model) == ()
+
+
+def _interest_at(gap: Decimal) -> tuple[str, ...]:
+    """The interest faults with a base of 1 at 5% and interest `gap` more
+    negative than minus their product: the check allows a unit of the rate
+    times the base (1E-39), the interest's rounding (about 5E-39) and a unit
+    of the interest (1E-39), about 7E-39."""
+    model = _model()
+    for line_id, value in (
+        ("interest_bearing_debt_opening", Decimal(1)),
+        ("wa_rate", Decimal("0.05")),
+        ("cash_interest", Decimal("-0.05") - gap),
+    ):
+        cell = replace(_cell(model, line_id, _BASE), value=value)
+        model = _with_cell(model, line_id, _BASE, cell)
+    return tuple(f for f in reconciliation_faults(model) if f.endswith(":interest"))
+
+
+def test_the_interest_bridge_allows_exactly_its_last_digits() -> None:
+    with localcontext(CONTEXT):
+        assert _interest_at(Decimal(0)) == ()
+        assert _interest_at(Decimal("6E-39")) == ()
+        assert _interest_at(Decimal("8E-39")) == (f"{_BASE}:interest",)
+
+
+def test_a_pf_register_of_only_ebitda_and_adjusted_ebitda_rows_is_noted() -> None:
+    regs = example_registers()
+    adjusted = next(a for a in regs.pro_forma if a.metric_id == "adjusted_ebitda")
+    only = replace(
+        regs,
+        pro_forma=(
+            adjusted,
+            replace(adjusted, adjustment_id="silverlake_reported", metric_id="ebitda"),
+        ),
+    )
+    assert _DOUBLE_COUNT in _model(regs=only).limitations
 
 
 def test_a_pf_refinancing_that_cuts_interest_raises_pf_coverage() -> None:
