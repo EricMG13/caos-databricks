@@ -639,6 +639,10 @@ def test_lock_run_also_ends_its_transaction_when_the_row_is_gone_under_for_updat
     def vanish(query: object, *args: object, **kwargs: object) -> object:
         result = real_execute(query, *args, **kwargs)  # type: ignore[arg-type]
         if isinstance(query, str) and "case_id FROM runs" in query:
+            # No run is ever deleted (`0050_rate_decks.sql`); this stands in
+            # for a row gone under the lock, and the unit's rollback below
+            # puts the trigger back with the row.
+            real_execute("ALTER TABLE runs DISABLE TRIGGER run_not_deleted")
             real_execute("DELETE FROM runs WHERE run_id = %s", (run_id,))
         return result
 

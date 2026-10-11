@@ -99,7 +99,11 @@ def test_native_children_are_immutable(
 )
 def test_combined_and_cascade_truncate_refuse(prepared: Prepared, tables: str) -> None:
     conn, _, _, _, _ = prepared
-    with pytest.raises(psycopg.errors.RaiseException, match="immutable"):
+    # `cases CASCADE` also reaches `runs`, which refuses its own truncation
+    # (`0050`); Postgres does not promise which cascaded table fires first.
+    with pytest.raises(
+        psycopg.errors.RaiseException, match=r"immutable|a run is never deleted"
+    ):
         conn.execute(f"TRUNCATE {tables}")
     conn.rollback()
     assert conn.execute("SELECT count(*) FROM source_blocks").fetchone() == (1,)
