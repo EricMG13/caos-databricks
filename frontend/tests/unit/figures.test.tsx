@@ -1080,11 +1080,11 @@ test("pressing a cell of the risk matrix names both labels and its count", () =>
   expect(figure.querySelector("[data-chart='risk-matrix']")).not.toBeNull();
   fireEvent.click(
     within(figure).getByRole("button", {
-      name: "Probability High, Impact High: 1 event, EV-1 (model-authored)",
+      name: "Probability High, Impact High: 1 event, EV-1 (a count of the model's rows)",
     }),
   );
   const picked = container.querySelector("[data-picked]")!;
-  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("1 events");
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("1 event");
   expect(picked).toHaveTextContent("Probability High · Impact High");
   expect(picked).toHaveTextContent("Computed here: a count of the model's rows, not served");
   expect(picked).not.toHaveTextContent("Model-authored");

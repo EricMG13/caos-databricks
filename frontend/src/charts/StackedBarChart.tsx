@@ -6,11 +6,19 @@
 import { ChartFrame } from "./ChartFrame";
 import { bandPlot, type BandBar } from "./band";
 import { formatDecimal, toNumber } from "./decimal";
-import { cellName, cellSelection, cellText, cellsOf, seriesLegend, seriesTable } from "./series";
+import {
+  cellName,
+  cellSelection,
+  cellText,
+  cellsOf,
+  seriesLegend,
+  seriesTable,
+  type Counted,
+} from "./series";
 import { stackOf, type Segment } from "./stack";
 import type { Orientation, SeriesChartProps, TableTwin } from "./types";
 
-function segmentBar(segment: Segment, unit: string | undefined): BandBar {
+function segmentBar(segment: Segment, unit: string | undefined, counted: Counted): BandBar {
   const { cell, share, gap } = segment;
   const said = share === null ? "" : `, ${share}% of the whole`;
   return {
@@ -25,8 +33,8 @@ function segmentBar(segment: Segment, unit: string | undefined): BandBar {
     gap: gap !== null,
     name:
       gap !== null && cell.value !== null
-        ? `${cellName(cell, unit)}; not drawn: ${gap}`
-        : cellName(cell, unit, said),
+        ? `${cellName(cell, unit, "", false, counted)}; not drawn: ${gap}`
+        : cellName(cell, unit, said, false, counted),
     label: null,
     selection: cellSelection(cell),
   };
@@ -42,18 +50,21 @@ export function StackedBarChart({
   mode = "absolute",
   orientation = "vertical",
   height,
+  unitOne,
+  computed,
   onSelect,
-}: SeriesChartProps & {
-  /** Amounts, or each stack as its whole and each segment as its share. */
-  mode?: "absolute" | "normalised";
-  orientation?: Orientation;
-  /** A vertical chart's height, axes included. */
-  height?: number;
-}) {
+}: SeriesChartProps &
+  Counted & {
+    /** Amounts, or each stack as its whole and each segment as its share. */
+    mode?: "absolute" | "normalised";
+    orientation?: Orientation;
+    /** A vertical chart's height, axes included. */
+    height?: number;
+  }) {
   const normalised = mode === "normalised";
   const cells = cellsOf(categories, series);
   const { segments, totals } = stackOf(cells, categories.length, normalised);
-  const bars = segments.map((segment) => segmentBar(segment, unit));
+  const bars = segments.map((segment) => segmentBar(segment, unit, { unitOne, computed }));
   const bySegment = new Map(segments.map((segment) => [segment.cell, segment]));
   const twin = seriesTable(categoryLabel, categories, series, cells, unit, (cell) => {
     const segment = bySegment.get(cell);

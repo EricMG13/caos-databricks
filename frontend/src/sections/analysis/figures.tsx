@@ -837,6 +837,8 @@ export interface FigurePick {
   /** What the value is where this host computed it, said in place of its
       origin: "a count of the model's rows". */
   computed?: string;
+  /** The unit said of a value of exactly 1. */
+  unitOne?: string;
 }
 
 /** What a bullet's or a range strip's marks are, by their selection's key. */
@@ -899,6 +901,7 @@ function Chart({
         ...(selection.interval ? { interval: selection.interval } : {}),
         unit: figure.unit,
         ...(figure.computed ? { computed: figure.computed } : {}),
+        ...(figure.unitOne ? { unitOne: figure.unitOne } : {}),
         source: figure.sourceOf(selection),
         origin: selection.origin,
       },
@@ -963,6 +966,8 @@ function Chart({
           categories={figure.categories}
           series={figure.series}
           categoryLabel={figure.categoryLabel}
+          unitOne={figure.unitOne}
+          computed={figure.computed}
         />
       );
     case "bars":
@@ -1047,6 +1052,27 @@ function Unread({ handoff }: { handoff: HandoffView }) {
   );
 }
 
+/** One figure in a grid: its chart, or past `MAX_MARKS` its title and summary. */
+export function FigureCell({
+  figure,
+  onPick,
+}: {
+  figure: Figure;
+  onPick: (pick: FigurePick, opener: HTMLElement) => void;
+}) {
+  return (
+    <div className={`fig ${figure.kind}`} data-figure={figure.key}>
+      {figure.oversized ? (
+        <p className="note" data-figure-oversized>
+          <b>{figure.title}.</b> {figure.summary}
+        </p>
+      ) : (
+        <Chart figure={figure} onPick={onPick} />
+      )}
+    </div>
+  );
+}
+
 export function Figures({
   handoff,
   calculation,
@@ -1086,15 +1112,7 @@ export function Figures({
         <ProvenanceKeyed value={false}>
           <div className="figgrid">
             {figures.map((figure) => (
-              <div key={figure.key} className={`fig ${figure.kind}`} data-figure={figure.key}>
-                {figure.oversized ? (
-                  <p className="note" data-figure-oversized>
-                    <b>{figure.title}.</b> {figure.summary}
-                  </p>
-                ) : (
-                  <Chart figure={figure} onPick={onPick} />
-                )}
-              </div>
+              <FigureCell key={figure.key} figure={figure} onPick={onPick} />
             ))}
           </div>
         </ProvenanceKeyed>

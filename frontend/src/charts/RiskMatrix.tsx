@@ -66,12 +66,13 @@ function idOf(event: RiskEvent): string {
 
 function originOf(events: readonly RiskEvent[]): { origin: Origin; said: string } {
   const host = events.filter((event) => event.origin === "host").length;
-  if (host === events.length) return { origin: "host", said: ORIGIN_WORD.host };
-  if (host === 0) return { origin: "model", said: ORIGIN_WORD.model };
+  // A cell's value is a count of its rows, and its name says so (Task 17).
+  if (host === events.length) return { origin: "host", said: "a count of host-verified rows" };
+  if (host === 0) return { origin: "model", said: "a count of the model's rows" };
   // A cell of both is drawn as the model's: no host check stands for it all.
   return {
     origin: "model",
-    said: `${host} ${ORIGIN_WORD.host}, ${events.length - host} ${ORIGIN_WORD.model}`,
+    said: `a count of rows: ${host} ${ORIGIN_WORD.host}, ${events.length - host} ${ORIGIN_WORD.model}`,
   };
 }
 

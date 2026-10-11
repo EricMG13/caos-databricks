@@ -236,7 +236,10 @@ function HostCalculation({ handoff, model }: { handoff: HandoffView; model: stri
 
 /** The pressed mark, said beside the figures it came from. */
 function Picked({ pick }: { pick: FigurePick }) {
-  const amount = (value: string) => `${formatDecimal(value)}${pick.unit ? ` ${pick.unit}` : ""}`;
+  const amount = (value: string) => {
+    const unit = value === "1" && pick.unitOne ? pick.unitOne : pick.unit;
+    return `${formatDecimal(value)}${unit ? ` ${unit}` : ""}`;
+  };
   return (
     <section className="pnl" data-picked aria-labelledby="picked-heading" aria-live="polite">
       <header>
@@ -293,7 +296,9 @@ function ModuleView({
   const { hash } = useLocation();
   const { openFact } = useEvidence();
   const register = sourceRegister(handoffs);
-  const [pick, setPick] = useState<FigurePick | null>(null);
+  // Where the pressed mark is, so the panel is said beside it: the Figures,
+  // or the Audit tab's counts.
+  const [pick, setPick] = useState<{ at: "figures" | "counts"; pick: FigurePick } | null>(null);
   const [opener, setOpener] = useState<HTMLElement | null>(null);
   const pendingFact = useRef<FactIdentity | null>(null);
   const citations = register.reduce((sum, entry) => sum + entry.count, 0);
@@ -338,9 +343,9 @@ function ModuleView({
       <Figures
         handoff={handoff}
         calculation={<HostCalculation handoff={handoff} model={model} />}
-        onPick={(next) => setPick(next)}
+        onPick={(next) => setPick({ at: "figures", pick: next })}
       />
-      {pick ? <Picked pick={pick} /> : null}
+      {pick?.at === "figures" ? <Picked pick={pick.pick} /> : null}
       {reader.length ? <ReaderParts parts={reader} /> : null}
       <Depth
         key={hash}
@@ -359,6 +364,8 @@ function ModuleView({
           <UnverifiedFacts entries={handoff.unverified_facts} names={sourceNames(handoffs)} />
         }
         documents={<SourceRegister register={register} />}
+        onPick={(next) => setPick({ at: "counts", pick: next })}
+        picked={pick?.at === "counts" ? <Picked pick={pick.pick} /> : null}
       />
       {opener ? (
         <Overlay
