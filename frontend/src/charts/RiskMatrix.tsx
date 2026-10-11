@@ -129,6 +129,14 @@ function matrixPlot(cells: readonly MatrixCell[], kit: PlotKit): Plot {
         const middle = TOP + Math.floor(cell.index / IMPACT.length) * ROW + ROW / 2;
         const centre = LEFT + ((cell.index % IMPACT.length) + 0.5) * width;
         const box = { x: centre - SIDE, y: middle - SIDE / 2, width: SIDE, height: SIDE };
+        // The hit box is the cell's inner area: pressing the count presses it.
+        const wide = Math.max(SIDE, width - 8);
+        const hit = {
+          x: centre - wide / 2,
+          y: middle - (ROW - 8) / 2,
+          width: wide,
+          height: ROW - 8,
+        };
         return (
           <g key={cell.key} data-cell={cell.key}>
             {cell.events.length ? (
@@ -152,7 +160,7 @@ function matrixPlot(cells: readonly MatrixCell[], kit: PlotKit): Plot {
                   mark={{
                     key: cell.key,
                     name: cell.name,
-                    box,
+                    box: hit,
                     selection: {
                       series: `Probability ${cell.probability}`,
                       category: `Impact ${cell.impact}`,

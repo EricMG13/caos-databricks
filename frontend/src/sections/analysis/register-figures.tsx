@@ -75,13 +75,21 @@ export function registerRows(
     is named by its row. */
 const PLACES = new WeakMap<Row, number>();
 
+/** A register row's place, counted from 1; a row `registerRows` did not
+    read has none, and naming one by it is a fault, not a guess. */
+function placeOf(row: Row): number {
+  const place = PLACES.get(row);
+  if (place === undefined) throw new Error("A row not read by registerRows has no place to name");
+  return place + 1;
+}
+
 /** What a row's `columns` name, joined, past their citation markers; all
     blank, its row ("row 3, Factor not stated"), so blanks never merge. */
-const nameOf = (row: Row, ...columns: string[]) =>
+export const nameOf = (row: Row, ...columns: string[]) =>
   columns
     .map((column) => unmarked(text(row, column)).trim())
     .filter(Boolean)
-    .join(" ") || `row ${PLACES.get(row)! + 1}, ${columns[0]} not stated`;
+    .join(" ") || `row ${placeOf(row)}, ${columns[0]} not stated`;
 
 /** A figure's unit as written: the currency signs it starts or ends with,
     then the `x` or `%` it ends in: "$", "%", "€ x". */
@@ -117,6 +125,13 @@ function suffixOf(cell: Cell | undefined): Unit | undefined {
   const core = bare.replace(CURRENCY, "");
   const suffix = /[xX]$/.test(core) ? "x" : core.endsWith("%") ? "%" : "";
   return [signs, suffix].filter(Boolean).join(" ") || undefined;
+}
+
+/** A cell's `x` or `%` alone, its currency sign dropped: where a register
+    states a currency column, that column names the currency. */
+function suffixAlone(cell: Cell | undefined): Unit | undefined {
+  const unit = suffixOf(cell);
+  return unit && /[x%]$/.test(unit) ? unit.slice(-1) : undefined;
 }
 
 /** A cell as a summary says it: its figure as served, else n/a and its text. */
@@ -185,18 +200,18 @@ const bySuffix = (unitOf: (row: Row) => Unit | undefined): Grouping<Unit> => ({
     joins each of its units' figures, a cell drawn only in its own unit's and
     a gap naming it in the others (`inUnit`): no unit is invented and no axis
     holds two. A row stating no figure joins the figure of no unit. */
-const byCellUnits = (columns: readonly string[]): Grouping<Unit> => ({
+const byCellUnits = (columns: readonly string[], unitOf = suffixOf): Grouping<Unit> => ({
   of: (row) => {
     const units = columns.filter((column) => row[column]?.value != null);
-    return units.length ? [...new Set(units.map((column) => suffixOf(row[column])))] : [undefined];
+    return units.length ? [...new Set(units.map((column) => unitOf(row[column])))] : [undefined];
   },
   ...BY_UNIT,
 });
 
 /** A cell as the figure of unit `at` draws it: its figure where written in
     `at`, else a gap naming it, drawn in its own unit's figure. */
-function inUnit(cell: Cell | undefined, at: Unit | undefined): Datum {
-  if (cell?.value != null && suffixOf(cell) !== at) {
+function inUnit(cell: Cell | undefined, at: Unit | undefined, unitOf = suffixOf): Datum {
+  if (cell?.value != null && unitOf(cell) !== at) {
     return { value: null, reason: `${cell.text}, drawn in its unit's figure` };
   }
   return datum(cell);
@@ -298,7 +313,7 @@ export function covenantHeadroom(handoff: HandoffView): Figure[] {
     kind: "bullet",
     summary: `Headroom as served: ${listed(
       entries.map(({ row }) => `${nameOf(row, "Test")} ${served(row["Headroom"])}`),
-    )}.`,
+    )}.${repeated(entries.map(({ row }) => nameOf(row, "Test")))}`,
     bullets: entries.map(({ row, index }) => ({
       key: `${index}`,
       label: nameOf(row, "Test"),
@@ -367,7 +382,7 @@ export function peerRanges(handoff: HandoffView): Figure[] {
         const position = text(row, "Borrower Position");
         return `${nameOf(row, "Metric")} ${served(row["Borrower Value"])}${position ? ` (${position})` : ""}`;
       }),
-    )}.`,
+    )}.${repeated(entries.map(({ row }) => nameOf(row, "Metric")))}`,
     ranges: entries.map(rangeOf(PEER_STATISTICS, "Metric")),
     markerLabel: "Borrower value",
     categoryLabel: "Metric",
@@ -399,7 +414,7 @@ export function impliedEv(handoff: HandoffView): Figure[] {
     kind: "range",
     summary: `Implied EV as served: ${listed(
       entries.map(({ row }) => `${nameOf(row, "Method")} ${served(row["Implied EV"])}`),
-    )}.`,
+    )}.${repeated(entries.map(({ row }) => nameOf(row, "Method")))}`,
     ranges: entries.map(rangeOf(IMPLIED_STATISTICS, "Method")),
     markerLabel: "Implied EV",
     categoryLabel: "Method",
@@ -774,12 +789,18 @@ export function liquiditySources(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2D", "T2E.2");
   if (!rows?.length) return [];
   const amount = "Source-Supported Amount";
-  const head = { key: "liquidity-sources", table: "T2E.2", title: "Liquidity by accessibility" };
-  return [
-    stackFigure(rows, {
+  const base = { key: "liquidity-sources", table: "T2E.2", title: "Liquidity by accessibility" };
+  // A figure a unit, so no total adds two currencies.
+  const groups = groupsOf(
+    rows,
+    base,
+    bySuffix((row) => suffixOf(row[amount])),
+  );
+  return groups.map(({ entries, head }) =>
+    stackFigure(rowsOf(entries), {
       head: {
         ...head,
-        summary: summed(rows, amount, undefined),
+        summary: summed(rowsOf(entries), amount, head.unit),
         categoryLabel: "Accessibility Status",
       },
       ...byColumns({
@@ -790,18 +811,30 @@ export function liquiditySources(handoff: HandoffView): Figure[] {
         source: ["Source Trace", "Limitation / Restriction"],
       }),
     }),
-  ];
+  );
 }
+
+/** Entries' rows, in order. */
+const rowsOf = (entries: readonly Entry[]) => entries.map(({ row }) => row);
 
 /** CP-2D's mandatory cash uses (`T2E.3`): each timing's uses, mandatory
     stacked against discretionary. */
 export function cashUses(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2D", "T2E.3");
   if (!rows?.length) return [];
-  const head = { key: "cash-uses", table: "T2E.3", title: "Cash uses by timing" };
-  return [
-    stackFigure(rows, {
-      head: { ...head, summary: summed(rows, "Amount", undefined), categoryLabel: "Timing" },
+  const base = { key: "cash-uses", table: "T2E.3", title: "Cash uses by timing" };
+  const groups = groupsOf(
+    rows,
+    base,
+    bySuffix((row) => suffixOf(row["Amount"])),
+  );
+  return groups.map(({ entries, head }) =>
+    stackFigure(rowsOf(entries), {
+      head: {
+        ...head,
+        summary: summed(rowsOf(entries), "Amount", head.unit),
+        categoryLabel: "Timing",
+      },
       ...byColumns({
         category: "Timing",
         series: "Mandatory / Discretionary",
@@ -810,7 +843,7 @@ export function cashUses(handoff: HandoffView): Figure[] {
         source: ["Source Trace"],
       }),
     }),
-  ];
+  );
 }
 
 /** CP-2E's debt and rate exposure (`T2F.2`): per currency, fixed against
@@ -929,22 +962,30 @@ function columnFigure(
     const row = pickedRow(entries, selection);
     return row ? stated(row, spec.source) : null;
   };
-  const summary = seriesSummary(spec.noun, categories, series);
+  const summary = `${seriesSummary(spec.noun, categories, series)}${repeated(categories)}`;
   const figure = { ...head, categories, series, summary, sourceOf, categoryLabel: spec.category };
   return { ...figure, kind: spec.kind };
 }
 
 /** A register drawn a series per column, a figure per unit its `columns`'
-    cells are written in; the figure of no such unit is in `plain`. */
+    cells are written in; the figure of no such unit is in `plain`. Where
+    `plain` is a currency column's, the column wins over a written sign:
+    only `x` and `%` split. */
 function byUnitFigures(
   rows: readonly Row[],
   base: Omit<Head, "unit">,
   spec: ColumnFigure,
   plain?: string,
 ) {
-  const grouping = byCellUnits(spec.columns.map(({ column }) => column));
+  const unitOf = plain === undefined ? suffixOf : suffixAlone;
+  const grouping = byCellUnits(
+    spec.columns.map(({ column }) => column),
+    unitOf,
+  );
   return groupsOf(rows, base, grouping).map(({ entries, head, at }) =>
-    columnFigure(entries, at ? head : { ...head, unit: plain }, spec, (cell) => inUnit(cell, at)),
+    columnFigure(entries, at ? head : { ...head, unit: plain }, spec, (cell) =>
+      inUnit(cell, at, unitOf),
+    ),
   );
 }
 
@@ -1074,13 +1115,21 @@ const keyed = (entries: readonly Entry[], keyOf: (row: Row) => string) =>
     same: group.map(({ row }) => row),
   }));
 
-/** " Leverage stated twice.": each key whose rows write any of `columns`
-    differently, at most ten named; "" where none does. */
+/** " Leverage: Realized stated twice.": each key whose rows write any of
+    `columns` differently, and which, at most ten named; "" where none does. */
 function restated(keys: readonly { label: string; same: readonly Row[] }[], columns: string[]) {
-  const named = keys.flatMap(({ label, same }) =>
-    columns.some((column) => restatement(same, column))
-      ? [`${label} stated ${times(same.length)}`]
-      : [],
+  const named = keys.flatMap(({ label, same }) => {
+    const differ = columns.filter((column) => restatement(same, column));
+    return differ.length ? [`${label}: ${differ.join(" and ")} stated ${times(same.length)}`] : [];
+  });
+  return named.length ? ` ${idList(named)}.` : "";
+}
+
+/** " Leverage stated twice.": each label a figure of a mark a row draws more
+    than once, at most ten named; "" where none repeats. */
+function repeated(labels: readonly string[]): string {
+  const named = [...groupBy(labels, (label) => label)].flatMap(([label, same]) =>
+    same.length > 1 ? [`${label} stated ${times(same.length)}`] : [],
   );
   return named.length ? ` ${idList(named)}.` : "";
 }
@@ -1098,8 +1147,9 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
   // A case is one line however it is spelt, labelled as first written; a
   // blank case or period is its row's own. Uppercase, a case's key never
   // meets a blank's, which is named in lowercase.
-  const caseOf = (row: Row) => text(row, "case").trim().toUpperCase() || nameOf(row, "case");
-  const periodOf = (row: Row) => text(row, "period").trim() || nameOf(row, "period");
+  const caseOf = (row: Row) =>
+    unmarked(text(row, "case")).trim().toUpperCase() || nameOf(row, "case");
+  const periodOf = (row: Row) => nameOf(row, "period");
   const labels = new Map<string, string>();
   for (const row of rows) {
     if (!labels.has(caseOf(row))) labels.set(caseOf(row), nameOf(row, "case"));
@@ -1139,7 +1189,15 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
         ...head,
         table: spec.register,
         kind: "line",
-        summary: seriesSummary(label, periods, series),
+        summary: `${seriesSummary(label, periods, series)}${restated(
+          cases.flatMap((kase) =>
+            periods.map((period) => ({
+              label: `${labels.get(kase)!} ${period}`,
+              same: rowsAt(kase, period),
+            })),
+          ),
+          [metric],
+        )}`,
         categories: periods,
         series,
         sourceOf: (selection) =>
@@ -1213,7 +1271,10 @@ function tornadoes(
       kind: "diverging",
       summary: `${spec.value} as served, largest first: ${listed(
         bars.map(({ category, point }) => `${category} ${say(point)}`),
-      )}.`,
+      )}.${restated(
+        [...named].map(([label, same]) => ({ label, same })),
+        [spec.value],
+      )}`,
       categories: bars.map(({ category }) => category),
       series: [series],
       sourceOf: (selection) => {
@@ -1302,7 +1363,10 @@ export function spreadCurve(handoff: HandoffView): Figure[] {
     return {
       ...head,
       kind: "scatter",
-      summary: `spread/yield as served, by maturity/call date: ${listed(said)}.`,
+      summary: `spread/yield as served, by maturity/call date: ${listed(said)}.${restated(
+        securities,
+        ["maturity/call date", "spread/yield"],
+      )}`,
       points,
       xLabel: "maturity/call date",
       pointLabel: "security_id",
@@ -1486,7 +1550,10 @@ function scoreFigure(ordered: readonly Row[], head: Head, spec: Scores): Figure[
     ([hi, lo], bar) => [!hi || bar.size > hi.size ? bar : hi, !lo || bar.size < lo.size ? bar : lo],
     [],
   );
-  const said = (bar: (typeof drawn)[number]) => `${bar.category} ${formatDecimal(bar.value)}`;
+  // A score with its unit: "4.0%", "1.5x", "12 $".
+  const unit = head.unit ? `${/^[x%]$/.test(head.unit) ? "" : " "}${head.unit}` : "";
+  const valued = (value: string) => `${formatDecimal(value)}${unit}`;
+  const said = (bar: (typeof drawn)[number]) => `${bar.category} ${valued(bar.value)}`;
   const [one, many] = spec.noun;
   const gaps = bars.length - drawn.length;
   const rest = gaps ? `; ${gaps} ${gaps === 1 ? "is" : "are"} n/a` : "";
@@ -1497,8 +1564,8 @@ function scoreFigure(ordered: readonly Row[], head: Head, spec: Scores): Figure[
       : !drawn.every((bar) => equal(bar.value, high.value))
         ? `Highest: ${said(high)}. Lowest: ${said(low!)}.`
         : gaps
-          ? `${drawn.length} ${many} score ${formatDecimal(high.value)} each${rest}.`
-          : `All ${drawn.length} ${many} score ${formatDecimal(high.value)}.`;
+          ? `${drawn.length} ${many} score ${valued(high.value)} each${rest}.`
+          : `All ${drawn.length} ${many} score ${valued(high.value)}.`;
   const keys = [...named].map(([label, same]) => ({ label, same }));
   const summary = `${spec.value} as served. ${scored}${restated(keys, [spec.value])}`;
   return [
