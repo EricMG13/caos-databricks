@@ -433,7 +433,7 @@ def _pf_add(key: str, base: Cell | None, adjustments: list[PfAdjustmentRow]) -> 
     total = start.value + sum(_pf_value(a) for a in adjustments)
     sources = refs([*start.sources, *(a.source for a in adjustments)])
     kept = [n for n in notes_of(start.note) if n in {FOREIGN, SIGN_NORMALISED}]
-    note = join_notes(*kept, carried((start,)))
+    note = join_notes((*kept, carried((start,))))
     return Cell(total, basis="PRO_FORMA", sources=sources, note=note)
 
 
