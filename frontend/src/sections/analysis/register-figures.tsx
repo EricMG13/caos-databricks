@@ -8,12 +8,15 @@
 // one, so no axis holds a dollar beside a euro.
 import {
   formatDecimal,
+  idList,
+  riskLevel,
   type BulletRow,
   type ChartColor,
   type ChartSelection,
   type ChartSeries,
   type Datum,
   type RangeRow,
+  type RiskEvent,
   type ScatterPoint,
   type WaterfallStep,
 } from "@/charts";
@@ -1245,6 +1248,46 @@ export function spreadCurve(handoff: HandoffView): Figure[] {
   });
 }
 
+/** CP-2A's probability and impact matrix (`T5.4`): an event a row, its
+    `Probability` and `Impact` past their citation markers, which the chart
+    reads as the ordinal labels. The summary counts the rows whose two read
+    High and names at most ten; a cell's value is that count, computed here. T5.4 declares no source column, so a cell states
+    none. */
+export function riskMatrix(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-2A", "T5.4");
+  if (!rows?.length) return [];
+  const events = rows.map((row, index): RiskEvent => ({
+    key: `${index}`,
+    // A blank id told apart by its row, counted from 1.
+    label: unmarked(text(row, "Event ID")).trim() || `row ${index + 1}, Event ID not stated`,
+    description: text(row, "Description"),
+    probability: unmarked(text(row, "Probability")),
+    impact: unmarked(text(row, "Impact")),
+    classification: text(row, "P/I Classification"),
+    origin: "model",
+  }));
+  const high = events.filter(
+    (event) => riskLevel(event.probability) === "High" && riskLevel(event.impact) === "High",
+  );
+  const noun = events.length === 1 ? "event" : "events";
+  return [
+    {
+      key: "risk-matrix",
+      table: "T5.4",
+      title: "Probability and impact",
+      kind: "matrix",
+      unit: "events",
+      computed: "a count of the model's rows",
+      summary: `High probability and high impact: ${[
+        `${high.length} of ${events.length} ${noun}`,
+        ...(high.length ? [idList(high.map((event) => event.label))] : []),
+      ].join(", ")}.`,
+      events,
+      sourceOf: () => null,
+    },
+  ];
+}
+
 /** A trigger's label, which is also its identity: "Leverage (Issuer,
     downgrade)", its stated direction read trimmed and casefolded past its
     citation markers, so an upgrade and a downgrade trigger on one metric
@@ -1502,6 +1545,7 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...cashUses(handoff),
     ...liquidityBridge(handoff),
     ...downsideSensitivities(handoff),
+    ...riskMatrix(handoff),
     ...forecastCases(handoff),
     ...creditPath(handoff),
     ...ratingTriggers(handoff),

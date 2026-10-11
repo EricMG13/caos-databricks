@@ -257,9 +257,11 @@ function Picked({ pick }: { pick: FigurePick }) {
         </dd>
         <dt>Origin</dt>
         <dd>
-          {pick.origin === null
-            ? "Computed here: the stated total less the running level, not served"
-            : "Model-authored, not host-verified"}
+          {pick.computed
+            ? `Computed here: ${pick.computed}, not served`
+            : pick.origin === null
+              ? "Computed here: the stated total less the running level, not served"
+              : "Model-authored, not host-verified"}
         </dd>
         <dt>Table</dt>
         <dd className="mono">{pick.table}</dd>

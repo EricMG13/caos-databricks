@@ -173,6 +173,20 @@ export interface ScatterPoint {
   origin: Origin;
 }
 
+/** One event of a probability and impact matrix, its cells as the figure
+    gives them: a label that is not one of High, Medium, Low or Unknown
+    counts as Unknown. */
+export interface RiskEvent {
+  key: string;
+  /** Its id, naming it in its cell's mark. */
+  label: string;
+  description: string;
+  probability: string;
+  impact: string;
+  classification: string;
+  origin: Origin;
+}
+
 // What a chart hands its frame: the drawing, and every mark a reader can reach.
 
 export interface Box {
