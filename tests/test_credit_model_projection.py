@@ -20,7 +20,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from caos.calculators.cash_flow import cash_flow_forecast
-from caos.calculators.credit_model._cells import CONTEXT
+from caos.calculators.credit_model import projection as projection_module
+from caos.calculators.credit_model._cells import CONTEXT, UNSPANNED
 from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.calculators.credit_model.history import account_frame, historical_columns
 from caos.calculators.credit_model.projection import (
@@ -1120,8 +1121,7 @@ _WRONG_UNIT_IMPLIED = Decimal("0.061")
         ("tlb", {"spread_bps": Decimal(2001)}),
         ("tlb", {"floor_bps": Decimal("0.5")}),  # "0.50%" read as 0.5 bp
         ("tlb", {"floor_bps": Decimal(1001)}),
-        ("ssn29", {"fixed_rate": Decimal("0.065")}),  # a decimal, not a percent
-        ("ssn29", {"fixed_rate": Decimal("0.49")}),
+        ("ssn29", {"fixed_rate": Decimal("-0.01")}),
         ("ssn29", {"fixed_rate": Decimal("30.01")}),
     ],
 )
@@ -1141,7 +1141,8 @@ def test_rate_term_bounds_are_inclusive() -> None:
     assert facility_rate(widest, deck, "BASE", 1, None) == (Decimal("0.3"), None)
     whole = replace(_row("tlb"), spread_bps=Decimal("275.00"))
     assert facility_rate(whole, deck, "BASE", 1, None) == (Decimal("0.0655"), None)
-    for coupon in ("0.5", "30"):
+    # MINOR-10: a zero-coupon convertible is priced at its stated 0%.
+    for coupon in ("0", "0.065", "0.5", "30"):
         row = replace(_row("ssn29"), fixed_rate=Decimal(coupon))
         expected = Decimal(coupon) / 100
         assert facility_rate(row, deck, "BASE", 1, None) == (expected, None)
@@ -1150,7 +1151,7 @@ def test_rate_term_bounds_are_inclusive() -> None:
 def test_terms_in_the_wrong_unit_price_at_the_implied_rate_noted() -> None:
     wrong = {"spread_bps": Decimal("2.25"), "floor_bps": Decimal("0.5")}
     regs = _terms(example_registers(), "tlb", wrong)
-    regs = _terms(regs, "ssn29", {"fixed_rate": Decimal("0.065")})
+    regs = _terms(regs, "ssn29", {"fixed_rate": Decimal("30.5")})
     first = _frame(_inputs(regs))["BASE:2026"]
 
     assert first["fac:tlb"].note == "term out of range"
@@ -1451,3 +1452,29 @@ def test_a_request_year_ten_from_the_base_year_is_placed() -> None:
     columns, _ = projection(_inputs(regs, request))
 
     assert columns[-1].end_date == "2035-12-31"
+
+
+def test_a_projection_names_why_its_anchor_figure_is_missing() -> None:
+    """The audit's M1 projection sites: an anchor figure missing with a
+    reason keeps it on what is built from it."""
+    why = Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
+    assert projection_module._opening_cell(why) == why
+    one = Cell(Decimal(1))
+    cells = {"cash_interest": why, "debt_opening": one, "total_debt": one}
+    assert projection_module._implied(cells) == why
+    cells = {"cash_interest": one, "debt_opening": one, "total_debt": why}
+    assert projection_module._implied(cells) == why
+    # FY2025's components do not span it: its business units' revenue, the
+    # anchor CP-CF grows from, is missing with that reason, and so is the
+    # projection.
+    regs = example_registers()
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(p, component_period_ids=("Q1_2025", "Q2_2025", "GHOST"))
+            if p.period_id == "FY2025"
+            else p
+            for p in regs.periods
+        ),
+    )
+    assert _frame(_inputs(regs))["BASE:2026"]["bu:las_vegas"] == why

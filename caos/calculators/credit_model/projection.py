@@ -26,7 +26,7 @@ currency is held flat and left out (spec B13: no FX); operating leases are
 not projected. A rate term outside CP-1's value set or its range is never
 used: a spread outside 0-2,000 bp or a floor outside 0-1,000 bp, either not a
 whole number of basis points (a percent read as basis points), or a fixed
-coupon outside 0.5-30 percent (a decimal read as a percent), or any term
+coupon outside 0-30 percent (from 0: a zero-coupon convertible), or any term
 CP-1 wrote so (a spread or floor written with `%`, `terms_out_of_range`). The rate falls
 back to the implied rate, and a negative amortisation to none, each noted
 "term out of range".
@@ -138,7 +138,7 @@ _PERCENT = Decimal(100)
 # Each term's range, and whether it is a whole number: basis points are.
 _SPREAD = (Decimal(0), Decimal(2000), True)
 _FLOOR = (Decimal(0), Decimal(1000), True)
-_COUPON = (Decimal("0.5"), Decimal(30), False)
+_COUPON = (Decimal(0), Decimal(30), False)  # from 0: zero-coupon convertibles
 # CP-CF's decimal strings (`cash_flow._NUMBER`) and whole day counts.
 _NUMBER = re.compile(r"-?(0|[1-9][0-9]{0,17})(\.[0-9]{1,6})?")
 _WHOLE = re.compile(r"[1-9][0-9]{0,2}")
@@ -599,7 +599,7 @@ def _grown(ctx: _Context, segment: str, prior: Cell, period: _Period) -> Cell:
     growth; held flat in no slot or as corporate and eliminations."""
     slot = ctx.slot_of.get(segment)
     if prior.value is None:
-        return Cell(None, "COMPONENT_MISSING")
+        return Cell(None, "COMPONENT_MISSING", note=prior.note)
     if slot is None or segment in ctx.corporate:
         return Cell(prior.value, basis="PROJECTED", note=HELD_FLAT)
     growth = ctx.growth.get((period.case, period.year, slot))
@@ -747,9 +747,9 @@ def _undrawn(
 
 def _opening_cell(cell: Cell) -> Cell:
     """An anchor balance as the projection's opening: its figure, sourced,
-    with what it leaves out."""
+    with what it leaves out; without one, why."""
     if cell.value is None:
-        return Cell(None, "COMPONENT_MISSING")
+        return Cell(None, "COMPONENT_MISSING", note=cell.note)
     return Cell(
         cell.value, basis="CALCULATED", sources=cell.sources, note=carried((cell,))
     )
@@ -757,17 +757,17 @@ def _opening_cell(cell: Cell) -> Cell:
 
 def _implied(cells: Mapping[str, Cell]) -> Cell:
     """LTM cash interest over the average of the LTM's opening and closing
-    total debt; `COMPONENT_MISSING` without a figure (with the opening's
-    note, "opening stack incomplete") and `ZERO_OR_NEGATIVE_DENOMINATOR`
-    with an average <= 0."""
-    interest = cells.get("cash_interest", ABSENT).value
-    opened = cells.get("debt_opening", ABSENT)
-    opening = opened.value
-    closing = cells.get("total_debt", ABSENT).value
-    if opening is None:
-        return Cell(None, "COMPONENT_MISSING", note=opened.note)
-    if interest is None or closing is None:
-        return Cell(None, "COMPONENT_MISSING")
+    total debt; `COMPONENT_MISSING` without a figure, with the missing
+    inputs' notes (the opening's "opening stack incomplete"), and
+    `ZERO_OR_NEGATIVE_DENOMINATOR` with an average <= 0."""
+    parts = [
+        cells.get(key, ABSENT)
+        for key in ("cash_interest", "debt_opening", "total_debt")
+    ]
+    interest, opening, closing = (part.value for part in parts)
+    if interest is None or opening is None or closing is None:
+        why = join_notes(tuple(part.note for part in parts if part.value is None))
+        return Cell(None, "COMPONENT_MISSING", note=why)
     average = (opening + closing) / 2
     if average <= 0:
         return Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")

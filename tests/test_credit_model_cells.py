@@ -21,6 +21,8 @@ from caos.calculators.credit_model._cells import (
     opening_date,
     periods_at,
     refs,
+    treated_as_zero,
+    zeroed,
 )
 from caos.calculators.credit_model.frame import Cell, Column, SourceRef
 
@@ -46,6 +48,19 @@ def test_calc_adds_and_subtracts_or_is_component_missing() -> None:
         Decimal(3), basis="CALCULATED", sources=(_A, _B), note="residual"
     )
     assert calc(((one, 1), (Cell(None, "NOT_SOURCED"), 1))) == Cell(
+        None, "COMPONENT_MISSING"
+    )
+
+
+def test_calc_names_why_a_part_is_missing_on_its_missing_sum() -> None:
+    why = Cell(None, "COMPONENT_MISSING", note="components do not span the period")
+    other = Cell(None, "COMPONENT_MISSING", note="opening stack incomplete")
+    one = Cell(Decimal(1), basis="REPORTED", note="residual")
+    assert calc(((one, 1), (why, -1))) == Cell(None, "COMPONENT_MISSING", note=why.note)
+    assert calc(((why, 1), (other, 1), (why, 1))).note == f"{why.note}; {other.note}"
+    # The sum's own note says how a figure was found; there is none.
+    assert calc(((one, 1), (why, 1)), "residual").note == why.note
+    assert calc(((one, 1), (Cell(None, "NOT_STATED"), 1)), "residual") == Cell(
         None, "COMPONENT_MISSING"
     )
 
@@ -109,6 +124,21 @@ def test_calc_carries_a_sign_normalised_part_and_no_other_note() -> None:
     assert calc(((flipped, 1), (Cell(None, "NOT_SOURCED"), 1))) == Cell(
         None, "COMPONENT_MISSING"
     )
+
+
+def test_zeroed_reads_each_part_taken_as_nothing_and_calc_carries_them() -> None:
+    q2, q4 = treated_as_zero("Q2_2025"), treated_as_zero("Q4_2025")
+    one = Cell(Decimal(3), note=f"residual; {q2}")
+    two = Cell(Decimal(4), note=f"{q4}; {q2}")
+    assert zeroed([one, two, Cell(Decimal(1))]) == (q2, q4, q2)
+    assert zeroed([Cell(Decimal(1), note="not stated, treated as zeros")]) == ()
+    assert zeroed([]) == ()
+    flipped = Cell(Decimal(-5), note=SIGN_NORMALISED)
+    assert calc(((one, 1), (two, -1), (flipped, 1)), "residual").note == (
+        f"{SIGN_NORMALISED}; {q2}; {q4}; residual"
+    )
+    # A missing sum names why each part is missing, not what others took.
+    assert calc(((one, 1), (Cell(None, "NOT_STATED"), 1))).note is None
 
 
 def test_flipped_reads_the_sign_note_among_others() -> None:

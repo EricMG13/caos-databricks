@@ -23,13 +23,17 @@ from caos.calculators.credit_model._cells import CONTEXT
 from caos.calculators.credit_model.assemble import (
     NO_PROJECTIONS,
     NOT_APPLIED,
+    PF_NOT_SHOWN,
     CreditModel,
     ModelInputs,
     credit_model,
     reconciliation_faults,
 )
 from caos.calculators.credit_model.frame import Cell, Column
-from caos.calculators.credit_model.history import account_frame, historical_columns
+from caos.calculators.credit_model.history import (
+    account_frame,
+    historical_columns,
+)
 from caos.calculators.credit_model.layout import (
     BANDS,
     FacilityTerms,
@@ -41,7 +45,7 @@ from caos.calculators.credit_model.layout import (
 )
 from caos.calculators.credit_model.metrics import metric_frame
 from caos.calculators.credit_model.statements import statement_frame
-from caos.methodology.model_inputs import Cp1Registers, PfAdjustmentRow
+from caos.methodology.model_inputs import Cp1Registers, PeriodRow, PfAdjustmentRow
 
 _PF = "PF:LTM_Q2_2026"
 _LTM = "LTM:LTM_Q2_2026"
@@ -1333,7 +1337,11 @@ def test_registers_without_periods_give_a_model_without_columns() -> None:
     model = _model(regs=regs, projected=False)
     assert model.columns == ()
     assert all(line.cells == () for line in model.lines)
-    assert model.limitations == (NO_PROJECTIONS,)
+    # CP-1's PF rows have no column to go on, and say so.
+    assert model.limitations == (
+        NO_PROJECTIONS,
+        f"{PF_NOT_SHOWN}: LTM_Q2_2026 (4 adjustments)",
+    )
     assert reconciliation_faults(model) == ()
 
 
@@ -1762,3 +1770,33 @@ def test_a_parenthesised_zero_is_never_a_negative_zero() -> None:
 
     assert _signed_zeros(model) == []
     assert str(_value(model, "pf:silverlake_interest", _PF)) == "0"
+
+
+def test_pf_rows_for_an_ltm_without_a_pf_column_raise_a_limitation() -> None:
+    """The adversary's MAJOR-6 probe: a later Q3 2026 moves the LTM past
+    CP-1's LTM_Q2_2026, whose four PF rows have no column."""
+    regs = example_registers()
+    later = PeriodRow(
+        "Q3_2026",
+        "2026",
+        "3",
+        "QUARTER",
+        "2026-07-01",
+        "2026-09-30",
+        92,
+        "USD",
+        "MILLIONS",
+        (),
+    )
+    moved = replace(regs, periods=(*regs.periods, later))
+    model = _model(regs=moved, projected=False)
+    assert not any(c.kind == "PF_LTM" for c in model.columns)
+    assert len(regs.pro_forma) == 4
+    assert f"{PF_NOT_SHOWN}: LTM_Q2_2026 (4 adjustments)" in model.limitations
+    # With its PF column, nothing is dropped.
+    assert not any(t.startswith(PF_NOT_SHOWN) for t in _model().limitations)
+    # One row for another period: named, counted once.
+    first = regs.pro_forma[0]
+    one = replace(regs, pro_forma=(*regs.pro_forma, replace(first, period_id="FY2025")))
+    found = [t for t in _model(regs=one).limitations if t.startswith(PF_NOT_SHOWN)]
+    assert found == [f"{PF_NOT_SHOWN}: FY2025 (1 adjustment)"]
