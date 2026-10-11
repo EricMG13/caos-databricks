@@ -260,6 +260,20 @@ class Cp1Registers:
     unit: str
 
 
+@dataclass(frozen=True, slots=True)
+class DivisionGrowth:
+    case: Case
+    fiscal_year: str
+    slot_id: str
+    value: Decimal  # PERCENT_DECIMAL, READY rows only
+
+
+@dataclass(frozen=True, slots=True)
+class SlotAllocation:
+    slot_id: str
+    component_segment_ids: tuple[str, ...]
+
+
 def _malformed() -> Refusal:
     return Refusal(RefusalCode.HANDOFF_MALFORMED)
 
@@ -835,3 +849,72 @@ def cp1_registers(tables: Sequence[HandoffTable]) -> Cp1Registers:
         currency=_one({p.currency for p in periods}),
         unit=_one({p.unit for p in periods}),
     )
+
+
+_DRIVER_COLUMNS = frozenset(
+    {"driver_id", "slot_id", "case", "fiscal_year", "value", "unit", "status"}
+)
+
+
+def _fraction(row: _Row) -> Decimal:
+    """A READY growth driver's value as a decimal fraction, CP-MODEL's
+    convention (`validate_cp_model_inputs._number`): a cell written with `%`
+    divides by 100, where the host's figure keeps the points. Refused when
+    the unit is not `PERCENT_DECIMAL` or the row has no value."""
+    value = _figure(row, "value")
+    if _enum(row, "unit", _DRIVER_UNITS) != "PERCENT_DECIMAL" or value is None:
+        raise _malformed()
+    if "%" in unmarked(row["value"].text):
+        # Exact at any length: the exponent moves, no context rounds it.
+        sign, digits, exponent = value.as_tuple()
+        return Decimal((sign, digits, int(exponent) - 2))
+    return value
+
+
+def _growth(row: _Row) -> DivisionGrowth | None:
+    """The row as a division-growth driver, or None when it is another
+    driver, not READY, or of a case the model does not read."""
+    if _text(row, "driver_id").casefold() != "division_growth":
+        return None
+    case = _CASES.get(_enum(row, "case", _DRIVER_CASES))
+    if _enum(row, "status", _DRIVER_STATUSES) != "READY" or case is None:
+        return None
+    return DivisionGrowth(
+        case, _text(row, "fiscal_year"), _enum(row, "slot_id"), _fraction(row)
+    )
+
+
+def _growth_key(growth: DivisionGrowth) -> tuple[str, ...]:
+    """The case, year and slot a growth figure is for; the year as its
+    four-digit year (`FY2027` is `2027`) where it has one."""
+    year = fiscal_year_number(growth.fiscal_year)
+    written = growth.fiscal_year if year is None else str(year)
+    return growth.case, written, growth.slot_id
+
+
+def division_growth(tables: Sequence[HandoffTable]) -> tuple[DivisionGrowth, ...]:
+    """CP-2G's READY `division_growth` drivers for the base and downside cases
+    (`cp2g.cp_model_forecast_drivers`), each a decimal fraction; two for one
+    case, year and slot are refused."""
+    rows = _rows(_table(tables, _DRIVERS), _DRIVER_COLUMNS)
+    return _distinct(
+        tuple(growth for row in rows if (growth := _growth(row)) is not None),
+        _growth_key,
+    )
+
+
+_ALLOCATION_COLUMNS = frozenset({"slot_id", "component_segment_ids"})
+
+
+def slot_allocation(tables: Sequence[HandoffTable]) -> tuple[SlotAllocation, ...]:
+    """CP-1's forecast-slot allocation (`cp1.cp_model_segment_allocation`):
+    each slot and the segment ids it binds; a segment bound to two slots
+    would grow twice, and is refused."""
+    slots = tuple(
+        SlotAllocation(_enum(row, "slot_id"), _ids(row, "component_segment_ids"))
+        for row in _rows(_table(tables, _ALLOCATION), _ALLOCATION_COLUMNS)
+    )
+    segments = [segment for slot in slots for segment in slot.component_segment_ids]
+    if len(set(segments)) != len(segments):
+        raise _malformed()
+    return slots
