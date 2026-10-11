@@ -1795,7 +1795,7 @@ def test_adjusted_ebitda_and_its_metrics_name_a_partly_stated_add_back() -> None
     )
     model = _model(regs=regs)
     ltm = "LTM:LTM_Q2_2026"
-    assert _cell(model, "ebitda", ltm).value is not None
+    assert _cell(model, "ebitda", ltm).value == 3904
     for line_id in (
         "addback:restructuring",
         "adjusted_ebitda",

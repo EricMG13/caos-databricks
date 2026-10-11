@@ -19,6 +19,7 @@ from hypothesis import strategies as st
 
 from caos.calculators.credit_model.assemble import ModelInputs, credit_model
 from caos.calculators.credit_model.frame import Cell, Column, SourceRef
+from caos.calculators.credit_model.layout import facility_terms
 from caos.calculators.credit_model.projection import facility_rate
 from caos.methodology import model_inputs
 from caos.methodology.bundle import verified_bytes
@@ -1526,6 +1527,104 @@ def test_a_coupon_is_converted_only_strictly_between_0_and_half(
     assert read == (written * 100 if as_fraction else written)
     low = Decimal("0.5") if as_fraction else Decimal(0)
     assert coupon_in_range(read, as_fraction=as_fraction) is (low <= read <= 30)
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("0.065", (Decimal("0.065"), "coupon read as a fraction")),
+        ("0", (Decimal(0), None)),
+        ("0.4", (Decimal("0.06"), "term out of range")),
+        ("0.5", (Decimal("0.005"), None)),
+        ("30", (Decimal("0.3"), None)),
+        ("30.01", (Decimal("0.06"), "term out of range")),
+        ("-0.01", (Decimal("0.06"), "term out of range")),
+    ],
+)
+def test_a_fixed_coupon_prices_as_the_reader_reads_it(
+    written: str, expected: tuple[Decimal, str | None]
+) -> None:
+    facility = _fixed(written)
+
+    assert facility_rate(facility, None, "BASE", 1, Decimal("0.06")) == expected
+
+
+def test_a_coupon_read_as_a_fraction_is_shown_as_its_percent() -> None:
+    assert facility_terms(_fixed("0.065")).spread_or_coupon == "6.5%"
+    assert facility_terms(_fixed("6.500")).spread_or_coupon == "6.500%"
+
+
+def _rated(rate_type: str, written: TableCell) -> FacilityRow:
+    """The debt register's one facility, its rate type `rate_type` and its
+    fixed coupon `written`."""
+    table = replaced(debt_table(), "rate_type", cell(rate_type))
+    table = replaced(table, "fixed_rate", written)
+    (facility,) = cp1_registers(with_table(table)).facilities
+    return facility
+
+
+@pytest.mark.parametrize(
+    ("written", "read", "out_of_range"),
+    [
+        ("0.065", "0.065", False),  # a 0.065% coupon, as stated
+        ("0.4", "0.4", False),
+        ("0.001", "0.001", False),
+        ("0", "0", False),
+        ("6.5", "6.5", False),
+        ("30", "30", False),
+        ("30.01", "30.01", True),
+        ("-0.01", "-0.01", True),
+    ],
+)
+def test_a_fixed_coupon_written_with_percent_is_as_stated(
+    written: str, read: str, out_of_range: bool
+) -> None:
+    facility = _rated("fixed", figure(f"{written}% [C8]", written))
+
+    assert facility.fixed_rate == Decimal(read)
+    assert facility.coupon_as_fraction is False
+    assert facility.terms_out_of_range is out_of_range
+
+
+def test_a_coupon_written_with_percent_prices_at_that_percent() -> None:
+    table = debt_table()
+    for column, new in (
+        ("rate_type", cell("fixed")),
+        ("reference_rate", cell("none")),
+        ("spread_bps", NULL),
+        ("floor_bps", NULL),
+        ("fixed_rate", figure("0.065%", "0.065")),
+    ):
+        table = replaced(table, column, new)
+    (facility,) = cp1_registers(with_table(table)).facilities
+
+    rate = facility_rate(facility, None, "BASE", 1, Decimal("0.06"))
+
+    assert rate == (Decimal("0.00065"), None)
+    assert facility_terms(facility).spread_or_coupon == "0.065%"
+
+
+@pytest.mark.parametrize("rate_type", ["floating", "not_stated"])
+@pytest.mark.parametrize(
+    ("written", "out_of_range"),
+    [
+        ("0.065", False),
+        ("0.4", False),
+        ("0.001", False),
+        ("0", False),
+        ("30", False),
+        ("30.01", True),
+        ("-0.01", True),
+    ],
+)
+def test_a_coupon_on_a_row_not_fixed_is_kept_as_read(
+    rate_type: str, written: str, out_of_range: bool
+) -> None:
+    facility = _rated(rate_type, figure(written, written))
+
+    assert facility.fixed_rate == Decimal(written)
+    assert facility.coupon_as_fraction is False
+    assert facility.terms_out_of_range is out_of_range
 
 
 def _in_fiscal_year(year: str, end: str) -> tuple[TableCell, ...]:

@@ -674,6 +674,33 @@ def _model_cell(regs: Cp1Registers, line_id: str, column_id: str) -> Cell:
     return next(line for line in model.lines if line.line_id == line_id).cells[index]
 
 
+def test_growth_against_a_prior_on_another_footing_is_missing() -> None:
+    """The re-verify's M3 (p6 a): every period as reported but FY2024,
+    restated. FY2025's growth would compare the two."""
+    regs = example_registers()
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(
+                p,
+                accounting_basis="RESTATED"
+                if p.period_id == "FY2024"
+                else "AS REPORTED",
+            )
+            for p in regs.periods
+        ),
+    )
+    for line_id in ("revenue_growth", "adjusted_ebitda_growth", "bu_growth:las_vegas"):
+        assert _model_cell(regs, line_id, "FY:FY2025") == _OTHER, line_id
+        # FY2024 against FY2023 (as reported) differs too.
+        assert _model_cell(regs, line_id, "FY:FY2024") == _OTHER, line_id
+    # Like periods on one footing still grow.
+    assert _model_cell(regs, "revenue_growth", "Q:Q1_2025").value is not None
+    assert _model_cell(regs, "revenue_growth", "LTM:LTM_Q2_2026").value == _rise(
+        Decimal(11654), Decimal(11340)
+    )
+
+
 def test_growth_reads_each_columns_footing_and_the_anchors() -> None:
     now = _fy("FY:B", "2025-12-31", "FY2025")
     prior = _fy("FY:A", "2024-12-31", "FY2024")
