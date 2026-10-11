@@ -12,8 +12,8 @@ A record accepted under an earlier rule names it and is re-anchored by it
 from __future__ import annotations
 
 import random
-import time
 from pathlib import Path
+from typing import SupportsIndex
 from uuid import UUID
 
 import pytest
@@ -190,12 +190,30 @@ def test_tracked_letters_join_within_an_excerpt_on_a_tracking_extractor() -> Non
         _excerpt_run(page, None, lines, quote, tracking=False)
 
 
+class _Searched(str):
+    """A string that counts its `find` calls, each answered by `str.find`."""
+
+    finds = 0
+
+    def find(
+        self,
+        sub: str,
+        start: SupportsIndex | None = None,
+        end: SupportsIndex | None = None,
+        /,
+    ) -> int:
+        self.finds += 1
+        return super().find(sub, start, end)
+
+
 def test_excerpts_of_a_long_page_are_found_in_one_search_each() -> None:
     """N41's shape under `EXCERPT`: 512 excerpts of one 240,000-token page,
     its words drawn from fourteen so every quote meets thousands of partial
     matches, each found by one search of the page's joined keys
-    (`_Flat.places`) -- 3.7 s by a Python step per partial match, about 0.3 s
-    this way. A word holding the join's separator begins nowhere."""
+    (`_Flat.places`), counted as `str.find` calls: a quote found once costs
+    two, the hit and the miss past it that ends the scan, however many
+    partial matches it meets (it was 3.7 s by a Python step per partial
+    match). A word holding the join's separator begins nowhere."""
     vocabulary = (
         *("the", "of", "and", "to", "in", "a", "Company", "debt", "was"),
         *("USD", "net", "revenue", "for", "year"),
@@ -220,11 +238,14 @@ def test_excerpts_of_a_long_page_are_found_in_one_search_each() -> None:
     for n in range(512):
         first = draw.randrange(count) * width + draw.randrange(width - 9)
         quotes.append(" ".join(t.text for t in tokens[first : first + 8 + n % 3]))
-    started = time.perf_counter()
-    for quote in quotes:
-        _excerpt_run(page, None, lines, quote, tracking=False)
-    assert time.perf_counter() - started < 2.0
     flat = page.flat(None, lines, joined=False)
+    searched = _Searched(flat._joined())
+    flat.joined = searched
+    for quote in quotes:
+        before = searched.finds
+        _excerpt_run(page, None, lines, quote, tracking=False)
+        cost = searched.finds - before
+        assert cost == 2, quote
     assert list(flat.places(["L0", "the\x00of"])) == []
 
 
@@ -347,26 +368,48 @@ def test_an_exact_excerpt_is_found_before_an_edge_forgiven_one() -> None:
     assert _code_of(page, lines, f"{quote},") == "CITATION_AMBIGUOUS"
 
 
+def _searches_of(page: _Page, lines: dict[int, tuple[str, ...]], quote: str) -> int:
+    """How many `str.find` calls `quote` costs on `page`, both of its flats
+    summed (`_code_of` tracks letters, so its third pass reads the joined
+    one), as it refuses `CITATION_NOT_LOCATED`; a page's flats are counted
+    from their first use, and later quotes on it are counted by difference."""
+    searched = []
+    for joined in (False, True):
+        flat = page.flat(None, lines, joined=joined)
+        if flat.joined is None:
+            # `_joined` records where each key begins, so it runs once.
+            flat.joined = _Searched(flat._joined())
+        assert isinstance(flat.joined, _Searched), "searched before it was counted"
+        searched.append(flat.joined)
+    before = sum(s.finds for s in searched)
+    assert _code_of(page, lines, quote) == "CITATION_NOT_LOCATED"
+    return sum(s.finds for s in searched) - before
+
+
 def test_near_places_cost_one_scan_each_on_adversarial_pages() -> None:
     """Fix round 1 of D105: a hit the search had to reject was a Python
     step, so 64 quotes of a 240,000-token page of one repeated word took
     11.5 s, and of 120 lines of 2,000 words 15.7 s. Every needle is now
-    exact and every hit a place within one line. Each page's derived keys
-    are built once, before the clock, as a `TokenIndex` keeps them."""
+    exact and every hit a place within one line, so a quote costs one scan
+    per needle, counted as `str.find` calls over the page's joined keys
+    however many near places the page holds."""
     one_word = _words_page(*["a a a a a a a"] * (240_000 // 7))
     wide = _words_page(*[" ".join(["a"] * 2000)] * 120)
-    cases = (
-        (one_word, "a " * 8),
-        (one_word, "x " + "a " * 7),
-        (wide, "x " + "a " * 6 + "y"),
-    )
-    for (page, lines), quote in cases:
-        assert _code_of(page, lines, quote) == "CITATION_NOT_LOCATED"
-    started = time.perf_counter()
-    for (page, lines), quote in cases:
-        for _ in range(64):
-            assert _code_of(page, lines, quote) == "CITATION_NOT_LOCATED"
-    assert time.perf_counter() - started < 3.0
+    # Four: the first pass's one miss; the second pass's interior hit (the
+    # check stops at the first of some 68,000 places, two a line) and its
+    # one exact needle's miss, no line holding eight; and the third pass's
+    # interior alone, which misses: the tracked letters join each line of
+    # single letters into one key, "aaaaaaa", so six "a" keys are nowhere.
+    cost = _searches_of(*one_word, "a " * 8)
+    assert cost == 4
+    # Three: the first pass's miss; the second pass's interior hit alone,
+    # and the third pass's interior miss alone (the joined flat holds no
+    # run of "a" keys) -- "x" is no key of the page, so there is no needle.
+    cost = _searches_of(*one_word, "x " + "a " * 7)
+    assert cost == 3
+    # Three, the same way, on a page of 2,000-word lines.
+    cost = _searches_of(*wide, "x " + "a " * 6 + "y")
+    assert cost == 3
 
 
 def test_edge_forgiveness_stops_at_its_needle_bound() -> None:
