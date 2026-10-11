@@ -1,12 +1,14 @@
 // The credit model and the accepted CP-CF projection, read only. Values are
 // server strings: this view deliberately performs no model arithmetic or
-// evidence navigation. The credit model is a plain table until the grid
-// replaces it (Plan 2 Task 3).
+// evidence navigation beyond the passport a cell opens. The credit model is the
+// grid (`ModelGrid`); the accepted CP-CF forecast follows it.
 import { LineChart, type ChartSeries } from "@/charts";
 import { NoteRows } from "@/ds/atoms";
 import type { ModelDocument } from "@/wire/v1";
 import { displayDecimal } from "@/ds/format";
 import { Digest } from "@/ds/Digest";
+import { useSearchParams } from "react-router";
+import { ModelGrid } from "./ModelGrid";
 
 type Forecast = NonNullable<ModelDocument["body"]["forecast"]>;
 type ForecastValue = Forecast["periods"][number]["values"][number];
@@ -121,47 +123,48 @@ export function forecastSeries(
 
 type ModelBody = ModelDocument["body"];
 
-/** The credit model's lines, one row each, a column per period: the
-    server's figure rounded for reading (its exact decimal is the title), or
-    a dash with the reason as the title. */
-function CreditModelTable({ body }: { body: ModelBody }) {
-  if (!body.lines.length) return null;
+/** What the grid is read in: its unit, the rate deck its interest was priced
+    at, the unrealised add-backs switch, and the model's limitations. The
+    limitations stand on their own: a document whose CP-1 could not be read has
+    them and an accepted forecast but no line. */
+function ModelHeader({ body }: { body: ModelBody }) {
+  const [params, setParams] = useSearchParams();
+  const excluded = params.get("exclude_unrealised") === "1";
+  const setExcluded = (on: boolean) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (on) next.set("exclude_unrealised", "1");
+        else next.delete("exclude_unrealised");
+        return next;
+      },
+      { replace: true },
+    );
+  const hasModel = body.lines.length > 0;
   return (
-    <section className="pnl" data-model-lines>
+    <section className="pnl" data-model-header>
       <header>
         <h2>Credit model</h2>
-        <span className="tag">
-          {body.currency} · {body.unit}
+        <span className="tag" data-model-unit>
+          {[body.currency, body.unit?.toLowerCase()].filter(Boolean).join(" ") || "no model"}
         </span>
+        {hasModel ? (
+          <span className="tag" data-model-deck>
+            {body.rate_deck ? `rate deck ${body.rate_deck.as_of}` : "no rate deck"}
+          </span>
+        ) : null}
       </header>
-      <div className="pb flush scroll" tabIndex={0} role="region" aria-label="Credit model lines">
-        <table className="dense">
-          <thead>
-            <tr>
-              <th className="l">Line</th>
-              {body.columns.map((column) => (
-                <th key={column.column_id}>{column.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {body.lines.map((line) => (
-              <tr key={line.line_id}>
-                <td className="l">{line.label}</td>
-                {line.cells.map((cell, index) => (
-                  <td
-                    key={body.columns[index]?.column_id ?? index}
-                    title={cell.value ?? cell.reason ?? undefined}
-                  >
-                    {cell.value !== null ? displayDecimal(cell.value) : "—"}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
       <div className="pb">
+        {hasModel ? (
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={excluded}
+              onChange={(event) => setExcluded(event.target.checked)}
+            />{" "}
+            Exclude unrealised add-backs
+          </label>
+        ) : null}
         <dl className="kv">
           <NoteRows label="Model limitations" values={body.limitations} data-model-limitations />
         </dl>
@@ -172,11 +175,23 @@ function CreditModelTable({ body }: { body: ModelBody }) {
 
 export function ModelSection({ document }: { document: ModelDocument; tab: string | null }) {
   const { body } = document;
+  const credit = (
+    <>
+      <ModelHeader body={body} />
+      {body.lines.length ? (
+        <section className="pnl" data-model-lines>
+          <div className="pb flush">
+            <ModelGrid body={body} />
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
   const forecast = body.forecast;
   if (!forecast) {
     return (
       <div className="col" data-model-v1 data-run={body.displayed_run_id ?? ""}>
-        <CreditModelTable body={body} />
+        {credit}
         <section className="pnl">
           <header>
             <h2>Model</h2>
@@ -196,7 +211,7 @@ export function ModelSection({ document }: { document: ModelDocument; tab: strin
   }
   return (
     <div className="col" data-model-v1 data-run={body.displayed_run_id ?? ""}>
-      <CreditModelTable body={body} />
+      {credit}
       <section className="pnl">
         <header>
           <h2>Accepted forecast</h2>
