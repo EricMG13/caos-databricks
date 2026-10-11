@@ -3,11 +3,13 @@
 // the server's exact decimal string re-spelled for reading (`grid.ts`).
 import { memo, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
+import { useEvidence } from "@/evidence/EvidenceContext";
 import type { ModelDocument } from "@/wire/v1";
 import {
   columnGroups,
   groupList,
   hiddenLine,
+  passportOfCell,
   refinanced,
   shownCell,
   tintOf,
@@ -30,16 +32,47 @@ const TERMS = [
 
 const TINT_CLASS = { pf: "col-pf", base: "col-base", down: "col-down" } as const;
 
-/** One cell: its figure, or the marker for the figure it does not have with the
-    reason in its title. */
-function ModelCell({ line, entry }: { line: ModelLine; entry: GridColumn }) {
-  const shown = shownCell(line, line.cells[entry.index]!);
+/** One cell: a button opening its passport. A cell with no figure shows its
+    marker and carries the reason in its title, its accessible name and its
+    passport. Memoised on stable props, so opening a band or a group redraws
+    only what changed. */
+export const ModelCellButton = memo(function ModelCellButton({
+  body,
+  line,
+  index,
+  observedAt,
+}: {
+  body: Body;
+  line: ModelLine;
+  /** The column's position in every line's `cells`. */
+  index: number;
+  observedAt: string;
+}) {
+  const { openPassport } = useEvidence();
+  const column = body.columns[index]!;
+  const cell = line.cells[index]!;
+  const shown = shownCell(line, cell);
+  const reason = shown.figure
+    ? ""
+    : ` (${shown.title.charAt(0).toLowerCase()}${shown.title.slice(1)})`;
   return (
-    <span className="cellval" data-cell={entry.column.column_id} title={shown.title}>
+    <button
+      type="button"
+      className="cellbtn"
+      data-cell={column.column_id}
+      title={shown.title}
+      aria-label={`${line.label} · ${column.label} · ${shown.text}${reason}`}
+      onClick={(event) =>
+        openPassport(
+          passportOfCell({ body, line, column, cell, index, observedAt }),
+          event.currentTarget,
+        )
+      }
+    >
       {shown.figure ? shown.text : <span className="na">{shown.text}</span>}
-    </span>
+    </button>
   );
-}
+});
 
 interface Band {
   name: string;
@@ -67,15 +100,19 @@ function bandsOf(lines: readonly ModelLine[]): Band[] {
 /** Rank headings, then the line itself. Memoised: its props are the served
     line and the memoised column groups, which a band toggle leaves alone. */
 const ModelRows = memo(function ModelRows({
+  body,
   line,
   heading,
   groups,
   width,
+  observedAt,
 }: {
+  body: Body;
   line: ModelLine;
   heading: string | null;
   groups: ColumnGroup[];
   width: number;
+  observedAt: string;
 }) {
   return [
     ...(heading
@@ -112,7 +149,12 @@ const ModelRows = memo(function ModelRows({
               ];
               return (
                 <td key={entry.column.column_id} className={classes.filter(Boolean).join(" ")}>
-                  <ModelCell line={line} entry={entry} />
+                  <ModelCellButton
+                    body={body}
+                    line={line}
+                    index={entry.index}
+                    observedAt={observedAt}
+                  />
                 </td>
               );
             }),
@@ -175,7 +217,7 @@ function GroupHeads({
   );
 }
 
-export function ModelGrid({ body }: { body: Body }) {
+export function ModelGrid({ body, observedAt }: { body: Body; observedAt: string }) {
   const [params] = useSearchParams();
   const mcols = params.get("mcols");
   const mall = params.get("mall");
@@ -249,10 +291,12 @@ export function ModelGrid({ body }: { body: Body }) {
                 ? band.lines.map(({ line, heading }) => (
                     <ModelRows
                       key={line.line_id}
+                      body={body}
                       line={line}
                       heading={heading}
                       groups={groups}
                       width={width}
+                      observedAt={observedAt}
                     />
                   ))
                 : null}

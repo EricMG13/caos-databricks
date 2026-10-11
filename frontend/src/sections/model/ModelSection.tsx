@@ -181,7 +181,7 @@ export function ModelSection({ document }: { document: ModelDocument; tab: strin
       {body.lines.length ? (
         <section className="pnl" data-model-lines>
           <div className="pb flush">
-            <ModelGrid body={body} />
+            <ModelGrid body={body} observedAt={document.observed_at} />
           </div>
         </section>
       ) : null}
