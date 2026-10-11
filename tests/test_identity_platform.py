@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import http.client
 import json
+import queue
 import socket
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid5
 
@@ -658,12 +663,62 @@ def test_a_host_http_client_will_not_use_is_a_typed_refusal(
         scim_me("Bearer tok")
 
 
+# How long a test waits on a thread, a socket or the workspace before it fails
+# rather than hangs. Never what a test asserts: every wait it bounds ends on
+# an event long before it in a passing run.
+_HANG_GUARD_SECONDS = 30.0
+
+
+class _Trickle:
+    """The `drip` token's pace, and the clock its lookup reads.
+
+    The workspace sends one byte of the body for each receive the lookup
+    makes and none ahead of it, so each receive takes exactly one byte; each
+    receive moves the clock on by `step`, a byte arriving well inside the
+    socket's timeout every time, however loaded the machine is."""
+
+    def __init__(self, step: float) -> None:
+        self.step = step
+        self.now = 0.0
+        self.receives = 0
+        self.sent = 0
+        # True asks the workspace for one more byte; False ends the answer.
+        self.wanted: queue.Queue[bool] = queue.Queue()
+        # Set when the workspace waited out its guard for a byte to be asked
+        # for: the lookup was reading by a path the trickle never fed.
+        self.starved = False
+        self.ended = threading.Event()
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def received(self) -> None:
+        self.receives += 1
+        self.now += self.step
+        self.wanted.put(True)
+
+
+class _Hold:
+    """The `held` token's lookup, kept at the workspace until the test lets
+    it go. `changed` is notified whenever anything the test waits on moves."""
+
+    def __init__(self) -> None:
+        self.changed = threading.Condition()
+        self.arrived = 0
+        self.release = threading.Event()
+        self.answered = threading.Event()
+
+
 class _SlowWorkspace(BaseHTTPRequestHandler):
-    """SCIM `Me` on a real socket: `drip` trickles its body a byte at a time,
-    `slow` answers after a pause, anything else answers at once."""
+    """SCIM `Me` on a real socket: `drip` trickles its body at `trickle`'s
+    pace, `held` answers once `hold` is released, `slow` answers after a
+    pause, anything else answers at once."""
 
     protocol_version = "HTTP/1.1"
     pause = 1.5
+    # Set by the one test that asks for each token.
+    trickle: _Trickle
+    hold: _Hold
 
     def log_message(self, *_: object) -> None:
         return
@@ -673,16 +728,41 @@ class _SlowWorkspace(BaseHTTPRequestHandler):
         body = json.dumps({"id": token, "groups": []}).encode()
         if token == "slow":
             time.sleep(self.pause)
+        if token == "held":
+            hold = self.hold
+            with hold.changed:
+                hold.arrived += 1
+                hold.changed.notify_all()
+            # Shorter than every timeout of the lookup's own (twice it, where
+            # it is held), so a caller stuck behind this answer is answered
+            # once it passes, and fails.
+            hold.release.wait(_HANG_GUARD_SECONDS)
+            hold.answered.set()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         if token != "drip":
             self.wfile.write(body)
             return
+        trickle = self.trickle
+        try:
+            self._trickled(trickle, body)
+        finally:
+            trickle.ended.set()
+
+    def _trickled(self, trickle: _Trickle, body: bytes) -> None:
+        """`body` a byte for each one the lookup asks for, and none ahead."""
         for byte in body:
+            try:
+                more = trickle.wanted.get(timeout=_HANG_GUARD_SECONDS)
+            except queue.Empty:
+                trickle.starved = True
+                return
+            if not more:
+                return
+            trickle.sent += 1
             self.wfile.write(bytes([byte]))
             self.wfile.flush()
-            time.sleep(0.2)
 
 
 @pytest.fixture
@@ -706,36 +786,83 @@ def test_a_trickling_workspace_is_given_up_at_the_deadline(
     byte inside every timeout held the lookup -- and every request sharing it
     -- open for as long as it trickled. The lookup now ends at
     `SCIM_DEADLINE_SECONDS`, its sharers with it, and the helper thread stops
-    reading too, so nothing is left talking to the workspace."""
-    monkeypatch.setattr(identity, "SCIM_DEADLINE_SECONDS", 1.0)
-    monkeypatch.setattr(identity, "SCIM_TIMEOUT_SECONDS", 1.0)
-    outcomes: list[tuple[str, float]] = []
+    reading too, so nothing is left talking to the workspace. The clock the
+    lookup reads is the trickle's (`_Trickle`): each receive takes one byte
+    and a quarter of the deadline, so the lookup gives up after its fourth
+    receive, whatever the machine's load, and the workspace is never asked
+    for another byte. The deadline and the socket's timeout are hang guards,
+    never reached in real time by a passing run."""
+    monkeypatch.setattr(identity, "SCIM_DEADLINE_SECONDS", _HANG_GUARD_SECONDS)
+    monkeypatch.setattr(identity, "SCIM_TIMEOUT_SECONDS", _HANG_GUARD_SECONDS * 2)
+    trickle = _Trickle(step=_HANG_GUARD_SECONDS / 4)
+    monkeypatch.setattr(_SlowWorkspace, "trickle", trickle, raising=False)
+    # Only this module's clock: the event loop keeps the real one.
+    monkeypatch.setattr(identity, "time", SimpleNamespace(monotonic=trickle.monotonic))
+    body_by = identity._body_by
+
+    def paced(response: http.client.HTTPResponse, deadline: float) -> bytes:
+        receive = response.read1
+
+        def read1(n: int = -1) -> bytes:
+            trickle.received()
+            return receive(n)
+
+        monkeypatch.setattr(response, "read1", read1)
+        return body_by(response, deadline)
+
+    monkeypatch.setattr(identity, "_body_by", paced)
+    helpers: list[threading.Thread] = []
+    run = identity._Exchange.run
+
+    def recorded(exchange: identity._Exchange) -> None:
+        helpers.append(threading.current_thread())
+        run(exchange)
+
+    monkeypatch.setattr(identity._Exchange, "run", recorded)
+    outcomes: list[str] = []
 
     async def ask() -> None:
-        started = time.monotonic()
         try:
             await actor_from_token("drip")
-            outcomes.append(("actor", time.monotonic() - started))
+            outcomes.append("actor")
         except Refusal as refused:
-            outcomes.append((refused.code.value, time.monotonic() - started))
+            outcomes.append(refused.code.value)
 
     async def main() -> None:
         async with anyio.create_task_group() as group:
             for _ in range(3):
                 group.start_soon(ask)
 
-    anyio.run(main)
+    try:
+        anyio.run(main)
+        for helper in helpers:
+            helper.join(_HANG_GUARD_SECONDS)
+        unasked = trickle.wanted.qsize()
+    finally:
+        # Ends the answer, if the workspace is still waiting to be asked.
+        trickle.wanted.put(False)
+    ended = trickle.ended.wait(_HANG_GUARD_SECONDS)
 
-    assert [code for code, _ in outcomes] == ["IDENTITY_UNAVAILABLE"] * 3
-    assert max(took for _, took in outcomes) < 2.0
-    ended = time.monotonic()
-    while _helpers_alive() and time.monotonic() - ended < 2.0:
-        time.sleep(0.05)
-    assert not _helpers_alive(), "a helper is still reading the trickle"
-
-
-def _helpers_alive() -> bool:
-    return any(t.name == "caos-scim" and t.is_alive() for t in threading.enumerate())
+    assert outcomes == ["IDENTITY_UNAVAILABLE"] * 3
+    # One lookup, made by one helper thread, and all three shared it.
+    started = len(helpers)
+    assert started == 1
+    alive = [helper.name for helper in helpers if helper.is_alive()]
+    assert alive == [], "a helper is still reading the trickle"
+    assert ended, "the workspace is still answering"
+    # A read the trickle never fed -- past the deadline or instead of `read1`
+    # -- leaves the workspace waiting out its guard for a byte to be asked
+    # for; the socket's timeout is twice that guard, so the read ends there.
+    starved = trickle.starved
+    assert not starved, "the lookup read the workspace by a path the trickle never fed"
+    # Four: the clock reads 0, 7.5, 15 and 22.5 before the four receives
+    # and 30, the deadline, before the fifth, which is never made. Four
+    # bytes of a 28-byte body were sent and none is still asked for.
+    receives = trickle.receives
+    assert receives == 4
+    sent = trickle.sent
+    assert sent == 4
+    assert unasked == 0
 
 
 def test_requests_past_the_waiting_limit_are_refused_at_once(
@@ -787,19 +914,101 @@ def test_a_cached_caller_is_served_while_a_cold_burst_waits(
     workspace: str, empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ED-8, over the socket the way the process serves it: forty-five
-    requests for one cold token while its lookup takes 1.5 s used to hold
-    every AnyIO thread, and a caller whose identity was already cached waited
-    behind them (0.06 s became 5.5 s in the review's probe)."""
-    from caos import serve
+    requests for one cold token while its lookup was slow used to hold every
+    AnyIO thread, and a caller whose identity was already cached waited
+    behind them (0.06 s became 5.5 s in the review's probe). The workspace
+    now holds the burst's lookup (`_Hold`) until the cached caller has been
+    answered, so a cached caller queued behind the burst is answered only
+    once the hold's guard has let the lookup go and the workspace answered."""
     from caos.api import app as app_module
 
     monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
+    # The lookup's own bounds, past the hold's guard: the burst waits on the
+    # workspace for as long as the test holds it, and a cached caller queued
+    # behind the burst is answered once the guard passes rather than refused.
+    monkeypatch.setattr(identity, "SCIM_DEADLINE_SECONDS", _HANG_GUARD_SECONDS * 2)
+    monkeypatch.setattr(identity, "SCIM_TIMEOUT_SECONDS", _HANG_GUARD_SECONDS * 2)
+    monkeypatch.setattr(identity, "SHARED_WAIT_SECONDS", _HANG_GUARD_SECONDS * 3)
+    hold = _Hold()
+    monkeypatch.setattr(_SlowWorkspace, "hold", hold, raising=False)
+    seen = _Resolutions.recorded(monkeypatch, hold)
+    outcomes: list[tuple[int, str | None]] = []
+
+    def in_burst(http: httpx.Client) -> None:
+        answer = _directory(http, "held")
+        with hold.changed:
+            outcomes.append(answer)
+            hold.changed.notify_all()
+
+    # Every client is built before the burst starts: building one reads the
+    # CA bundle into a TLS context, 0.07 s alone but 1.5 s while forty-five
+    # are built at once on one host. Each request opens a connection of its
+    # own. The clients' timeout is past every guard, so it is never the answer.
+    with _served() as base:
+        warm, cached, *cold = (
+            httpx.Client(base_url=base, timeout=_HANG_GUARD_SECONDS * 4)
+            for _ in range(47)
+        )
+        try:
+            before = _directory(warm, "cached")
+            burst = [threading.Thread(target=in_burst, args=(one,)) for one in cold]
+            for one in burst:
+                one.start()
+            # The burst is waiting once the workspace holds its one lookup and
+            # every request of it has entered `actor_from_token`: the event loop
+            # runs each up to its first await -- joining the lookup or refused --
+            # before it reads the cached caller's request.
+            with hold.changed:
+                waiting = hold.changed.wait_for(
+                    lambda: hold.arrived == 1 and seen.entered["held"] == len(cold),
+                    _HANG_GUARD_SECONDS,
+                )
+            during = _directory(cached, "cached")
+            answered_first = hold.answered.is_set()
+            resolved_during = dict(seen.resolved)
+            asked_during = list(seen.asked)
+            hold.release.set()
+            for one in burst:
+                one.join(_HANG_GUARD_SECONDS)
+        finally:
+            hold.release.set()
+            for client in (warm, cached, *cold):
+                client.close()
+
+    assert waiting, (hold.arrived, seen.entered["held"])
+    # Past identity before the burst and during it -- whatever the store
+    # then answered -- while the workspace still held the burst's lookup and
+    # with no SCIM call of its own: its identity was resolved twice and no
+    # request of the burst's once; "cached" was asked of the workspace once,
+    # before the burst, and "held" once.
+    assert before[1] not in ("IDENTITY_UNAVAILABLE", "NOT_AUTHENTICATED"), before
+    assert during[1] not in ("IDENTITY_UNAVAILABLE", "NOT_AUTHENTICATED"), during
+    assert not answered_first, "the cached caller was answered after the burst"
+    assert resolved_during == {"cached": 2}
+    assert asked_during == ["cached", "held"]
+    # The burst's one lookup resolved the `SCIM_WAITING_LIMIT` requests that
+    # waited on it, and the rest were refused at once. Counted at identity,
+    # not at the store, which those served go on to ask at once.
+    assert hold.arrived == 1
+    assert seen.resolved["held"] == identity.SCIM_WAITING_LIMIT
+    answered = len(outcomes)
+    assert answered == len(cold)
+    refused = sum(code == "IDENTITY_UNAVAILABLE" for _, code in outcomes)
+    assert refused == len(cold) - identity.SCIM_WAITING_LIMIT
+
+
+@contextmanager
+def _served() -> Iterator[str]:
+    """The app on a uvicorn socket of its own, the way the process serves it,
+    at the base URL yielded; stopped on the way out."""
+    from caos import serve
+    from caos.api.app import app
+
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
-    base = f"http://127.0.0.1:{listener.getsockname()[1]}"
     server = uvicorn.Server(
         uvicorn.Config(
-            app_module.app,
+            app,
             lifespan="off",
             log_level="warning",
             limit_concurrency=serve.LIMIT_CONCURRENCY,
@@ -809,43 +1018,61 @@ def test_a_cached_caller_is_served_while_a_cold_burst_waits(
         target=server.run, kwargs={"sockets": [listener]}, daemon=True
     )
     thread.start()
-    while not server.started:
-        time.sleep(0.01)
-
-    def read(http: httpx.Client, token: str) -> float:
-        started = time.monotonic()
-        http.get(
-            "/api/v1/directory",
-            headers={
-                "x-forwarded-access-token": token,
-                "sec-fetch-site": "same-origin",
-            },
-        )
-        return time.monotonic() - started
-
-    # Every client is built before any clock starts: building one reads the CA
-    # bundle into a TLS context, 0.07 s alone but 1.5 s while forty-five are
-    # built at once on one host, which timed the test's own clients rather
-    # than the server's answer to the cached caller.
-    # Each request still opens a connection of its own, as before.
-    warm, cached, *cold = (httpx.Client(base_url=base, timeout=30) for _ in range(47))
     try:
-        read(warm, "cached")
-        burst = [threading.Thread(target=read, args=(one, "slow")) for one in cold]
-        for one in burst:
-            one.start()
-        time.sleep(0.5)
-        during = read(cached, "cached")
-        for one in burst:
-            one.join(30)
+        ends = time.monotonic() + _HANG_GUARD_SECONDS
+        while not server.started:
+            assert thread.is_alive(), "uvicorn stopped before it started"
+            assert time.monotonic() < ends, "uvicorn did not start"
+            time.sleep(0.01)
+        yield f"http://127.0.0.1:{listener.getsockname()[1]}"
     finally:
-        for client in (warm, cached, *cold):
-            client.close()
         server.should_exit = True
         thread.join(10)
         listener.close()
 
-    assert during < _SlowWorkspace.pause / 2, during
+
+@dataclass
+class _Resolutions:
+    """What `actor_from_token` was asked and answered, per token, and each
+    token a SCIM lookup was made for, in order. Counted under
+    `hold.changed`, so a test can wait on `entered`; the recorders delegate
+    to the real functions."""
+
+    entered: Counter[str] = field(default_factory=Counter)
+    resolved: Counter[str] = field(default_factory=Counter)
+    asked: list[str] = field(default_factory=list)
+
+    @classmethod
+    def recorded(cls, monkeypatch: pytest.MonkeyPatch, hold: _Hold) -> _Resolutions:
+        seen = cls()
+        resolve = identity.actor_from_token
+        current_user = identity._current_user
+
+        async def counted(token: object) -> Actor:
+            with hold.changed:
+                seen.entered[str(token)] += 1
+                hold.changed.notify_all()
+            actor = await resolve(token)
+            seen.resolved[str(token)] += 1
+            return actor
+
+        def asked(token: str) -> WorkspaceUser:
+            seen.asked.append(token)
+            return current_user(token)
+
+        monkeypatch.setattr(identity, "actor_from_token", counted)
+        monkeypatch.setattr(identity, "_current_user", asked)
+        return seen
+
+
+def _directory(http: httpx.Client, token: str) -> tuple[int, str | None]:
+    """The Directory read as `token`'s holder: its status and refusal code."""
+    response = http.get(
+        "/api/v1/directory",
+        headers={"x-forwarded-access-token": token, "sec-fetch-site": "same-origin"},
+    )
+    code = response.json().get("code")
+    return response.status_code, code if isinstance(code, str) else None
 
 
 def test_the_origin_rules_refuse_a_doubled_or_unparsable_header(

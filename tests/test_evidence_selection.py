@@ -656,18 +656,49 @@ def test_the_gate_bound_leaves_two_mapped_sources_and_the_authority_room() -> No
     assert 2 * GATE_SOURCE_BYTES + MEASURED["CP-0"] < MAX_REQUEST_BYTES
 
 
-def test_a_space_padded_or_overlong_item_names_nothing_and_answers_at_once() -> None:
+def test_a_space_padded_or_overlong_item_names_nothing_and_answers_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A cell of a name, thousands of spaces and a word once cost cubic time in
     the page expression, inside an open transaction (F32); it now names nothing
-    the pin carries and is answered as such before any clock notices."""
-    import time
+    the pin carries and is answered as such, and neither page expression is
+    ever handed an item past `_MAX_ITEM_CHARS` (their inputs counted)."""
+    from collections.abc import Iterator
+    from re import Match, Pattern
 
+    from caos.methodology import selection
+
+    read: list[int] = []
+
+    class Counted:
+        """A page expression that records the length of each text it reads and
+        answers by the real one."""
+
+        def __init__(self, real: Pattern[str]) -> None:
+            self.real = real
+
+        def fullmatch(self, text: str) -> Match[str] | None:
+            read.append(len(text))
+            return self.real.fullmatch(text)
+
+        def finditer(self, text: str) -> Iterator[Match[str]]:
+            read.append(len(text))
+            return self.real.finditer(text)
+
+    monkeypatch.setattr(selection, "_PAGES", Counted(selection._PAGES))
+    monkeypatch.setattr(selection, "_PAGE_WORD", Counted(selection._PAGE_WORD))
     a, b = _member("BA_FY2025_10K.txt"), _member("other.txt")
     last = {a.source_id: 108, b.source_id: 3}
     padded = "BA_FY2025_10K.txt" + " " * 20_000 + "pages 1-2"
-    started = time.perf_counter()
     found = select_sources((a, b), padded, last_pages=last)
-    assert time.perf_counter() - started < 2.0
+    unread = read[:]
+    assert unread == []
     assert found.basis is Basis.WHOLE_UNMAPPED
+    # Beside a mapped item it is the fault, told as UNKNOWN: `_unmapped_fault`
+    # holds the same bound.
+    beside = demand_fault((a, b), "other.txt; " + padded, last_pages=last)
+    unread = read[:]
+    assert unread == []
+    assert beside == DemandFault(padded, Fault.UNKNOWN)
     short = select_sources((a, b), "BA_FY2025_10K.txt   pages  1-2", last_pages=last)
     assert short.pages == {a.source_id: frozenset({1, 2})}

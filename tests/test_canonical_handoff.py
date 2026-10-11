@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import time
+from types import ModuleType
 
 import pytest
 from canonical_fixtures import (
@@ -56,6 +56,47 @@ def _refused(
     with pytest.raises(Refusal) as refused:
         _validate(identity, markdown, **kwargs)
     return refused.value
+
+
+class _Validators:
+    """The vendor's handoff validator, every `validate_text` call counted and
+    answered by the real one."""
+
+    def __init__(self, real: ModuleType) -> None:
+        self._real = real
+        self.reads = 0
+
+    def validate_text(self, text: str, **kwargs: str) -> object:
+        self.reads += 1
+        return self._real.validate_text(text, **kwargs)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._real, name)
+
+
+def _refused_unread(identity: HostIdentity, markdown: bytes) -> Refusal:
+    """The refusal of `markdown` as malformed, with the vendor's validators
+    never reached: every vendor expression that backtracks on such text runs
+    inside them, so their not running is its costing no time."""
+    counted = _Validators(CONTRACT.validate_handoff)
+    contract = dataclasses.replace(CONTRACT, validate_handoff=counted)
+    refusal: Refusal | None = None
+    try:
+        validate_markdown(
+            contract,
+            CATALOG,
+            _skill(identity.module_id),
+            markdown,
+            identity=identity,
+            gate_expects=PINNED,
+        )
+    except Refusal as refused:
+        refusal = refused
+    reads = counted.reads
+    assert reads == 0
+    assert refusal is not None
+    assert refusal.code is RefusalCode.HANDOFF_MALFORMED
+    return refusal
 
 
 CP0 = _identity("CP-0")
@@ -291,19 +332,16 @@ def test_a_heading_padded_with_a_long_whitespace_run_is_refused_at_once() -> Non
     section, so one answer stalls the App for good. Invariant 4 forbids editing
     the vendor file, so the run is refused here, before any validator sees it.
 
-    The wall clock is the assertion. A bound that merely refuses would leave
-    the defect in place: what matters is that the refusal costs no time.
+    The assertion is that no vendor validator is ever called: a bound that
+    merely refuses, after the validators ran, would leave the defect in place.
+    What matters is that the refusal costs no time, and the time is theirs.
     """
     padded = CP0_MD.replace(b"## Analysis", b"## Analysis" + b" " * 60_000 + b"#")
     assert padded != CP0_MD
-    started = time.perf_counter()
-    refused = _refused(CP0, padded)
-    spent = time.perf_counter() - started
-    assert refused.code is RefusalCode.HANDOFF_MALFORMED
-    assert spent < 1.0, spent
+    _refused_unread(CP0, padded)
     # Tabs count with spaces, so a run mixing the two is still one run.
     mixed = CP0_MD.replace(b"## Analysis", b"## Analysis" + b" \t" * 300 + b"#")
-    assert _refused(CP0, mixed).code is RefusalCode.HANDOFF_MALFORMED
+    _refused_unread(CP0, mixed)
     # A run inside the bound is ordinary text, wherever it falls.
     inside = CP0_MD.replace(b"## Analysis", b"## Analysis" + b" " * 200)
     assert _validate(CP0, inside).module_id == "CP-0"
@@ -345,13 +383,8 @@ def test_a_heading_built_of_many_short_runs_is_refused_at_once(line: bytes) -> N
     expressions backtrack over every run of a heading's title, and its
     `_heading_text` over every `#` run after one. A conforming handoff of
     about 1 MB of such headings cost several seconds per validation, GIL held,
-    on every read. The wall clock is the assertion again."""
-    padded = _headed(line, 12)
-    started = time.perf_counter()
-    refused = _refused(CP0, padded)
-    spent = time.perf_counter() - started
-    assert refused.code is RefusalCode.HANDOFF_MALFORMED
-    assert spent < 1.0, spent
+    on every read. No vendor validator is called again."""
+    _refused_unread(CP0, _headed(line, 12))
 
 
 def test_a_heading_spelt_the_ordinary_ways_still_validates() -> None:
@@ -559,7 +592,8 @@ def test_a_handoff_past_the_response_bound_is_malformed_at_once() -> None:
     yet no answer can be longer than the response the transport takes
     (`provider.MAX_RESPONSE_BYTES`, 4 MiB), whose Markdown is never longer than
     the JSON body it came in. Handoffs are bounded by that response bound, for
-    model output and stored reads alike, and refused before any validator."""
+    model output and stored reads alike, and refused before any validator
+    (none is called, counted)."""
     from caos.methodology.handoff import MAX_HANDOFF_BYTES, _text
     from caos.provider import MAX_RESPONSE_BYTES
 
@@ -568,9 +602,7 @@ def test_a_handoff_past_the_response_bound_is_malformed_at_once() -> None:
     tail = note * ((MAX_RESPONSE_BYTES - len(CP0_MD)) // len(note) + 1)
     over = CP0_MD + tail
     assert MAX_RESPONSE_BYTES < len(over) < 26_214_400
-    started = time.perf_counter()
-    assert _refused(CP0, over).code is RefusalCode.HANDOFF_MALFORMED
-    assert time.perf_counter() - started < 1.0
+    _refused_unread(CP0, over)
     # The bound itself is accepted text, one byte past it is not.
     line = b"x" * 1023 + b"\n"
     exact = line * (MAX_RESPONSE_BYTES // len(line))

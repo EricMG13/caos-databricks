@@ -17,6 +17,7 @@ ambiguous exact match never reaches it.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from uuid import UUID
 
@@ -304,13 +305,43 @@ def test_an_ambiguous_quote_stops_at_its_second_place() -> None:
 
 
 @pytest.mark.parametrize("normalised", ["last", "edges", "region"])
-def test_a_long_near_match_costs_no_more_than_the_page(normalised: str) -> None:
+def test_a_long_near_match_costs_no_more_than_the_page(
+    normalised: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """MAX-06's other half: a quote that matches the page almost everywhere and
     fails at its last word, or at a region, was compared word by word from
-    every start. The search is linear in the page and the quote now."""
-    import time
+    every start. The search is linear in the page and the quote now, counted
+    as the matcher's own steps: `_extended` (one per token it reads and per
+    border), `_key`, `_edge_equal`, and no start asked of `_match_at`. A
+    search that bypasses those four is not held by this test."""
+    from caos.evidence import citations
 
     size, width = 50_000, 5_000
+    # Linear, with room to spare: each of the two passes reads the page once
+    # and the pattern's borders once (`_extended`, at most 2 * (`size` +
+    # `width`)), the keys are built once per pass (`_key`, 2 * `width`), and
+    # here the last word never matches, so each start the normalised pass
+    # proposes costs one edge comparison (`_edge_equal`, at most `size`). It
+    # measures 165,000 at the most, on `last`; 4 * (`size` + `width`) is
+    # 220,000, where a comparison per start and word is `size * width`, 250
+    # million.
+    bound = 4 * (size + width)
+    steps = {"_extended": 0, "_edge_equal": 0, "_key": 0, "_match_at": 0}
+
+    def counting(name: str) -> Callable[..., object]:
+        real = getattr(citations, name)
+
+        def wrapper(*args: object, **kwargs: object) -> object:
+            steps[name] += 1
+            # Checked as it counts, so a quadratic search fails at once.
+            assert sum(steps.values()) <= bound and not steps["_match_at"], steps
+            return real(*args, **kwargs)
+
+        return wrapper
+
+    for name in steps:
+        monkeypatch.setattr(citations, name, counting(name))
+
     regions = tuple(at // (width - 1) for at in range(size))
     page = _line(*(["a"] * size), regions=regions if normalised == "region" else ())
     words = ["a"] * width
@@ -318,10 +349,10 @@ def test_a_long_near_match_costs_no_more_than_the_page(normalised: str) -> None:
         words[-1] = "b"
     elif normalised == "edges":
         words[0], words[-1] = '"a', 'b."'
-    started = time.perf_counter()
     with pytest.raises(Refusal, match=r"^CITATION_NOT_LOCATED$"):
         _unique_run(page, " ".join(words))
-    assert time.perf_counter() - started < 1.0
+    assert sum(steps.values()) <= bound, steps
+    assert steps["_match_at"] == 0, steps
 
 
 def _every_start(
