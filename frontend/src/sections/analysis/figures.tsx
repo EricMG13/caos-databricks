@@ -28,6 +28,7 @@ import type { HandoffView } from "@/wire/v1";
 import {
   MAX_FIGURES,
   MAX_MARKS,
+  caseRank,
   datum,
   groupBy,
   nearestOf,
@@ -482,8 +483,6 @@ export function addbackValidation(tables: readonly Table[]): DivergingFigure | S
   };
 }
 
-const CASE_ORDER = ["BASE", "DOWNSIDE"];
-
 /** Each division's forecast growth, base against downside, by fiscal year
     (N56): one figure a division, as the KPIs are, so two lines share each
     axis. A slot the issuer does not use (`NOT_APPLICABLE` throughout) draws
@@ -500,11 +499,9 @@ export function forecastDrivers(tables: readonly Table[]): LineFigure[] {
   return slots.map((slot) => {
     const own = bySlot.get(slot)!;
     const years = unique(own.map((row) => text(row, "fiscal_year"))).sort();
-    // A case the bundle does not name sorts after the two it does, never
-    // before BASE (`indexOf` is -1).
-    const order = (kase: string) =>
-      CASE_ORDER.includes(kase) ? CASE_ORDER.indexOf(kase) : CASE_ORDER.length;
-    const cases = unique(own.map((row) => text(row, "case"))).sort((a, b) => order(a) - order(b));
+    const cases = unique(own.map((row) => text(row, "case"))).sort(
+      (a, b) => caseRank(a) - caseRank(b),
+    );
     const cells = groupBy(own, (row) => pair(text(row, "case"), text(row, "fiscal_year")));
     const at = (kase: string, year: string) => cells.get(pair(kase, year))?.[0];
     const label = sentence(slot.replace("_", " "));

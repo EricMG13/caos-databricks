@@ -19,6 +19,7 @@ import { bridgeOf } from "@/charts/bridge";
 import type { HandoffView } from "@/wire/v1";
 import {
   MAX_MARKS,
+  caseRank,
   datum,
   groupBy,
   negatedMagnitude,
@@ -27,6 +28,7 @@ import {
   stackFigure,
   sumOf,
   text,
+  unique,
   wallSummary,
   yearOf,
   type Cell,
@@ -966,6 +968,118 @@ export function recoveryByClass(handoff: HandoffView): Figure[] {
   });
 }
 
+/** A CP-2G register of a row a period and case, drawn a line a case. */
+interface CaseLines {
+  register: string;
+  key: string;
+  metrics: readonly string[];
+  /** The column a point's source states. */
+  source: string;
+}
+
+/** A metric as a figure's key part: "gross/net leverage" is "gross-net-leverage". */
+const slug = (metric: string) => metric.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+/** The point the rows stating one period and case give a metric: their
+    cell where every row writes it alike, else a gap naming each text. */
+function pointOf(group: readonly Row[], metric: string, unit: Unit | undefined): Datum {
+  const cells = group.map((row) => row[metric]);
+  const texts = cells.map((cell) => cell?.text.trim() || "not stated");
+  if (new Set(texts).size > 1) {
+    const times = texts.length === 2 ? "twice" : `${texts.length} times`;
+    return { value: null, reason: `stated ${times}: ${texts.join(", ")}` };
+  }
+  return inUnit(cells[0], unit);
+}
+
+/** A CP-2G register's cases as lines over its periods, a figure a metric and
+    a unit its cells are written in: periods in the order they first appear,
+    a line a case (BASE, then DOWNSIDE, then the rest, each read trimmed
+    and case-insensitive), every value as served. A cell in another unit is
+    a gap naming it, drawn in its own unit's figure; a cell the host read no
+    figure from is a gap carrying its text. Past `MAX_MARKS` a figure is
+    stated, not drawn. */
+function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
+  const rows = registerRows(handoff, "CP-2G", spec.register);
+  if (!rows?.length) return [];
+  // A case is one line however it is spelt, labelled as first written; a
+  // blank case is its own line. Uppercase, a key never meets "not-stated".
+  const caseOf = (row: Row) => text(row, "case").trim().toUpperCase() || "not-stated";
+  const periodOf = (row: Row) => text(row, "period").trim();
+  const labels = new Map<string, string>();
+  for (const row of rows) {
+    if (!labels.has(caseOf(row))) labels.set(caseOf(row), text(row, "case").trim());
+  }
+  const periods = unique(rows.map(periodOf));
+  const cases = [...labels.keys()].sort((a, b) => caseRank(a) - caseRank(b));
+  const cells = groupBy(rows, (row) => pair(caseOf(row), periodOf(row)));
+  const rowsAt = (kase: string, period: string) => cells.get(pair(kase, period)) ?? [];
+  const marks = cases.length * periods.length;
+  return spec.metrics.flatMap((metric) => {
+    const label = `${metric.charAt(0).toUpperCase()}${metric.slice(1)}`;
+    const [key, title] = [`${spec.key}-${slug(metric)}`, `${label}, base and downside`];
+    const units = [
+      ...new Set(
+        rows.filter((row) => row[metric]?.value != null).map((row) => suffixOf(row[metric])),
+      ),
+    ];
+    const heads =
+      units.length > 1
+        ? units.map((unit) => ({
+            key: unit ? `${key}-${UNIT_KEY[unit]}` : key,
+            title: unit ? `${title}, ${unit}` : title,
+            unit,
+          }))
+        : [{ key, title, unit: units[0] }];
+    return heads.map((head): Figure => {
+      if (marks > MAX_MARKS) return oversized(head.key, spec.register, head.title, marks);
+      const series = cases.map((kase) => ({
+        key: kase,
+        label: labels.get(kase) || "Case not stated",
+        origin: "model" as const,
+        data: periods.map((period) => pointOf(rowsAt(kase, period), metric, head.unit)),
+      }));
+      return {
+        ...head,
+        table: spec.register,
+        kind: "line",
+        summary: seriesSummary(label, periods, series),
+        categories: periods,
+        series,
+        sourceOf: (selection) => {
+          const sources = rowsAt(selection.series, selection.category).map((row) =>
+            stated(row, [spec.source]),
+          );
+          const named = unique(sources.filter((source): source is string => source !== null));
+          return named.length ? named.join("; ") : null;
+        },
+      };
+    });
+  });
+}
+
+/** CP-2G's forecast (`T2H.4`): revenue, EBITDA and FCF, base against downside. */
+export function forecastCases(handoff: HandoffView): Figure[] {
+  return caseLines(handoff, {
+    register: "T2H.4",
+    key: "forecast-cases",
+    metrics: ["revenue", "EBITDA", "FCF"],
+    source: "evidence/assumption IDs",
+  });
+}
+
+/** CP-2G's credit path (`T2H.6`): leverage, coverage and FCF/debt, base
+    against downside. A leverage cell packing gross and net (`4.2x / 3.9x`)
+    is a gap carrying its text: the host reads no figure from it (N192). */
+export function creditPath(handoff: HandoffView): Figure[] {
+  return caseLines(handoff, {
+    register: "T2H.6",
+    key: "credit-path",
+    metrics: ["gross/net leverage", "coverage", "FCF/debt"],
+    source: "definition IDs",
+  });
+}
+
 /** Every figure a handoff's registers support, in reading order. A handoff
     is one module's, so only its own module's figures draw for it. */
 export function registerFigures(handoff: HandoffView): Figure[] {
@@ -979,6 +1093,8 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...liquiditySources(handoff),
     ...cashUses(handoff),
     ...liquidityBridge(handoff),
+    ...forecastCases(handoff),
+    ...creditPath(handoff),
     ...rateMix(handoff),
     ...refinancingWall(handoff),
     ...lmeExposure(handoff),
