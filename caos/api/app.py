@@ -52,6 +52,7 @@ from caos.api.commands import deliverable as deliverable_command
 from caos.api.commands import execution as execution_command
 from caos.api.commands import members as members_command
 from caos.api.commands import qualification as qualification_command
+from caos.api.commands import rate_decks as rate_decks_command
 from caos.api.commands import runs as runs_command
 from caos.api.deps import BLOB_ROOT as BLOB_ROOT
 from caos.api.deps import DATABASE_URL as DATABASE_URL
@@ -79,6 +80,7 @@ from caos.api.reads import directory as directory_read
 from caos.api.reads import evidence as evidence_read
 from caos.api.reads import model as model_read
 from caos.api.reads import qualification as qualification_read
+from caos.api.reads import rate_decks as rate_decks_read
 from caos.api.reads import reports as reports_read
 from caos.api.reads import run as run_read
 from caos.api.reads import upload as upload_read
@@ -452,6 +454,7 @@ for _section in (
     model_read,
     book_read,
     qualification_read,
+    rate_decks_read,
     reports_read,
     evidence_read,
     deliverable_read,
@@ -463,6 +466,7 @@ for _commands in (
     runs_command,
     execution_command,
     qualification_command,
+    rate_decks_command,
     members_command,
     deliverable_command,
 ):

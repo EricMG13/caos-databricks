@@ -43,11 +43,13 @@ command receipt the route records.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
-from caos.calculators.credit_model.projection import RateDeckYear
+from caos.calculators.credit_model.projection import RateDeck, RateDeckYear
 from caos.digest import canonical_digest
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -68,6 +70,41 @@ RATE_CHARS = 64
 # use; the second key is 0, since there is one deck sequence). Arbitrary and
 # permanent; `0050_rate_decks.sql` names it too, as 211812432.
 SAVE_LOCK = 0x0CA0_0050
+
+# Each statement is one literal, never assembled (bandit B608). "Latest" is
+# the greatest `deck_seq`, spelled the same in the read and the pin.
+#
+# A deck, its digest and its rates in one round trip, rates in (reference
+# rate, year) order. A LEFT JOIN, so a deck is never read as absent for lack
+# of a rate row; its digest then refuses it.
+_READ_LATEST = (
+    "SELECT d.deck_id, d.as_of, d.saved_at, d.rates_sha256,"
+    " r.reference_rate, r.year_offset, r.base_rate, r.downside_rate"
+    " FROM rate_decks d LEFT JOIN rate_deck_rates r ON r.deck_id = d.deck_id"
+    " WHERE d.deck_id = (SELECT deck_id FROM rate_decks"
+    " ORDER BY deck_seq DESC LIMIT 1)"
+    " ORDER BY r.reference_rate, r.year_offset"
+)
+# From the run, so an unknown run (no row) is told from a run with no deck (a
+# row of nulls).
+_READ_PINNED = (
+    "SELECT d.deck_id, d.as_of, d.saved_at, d.rates_sha256,"
+    " r.reference_rate, r.year_offset, r.base_rate, r.downside_rate"
+    " FROM runs u LEFT JOIN run_rate_decks p ON p.run_id = u.run_id"
+    " LEFT JOIN rate_decks d ON d.deck_id = p.deck_id"
+    " LEFT JOIN rate_deck_rates r ON r.deck_id = d.deck_id"
+    " WHERE u.run_id = %s"
+    " ORDER BY r.reference_rate, r.year_offset"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SavedDeck:
+    """A deck as the read route shows it: the projection's `RateDeck` and
+    when it was saved."""
+
+    deck: RateDeck
+    saved_at: datetime
 
 
 def _figure(rate: Decimal) -> str:
@@ -155,3 +192,48 @@ def save_deck(
         ),
     )
     return deck_id
+
+
+def _deck(rows: list[tuple[Any, ...]]) -> SavedDeck | None:
+    """The rows a deck read returned, as one deck; None for no rows or a row
+    naming no deck. `ARTIFACT_RECORD_MISMATCH` when the rates read are not
+    the rates the deck was saved with."""
+    if not rows or rows[0][0] is None:
+        return None
+    deck_id, as_of, saved_at, rates_sha256 = rows[0][:4]
+    years = tuple(
+        RateDeckYear(
+            reference_rate=str(reference_rate),
+            fiscal_year_offset=int(year_offset),
+            base=Decimal(base),
+            downside=Decimal(downside),
+        )
+        for *_deck_columns, reference_rate, year_offset, base, downside in rows
+        if reference_rate is not None
+    )
+    if not years or rates_digest(years) != rates_sha256:
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
+    return SavedDeck(RateDeck(str(deck_id), as_of.isoformat(), years), saved_at)
+
+
+def latest_saved_deck(conn: StoreConnection) -> SavedDeck | None:
+    """The latest committed deck and when it was saved, or None. One round
+    trip; its rates verified against their digest."""
+    return _deck(conn.execute(_READ_LATEST).fetchall())
+
+
+def latest_deck(conn: StoreConnection) -> RateDeck | None:
+    """The latest committed deck, or None when none was ever saved."""
+    saved = latest_saved_deck(conn)
+    return None if saved is None else saved.deck
+
+
+def deck_for_run(conn: StoreConnection, run_id: UUID) -> RateDeck | None:
+    """The deck the run pinned at its creation, or None when there was no
+    deck then; `RUN_NOT_FOUND` for a run the store does not hold. One round
+    trip; the rates verified against their digest."""
+    rows = conn.execute(_READ_PINNED, (run_id,)).fetchall()
+    if not rows:
+        raise Refusal(RefusalCode.RUN_NOT_FOUND)
+    saved = _deck(rows)
+    return None if saved is None else saved.deck

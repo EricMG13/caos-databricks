@@ -25,8 +25,24 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from conftest import recorded_statements
+from fastapi.testclient import TestClient
+from httpx2 import Response
 
-from caos.calculators.credit_model.projection import RateDeckYear
+from caos.api import app as app_module
+from caos.api.app import app, store_connection
+from caos.api.commands import rate_decks as rate_decks_command
+from caos.api.commands._request import IDEMPOTENCY_HEADER, REPLAYED_HEADER
+from caos.api.commands.rate_decks import require_admin, save_rate_deck
+from caos.api.identity import ROLE_HEADER, TRUST_SWITCH, TRUSTED, GlobalRole
+from caos.api.reads import rate_decks as rate_decks_read
+from caos.api.reads.rate_decks import read_latest_rate_deck
+from caos.api.wire import (
+    RateDeckRateView,
+    RateDeckSaved,
+    RateDeckView,
+)
+from caos.calculators.credit_model.projection import RateDeck, RateDeckYear
 from caos.digest import canonical_digest
 from caos.refusals import Refusal
 from caos.store import (
@@ -36,12 +52,21 @@ from caos.store import (
 )
 from caos.store.rate_decks import (
     SAVE_LOCK,
+    SavedDeck,
     check_rates,
+    deck_for_run,
+    latest_deck,
+    latest_saved_deck,
     rates_digest,
     save_deck,
 )
 from caos.store.runs import start_run
 
+__all__ = ["read_latest_rate_deck", "require_admin", "save_rate_deck"]
+
+PATH = "/api/v1/rate-decks"
+LATEST = "/api/v1/rate-decks/latest"
+AS_OF = "2026-10-01"
 RATES: list[dict[str, Any]] = [
     {
         "reference_rate": "SOFR",
@@ -62,6 +87,11 @@ RATES: list[dict[str, Any]] = [
         "downside_rate": "-0.0010",
     },
 ]
+BODY = {"as_of": AS_OF, "rates": RATES}
+NOT_FOUND = {
+    "code": "ENDPOINT_NOT_FOUND",
+    "clears": "Use a declared path and method.",
+}
 
 
 def _years(rates: list[dict[str, Any]] = RATES) -> tuple[RateDeckYear, ...]:
@@ -77,6 +107,52 @@ def _years(rates: list[dict[str, Any]] = RATES) -> tuple[RateDeckYear, ...]:
     )
 
 
+def _ordered(years: tuple[RateDeckYear, ...]) -> tuple[RateDeckYear, ...]:
+    return tuple(sorted(years, key=lambda y: (y.reference_rate, y.fiscal_year_offset)))
+
+
+@pytest.fixture
+def client(
+    case: tuple[StoreConnection, UUID],
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[tuple[TestClient, StoreConnection]]:
+    """The real app on the case's connection, served without an edge token,
+    so a role above READER is the switched-on role header."""
+    conn, _case_id = case
+    monkeypatch.setenv(TRUST_SWITCH, TRUSTED)
+    monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
+    app.dependency_overrides[store_connection] = lambda: conn
+    try:
+        with TestClient(app) as opened:
+            yield opened, conn
+    finally:
+        app.dependency_overrides.clear()
+
+
+def _save(
+    http: TestClient,
+    body: object,
+    user: UUID,
+    role: str = "ADMIN",
+    key: UUID | None = None,
+) -> Response:
+    headers = {
+        "x-caos-user": str(user),
+        ROLE_HEADER: role,
+        IDEMPOTENCY_HEADER: str(key or uuid4()),
+    }
+    answer: Response = http.post(PATH, headers=headers, json=body)
+    return answer
+
+
+def _latest(http: TestClient, role: str = "READER") -> Response:
+    answer: Response = http.get(
+        LATEST, headers={"x-caos-user": str(uuid4()), ROLE_HEADER: role}
+    )
+    return answer
+
+
 def _decks(conn: StoreConnection) -> tuple[int, int, int]:
     """Rows in the three deck tables, read and released."""
     counts = tuple(
@@ -86,6 +162,132 @@ def _decks(conn: StoreConnection) -> tuple[int, int, int]:
     )
     conn.rollback()
     return counts[0], counts[1], counts[2]
+
+
+def test_an_admin_saves_a_deck_and_it_reads_back_as_latest(
+    client: tuple[TestClient, StoreConnection],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    http, conn = client
+    admin, key = uuid4(), uuid4()
+
+    with recorded_statements(conn) as saving:
+        answer = _save(http, BODY, admin, key=key)
+
+    assert answer.status_code == 201, answer.text
+    assert answer.headers.get(REPLAYED_HEADER) is None
+    deck_id = RateDeckSaved.model_validate(answer.json()).deck_id
+    assert len(saving) == rate_decks_command.SAVE_IO
+    assert rate_decks_command.SAVE_IO == rate_decks_command.IO_BUDGET
+    # The one log line names the deck and its size, never a rate.
+    logged = capsys.readouterr().err
+    assert f"rate_deck_saved deck_id={deck_id} rows=3" in logged
+    assert "0.0380" not in logged and "SOFR" not in logged
+
+    with recorded_statements(conn) as reading:
+        shown = _latest(http)
+    assert shown.status_code == 200, shown.text
+    assert len(reading) == rate_decks_read.IO_BUDGET == 1
+    view = RateDeckView.model_validate(shown.json())
+    assert (view.deck_id, view.as_of) == (deck_id, AS_OF)
+    assert view.rates == [
+        RateDeckRateView.model_validate(row)
+        for row in sorted(RATES, key=lambda r: (r["reference_rate"], r["year_offset"]))
+    ]
+
+    # The store reads it back as Plan 1's `RateDeck`: Decimal, never float.
+    deck = latest_deck(conn)
+    assert deck == RateDeck(str(deck_id), AS_OF, _ordered(_years()))
+    assert all(type(year.base) is Decimal for year in deck.years)
+    saved = latest_saved_deck(conn)
+    assert isinstance(saved, SavedDeck)
+    assert saved.deck == deck and saved.saved_at == view.saved_at
+    conn.rollback()
+
+    # The same key and body replays the receipt and writes nothing; a
+    # different body under it is the idempotency conflict.
+    with recorded_statements(conn) as replaying:
+        again = _save(http, BODY, admin, key=key)
+    assert again.status_code == 201
+    assert again.headers.get(REPLAYED_HEADER) == "true"
+    assert again.json() == answer.json()
+    assert len(replaying) == rate_decks_command.REPLAY_IO
+    changed = {**BODY, "as_of": "2026-10-02"}
+    reused = _save(http, changed, admin, key=key)
+    assert reused.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert _decks(conn) == (1, 3, 0)
+    assert "rate_deck_saved" not in capsys.readouterr().err
+
+
+def test_with_no_deck_the_latest_is_null(
+    client: tuple[TestClient, StoreConnection],
+) -> None:
+    http, conn = client
+    shown = _latest(http)
+    assert shown.status_code == 200
+    assert shown.json() is None
+    assert latest_deck(conn) is None
+    assert latest_saved_deck(conn) is None
+
+
+@pytest.mark.parametrize("role", ["ANALYST", "READER"])
+def test_a_non_admin_save_is_refused_as_not_found(
+    client: tuple[TestClient, StoreConnection], role: str
+) -> None:
+    http, conn = client
+    answer = _save(http, BODY, uuid4(), role=role)
+    assert (answer.status_code, answer.json()) == (404, NOT_FOUND)
+    # Refused before the key, the body and the store: no key, no body.
+    bare = http.post(PATH, headers={"x-caos-user": str(uuid4()), ROLE_HEADER: role})
+    assert (bare.status_code, bare.json()) == (404, NOT_FOUND)
+    assert _decks(conn) == (0, 0, 0)
+    # Anonymous is 401 before anything else.
+    assert http.post(PATH, json=BODY).status_code == 401
+    assert http.get(LATEST).status_code == 401
+
+
+def test_require_admin_compares_by_rank() -> None:
+    from caos.api.identity import Actor
+
+    admin = Actor(uuid4(), GlobalRole.ADMIN)
+    assert require_admin(admin) is admin
+    for role in (GlobalRole.ANALYST, GlobalRole.READER):
+        with pytest.raises(Refusal, match=r"^ENDPOINT_NOT_FOUND$"):
+            require_admin(Actor(uuid4(), role))
+
+
+def test_duplicate_rate_rows_are_refused(
+    client: tuple[TestClient, StoreConnection],
+) -> None:
+    http, conn = client
+    rows = [RATES[0], {**RATES[0], "base_rate": "0.0400"}]
+    answer = _save(http, {**BODY, "rates": rows}, uuid4())
+    assert (answer.status_code, answer.json()["code"]) == (400, "REQUEST_INVALID")
+    with pytest.raises(Refusal, match=r"^REQUEST_INVALID$"):
+        save_deck(conn, uuid4(), date(2026, 10, 1), _years(rows))
+    conn.rollback()
+    assert _decks(conn) == (0, 0, 0)
+
+
+@pytest.mark.parametrize(
+    "rates",
+    [
+        [],
+        [{**RATES[0], "base_rate": "1"}],
+        [{**RATES[0], "downside_rate": "-1"}],
+        [{**RATES[0], "base_rate": "1.5"}],
+        [{**RATES[0], "year_offset": 0}],
+        [{**RATES[0], "year_offset": 6}],
+    ],
+    ids=["empty", "base-one", "downside-minus-one", "base-over", "offset-0", "off-6"],
+)
+def test_a_deck_outside_its_bounds_is_refused_before_any_write(
+    client: tuple[TestClient, StoreConnection], rates: list[dict[str, Any]]
+) -> None:
+    http, conn = client
+    answer = _save(http, {**BODY, "rates": rates}, uuid4())
+    assert (answer.status_code, answer.json()["code"]) == (400, "REQUEST_INVALID")
+    assert _decks(conn) == (0, 0, 0)
 
 
 def test_a_deck_is_written_only_under_the_save_lock_with_a_finite_stamp(
@@ -172,6 +374,20 @@ def test_the_rates_digest_is_of_the_values_not_their_spelling() -> None:
     )
 
 
+def test_a_deck_with_a_negative_zero_reads_back_intact(
+    case: tuple[StoreConnection, UUID],
+) -> None:
+    conn, _case_id = case
+    rows = (RateDeckYear("SONIA", 2, Decimal("-0.000"), Decimal("0.05000")),)
+    save_deck(conn, uuid4(), date(2026, 10, 1), rows)
+    conn.commit()
+    latest = latest_deck(conn)
+    assert latest is not None
+    assert latest.years == (
+        RateDeckYear("SONIA", 2, Decimal("0.000"), Decimal("0.05000")),
+    )
+
+
 def test_a_rate_longer_than_the_wire_carries_is_refused(
     case: tuple[StoreConnection, UUID],
 ) -> None:
@@ -197,6 +413,12 @@ def test_a_rate_longer_than_the_wire_carries_is_refused(
             (deck_id, long),
         )
     conn.rollback()
+
+
+def test_an_unknown_run_has_no_deck_to_read(case: tuple[StoreConnection, UUID]) -> None:
+    conn, _case_id = case
+    with pytest.raises(Refusal, match=r"^RUN_NOT_FOUND$"):
+        deck_for_run(conn, uuid4())
 
 
 def test_a_run_inserted_naming_another_transaction_cannot_be_pinned(
