@@ -28,6 +28,7 @@ import {
   registerRows,
   scenarioMoves,
   scoreRegisters,
+  spreadCurve,
   valueAllocation,
 } from "@/sections/analysis/register-figures";
 import { caseRank, negatedMagnitude, type Figure } from "@/sections/analysis/figure-core";
@@ -2451,5 +2452,138 @@ test("expectedRealised: another module's T7.4 draws nothing; past the marks it i
     oversized: true,
     key: "expected-realised",
     summary: expect.stringMatching(/^2002 marks/),
+  });
+});
+
+// CP-3D's T3E.3, as the profile declares it.
+const ISSUER_CURVE = [
+  "security_id",
+  "maturity/call date",
+  "spread/yield",
+  "seniority",
+  "curve residual",
+  "explanation status",
+];
+const t3e3 = (id: string, date: string, spread: Served, seniority: string, residual = "+12") => [
+  c(id),
+  c(date),
+  spread,
+  c(seniority),
+  c(residual),
+  c("Explained"),
+];
+function scatter(figure: Figure) {
+  if (figure.kind !== "scatter") throw new Error(`A ${figure.kind} figure, not a scatter.`);
+  return figure;
+}
+const curves = (rows: Served[][], module = "CP-3D") =>
+  spreadCurve(moduleWith(module, [register("T3E.3", ISSUER_CURVE, rows)])).map(scatter);
+
+test("spreadCurve: a point a security, its spread at its date, coloured by seniority", () => {
+  const figures = curves([
+    t3e3("NOTE-A", "2031-06-15 [C1]", c("412.5", "412.5"), "Senior secured"),
+    t3e3("NOTE-B", "2029-03", c("275", "275"), "Subordinated", "-8"),
+    t3e3("", "03/04/2031", c("Not quoted"), ""),
+  ]);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit, figure.table])).toEqual([
+    ["spread-curve", "Spread against maturity", undefined, "T3E.3"],
+  ]);
+  const [curve] = figures;
+  expect([curve!.xLabel, curve!.pointLabel, curve!.valueLabel, curve!.groupLabel]).toEqual([
+    "maturity/call date",
+    "security_id",
+    "spread/yield",
+    "seniority",
+  ]);
+  // The date as written past its citation markers; the chart reads it, never this.
+  expect(curve!.points).toEqual([
+    {
+      key: "0",
+      label: "NOTE-A",
+      at: "2031-06-15",
+      value: { value: "412.5" },
+      group: "Senior secured",
+      origin: "model",
+    },
+    {
+      key: "1",
+      label: "NOTE-B",
+      at: "2029-03",
+      value: { value: "275" },
+      group: "Subordinated",
+      origin: "model",
+    },
+    {
+      key: "2",
+      label: "security_id not stated",
+      at: "03/04/2031",
+      value: { value: null, reason: "Not quoted" },
+      group: "seniority not stated",
+      origin: "model",
+    },
+  ]);
+  expect(curve!.summary).toBe(
+    "spread/yield as served, by maturity/call date: NOTE-A 2031-06-15 412.5; NOTE-B 2029-03 275; security_id not stated 03/04/2031 n/a (Not quoted).",
+  );
+  const pressed = { series: "Subordinated", category: "NOTE-B", index: 1, value: "275" };
+  expect(curve!.sourceOf({ ...pressed, origin: "model" })).toBe(
+    "curve residual: -8; explanation status: Explained",
+  );
+});
+
+test("spreadCurve: a security stated twice is one point, each cell a gap naming each text where they differ", () => {
+  const [curve] = curves([
+    t3e3("NOTE-A", "2031-06-15", c("412.5", "412.5"), "Senior"),
+    t3e3("NOTE-A", "2032-06-15", c("415", "415"), "Senior", "+3"),
+    t3e3("NOTE-B", "2030", c("200", "200"), "Senior"),
+    t3e3("NOTE-B", "2030", c("200", "200"), "Senior"),
+  ]);
+  expect(curve!.points.map(({ key, at, value, group }) => [key, at, value, group])).toEqual([
+    [
+      "0",
+      "stated twice: 2031-06-15, 2032-06-15",
+      { value: null, reason: "stated twice: 412.5, 415" },
+      "Senior",
+    ],
+    ["2", "2030", { value: "200" }, "Senior"],
+  ]);
+  expect(
+    curve!.sourceOf({
+      series: "Senior",
+      category: "NOTE-A",
+      index: 0,
+      value: null,
+      origin: "model",
+    }),
+  ).toBe(
+    "curve residual: +12; explanation status: Explained; curve residual: +3; explanation status: Explained",
+  );
+});
+
+test("spreadCurve: a yield in % and a spread are two figures, never one axis", () => {
+  const figures = curves([
+    t3e3("NOTE-A", "2031", c("350", "350"), "Senior"),
+    t3e3("NOTE-B", "2032", c("6.5%", "6.5"), "Senior"),
+  ]);
+  expect(
+    figures.map((figure) => [figure.key, figure.title, figure.unit, figure.points.length]),
+  ).toEqual([
+    ["spread-curve", "Spread against maturity", undefined, 1],
+    ["spread-curve-percent", "Spread against maturity, %", "%", 1],
+  ]);
+});
+
+test("spreadCurve: another module's T3E.3 draws nothing; past the marks it is stated", () => {
+  const row = t3e3("NOTE-A", "2031", c("350", "350"), "Senior");
+  expect(curves([row], "CP-3C")).toEqual([]);
+  const cp3d = moduleWith("CP-3D", [register("T3E.3", ISSUER_CURVE, [row])]);
+  expect(registerFigures(cp3d).map((figure) => figure.key)).toEqual(["spread-curve"]);
+  const many = Array.from({ length: 2001 }, (_, n) => t3e3(`N${n}`, "2031", c("1", "1"), "S"));
+  expect(
+    spreadCurve(moduleWith("CP-3D", [register("T3E.3", ISSUER_CURVE, many)]))[0],
+  ).toMatchObject({
+    oversized: true,
+    key: "spread-curve",
+    summary: expect.stringMatching(/^2001 marks/),
   });
 });
