@@ -121,7 +121,7 @@ Classes:
 
 The 2026-09-25 run's register is gone (B10), so rebuild it from the tracked ledgers. At `9393940` a `decisions.md` entry named 77 of CF-001–CF-106 (§5 lists its seeds' entries per group), most from the backlog pass (D38–D48, F159–F249) and most as fixed; D39 keeps CF-034 as it is (N25). That run classed CF-001 FIXED (F424, F429) and CF-010 and CF-033 PLATFORM-ONLY, and left 25 CF IDs that no tracked document describes (N107): check each again, and class one that only the owner's `findings.md` describes DEFERRED to N107. Neither an entry naming a row nor a past run's class is evidence, so check each one.
 
-Each change since `2a4f983` had its own task review, audit or adversarial pass (`decisions.md` names each), but nothing has reviewed them together, and some had none. Review, with the `adversarial-reviewer` skill or the `opus55-reviewer` agent in a worktree at BASE:
+Each change since `2a4f983` had its own task review, audit or adversarial pass (`decisions.md` names each), but nothing has reviewed them together, and some had none. Review them in a worktree at BASE with `mx-adversary`; `mx-architect` then reads the second list's findings together (§10's agents):
 - what records no review: F498–F500, F503, F507, F541–F543 and F581, and the Book/Model inputs (#153–#155: `caos/methodology/model_inputs.py`, `caos/calculators/credit_model/frame.py`), which landed with no `decisions.md` entry;
 - the changes that move what an invariant means in practice, read together: citations as 8-word excerpts, kept unverified and cited by markers in the body (D105–D107; invariants 2 and 11); the run's pinned model and command (F468, D109; invariant 10); the drop re-attempts (D110, D118; invariant 6); the Copilot transport's bill, settlement and park (D77 addendum 2, F556–F612; invariants 7 and 8); and the typed registers, which call the bundle's private functions (D124; invariant 4).
 
@@ -191,7 +191,7 @@ Only the changes below are allowed. Each must be shown to preserve behaviour:
 
 **Architecture.** Beyond R1–R6, a structural change is allowed only where two or more confirmed register rows share one seam, and the commit names the rows it retires. No speculative redesign. No N1 parallelism (runs stay sequential, D42). Nothing of OD-3, OD-7 or OD-10 to OD-18 beyond what its Choice says.
 
-**Stop rule, per item.** Allow at most two attempts. Revert the item by explicit path and record it in `next.md` with the reason if either of these happens:
+**Stop rule, per item.** Allow at most two attempts, the second one rung up the owner's ladder (§10's agents). Revert the item by explicit path and record it in `next.md` with the reason if either of these happens:
 - it would need a golden, vendor byte, dependency or behaviour change;
 - the same gate fails twice.
 
@@ -227,19 +227,19 @@ A step is one register row or one refactor item.
 
 1. **Re-read** the row's sources. Reproduce it at HEAD, or record the before-metric. If it no longer reproduces, reclassify it and move on.
 2. **Test first.** For a repair, write the failing test. For a refactor, name the tests and goldens that pin the behaviour; add a characterization test only where nothing pins it.
-3. **Make the smallest change.**
+3. **Make the smallest change**, through the implementer §10's table names for the work; the lead session writes no code.
 4. **Run the targeted checks:** `uv run pytest --no-cov -n 4 <files>`, `tests/parity` when a parity-bound path is touched, and ruff, mypy and every gate the change could move. A change on a money, ordering or security path also runs `mutmut` (D142) over what it changed, and its `Fn` entry names each surviving mutant killed or justified.
 5. **Live-test, according to what changed:**
    - Store, graph, worker, model seam or API: `tests/test_platform_boot.py` plus one scenario over HTTP through the scenario harness (`tests/platform_journey.py`, extended under `docs/rebuild/runs/final-sweep/`).
    - The Copilot transport or the PC worker: `tests/test_copilot.py` and `tests/test_pc_worker.py`; never a seat.
    - Frontend: `npm --prefix frontend run test && npm --prefix frontend run build`, the adapted DB-03 journey against the real app, and `build:demo` then `test:workbench` for chrome or section changes.
    - Deployment: A34–A37, `tests/shipped_boot.py` and `tests/test_enterprise_deploy.py`.
-6. **Autoreview:**
-   - `confidence-review` on the change;
-   - `adversarial-reviewer` (or the `opus55-reviewer` agent) on the step's diff;
-   - `rewrite-tournament` on every non-trivial function changed.
+6. **Review**, once per level (the owner's global rules):
+   - `mx-precise` reviews the step's diff against its brief, the spec verdict and the quality verdict apart; a small fix's re-review may go to `mx-feature`;
+   - `mx-adversary` also reviews it when it touches money, ordering or concurrency, or security (groups C to F, the Copilot transport);
+   - `confidence-review` and `rewrite-tournament` run once, on the branch diff, at §9's whole-branch review, not per step.
 
-   Fix what they confirm. A skill that is not installed is recorded as unavailable, never as run.
+   Fix what they confirm. A skill or agent that is not available is recorded as unavailable, never as run.
 7. **Commit** on the sweep branch. Stage explicit paths. The message names the register row and its ledger IDs, and the `Fn` entry goes in `docs/rebuild/decisions.md` in the same commit. Number each `Fn` and `N` from the first unused on `rebuild/databricks` at that moment, since other sessions' pull requests may have landed ids meanwhile. Then check `git status --short`.
 8. **Update `progress.md`:** the row, the commit, the tests, the live-test result, the review result and the metric delta.
 
@@ -259,7 +259,7 @@ On the final commit, in the final turn, in the main session:
    - jscpd ≤ 3%.
 5. The shipped-set boot and the governed run (§7.1).
 6. Ten consecutive, distinct, realistic scenarios pass on the final commit, through the scenario harness: LITE and FULL, gates, cancel, a restart mid-run, filing through three actors, and a run whose pinned model the deployment stops approving (F468). Set the ceiling as OD-2, D83 and CF-008 leave it (120.00). An actor holds at most four queued or running runs (D46, `QUEUED_RUNS_LIMIT_REACHED`), so end or cancel each scenario's run before the next.
-7. Run a final independent adversarial review of `git diff BASE..HEAD`. Every CRITICAL or HIGH it raises is fixed and re-reviewed; every MEDIUM is fixed or put in `next.md`.
+7. Run the whole-branch review of `git diff BASE..HEAD`: `mx-architect` (if Fable is refused, record the error and use `mx-adversary`), then `confidence-review` and `rewrite-tournament` on the same diff. Every CRITICAL or HIGH they raise is fixed and re-reviewed; every MEDIUM is fixed or put in `next.md`.
 8. The register has zero OPEN rows at CRITICAL or HIGH. Every other OPEN row is fixed or has an N entry. Every DEFERRED, DECISION or PLATFORM-ONLY row names its entry.
 9. `git status --short` shows only the untracked paths recorded at BASE, nothing has been pushed, and no branch but the sweep's has moved.
 
@@ -278,12 +278,7 @@ These are lessons from the runs of 23 September to 11 October.
 - **Postgres.** The suite uses the compose `test-postgres` on 55437, which runs on tmpfs. The Docker VM has about 4 GB of RAM and 2 CPUs; a tmpfs server under a bulk load took the audit's database down. Run scale or load probes against a separate disposable disk-backed container, and stop it afterwards. The persistent dev store on 55436 holds the live runs' databases: never point a test at it, and never run `docker compose up` from a new worktree while a live run uses it (a compose project from a new path re-created it on 2026-10-05). `tests/pg_reaper.py` drops only timestamped test databases over two hours old, and only on 55437 (F588).
 - **complexipy** rewrites `complexipy-snapshot.json` on every run (F25). Commit that file only when the baseline legitimately shrinks.
 - **Port 4173.** `npm run test:workbench` and `npm run a11y` hard-code it (`--strictPort`), so only one of them runs at a time. `test:workbench` serves the prebuilt `dist-demo`: run `build:demo` first, or it tests stale code. A container may lack Playwright's browsers for the pinned version (B11); CI installs them.
-- **Parallel helpers** are allowed for read-only work only: register classification, reproduction and review. Dispatch helpers and implementers by their `mx-*` agent names, as the owner's global rules require.
-  - Create each worktree yourself: `git worktree add --detach <path> <sha>`. The harness's own worktree isolation cannot run git under the `rtk` command hook.
-  - Give each helper its own ports and databases.
-  - Never SendMessage a running workflow agent: it starts a second copy in the same worktree.
-  - Subagents cannot write report files. Have them return structured output, and write it yourself.
-  - One writer at a time: the lead session, or one implementer sub-agent it dispatches into the sweep's worktree. Only the lead session commits.
+- **Agents.** See the table after this list.
 - **Usage limits.** Commit every green step and update `progress.md` after every step. A resumed session starts from `progress.md`, `register.md` and `git log BASE..HEAD`. A resumed workflow replays its cache only if the script is unchanged, because the cache is an order prefix.
 - **/goal.** The evaluator reads only the transcript, and background subagents defer evaluation. Run the final acceptance commands in the main session, in the final turn.
 - **Live provider.** Use it only under OD-6, only through the test adapter, never as gateway or Copilot evidence, and never print the key. Read the key's usage (`GET https://openrouter.ai/api/v1/key`) before every run, and measure a run's spend from `GET /api/v1/generation`, because the usage figure lags. An exhausted account answers `PROVIDER_CALL_INVALID` with nothing billed. The live loop's model since 3 October is `openai/gpt-6-luna` at high effort on the `openai` tier (F479); its price pin must cover the highest input rate a prompt reaches, long-context cache writes included (N152). A run's ceiling holds about six times its actual spend, because every billed attempt keeps its reservation (CF-008), and a FULL node may now take four attempts (D82).
@@ -293,19 +288,43 @@ These are lessons from the runs of 23 September to 11 October.
 - **Other writers.** Other sessions work in worktrees of their own and open pull requests against `rebuild/databricks`, which the owner merges; while documents-touching pull requests merge, `decisions.md` and `next.md` conflict on every base move. Before every commit check `git log -1`, `git status --short` and the worktree's `MERGE_HEAD`.
 - **`rtk` wrapper.** Some commands are rewritten by the `rtk` hook (`grep -h`, `find -exec`, counts through pipes); prefer Python or plain invocations when an output looks wrong. `uv run pytest`'s output can come back as "No tests collected" through its filter: run the gate as written with its output redirected to a log under `docs/rebuild/runs/final-sweep/logs/`, and read the tail.
 
+**Agents.** Every sub-agent is dispatched by its `mx-*` name (`~/.claude/agents/`, `~/.claude/model-matrix.md`), each of which pins its model and effort; never by a model alias or with the model left to inherit. `opus55-reviewer` inherits the session's effort, so the sweep does not use it.
+
+| Sweep work | Agent |
+|---|---|
+| The lead session: register, ledgers, `progress.md`, commits, the final turn | the session itself, Opus 5.5 at high effort (§11) |
+| Phase 1's classification, reproduction and ledger digests (read-only) | `mx-feature` |
+| §4's review of what landed since `2a4f983` | `mx-adversary`; then `mx-architect` reads the invariant-moving set together |
+| Groups C, D, E and F (security, authority, durability, money; the Copilot transport's bill and park) | `mx-invariants`, reviewed by `mx-precise` and `mx-adversary`, with `mutmut` (§8 step 4) |
+| Groups A, B, G, I, J and K | `mx-precise`; a multi-file change `mx-autonomous` |
+| Group H, the frontend | `mx-feature`, reviewed by `mx-precise` |
+| R1, R2 and R3 (behaviour-preserving; the parity goldens byte-identical) | `mx-precise` |
+| R6 and the ledgers' text | `mx-scaffold` |
+| Task review; a small fix's re-review | `mx-precise`; `mx-feature` |
+| §9's whole-branch review | `mx-architect`; if refused, `mx-adversary` |
+
+- A second attempt starts one rung up: `mx-scaffold` → `mx-feature` → `mx-precise` → `mx-invariants` (sensitive code) or `mx-autonomous` (multi-file). `mx-adversary` and `mx-architect` review; they never implement. A refused `mx-adversary` audit goes to `mx-architect`, not a retry.
+- Fable 5.1 (`mx-architect`) refused once with a 403 `oauth_org_not_allowed` (2026-10-03) and answered later the same day: retry once, then use `mx-adversary` and record the refusal in `progress.md`.
+- Parallel sub-agents only for read-only work: classification, reproduction and review. One writer at a time: one implementer in the sweep's worktree. Only the lead session commits.
+- Create each helper's worktree yourself: `git worktree add --detach <path> <sha>`. The harness's own worktree isolation cannot run git under the `rtk` command hook. Give each helper its own ports and databases.
+- Never SendMessage a running workflow agent: it starts a second copy in the same worktree.
+- Sub-agents cannot write report files: `mx-adversary`'s definition asks for a report at a path, which this harness refuses. Every brief asks for the report in the final message, and the lead session writes it.
+- Every brief and reviewer prompt states: no stub or fake value standing in for real behaviour; no catch-all that hides a failure unless the fail-open is documented and logged; a report ends with a `Not verified:` line naming what no gate or test exercised. `mx-*` implementers have no MCP tools: the lead session puts any library documentation a brief needs into it.
+
 ## 11. Launch
 
 1. Fill in §0.
-2. Wait until what is in flight against `rebuild/databricks` has merged or been parked: the Book/Model plans (`docs/superpowers/plans/2026-10-10-*`, migrations 0050 and 0051), the readiness-check branch (migration 0049) and the readiness default-run fix stacked on both. Make sure no other session is writing this repository. BASE is the tip after that.
-3. In a Claude Code session in the repository, version 2.1.259 or later (the desktop app qualifies; the `claude` on `PATH` read 2.1.246 at B3 and 2.1.296 on 2026-10-11), from your worktree (§1), run:
+2. Start the session on Opus 5.5 at high effort, chosen before launch (a session cannot raise its own effort): long-horizon coordination is the matrix's Opus row, and Fable is kept for §9's whole-branch review.
+3. Wait until what is in flight against `rebuild/databricks` has merged or been parked: the Book/Model plans (`docs/superpowers/plans/2026-10-10-*`, migrations 0050 and 0051), the readiness-check branch (migration 0049) and the readiness default-run fix stacked on both. Make sure no other session is writing this repository. BASE is the tip after that.
+4. In a Claude Code session in the repository, version 2.1.259 or later (the desktop app qualifies; the `claude` on `PATH` read 2.1.246 at B3 and 2.1.296 on 2026-10-11), from your worktree (§1), run:
    ```text
    /goal <the contents of docs/rebuild/final-sweep/goal.txt>
    ```
-4. **Headless:**
+5. **Headless:**
    ```bash
-   claude -p "/goal $(cat docs/rebuild/final-sweep/goal.txt)" --permission-mode auto --permission-prompts none --output-format stream-json --verbose
+   claude -p "/goal $(cat docs/rebuild/final-sweep/goal.txt)" --model claude-opus-5-5 --effort high --permission-mode auto --permission-prompts none --output-format stream-json --verbose
    ```
    Do not use `--bare`: `/goal` runs on hooks. To resume:
    ```bash
-   claude -p "Resume the active goal from where you stopped." --continue --permission-mode auto --permission-prompts none
+   claude -p "Resume the active goal from where you stopped." --continue --model claude-opus-5-5 --effort high --permission-mode auto --permission-prompts none
    ```
