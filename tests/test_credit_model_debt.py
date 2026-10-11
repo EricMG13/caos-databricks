@@ -638,3 +638,30 @@ def test_debt_non_cash_keeps_what_its_closing_leaves_out() -> None:
     assert q2["debt_opening"].note is None
     assert q2["debt_non_cash"].value == -1000
     assert q2["debt_non_cash"].note == f"residual; {_EXCLUDES_FOREIGN}"
+
+
+def test_a_debt_adjustment_classed_a_finance_lease_is_never_a_lease() -> None:
+    """The stack adversary's MINOR-D (m3b.py): a genuine new term loan from
+    Q3 2025 (CP-1 states 11530 at 30 June 2025), the discount row (a DEBT
+    ADJUSTMENT, -170) classified FINANCE_LEASE. CP-1 counts every DEBT
+    ADJUSTMENT row in total debt, as the closing does, so the opening check
+    never subtracts it as a lease: 11790, a new issue, no note."""
+    regs = _drop(example_registers(), "tlb", *_EARLY, "Q1_2025", "Q2_2025")
+    regs = _stated_debt(regs, "11530")
+    classed = replace(
+        regs,
+        facilities=tuple(
+            replace(f, lease_classification="FINANCE_LEASE")
+            if f.facility_id == "disc"
+            else f
+            for f in regs.facilities
+        ),
+    )
+    disc = next(f for f in classed.facilities if f.facility_id == "disc")
+    assert disc.facility_type == "DEBT ADJUSTMENT"
+    for case in (regs, classed):
+        ltm = _debt(case, historical_columns(case))["LTM:LTM_Q2_2026"]
+        opening = ltm["debt_opening"]
+        assert (opening.value, opening.note) == (Decimal(11790), None)
+        assert ltm["debt_non_cash"].value == 2340
+        assert ltm["debt_non_cash"].note == "residual"

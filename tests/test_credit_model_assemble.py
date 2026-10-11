@@ -19,7 +19,7 @@ from credit_model_fixture import (
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
-from caos.calculators.credit_model._cells import CONTEXT
+from caos.calculators.credit_model._cells import CONTEXT, treated_as_zero
 from caos.calculators.credit_model.assemble import (
     NO_PROJECTIONS,
     NOT_APPLIED,
@@ -31,7 +31,6 @@ from caos.calculators.credit_model.assemble import (
 )
 from caos.calculators.credit_model.frame import Cell, Column
 from caos.calculators.credit_model.history import (
-    PARTLY_STATED,
     account_frame,
     historical_columns,
 )
@@ -1781,8 +1780,10 @@ def test_a_parenthesised_zero_is_never_a_negative_zero() -> None:
     assert str(_value(model, "pf:silverlake_interest", _PF)) == "0"
 
 
-def test_adjusted_ebitda_and_its_metrics_name_a_partly_stated_add_back() -> None:
-    """The audit's p10 (a): restructuring stated only in 2026."""
+def test_adjusted_ebitda_and_its_metrics_name_an_add_back_taken_as_nil() -> None:
+    """The audit's p10 (a): restructuring stated only in 2026. An add-back
+    is a one-off (MAJOR-A): FY2025 and H1 2025 without a row are nothing,
+    named on the LTM add-back and every figure built from it."""
     regs = example_registers()
     kept = {"Q1_2026", "Q2_2026", "H1_2026"}
     regs = replace(
@@ -1796,6 +1797,7 @@ def test_adjusted_ebitda_and_its_metrics_name_a_partly_stated_add_back() -> None
     model = _model(regs=regs)
     ltm = "LTM:LTM_Q2_2026"
     assert _cell(model, "ebitda", ltm).value == 3904
+    assert _cell(model, "addback:restructuring", ltm).value == 16
     for line_id in (
         "addback:restructuring",
         "adjusted_ebitda",
@@ -1804,7 +1806,9 @@ def test_adjusted_ebitda_and_its_metrics_name_a_partly_stated_add_back() -> None
         "metric:interest_coverage_adjusted",
     ):
         cell = _cell(model, line_id, ltm)
-        assert (cell.reason, cell.note) == ("COMPONENT_MISSING", PARTLY_STATED), line_id
+        assert cell.value is not None, line_id
+        for nil in ("FY2025", "H1_2025"):
+            assert treated_as_zero(nil) in (cell.note or "").split("; "), line_id
 
 
 def test_pf_rows_for_an_ltm_without_a_pf_column_raise_a_limitation() -> None:
