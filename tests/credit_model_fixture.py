@@ -23,17 +23,21 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
+from typing import Any
 
-from caos.calculators.credit_model.frame import SourceRef
+from caos.calculators.credit_model.frame import Case, SourceRef
+from caos.calculators.credit_model.projection import RateDeck, RateDeckYear
 from caos.methodology.model_inputs import (
     AccountRow,
     AddbackRow,
     Cp1Registers,
+    DivisionGrowth,
     FacilityRow,
     KpiRow,
     PeriodRow,
     PfAdjustmentRow,
     SegmentRow,
+    SlotAllocation,
 )
 
 _PERIODS = """
@@ -522,3 +526,142 @@ def example_registers() -> Cp1Registers:
         currency="USD",
         unit="MILLIONS",
     )
+
+
+# The projections (CP-2G and CP-CF), the worked example's Base and Downside
+# cases. CP-2G binds three division slots; managed and other is in none, so
+# the host holds it flat. Each year's growth by slot:
+_GROWTH = """
+case     year DIVISION_1 DIVISION_2 DIVISION_3
+BASE     2026      0.025      0.010       0.10
+BASE     2027      0.030      0.015       0.08
+BASE     2028      0.030      0.015       0.06
+DOWNSIDE 2026      -0.06      -0.04       0.02
+DOWNSIDE 2027      -0.03      -0.02       0.03
+DOWNSIDE 2028       0.01       0.01       0.04
+"""
+_CASES: dict[str, Case] = {"BASE": "BASE", "DOWNSIDE": "DOWNSIDE"}
+_SLOTS = {"DIVISION_1": "las_vegas", "DIVISION_2": "regional", "DIVISION_3": "digital"}
+
+# CP-CF's drivers, unsigned: revenue is the slot growth on FY2025's business
+# units (rounded), EBITDA the example's margin on its revenue, `cfo` before
+# interest and taxes (EBITDA less lease cash 16, other 80 and the working
+# capital outflow), distributions the buybacks. Base sweeps cash to the term
+# loan. The stated closings follow CP-CF's own roll-forward from FY2025.
+_DRIVERS = """
+case     year revenue ebitda  cfo interest taxes capex distrib repaid  debt cash
+BASE     2026   11809   4136 4025      859   170  1700     400    822 13012 1030
+BASE     2027   12138   4290 4179      798   180  1650     400   1097 11891 1060
+BASE     2028   12451   4427 4316      728   190  1600     400    337 11530 2097
+DOWNSIDE 2026   11062   3319 3183      882   120  1500       0      0 13834 1637
+DOWNSIDE 2027   10872   3099 2983      894   100  1300       0      0 13810 2302
+DOWNSIDE 2028   11018   3196 3090      889   110  1200       0      0 13786 3169
+"""
+_FY2025_DEBT = {  # CP-CF's opening: CP-1's total debt, finance lease excluded
+    "rcf": "0",
+    "tlb": "2328",
+    "ssn29": "2000",
+    "ssn31": "1000",
+    "sun29": "3600",
+    "sun32": "3500",
+    "sub27": "1600",
+    "disc": "-170",
+}
+# The SOFR deck, as decimals: FY+1 is FY2026.
+_DECK = (
+    ("1", "0.0380", "0.0480"),
+    ("2", "0.0340", "0.0540"),
+    ("3", "0.0325", "0.0525"),
+)
+
+
+def example_growth() -> tuple[DivisionGrowth, ...]:
+    """CP-2G's division growth, a decimal fraction per case, year and slot."""
+    lines = _GROWTH.strip().splitlines()
+    slots = lines[0].split()[2:]
+    return tuple(
+        DivisionGrowth(_CASES[case], year, slot, Decimal(value))
+        for case, year, *values in (line.split() for line in lines[1:])
+        for slot, value in zip(slots, values, strict=True)
+    )
+
+
+def example_slots() -> tuple[SlotAllocation, ...]:
+    """CP-1's slot allocation: one segment per division slot."""
+    return tuple(SlotAllocation(slot, (segment,)) for slot, segment in _SLOTS.items())
+
+
+def example_deck() -> RateDeck:
+    """The pinned rate deck: SOFR for FY+1 to FY+3, Base and Downside."""
+    return RateDeck(
+        deck_id="deck-1",
+        as_of="2026-10-01",
+        years=tuple(
+            RateDeckYear("SOFR", int(offset), Decimal(base), Decimal(downside))
+            for offset, base, downside in _DECK
+        ),
+    )
+
+
+def example_request() -> dict[str, Any]:
+    """CP-CF's accepted request: FY2026-FY2028 for Base and Downside, from
+    FY2025's closing debt and cash, the term loan amortising 24 a year."""
+    rows = [line.split() for line in _DRIVERS.strip().splitlines()[1:]]
+    drivers = []
+    for case, year, revenue, ebitda, cfo, interest, taxes, capex, *rest in rows:
+        distributions, optional, debt, cash = rest
+        drivers.append(
+            {
+                "case": case,
+                "period_id": f"FY{year}",
+                "status": "READY",
+                "stated_closing_debt": debt,
+                "stated_closing_cash": cash,
+                "revenue": revenue,
+                "ebitda": ebitda,
+                "cfo": cfo,
+                "capex": capex,
+                "acquisitions_disposals": "0",
+                "cash_interest": interest,
+                "cash_taxes": taxes,
+                "distributions": distributions,
+                "issuance": "0",
+                "optional_repayment": optional,
+                "pik": "0",
+                "capitalised_interest": "0",
+                "fx_perimeter": "0",
+            }
+        )
+    return {
+        "opening": {
+            "cash": "980",
+            "as_of_period_id": "FY2025",
+            "debt_by_facility": [
+                {"facility_id": facility_id, "amount": amount}
+                for facility_id, amount in _FY2025_DEBT.items()
+            ],
+        },
+        "periods": [
+            {
+                "case": row[0],
+                "period_id": f"FY{row[1]}",
+                "fiscal_year": row[1],
+                "days": "365",
+            }
+            for row in rows
+        ],
+        "drivers": drivers,
+        "contractual": {
+            "amortisation": [
+                {
+                    "case": row[0],
+                    "period_id": f"FY{row[1]}",
+                    "facility_id": "tlb",
+                    "amount": "24",
+                }
+                for row in rows
+            ]
+        },
+        "units": {"currency": "USD", "scale": "millions"},
+        "perimeter": "Example Gaming Co. consolidated",
+    }

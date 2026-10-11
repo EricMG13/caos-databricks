@@ -16,6 +16,7 @@ import pytest
 from canonical_fixtures import BUNDLE
 
 from caos.calculators.credit_model.frame import Cell, Column, SourceRef
+from caos.calculators.credit_model.projection import facility_rate
 from caos.methodology import model_inputs
 from caos.methodology.bundle import verified_bytes
 from caos.methodology.model_inputs import (
@@ -1283,6 +1284,20 @@ def test_a_rate_term_in_its_unit_is_not_flagged(
     (facility,) = cp1_registers(with_table(table)).facilities
 
     assert not facility.terms_out_of_range
+
+
+@pytest.mark.parametrize("written", ["2.25", "2"])
+def test_a_spread_written_as_a_percent_prices_at_the_implied_rate_noted(
+    written: str,
+) -> None:
+    table = replaced(debt_table(), "spread_bps", figure(f"{written}%", written))
+    (facility,) = cp1_registers(with_table(table)).facilities
+    implied = Decimal("0.06")
+
+    rate = facility_rate(facility, None, "BASE", 1, implied)
+
+    assert facility.spread_bps == Decimal(written)  # never read as 2.25 bp priced
+    assert rate == (implied, "term out of range")
 
 
 @pytest.mark.parametrize("year", ["FY1000", "FY2201"])
