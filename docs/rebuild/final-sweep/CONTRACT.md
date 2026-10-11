@@ -2,7 +2,7 @@
 
 The last local pass over `rebuild/databricks` before the app goes to the enterprise workspace (`docs/rebuild/ENTERPRISE_HANDOFF.md`). The condition that drives it is `docs/rebuild/final-sweep/goal.txt`; this file is what that condition points at.
 
-Written 2026-09-23 against `c37733e`; revised the same day against `e4e4e01`, after D29–D34 and F147–F158 landed; revised 2026-09-25 against `9393940`, after D35–D73 and F159–F415 landed (the backlog pass, the R24 audit, reviews 1–5, vendor forks r3 and r4, the redesign and the design brief; §0, §2, §5, §6). Run once, on 2026-09-25 at BASE `2a4f983` in a cloud container (F416–F431; N107–N116; B10, B11). Revised 2026-10-11 against `78c4f17`, after D74–D142 and F432–F622 landed: the GitNexus review, the model selector, GitHub Copilot as the model, the live-run fixes with vendor forks r5–r14, citations as excerpts and markers, depth 1a, the chart series and the first Book/Model pull requests (every section). It adapts the loop-library prompt *"Refactor until you are happy with the architecture. After each significant step, live-test the system, run autoreview, and commit. Track progress in /tmp/refactor-{projectname}.md"* and gives it an end point. Only confirmed defects are repaired. Only measured problems are refactored. Both are proven. The tree handed over has fresh evidence for every claim.
+Written 2026-09-23 against `c37733e`; revised the same day against `e4e4e01`, after D29–D34 and F147–F158 landed; revised 2026-09-25 against `9393940`, after D35–D73 and F159–F415 landed (the backlog pass, the R24 audit, reviews 1–5, vendor forks r3 and r4, the redesign and the design brief; §0, §2, §5, §6). Run once, on 2026-09-25 at BASE `2a4f983` in a cloud container (F416–F431; N107–N116; B10, B11). Revised 2026-10-11 against `78c4f17`, after D74–D142 and F432–F622 landed: the GitNexus review, the model selector, GitHub Copilot as the model, the live-run fixes with vendor forks r5–r14, citations as excerpts and markers, depth 1a, the chart series and the first Book/Model pull requests (every section). The method is the owner's global one, `~/.claude/refactoring-sweep.md`, and this is its worked example. It adapts the loop-library prompt *"Refactor until you are happy with the architecture. After each significant step, live-test the system, run autoreview, and commit. Track progress in /tmp/refactor-{projectname}.md"* and gives it an end point. Only confirmed defects are repaired. Only measured problems are refactored. Both are proven. The tree handed over has fresh evidence for every claim.
 
 ## 0. Owner decisions
 
@@ -67,6 +67,7 @@ You are operating autonomously. Nobody can answer, approve or unblock you. Never
 | The final sweep of 2026-09-25 (BASE `2a4f983`): its register lived git-ignored in a cloud container and is gone; what it left is tracked | F416–F431; N107–N116 (its review's M1–M4 and L1–L4 are N108–N112); B10, B11 |
 | The GitNexus review of 2026-09-27 (baseline `9393940`; the Codex snapshot is on the owner's machine, and `decisions.md` cites each ID) | R011, R014–R016, R031, R035, R040, R047, R050, R053, R059, V003 (F432–F443); AF-01–AF-06 (F452–F457) |
 | The reviews since 2026-09-25, cited in `decisions.md` by their own labels, which repeat across reviews (a register row writes `Task 5b: V3`) | the live-run fixes' task reviews and audits (Tasks 1, 2, 4, 5, 5b V1–V14, 5c, 5d-3–5d-5, P; EX1, EX2, NB1, NB2, MK1, MK2; the reviews of D109, D110, D112, D113 (Q1, Q3), `34b6574` and `claude/d118`); the Copilot transport's audits of `45d755c`, `3b0da98` and `44ff021`, fix rounds 1–5, Tasks 3, 5 and 6 and the whole-branch review (MEDIUM-1, LOW-1–LOW-3, Info); the reviews of D74, D122 and the chart series (F616–F619) |
+| Stage R (§2a), when it has run: `docs/rebuild/review-<date>/` | `<section>-NN` by verdict; `synthesis.md`'s root causes |
 | `.impeccable/critique/2026-09-23T11-45-42Z__frontend-src.md` (untracked owner file; `decisions.md`'s "Design critique plan", F151–F158), and the later `/impeccable` critique of the Analysis section (F376–F388) | P0, P1 |
 | `docs/rebuild/prompt-review-2026-09-23.md` | G1-1–G1-18, G2-1–G2-18, G3-1–G3-17 (every row FIXED, DECIDED or NOT-A-DEFECT; F426 corrected its status line) |
 | `docs/rebuild/2026-09-25-design-brief.md` | section 5 (screen by screen), 6.1–6.13 and questions 1–6 (answered by D64–D69); tracked as N96–N106; 6.5's remainder is N98, and 6.13 and every phone item were withdrawn by D63 |
@@ -83,6 +84,65 @@ The `Fn` entries in `decisions.md` (F1–F622; F162–F166, F483, F484, F490, F5
 - The shipped-set probe: `evidence/DB-13/probe_shipped_set.py`.
 
 These are probes, not tests. Their paths and ports point at removed worktrees: adapt them under `docs/rebuild/runs/final-sweep/`, and copy them into `tests/` only as a regression test that fails before a fix.
+
+## 2a. Stage R: the sectioned review, before the sweep
+
+One fresh reviewer per section of the code, run before the sweep and not inside it, so that review cannot drift over the sweep's long session. Its findings land as tracked files the owner reads before filling §0 and launching; the sweep then treats them as a ledger (§2) and its review gap (§4) as covered. The method is the owner's global one (`~/.claude/refactoring-sweep.md`, "Stage R").
+
+**Inputs**
+
+| Layer | File | Section | Why |
+|---|---|---|---|
+| L0 | `CLAUDE.md` | invariants, conventions | what a finding is measured against |
+| L3 | this contract | §0, §2, §4, §5 | owner decisions are not defects; the ledgers a finding may repeat; the invariant-moving changes; the group order |
+| L3 | `docs/rebuild/decisions.md` | entries since `2a4f983` | what changed and why: deliberate, decided behaviour is not a defect |
+| L3 | `docs/rebuild/next.md` | open N entries | what is already known or deferred: a finding that repeats one cites it |
+| L4 | the GitNexus index at REVIEW_BASE | calls, processes, communities | each section's boundary |
+| L4 | `docs/rebuild/runs/review-<date>/map-<n>.md` (git-ignored) | the whole map | the brief's section map, written by the lead |
+
+**Process**
+
+1. **Start.** The same in-flight condition as §11 step 1. Cut `review/<date>` from the tip of `rebuild/databricks` in a worktree of its own and record `REVIEW_BASE`. Re-index it: `gitnexus analyze --index-only <worktree path>`, then `gitnexus status` must show it current (the index read `064ef61` on 2026-10-11).
+2. **Maps.** For each section below, the lead writes a map: its files and line counts, its entry points (routes, CLI mains, the worker), the calls into and out of it and the processes that cross it (GitNexus `context`, `impact`, `route_map`, and `cypher` over `CALLS` edges whose ends lie in different sections), and the communities it shares with another section, named as seams. GitNexus's own communities (638 at `064ef61`, the largest 361 symbols) are too fine to be sections; they show where the seams are. Sub-agents have no MCP tools: the map goes into the brief.
+3. **Find.** One `mx-architect` (Fable 5.1 at high) per section, both lenses in one pass: correctness, and the adversarial review's three personas (saboteur, new hire, security auditor), stated in the brief because the agent cannot load skills. It reads its section in full and the far side of every boundary edge on its map. It runs probes only in the git-ignored `docs/rebuild/runs/review-<date>/probes/` or its scratchpad, on a database and ports of its own, and edits nothing tracked. Its final message returns each finding as: `<section>-NN` · CRITICAL, HIGH, MEDIUM or LOW · `file:line` · the invariant or behaviour · a concrete input and what goes wrong · a reproduction (command, probe or failing-test sketch) · confidence · the ledger IDs or N entries it repeats; then a `Not verified:` line.
+4. **Across sections.** Three more `mx-architect` passes, each by invariant across the sections it names, each reading the §4 changes in its area:
+   - money and exactly-once (invariants 6–8): sections 3, 5, 7 and 8 (D110, D118, D77 addendum 2);
+   - evidence and citations (invariants 2 and 11): sections 4, 5, 9, 11 and 12 (D105–D107, D112);
+   - identity, human gates and the pinned route (invariants 3, 5 and 10): sections 1, 3 and 9 (F468, D109, D124).
+5. **Verify.** Every finding goes to `mx-adversary` (Opus 5.5 at xhigh), a different model from the finder's: it reproduces the finding on `REVIEW_BASE` by its reproduction or a probe of its own, and answers CONFIRMED, NOT-REPRODUCED, or NOT-A-DEFECT with the reason (a behaviour a `Dn` or §0 decided is NOT-A-DEFECT). An unverified finding stays unverified; it is never upgraded.
+6. **Synthesis.** One `mx-architect` reads every verified finding, merges findings that share a root cause, ranks them by §5's group order and severity, and names the ledger IDs and N entries each repeats.
+7. **Write and commit.** The lead writes the outputs below and commits them on `review/<date>` by explicit path: documents only, no code, no `Fn` (a finding is not a fix). Nothing is pushed; the owner merges the branch before the sweep starts.
+
+If Fable is refused (a 403 on 2026-10-03 passed the same day), retry once, then the finder is `mx-adversary` and the verifier `mx-precise`, recorded in `synthesis.md` as one model family finding and checking. Run at most four reviewers at once: they share the Docker VM and its Postgres (§10). No paid or Copilot call, no vendor edit, no gate touched.
+
+**Sections**
+
+| # | Section | Scope | Lines at `78c4f17` |
+|---|---|---|---|
+| 1 | Edge, identity, commands | `caos/api`: `edge`, identity, `wire`, the governed-write commands | 11.1k with section 2 |
+| 2 | Reads | `caos/api`: section reads, `stream`, `health`, `site` | (with section 1) |
+| 3 | Store | `caos/store`, its migrations, `caos/blobs.py` | 7.6k |
+| 4 | Evidence | `caos/evidence` | 6.2k |
+| 5 | Execution | `caos/methodology`: the canonical executor, handoffs, citations, coverage | 10.6k with section 6 |
+| 6 | Authority | `caos/methodology`: invocation, selection, the bundle and vendor loading; `caos/icm.py` | (with section 5) |
+| 7 | Graph and model seam | `caos/graph`, `caos/models.py`, `caos/provider.py`, `caos/pricing.py` | 4.0k |
+| 8 | Copilot | `caos/copilot.py` | 2.0k |
+| 9 | Outputs | `caos/calculators`, `caos/deliverable`, `caos/qualification` | 7.6k |
+| 10 | Deploy and gates | `scripts/`, `databricks.yml`, `app.yaml`, `tests/workspace_stub.py`, `tests/platform_app.py`, `tests/shipped_boot.py` | 8.1k and the bundle |
+| 11 | Workspace chrome and sections | `frontend/src`: `app/`, `chrome/`, `sections/`, `controls/`, `states/` | 25.2k with section 12 |
+| 12 | Evidence views and charts | `frontend/src`: `evidence/`, `ds/`, `charts/`, `components/`, `wire/` | (with section 11) |
+
+The lead splits sections 1–2, 5–6 and 11–12 along their maps; a section over about 12k lines is split again.
+
+**Outputs**
+
+- `docs/rebuild/review-<date>/findings-<n>-<slug>.md`: one per section and per cross-section pass, every finding with its verifier's verdict.
+- `docs/rebuild/review-<date>/synthesis.md`: the root causes, ranked, each with its finding IDs, the ledger IDs and N entries it repeats, and the models that found and verified it.
+- Git-ignored, under `docs/rebuild/runs/review-<date>/`: the maps, probes and logs.
+
+**Done** when every section and pass has its findings file, every finding a verdict, the synthesis is written, all of it is committed on `review/<date>`, and `git status --short` shows only the untracked paths recorded at the start.
+
+**Launch.** A fresh session on Opus 5.5 at high, in the review worktree: `Run Stage R of docs/rebuild/final-sweep/CONTRACT.md (section 2a), and nothing else.` Its fifteen finders, a verifier per finding and the synthesis exceed the ten-agent guideline for a workflow, so a workflow runs only when the owner asks for one.
 
 ## 3. Phase 0: freeze and baseline
 
@@ -121,7 +181,7 @@ Classes:
 
 The 2026-09-25 run's register is gone (B10), so rebuild it from the tracked ledgers. At `9393940` a `decisions.md` entry named 77 of CF-001–CF-106 (§5 lists its seeds' entries per group), most from the backlog pass (D38–D48, F159–F249) and most as fixed; D39 keeps CF-034 as it is (N25). That run classed CF-001 FIXED (F424, F429) and CF-010 and CF-033 PLATFORM-ONLY, and left 25 CF IDs that no tracked document describes (N107): check each again, and class one that only the owner's `findings.md` describes DEFERRED to N107. Neither an entry naming a row nor a past run's class is evidence, so check each one.
 
-Each change since `2a4f983` had its own task review, audit or adversarial pass (`decisions.md` names each), but nothing has reviewed them together, and some had none. Review them in a worktree at BASE with `mx-adversary`; `mx-architect` then reads the second list's findings together (§10's agents):
+Each change since `2a4f983` had its own task review, audit or adversarial pass (`decisions.md` names each), but nothing has reviewed them together, and some had none. Stage R (§2a) is that review: when it ran on BASE, or on a commit BASE contains with no change under `caos/`, `scripts/` or `frontend/src` since, its CONFIRMED findings enter the register as OPEN rows, each reproduced again at BASE, and its NOT-REPRODUCED and NOT-A-DEFECT ones are classed with their reasons. Otherwise, review in a worktree at BASE with `mx-adversary`, and `mx-architect` reads the second list's findings together (§10's agents):
 - what records no review: F498–F500, F503, F507, F541–F543 and F581, and the Book/Model inputs (#153–#155: `caos/methodology/model_inputs.py`, `caos/calculators/credit_model/frame.py`), which landed with no `decisions.md` entry;
 - the changes that move what an invariant means in practice, read together: citations as 8-word excerpts, kept unverified and cited by markers in the body (D105–D107; invariants 2 and 11); the run's pinned model and command (F468, D109; invariant 10); the drop re-attempts (D110, D118; invariant 6); the Copilot transport's bill, settlement and park (D77 addendum 2, F556–F612; invariants 7 and 8); and the typed registers, which call the bundle's private functions (D124; invariant 4).
 
@@ -294,7 +354,8 @@ These are lessons from the runs of 23 September to 11 October.
 |---|---|
 | The lead session: register, ledgers, `progress.md`, commits, the final turn | the session itself, Opus 5.5 at high effort (§11) |
 | Phase 1's classification, reproduction and ledger digests (read-only) | `mx-feature` |
-| §4's review of what landed since `2a4f983` | `mx-adversary`; then `mx-architect` reads the invariant-moving set together |
+| Stage R (§2a): finders, cross-section passes, synthesis; verification | `mx-architect`; `mx-adversary` |
+| §4's review, when Stage R has not covered BASE | `mx-adversary`; then `mx-architect` reads the invariant-moving set together |
 | Groups C, D, E and F (security, authority, durability, money; the Copilot transport's bill and park) | `mx-invariants`, reviewed by `mx-precise` and `mx-adversary`, with `mutmut` (§8 step 4) |
 | Groups A, B, G, I, J and K | `mx-precise`; a multi-file change `mx-autonomous` |
 | Group H, the frontend | `mx-feature`, reviewed by `mx-precise` |
@@ -313,14 +374,15 @@ These are lessons from the runs of 23 September to 11 October.
 
 ## 11. Launch
 
-1. Fill in §0.
-2. Start the session on Opus 5.5 at high effort, chosen before launch (a session cannot raise its own effort): long-horizon coordination is the matrix's Opus row, and Fable is kept for §9's whole-branch review.
-3. Wait until what is in flight against `rebuild/databricks` has merged or been parked: the Book/Model plans (`docs/superpowers/plans/2026-10-10-*`, migrations 0050 and 0051), the readiness-check branch (migration 0049) and the readiness default-run fix stacked on both. Make sure no other session is writing this repository. BASE is the tip after that.
-4. In a Claude Code session in the repository, version 2.1.259 or later (the desktop app qualifies; the `claude` on `PATH` read 2.1.246 at B3 and 2.1.296 on 2026-10-11), from your worktree (§1), run:
+1. Wait until what is in flight against `rebuild/databricks` has merged or been parked: the Book/Model plans (`docs/superpowers/plans/2026-10-10-*`, migrations 0050 and 0051), the readiness-check branch (migration 0049) and the readiness default-run fix stacked on both. Make sure no other session is writing this repository. BASE is the tip after that.
+2. Run Stage R (§2a) on that tip, and merge its findings.
+3. Fill in §0, with Stage R's synthesis in hand.
+4. Start the session on Opus 5.5 at high effort, chosen before launch (a session cannot raise its own effort): long-horizon coordination is the matrix's Opus row, and Fable is kept for §9's whole-branch review.
+5. In a Claude Code session in the repository, version 2.1.259 or later (the desktop app qualifies; the `claude` on `PATH` read 2.1.246 at B3 and 2.1.296 on 2026-10-11), from your worktree (§1), run:
    ```text
    /goal <the contents of docs/rebuild/final-sweep/goal.txt>
    ```
-5. **Headless:**
+6. **Headless:**
    ```bash
    claude -p "/goal $(cat docs/rebuild/final-sweep/goal.txt)" --model claude-opus-5-5 --effort high --permission-mode auto --permission-prompts none --output-format stream-json --verbose
    ```
