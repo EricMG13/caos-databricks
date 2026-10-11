@@ -22,6 +22,8 @@ from hypothesis import strategies as st
 from caos.calculators.cash_flow import cash_flow_forecast
 from caos.calculators.credit_model import projection as projection_module
 from caos.calculators.credit_model._cells import CONTEXT, UNSPANNED
+from caos.calculators.credit_model.assemble import ModelInputs, credit_model
+from caos.calculators.credit_model.debt import HISTORY_INCOMPLETE
 from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.calculators.credit_model.history import account_frame, historical_columns
 from caos.calculators.credit_model.projection import (
@@ -48,6 +50,8 @@ _FIXED_INTEREST = Decimal("130") + 70 + Decimal("166.5") + 210 + 130  # + sub27
 # LTM to Q2 2026: cash interest 862 over the average of total debt (finance
 # lease included) at 30 June 2025 (14,130) and 30 June 2026 (14,106).
 _IMPLIED = CONTEXT.divide(Decimal(862), (Decimal(14130) + Decimal(14106)) / 2)
+# No implied rate (`facility_rate`'s fallback), as `_implied` gives it.
+_NO_IMPLIED = Cell(None, "COMPONENT_MISSING")
 
 
 def _history(regs: Cp1Registers) -> Frame:
@@ -164,24 +168,30 @@ def test_a_floating_facility_uses_deck_rate_floor_and_spread() -> None:
         (RateDeckYear("SOFR", 1, Decimal("0.003"), Decimal("0.004")),),
     )
 
-    assert facility_rate(_row("tlb"), deck, "BASE", 1, None) == (
+    assert facility_rate(_row("tlb"), deck, "BASE", 1, _NO_IMPLIED) == (
         Decimal("0.0655"),
         None,
     )
-    assert facility_rate(_row("tlb"), deck, "DOWNSIDE", 2, None) == (
+    assert facility_rate(_row("tlb"), deck, "DOWNSIDE", 2, _NO_IMPLIED) == (
         Decimal("0.0815"),
         None,
     )
     # Below the 50 bp floor the floor applies; the revolver has no floor.
-    assert facility_rate(_row("tlb"), low, "BASE", 1, None) == (Decimal("0.0325"), None)
-    assert facility_rate(_row("rcf"), low, "BASE", 1, None) == (Decimal("0.0255"), None)
-    assert facility_rate(_row("rcf"), low, "DOWNSIDE", 1, None) == (
+    assert facility_rate(_row("tlb"), low, "BASE", 1, _NO_IMPLIED) == (
+        Decimal("0.0325"),
+        None,
+    )
+    assert facility_rate(_row("rcf"), low, "BASE", 1, _NO_IMPLIED) == (
+        Decimal("0.0255"),
+        None,
+    )
+    assert facility_rate(_row("rcf"), low, "DOWNSIDE", 1, _NO_IMPLIED) == (
         Decimal("0.0265"),
         None,
     )
     # A fixed coupon is its percent as a decimal.
     for facility_id, rate in _FIXED.items():
-        assert facility_rate(_row(facility_id), deck, "BASE", 1, None) == (
+        assert facility_rate(_row(facility_id), deck, "BASE", 1, _NO_IMPLIED) == (
             Decimal(rate),
             None,
         )
@@ -198,12 +208,12 @@ def test_terms_not_stated_fall_back_to_the_implied_rate_with_a_note() -> None:
         {"spread_bps": None},
     ]
     for terms in implied_terms:
-        assert facility_rate(replace(tlb, **terms), deck, "BASE", 1, implied) == (
+        assert facility_rate(replace(tlb, **terms), deck, "BASE", 1, Cell(implied)) == (
             implied,
             "implied rate",
         )
     assert facility_rate(
-        replace(_row("ssn29"), fixed_rate=None), deck, "BASE", 1, implied
+        replace(_row("ssn29"), fixed_rate=None), deck, "BASE", 1, Cell(implied)
     ) == (
         implied,
         "implied rate",
@@ -216,13 +226,13 @@ def test_terms_not_stated_fall_back_to_the_implied_rate_with_a_note() -> None:
         (_row("ssn29"), {"fixed_rate": Decimal("-0.5")}),
     ]
     for row, terms in out_of_range:
-        assert facility_rate(replace(row, **terms), deck, "BASE", 1, implied) == (
+        assert facility_rate(replace(row, **terms), deck, "BASE", 1, Cell(implied)) == (
             implied,
             "term out of range",
         )
     # With no implied rate there is no rate, the note kept.
     assert facility_rate(
-        replace(tlb, rate_type="NOT_STATED"), deck, "BASE", 1, None
+        replace(tlb, rate_type="NOT_STATED"), deck, "BASE", 1, _NO_IMPLIED
     ) == (
         None,
         "implied rate",
@@ -251,12 +261,12 @@ def test_an_out_of_range_amortisation_is_not_stated_and_noted() -> None:
 
 
 def test_no_rate_deck_uses_the_implied_rate_for_floating_facilities() -> None:
-    assert facility_rate(_row("rcf"), None, "BASE", 1, Decimal("0.06")) == (
+    assert facility_rate(_row("rcf"), None, "BASE", 1, Cell(Decimal("0.06"))) == (
         Decimal("0.06"),
         "no rate deck",
     )
     # A fixed coupon needs no deck.
-    assert facility_rate(_row("ssn29"), None, "BASE", 1, Decimal("0.06")) == (
+    assert facility_rate(_row("ssn29"), None, "BASE", 1, Cell(Decimal("0.06"))) == (
         Decimal("0.065"),
         None,
     )
@@ -713,13 +723,16 @@ def test_zero_and_fractional_terms_are_in_range_and_exact() -> None:
     rcf = _row("rcf")
     zero = replace(rcf, spread_bps=Decimal(0), floor_bps=Decimal(0))
 
-    assert facility_rate(zero, deck, "BASE", 1, None) == (Decimal("0.0380"), None)
+    assert facility_rate(zero, deck, "BASE", 1, _NO_IMPLIED) == (
+        Decimal("0.0380"),
+        None,
+    )
     half = replace(_row("ssn29"), fixed_rate=Decimal("0.5"))
-    assert facility_rate(half, deck, "BASE", 1, None) == (Decimal("0.005"), None)
+    assert facility_rate(half, deck, "BASE", 1, _NO_IMPLIED) == (Decimal("0.005"), None)
     # A coupon to 31 digits is divided at 38, never rounded to 28.
     coupon = Decimal("6.234567890123456789012345678901")
     fixed = replace(_row("ssn29"), fixed_rate=coupon)
-    rate, _ = facility_rate(fixed, deck, "BASE", 1, None)
+    rate, _ = facility_rate(fixed, deck, "BASE", 1, _NO_IMPLIED)
     assert rate == CONTEXT.divide(coupon, Decimal(100))
 
 
@@ -1030,7 +1043,7 @@ def _deck(*years: tuple[str, int, str]) -> RateDeck:
 def test_a_deck_without_the_reference_rate_falls_back_to_the_implied_rate() -> None:
     deck = _deck(("SONIA", 1, "0.04"))
 
-    assert facility_rate(_row("tlb"), deck, "BASE", 1, Decimal("0.06")) == (
+    assert facility_rate(_row("tlb"), deck, "BASE", 1, Cell(Decimal("0.06"))) == (
         Decimal("0.06"),
         "reference rate not in deck",
     )
@@ -1045,18 +1058,18 @@ def test_deck_notes_tell_a_held_year_from_a_missing_one() -> None:
     deck = _deck(("SOFR", 1, "0.03"), ("SOFR", 3, "0.05"))
     tlb = _row("tlb")
 
-    assert facility_rate(tlb, deck, "BASE", 1, None) == (Decimal("0.0575"), None)
-    assert facility_rate(tlb, deck, "BASE", 2, None) == (
+    assert facility_rate(tlb, deck, "BASE", 1, _NO_IMPLIED) == (Decimal("0.0575"), None)
+    assert facility_rate(tlb, deck, "BASE", 2, _NO_IMPLIED) == (
         Decimal("0.0575"),
         "deck year missing",
     )
-    assert facility_rate(tlb, deck, "BASE", 3, None) == (Decimal("0.0775"), None)
-    assert facility_rate(tlb, deck, "BASE", 4, None) == (
+    assert facility_rate(tlb, deck, "BASE", 3, _NO_IMPLIED) == (Decimal("0.0775"), None)
+    assert facility_rate(tlb, deck, "BASE", 4, _NO_IMPLIED) == (
         Decimal("0.0775"),
         "last deck rate held flat",
     )
     late = _deck(("SOFR", 2, "0.03"))
-    assert facility_rate(tlb, late, "BASE", 1, Decimal("0.06")) == (
+    assert facility_rate(tlb, late, "BASE", 1, Cell(Decimal("0.06"))) == (
         Decimal("0.06"),
         "deck year missing",
     )
@@ -1139,7 +1152,7 @@ def test_a_rate_term_in_the_wrong_unit_is_out_of_range(
     facility_id: str, terms: dict[str, Any]
 ) -> None:
     row = replace(_row(facility_id), **terms)
-    rate = facility_rate(row, example_deck(), "BASE", 1, _WRONG_UNIT_IMPLIED)
+    rate = facility_rate(row, example_deck(), "BASE", 1, Cell(_WRONG_UNIT_IMPLIED))
 
     assert rate == (_WRONG_UNIT_IMPLIED, "term out of range")
 
@@ -1148,16 +1161,19 @@ def test_rate_term_bounds_are_inclusive() -> None:
     deck = example_deck()
     widest = replace(_row("tlb"), spread_bps=Decimal(2000), floor_bps=Decimal(1000))
     # The 10% floor is above the deck's 3.80%: 10% + 20%.
-    assert facility_rate(widest, deck, "BASE", 1, None) == (Decimal("0.3"), None)
+    assert facility_rate(widest, deck, "BASE", 1, _NO_IMPLIED) == (Decimal("0.3"), None)
     whole = replace(_row("tlb"), spread_bps=Decimal("275.00"))
-    assert facility_rate(whole, deck, "BASE", 1, None) == (Decimal("0.0655"), None)
+    assert facility_rate(whole, deck, "BASE", 1, _NO_IMPLIED) == (
+        Decimal("0.0655"),
+        None,
+    )
     # MINOR-10: a zero-coupon convertible is priced at its stated 0%; a
     # coupon below half a percent the reader kept (written with `%`) is as
     # stated.
     for coupon in ("0", "0.001", "0.065", "0.4999", "0.5", "30"):
         row = replace(_row("ssn29"), fixed_rate=Decimal(coupon))
         expected = Decimal(coupon) / 100
-        assert facility_rate(row, deck, "BASE", 1, None) == (expected, None)
+        assert facility_rate(row, deck, "BASE", 1, _NO_IMPLIED) == (expected, None)
 
 
 @pytest.mark.parametrize(
@@ -1178,7 +1194,7 @@ def test_a_coupon_prices_in_percent_as_the_reader_reads_it(
     coupon, as_fraction = coupon_percent(Decimal(written))
     row = replace(_row("ssn29"), fixed_rate=coupon, coupon_as_fraction=as_fraction)
 
-    assert facility_rate(row, example_deck(), "BASE", 1, _WRONG_UNIT_IMPLIED) == (
+    assert facility_rate(row, example_deck(), "BASE", 1, Cell(_WRONG_UNIT_IMPLIED)) == (
         expected
     )
 
@@ -1189,7 +1205,7 @@ def test_a_coupon_read_as_a_fraction_prices_from_half_a_percent() -> None:
         row = replace(
             _row("ssn29"), fixed_rate=Decimal(coupon), coupon_as_fraction=True
         )
-        assert facility_rate(row, deck, "BASE", 1, None) == (
+        assert facility_rate(row, deck, "BASE", 1, _NO_IMPLIED) == (
             Decimal(coupon) / 100,
             "coupon read as a fraction",
         )
@@ -1198,11 +1214,11 @@ def test_a_coupon_read_as_a_fraction_prices_from_half_a_percent() -> None:
 def test_a_coupon_on_a_floating_row_never_moves_its_rate() -> None:
     deck = example_deck()
     tlb = _row("tlb")
-    priced = facility_rate(tlb, deck, "BASE", 1, None)
+    priced = facility_rate(tlb, deck, "BASE", 1, _NO_IMPLIED)
 
     for coupon in ("0.065", "0.4", "0", "30"):
         row = replace(tlb, fixed_rate=Decimal(coupon))
-        assert facility_rate(row, deck, "BASE", 1, None) == priced, coupon
+        assert facility_rate(row, deck, "BASE", 1, _NO_IMPLIED) == priced, coupon
     assert priced[1] is None
 
 
@@ -1479,11 +1495,13 @@ def test_interest_from_weights_below_one_on_a_larger_base_is_exact() -> None:
 def test_a_facility_whose_terms_were_written_out_of_range_prices_implied() -> None:
     # In range as read (225 bp), but CP-1 wrote it out of its unit.
     flagged = replace(_row("tlb"), terms_out_of_range=True)
-    assert facility_rate(flagged, example_deck(), "BASE", 1, _WRONG_UNIT_IMPLIED) == (
+    assert facility_rate(
+        flagged, example_deck(), "BASE", 1, Cell(_WRONG_UNIT_IMPLIED)
+    ) == (
         _WRONG_UNIT_IMPLIED,
         "term out of range",
     )
-    assert facility_rate(_row("tlb"), example_deck(), "BASE", 1, None)[1] is None
+    assert facility_rate(_row("tlb"), example_deck(), "BASE", 1, _NO_IMPLIED)[1] is None
 
     regs = _terms(example_registers(), "tlb", {"terms_out_of_range": True})
     first = _frame(_inputs(regs))["BASE:2026"]
@@ -1549,3 +1567,68 @@ def test_a_projection_names_why_its_anchor_figure_is_missing() -> None:
         ),
     )
     assert _frame(_inputs(regs))["BASE:2026"]["bu:las_vegas"] == why
+
+
+def test_the_implied_rate_carries_an_opening_whose_history_is_incomplete() -> None:
+    """The re-verify's L2 (p14): the term loan's rows before Q3 2025
+    removed, so the LTM's opening debt is CP-1's stated total, noted; ssn29
+    with no rate type prices at the implied rate built from it."""
+    regs = example_registers()
+    early = {"FY2023", "FY2024", "Q1_2025", "Q2_2025", "H1_2025"}
+    early |= {f"Q{n}_2024" for n in range(1, 5)}
+    regs = replace(
+        regs,
+        facilities=tuple(
+            replace(f, rate_type="NOT_STATED", fixed_rate=None)
+            if f.facility_id == "ssn29"
+            else f
+            for f in regs.facilities
+            if not (f.facility_id == "tlb" and f.period_id in early)
+        ),
+    )
+    model = credit_model(
+        ModelInputs(
+            registers=regs,
+            request=example_request(),
+            growth=example_growth(),
+            slots=example_slots(),
+            deck=example_deck(),
+        )
+    )
+    ids = [c.column_id for c in model.columns]
+
+    def cell(line_id: str, column_id: str) -> Cell:
+        line = next(line for line in model.lines if line.line_id == line_id)
+        return line.cells[ids.index(column_id)]
+
+    opening = cell("debt_opening", "LTM:LTM_Q2_2026")
+    assert (opening.value, opening.note) == (Decimal(14130), HISTORY_INCOMPLETE)
+    assert cell("fac:ssn29", "BASE:2026").note == f"implied rate; {HISTORY_INCOMPLETE}"
+    # The implied rate itself, and facility_rate's note on it.
+    one = Cell(Decimal(1))
+    noted = Cell(Decimal(1), note=HISTORY_INCOMPLETE)
+    cells = {
+        "cash_interest": Cell(Decimal(-1)),
+        "debt_opening": noted,
+        "total_debt": one,
+    }
+    assert projection_module._implied(cells) == Cell(
+        Decimal(1), note=HISTORY_INCOMPLETE
+    )
+    cells = {**cells, "debt_opening": one}
+    assert projection_module._implied(cells) == Cell(Decimal(1))
+    ssn29 = next(f for f in regs.facilities if f.facility_id == "ssn29")
+    rate = Cell(Decimal("0.06"), note=HISTORY_INCOMPLETE)
+    assert facility_rate(ssn29, None, "BASE", 1, rate) == (
+        Decimal("0.06"),
+        f"implied rate; {HISTORY_INCOMPLETE}",
+    )
+    # The weighted rate with no facility mix is the implied rate, as noted.
+    assert projection_module._unweighted(rate, Cell(Decimal(1))) == Cell(
+        Decimal("0.06"),
+        basis="CALCULATED",
+        note=f"no facility mix, implied rate; {HISTORY_INCOMPLETE}",
+    )
+    # No implied rate: its reason is the weighted rate's, not the facility's.
+    missing = Cell(None, "COMPONENT_MISSING", note=HISTORY_INCOMPLETE)
+    assert facility_rate(ssn29, None, "BASE", 1, missing) == (None, "implied rate")
