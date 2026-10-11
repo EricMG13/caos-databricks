@@ -53,9 +53,12 @@ def refs(sources: Iterable[SourceRef | None]) -> tuple[SourceRef, ...]:
     return tuple(dict.fromkeys(s for s in sources if s is not None))
 
 
-def join_notes(*notes: str | None) -> str | None:
+def join_notes(notes: tuple[str | None, ...]) -> str | None:
     """The notes as one, each once in order (a note may already join
-    several); None without any."""
+    several); None without any. One tuple rather than `*notes`: a variadic
+    is unbounded positional width, which the suppression budget charges
+    (`tests/test_suppression_budget.py`), and a tuple, unlike any iterable,
+    cannot be a bare string read a character at a time."""
     kept = dict.fromkeys(
         part for note in notes if note is not None for part in note.split("; ")
     )
@@ -80,7 +83,7 @@ def calc(parts: Iterable[tuple[Cell, int]], note: str | None = None) -> Cell:
         total += cell.value * sign
         sources.extend(cell.sources)
     normalised = any(flipped(cell) for cell, _ in cells)
-    noted = join_notes(SIGN_NORMALISED if normalised else None, note)
+    noted = join_notes((SIGN_NORMALISED if normalised else None, note))
     return Cell(total, basis="CALCULATED", sources=refs(sources), note=noted)
 
 
