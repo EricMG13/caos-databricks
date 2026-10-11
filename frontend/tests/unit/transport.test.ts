@@ -338,7 +338,9 @@ describe("the transport", () => {
       "committee",
     ]);
     expect(DISABLED).toEqual(["admin"]);
-    const spy = vi.fn();
+    // Admin has no section document: it mounts the rate deck card, whose one
+    // read is the latest deck, and it opens no event tail.
+    const spy = vi.fn((_url: string) => Promise.resolve(new Response("null", { status: 200 })));
     const tail = vi.fn();
     vi.stubGlobal("fetch", spy);
     vi.stubGlobal("EventSource", tail);
@@ -352,9 +354,7 @@ describe("the transport", () => {
         ),
       );
       expect(
-        await within(container).findByText(UNAVAILABLE_WORDING, {
-          selector: "[data-surface-state='unavailable'] *",
-        }),
+        await within(container).findByRole("heading", { name: "Rate deck" }),
       ).toBeInTheDocument();
       const nav = within(container).getByRole("navigation", { name: "Workspace" });
       for (const off of DISABLED) {
@@ -363,7 +363,10 @@ describe("the transport", () => {
       }
       unmount();
     }
-    expect(spy).not.toHaveBeenCalled();
+    // The card's two reads: the latest deck and the Directory (the viewer's role).
+    expect(new Set(spy.mock.calls.map(([url]) => String(url)))).toEqual(
+      new Set(["/api/v1/rate-decks/latest", "/api/v1/directory"]),
+    );
     expect(tail).not.toHaveBeenCalled();
   });
 

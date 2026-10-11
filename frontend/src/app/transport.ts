@@ -15,6 +15,7 @@ import {
   parseBookDocument,
   parseDirectoryDocument,
   parseModelDocument,
+  parseLatestRateDeck,
   parsePageDocument,
   parseCommitteeDocument,
   parseReportDocument,
@@ -25,6 +26,7 @@ import {
   requireIdentity,
   sameId,
   type PageDocument,
+  type RateDeckView,
   type QualificationRead,
   type SectionDocument as V1Document,
 } from "@/wire/v1";
@@ -67,6 +69,9 @@ export interface SectionQuery {
   run?: string | null;
   revision?: string | null;
   fixture?: string | null;
+  /** The Model's switch, `1` to leave unrealised add-backs out. Only the
+      model section carries it; any other value is not sent. */
+  excludeUnrealised?: string | null;
 }
 
 const V1_PARSERS: Record<EnabledSection, (value: unknown) => V1Document> = {
@@ -94,6 +99,9 @@ export function sectionUrl(section: Section, query: SectionQuery): string | null
     query.run
   ) {
     params.set("run", query.run);
+  }
+  if (section === "model" && query.excludeUnrealised === "1") {
+    params.set("exclude_unrealised", "1");
   }
   if ((section === "report" || section === "committee") && query.revision) {
     params.set("revision", query.revision);
@@ -276,6 +284,40 @@ export async function fetchQualification(
             error instanceof WireIdentityError ? "WIRE_IDENTITY_MISMATCH" : "WIRE_SHAPE_INVALID",
           clears: "the qualification result is bound to the requested evidence",
         },
+      };
+    }
+    throw error;
+  }
+}
+
+export type RateDeckStatus =
+  | { kind: "ready"; deck: RateDeckView | null }
+  | { kind: "error"; refusal: Refusal }
+  | { kind: "unavailable" }
+  | { kind: "offline" };
+
+/** The latest rate deck any signed-in user reads; `deck` is null when none was
+    ever saved. Not a section document: Admin has none, and the card asks for
+    this itself. */
+export async function fetchRateDeck(signal?: AbortSignal): Promise<RateDeckStatus> {
+  let response: Response;
+  try {
+    response = await fetch("/api/v1/rate-decks/latest", {
+      signal,
+      headers: { accept: "application/json" },
+    });
+  } catch {
+    return { kind: "offline" };
+  }
+  if (response.status === 404) return { kind: "unavailable" };
+  if (!response.ok) return { kind: "error", refusal: refusalOf(await bodyOf(response)) };
+  try {
+    return { kind: "ready", deck: parseLatestRateDeck(await bodyOf(response)) };
+  } catch (error) {
+    if (error instanceof WireShapeError) {
+      return {
+        kind: "error",
+        refusal: { code: "WIRE_SHAPE_INVALID", clears: "the rate deck is the declared v1 shape" },
       };
     }
     throw error;

@@ -977,6 +977,9 @@ export const parseBookDocument = (value: unknown): BookDocument => parse(BookDoc
 export const parseReportDocument = (value: unknown): ReportDocument => parse(ReportDocument, value);
 export const parseCommitteeDocument = (value: unknown): CommitteeDocument =>
   parse(CommitteeDocument, value);
+/** The latest rate deck, or null when none was ever saved. */
+export const parseLatestRateDeck = (value: unknown): RateDeckView | null =>
+  parse(nullable(RateDeckView), value);
 export const parseRefusalBody = (value: unknown): RefusalBody => parse(RefusalBody, value);
 export const parseQualificationRead = (value: unknown): QualificationRead =>
   parse(QualificationRead, value);

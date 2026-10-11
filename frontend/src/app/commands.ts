@@ -24,6 +24,8 @@ import type {
   GrantStanding,
   Infer,
   PinRunInput,
+  RateDeckSaved,
+  SaveRateDeck,
   RunCreated,
   RunInputPinned,
   RunWork,
@@ -35,6 +37,7 @@ import {
   parseCaseCreated,
   parseGateApproved,
   parseGatePreviewDocument,
+  parseRateDeckSaved,
   parseRefusalBody,
   parseRunCreated,
   parseRunInputPinned,
@@ -351,4 +354,14 @@ export function fileDeliverable(
 ): Promise<CommandResult<DeliverableFiled>> {
   const url = `${revisionPath(caseId, revisionId)}/filing`;
   return jsonCommand(intent, url, { payload_sha256: payloadSha256 }, parseDeliverableFiled);
+}
+
+/** Save a rate deck (ADMIN only; the server answers anyone else as an absent
+    route and the refusal is shown as it came). The saver is the actor, never a
+    field. */
+export function saveRateDeck(
+  request: SaveRateDeck,
+  intent: Intent = newIntent(),
+): Promise<CommandResult<RateDeckSaved>> {
+  return jsonCommand(intent, "/api/v1/rate-decks", request, parseRateDeckSaved);
 }

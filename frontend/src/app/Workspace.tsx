@@ -127,6 +127,7 @@ export function Workspace({ section }: { section: Section }) {
   const runId = params.get("run");
   const revisionId = params.get("revision");
   const qualificationEvidence = params.get("qualification");
+  const excludeUnrealised = section === "model" ? params.get("exclude_unrealised") : null;
   const carried = new URLSearchParams();
   if (caseId) carried.set("case", caseId);
   if (runId) carried.set("run", runId);
@@ -137,7 +138,13 @@ export function Workspace({ section }: { section: Section }) {
   // A disabled section, or a case section with no case, sends no request and
   // opens no tail: it is `unavailable` in every mode (brief 4.1, decision 9).
   const requested =
-    sectionUrl(section, { case: caseId, run: runId, revision: revisionId, fixture }) !== null;
+    sectionUrl(section, {
+      case: caseId,
+      run: runId,
+      revision: revisionId,
+      fixture,
+      excludeUnrealised,
+    }) !== null;
   // Report and Committee without the run or revision they read are waiting on
   // the reader, not refused: they say what to pick and where (plan step 1).
   const need = selectionNeeded(section, { case: caseId, run: runId, revision: revisionId });
@@ -146,7 +153,7 @@ export function Workspace({ section }: { section: Section }) {
   // qualification hash is not part of it: it binds global evidence the strip
   // reads for itself and names no section request, so keying on it would tear
   // the section down — and its open tail with it — for a label change.
-  const key = `${section}|${caseId ?? ""}|${runId ?? ""}|${revisionId ?? ""}|${fixture ?? ""}`;
+  const key = `${section}|${caseId ?? ""}|${runId ?? ""}|${revisionId ?? ""}|${fixture ?? ""}|${excludeUnrealised ?? ""}`;
   const [held, setHeld] = useState<(Keyed<Held> & { version: number }) | null>(null);
   const readSequence = useRef(0);
   const reads = useMemo(
@@ -288,7 +295,7 @@ export function Workspace({ section }: { section: Section }) {
       const version = reads.begin();
       return fetchSection(
         section,
-        { case: caseId, run: runId, revision: revisionId, fixture },
+        { case: caseId, run: runId, revision: revisionId, fixture, excludeUnrealised },
         mine.controller.signal,
       ).then((next) => {
         // A late response, for a case or run the user has left, is discarded.
@@ -314,7 +321,7 @@ export function Workspace({ section }: { section: Section }) {
       flight = null;
       authority.current = issue(authority.current);
     };
-  }, [requested, section, caseId, runId, revisionId, fixture, key, reads]);
+  }, [requested, section, caseId, runId, revisionId, fixture, excludeUnrealised, key, reads]);
 
   // The view is mounted under what it is about, never under `observed_at`, so
   // an ordinary refresh keeps its local selection (R5).
@@ -407,6 +414,7 @@ export function Workspace({ section }: { section: Section }) {
   // typed views and no document satisfies them all; the registry has already
   // checked each view against its own document, and a disabled section never
   // reaches this render with a document to mount.
+  const AdminView = SECTION_VIEWS.admin;
   const View = SECTION_VIEWS[section] as ComponentType<{
     document: WorkspaceDocument;
     tab: string | null;
@@ -491,26 +499,33 @@ export function Workspace({ section }: { section: Section }) {
               {/* The snapshot ledger outlives the documents a section renders,
                 so it sits above the boundary and the mount key. */}
               <LedgerProvider>
-                <RegionState status={status} onReload={reload} onRetry={retry} section={section}>
-                  {(doc) => (
-                    // A render failure is about the document that caused it:
-                    // the next one served clears it, without waiting for a
-                    // navigation to unmount the boundary.
-                    <SectionBoundary key={mountKey} resetOn={doc.observed_at}>
-                      {/* A view whose chunk is still in flight reads as the
+                {section === "admin" ? (
+                  // No document to read: the card fetches the rate deck itself.
+                  <Suspense fallback={<SurfaceState kind="loading" />}>
+                    <AdminView document={undefined} tab={null} />
+                  </Suspense>
+                ) : (
+                  <RegionState status={status} onReload={reload} onRetry={retry} section={section}>
+                    {(doc) => (
+                      // A render failure is about the document that caused it:
+                      // the next one served clears it, without waiting for a
+                      // navigation to unmount the boundary.
+                      <SectionBoundary key={mountKey} resetOn={doc.observed_at}>
+                        {/* A view whose chunk is still in flight reads as the
                         region loading, and a failed one meets the boundary.
                         Inside the panel, so the tabs never name a panel that
                         is not on the page while it loads. */}
-                      <SectionPanel tab={activeTab}>
-                        <Suspense fallback={<SurfaceState kind="loading" />}>
-                          <DocumentReadContext.Provider value={readOrder}>
-                            <View key={mountKey} document={doc} tab={activeTab} />
-                          </DocumentReadContext.Provider>
-                        </Suspense>
-                      </SectionPanel>
-                    </SectionBoundary>
-                  )}
-                </RegionState>
+                        <SectionPanel tab={activeTab}>
+                          <Suspense fallback={<SurfaceState kind="loading" />}>
+                            <DocumentReadContext.Provider value={readOrder}>
+                              <View key={mountKey} document={doc} tab={activeTab} />
+                            </DocumentReadContext.Provider>
+                          </Suspense>
+                        </SectionPanel>
+                      </SectionBoundary>
+                    )}
+                  </RegionState>
+                )}
               </LedgerProvider>
             </ReportDraftProvider>
           </EvidenceProvider>
