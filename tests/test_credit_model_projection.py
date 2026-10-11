@@ -33,7 +33,12 @@ from caos.calculators.credit_model.projection import (
     rate_for,
 )
 from caos.calculators.credit_model.statements import statement_frame
-from caos.methodology.model_inputs import Cp1Registers, FacilityRow, SlotAllocation
+from caos.methodology.model_inputs import (
+    Cp1Registers,
+    FacilityRow,
+    SlotAllocation,
+    coupon_percent,
+)
 from caos.refusals import Refusal, RefusalCode
 
 # CP-CF opens at FY2025, the balances' column. Its stack,
@@ -1123,6 +1128,11 @@ _WRONG_UNIT_IMPLIED = Decimal("0.061")
         ("tlb", {"floor_bps": Decimal(1001)}),
         ("ssn29", {"fixed_rate": Decimal("-0.01")}),
         ("ssn29", {"fixed_rate": Decimal("30.01")}),
+        # Read as a fraction (0.001 and 0.004999) and still below half a
+        # percent, or over 30.
+        ("ssn29", {"fixed_rate": Decimal("0.1"), "coupon_as_fraction": True}),
+        ("ssn29", {"fixed_rate": Decimal("0.4999"), "coupon_as_fraction": True}),
+        ("ssn29", {"fixed_rate": Decimal("30.01"), "coupon_as_fraction": True}),
     ],
 )
 def test_a_rate_term_in_the_wrong_unit_is_out_of_range(
@@ -1141,11 +1151,72 @@ def test_rate_term_bounds_are_inclusive() -> None:
     assert facility_rate(widest, deck, "BASE", 1, None) == (Decimal("0.3"), None)
     whole = replace(_row("tlb"), spread_bps=Decimal("275.00"))
     assert facility_rate(whole, deck, "BASE", 1, None) == (Decimal("0.0655"), None)
-    # MINOR-10: a zero-coupon convertible is priced at its stated 0%.
-    for coupon in ("0", "0.065", "0.5", "30"):
+    # MINOR-10: a zero-coupon convertible is priced at its stated 0%; a
+    # coupon below half a percent the reader kept (written with `%`) is as
+    # stated.
+    for coupon in ("0", "0.001", "0.065", "0.4999", "0.5", "30"):
         row = replace(_row("ssn29"), fixed_rate=Decimal(coupon))
         expected = Decimal(coupon) / 100
         assert facility_rate(row, deck, "BASE", 1, None) == (expected, None)
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("0.065", (Decimal("0.065"), "coupon read as a fraction")),
+        ("0", (Decimal(0), None)),
+        ("0.4", (_WRONG_UNIT_IMPLIED, "term out of range")),
+        ("0.5", (Decimal("0.005"), None)),
+        ("30", (Decimal("0.3"), None)),
+        ("30.01", (_WRONG_UNIT_IMPLIED, "term out of range")),
+        ("-0.01", (_WRONG_UNIT_IMPLIED, "term out of range")),
+    ],
+)
+def test_a_coupon_prices_in_percent_as_the_reader_reads_it(
+    written: str, expected: tuple[Decimal, str | None]
+) -> None:
+    coupon, as_fraction = coupon_percent(Decimal(written))
+    row = replace(_row("ssn29"), fixed_rate=coupon, coupon_as_fraction=as_fraction)
+
+    assert facility_rate(row, example_deck(), "BASE", 1, _WRONG_UNIT_IMPLIED) == (
+        expected
+    )
+
+
+def test_a_coupon_read_as_a_fraction_prices_from_half_a_percent() -> None:
+    deck = example_deck()
+    for coupon in ("0.5", "30"):
+        row = replace(
+            _row("ssn29"), fixed_rate=Decimal(coupon), coupon_as_fraction=True
+        )
+        assert facility_rate(row, deck, "BASE", 1, None) == (
+            Decimal(coupon) / 100,
+            "coupon read as a fraction",
+        )
+
+
+def test_a_coupon_on_a_floating_row_never_moves_its_rate() -> None:
+    deck = example_deck()
+    tlb = _row("tlb")
+    priced = facility_rate(tlb, deck, "BASE", 1, None)
+
+    for coupon in ("0.065", "0.4", "0", "30"):
+        row = replace(tlb, fixed_rate=Decimal(coupon))
+        assert facility_rate(row, deck, "BASE", 1, None) == priced, coupon
+    assert priced[1] is None
+
+
+def test_a_coupon_read_as_a_fraction_is_noted_on_the_facility() -> None:
+    coupon, as_fraction = coupon_percent(Decimal("0.065"))
+    terms = {"fixed_rate": coupon, "coupon_as_fraction": as_fraction}
+    first = _frame(_inputs(_terms(example_registers(), "ssn29", terms)))["BASE:2026"]
+    stated = _frame(_inputs())["BASE:2026"]
+
+    assert first["fac:ssn29"].note == projection_module.COUPON_AS_FRACTION
+    assert projection_module.COUPON_AS_FRACTION == "coupon read as a fraction"
+    assert first["fac:ssn31"].note is None
+    # 6.5%, as the register's 6.500 prices.
+    assert first["cash_interest"] == stated["cash_interest"]
 
 
 def test_terms_in_the_wrong_unit_price_at_the_implied_rate_noted() -> None:

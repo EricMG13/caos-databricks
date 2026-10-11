@@ -14,7 +14,7 @@ from credit_model_fixture import (
     example_registers,
     example_slots,
 )
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from caos.calculators.credit_model import history
@@ -45,6 +45,7 @@ from caos.calculators.credit_model.history import (
     ltm_frames,
 )
 from caos.methodology.model_inputs import (
+    MAX_NESTING,
     MAX_PERIODS,
     AccountRow,
     AddbackRow,
@@ -2574,6 +2575,58 @@ def test_a_span_is_whole_months_within_a_week_either_way() -> None:
     assert whole((late, date(2024, 3, 1).toordinal())) == (late, 1)
 
 
+def test_a_whole_week_span_is_whole_months_within_two_weeks_either_way() -> None:
+    """52/53-week calendars: a span of whole weeks is n whole months when the
+    day after it ends lies within `WEEK_SLACK_DAYS` of its first day plus n
+    months; any other span keeps `SLACK_DAYS`."""
+    whole = history._whole_months
+    assert history.WEEK_SLACK_DAYS == 14
+    jan = date(2025, 1, 1).toordinal()
+    # A 14-week January-March quarter: 98 days, 8 over January-March's 90.
+    assert whole((jan, jan + 97)) == (jan, 3)
+    # A 27-week first half (8 days over) and a 40-week nine months.
+    assert whole((jan, jan + 27 * 7 - 1)) == (jan, 6)
+    assert whole((jan, jan + 40 * 7 - 1)) == (jan, 9)
+    # Fourteen days either way is in (from 1 April, 3 months is 91 days),
+    # fifteen is out (from 1 January 90 days, from 1 July 92).
+    april = date(2025, 4, 1).toordinal()
+    assert whole((april, april + 15 * 7 - 1)) == (april, 3)
+    assert whole((april, april + 11 * 7 - 1)) == (april, 3)
+    assert whole((jan, jan + 15 * 7 - 1)) is None
+    july = date(2025, 7, 1).toordinal()
+    assert whole((july, july + 11 * 7 - 1)) is None
+    # A span of no whole number of weeks 8 days over still refuses (99 days).
+    leap = date(2024, 1, 1).toordinal()
+    assert whole((leap, leap + 98)) is None
+    # Two n within the slack (8 and 9 months from 1 June: 1 February and
+    # 1 March, 14 days either side of 15 February): no n, refused.
+    june = date(2025, 6, 1).toordinal()
+    assert whole((june, june + 37 * 7 - 1)) is None
+    assert whole((june, june + 36 * 7 - 1)) == (june, 8)  # 7 days from 1 February
+
+
+@settings(max_examples=300)
+@given(
+    first=st.dates(min_value=date(1990, 1, 1), max_value=date(2100, 12, 31)),
+    days=st.integers(min_value=1, max_value=800),
+)
+def test_whole_months_has_one_n_at_most(first: date, days: int) -> None:
+    """Every n within the slack (14 days on whole weeks, else 7), counted
+    afresh: exactly one is the answer, none or two are no answer."""
+    start = first.toordinal()
+    following = start + days
+    slack = history.WEEK_SLACK_DAYS if days % 7 == 0 else history.SLACK_DAYS
+    candidates = [
+        n
+        for n in range(1, days // 28 + 3)
+        if (moved := history._plus_months(first, n)) is not None
+        and abs(moved.toordinal() - following) <= slack
+    ]
+    expected = (start, candidates[0]) if len(candidates) == 1 else None
+
+    assert history._whole_months((start, following - 1)) == expected
+
+
 def test_a_remainder_is_whole_months_only_from_a_shared_start() -> None:
     remainder = history._remainder_months
     jan = date(2025, 1, 1).toordinal()
@@ -3099,7 +3152,7 @@ def test_the_twelve_months_ending_a_quarter_must_tile_by_dates() -> None:
         None, "COMPONENT_MISSING", note=UNSPANNED
     )
     # A balance is the quarter's own, whatever the window.
-    assert frame["acct:cash_and_equivalents"].value is not None
+    assert frame["acct:cash_and_equivalents"].value == 1000
 
 
 def test_quarters_to_date_must_tile_by_dates() -> None:
@@ -3203,9 +3256,11 @@ def test_quarter_twelve_month_metrics_follow_a_partly_stated_sparse_item() -> No
     """The audit's p8b: the same twelve months read the same on every
     column."""
     model = credit_model(_model_inputs(_live_interest()))
-    for line_id in ("metric:fcf_to_debt", "metric:ffo_to_debt"):
+    # FY2025's FCF 155 and FFO 1552 over its total debt 14118.
+    for line_id, flow in (("metric:fcf_to_debt", 155), ("metric:ffo_to_debt", 1552)):
         year = _line_cell(model, line_id, "FY:FY2025")
-        assert year.value is not None
+        with localcontext(CONTEXT):
+            assert year.value == Decimal(flow) / Decimal(14118)
         assert _line_cell(model, line_id, "Q:Q4_2025").value == year.value
         for column_id in ("Q:Q2_2026", "LTM:LTM_Q2_2026"):
             cell = _line_cell(model, line_id, column_id)
@@ -3290,6 +3345,48 @@ def test_covers_nested_by_their_starts_at_the_period_cap_never_exhaust_it() -> N
     assert longest == Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
     assert series.resolved["P10"].value == 1
     assert len(series.resolved) == MAX_PERIODS
+
+
+def test_twins_of_a_period_at_the_cap_never_nest_past_max_nesting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The re-verify's L3 (p13): FY2025 and 199 LTM periods on its exact
+    dates, an add-back on every third. A period of equal span stops
+    `_resolve_within`, so working out one twin never works out the next
+    inside it: `_resolved` nests at most `MAX_NESTING` + 1 deep (once per
+    period, where without the stop it nests once per twin, 201 deep)."""
+    year = _period("FY2025", ())
+    periods = (
+        year,
+        *(
+            replace(year, period_id=f"L{n}", period_type="LTM")
+            for n in range(MAX_PERIODS - 1)
+        ),
+    )
+    addbacks = tuple(
+        AddbackRow("x", "x", "SBC", "REALIZED", 1, p.period_id, Decimal(1), None)
+        for p in periods[1::3]
+    )
+    regs = Cp1Registers(periods, (), addbacks, (), (), (), (), "USD", "MILLIONS")
+    real = history._resolved
+    depth = [0, 0]  # now, deepest
+
+    def counted(
+        series: history._Series, register: history._Register, period_id: str | None
+    ) -> Cell:
+        depth[0] += 1
+        depth[1] = max(depth)
+        try:
+            return real(series, register, period_id)
+        finally:
+            depth[0] -= 1
+
+    monkeypatch.setattr(history, "_resolved", counted)
+    frame = _frame(regs)
+
+    assert 1 <= depth[1] <= MAX_NESTING + 1
+    # FY2025 has no row: its twin L0's own row is its figure.
+    assert frame["FY:FY2025"]["addback:x"].value == 1
 
 
 def _footing(
@@ -3445,3 +3542,217 @@ def test_a_quarter_of_other_months_never_tiles() -> None:
     gap: dict[str | None, PeriodRow] = {**periods, "Q2_2026": late}
     specs[1] = history._period_spec(late, "YTD")
     assert not history._tiles(specs, gap)
+
+
+def _days_period(
+    period_id: str, kind: str, first: date, days: int, quarter: str | None
+) -> PeriodRow:
+    """A fiscal-2025 or -2026 period (by its id's last four characters) of
+    `days` days from `first`."""
+    return PeriodRow(
+        period_id=period_id,
+        fiscal_year=period_id[-4:],
+        fiscal_quarter=quarter,
+        period_type=kind,
+        start_date=first.isoformat(),
+        end_date=(first + timedelta(days=days - 1)).isoformat(),
+        day_count=days,
+        currency="USD",
+        unit="MILLIONS",
+        component_period_ids=(),
+    )
+
+
+def _revenue_on(periods: tuple[PeriodRow, ...], per_day: bool) -> Cp1Registers:
+    """`periods` with revenue on each: 1 a day, else 100 a period."""
+    accounts = tuple(
+        AccountRow(
+            "revenue",
+            p.period_id,
+            Decimal(p.day_count if per_day and p.day_count else 100),
+            "VERIFIED",
+            None,
+        )
+        for p in periods
+    )
+    return Cp1Registers(periods, accounts, (), (), (), (), (), "USD", "MILLIONS")
+
+
+def _four_quarters(lengths: list[int], first: date = date(2025, 1, 1)) -> Cell:
+    """The trailing revenue ending the fourth of four fiscal-2025 quarters of
+    `lengths` days, each starting the day after the one before ends, revenue
+    100 each."""
+    periods = []
+    for n, days in enumerate(lengths, start=1):
+        periods.append(_days_period(f"Q{n}_2025", "QUARTER", first, days, str(n)))
+        first += timedelta(days=days)
+    regs = _revenue_on(tuple(periods), per_day=False)
+    return ltm_frames(regs, historical_columns(regs))["Q:Q4_2025"]["acct:revenue"]
+
+
+def test_four_quarters_must_span_twelve_months_as_one_span() -> None:
+    """The re-verify's M1 (p1): each quarter within its slack of three
+    months, four 14-week quarters are 392 days, 27 over twelve months."""
+    unspanned = Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
+    assert _four_quarters([98] * 4) == unspanned
+    assert _four_quarters([97] * 4) == unspanned  # 388 days, 23 over
+    # A 53-week year (one 14-week quarter, 371 days) and a calendar year.
+    assert _four_quarters([91, 91, 91, 98]).value == 400
+    assert _four_quarters([90, 91, 92, 92]).value == 400
+
+
+@settings(deadline=None, max_examples=200)
+@given(
+    first=st.dates(min_value=date(1990, 1, 1), max_value=date(2100, 12, 31)),
+    lengths=st.lists(st.integers(min_value=77, max_value=105), min_size=4, max_size=4),
+)
+@example(first=date(2025, 1, 1), lengths=[98, 98, 98, 98])
+def test_an_accepted_twelve_months_spans_them_within_the_slack(
+    first: date, lengths: list[int]
+) -> None:
+    """Four adjacent quarters summed as twelve months span twelve months:
+    the day after the last ends lies within `SLACK_DAYS` of the first's
+    start plus twelve months (`WEEK_SLACK_DAYS` where the span is whole
+    weeks), however each quarter's own slack adds up."""
+    cell = _four_quarters(lengths, first)
+    span = sum(lengths)
+    slack = history.WEEK_SLACK_DAYS if span % 7 == 0 else history.SLACK_DAYS
+    year_later = history._plus_months(first, 12)
+    assert year_later is not None
+    if cell.value is not None:
+        assert abs(first.toordinal() + span - year_later.toordinal()) <= slack
+    else:
+        assert cell == Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
+
+
+def _rolled_ltm(ytd_weeks: int, pytd_weeks: int) -> Cell:
+    """LTM revenue, at 1 a day, of calendar FY2025 + a YTD of `ytd_weeks`
+    from 1 January 2026 - a PYTD of `pytd_weeks` from 1 January 2025."""
+    periods = (
+        _days_period("FY2025", "FY", date(2025, 1, 1), 365, None),
+        _days_period("H1_2025", "YTD", date(2025, 1, 1), 7 * pytd_weeks, None),
+        _days_period("H1_2026", "YTD", date(2026, 1, 1), 7 * ytd_weeks, None),
+    )
+    regs = _revenue_on(periods, per_day=True)
+    columns = historical_columns(regs)
+    ltm = next(c for c in columns if c.kind == "LTM")
+    return account_frame(regs, columns)[ltm.column_id]["acct:revenue"]
+
+
+def test_an_ltm_needs_its_ytd_and_pytd_within_a_week_of_each_other() -> None:
+    """The re-verify's M1 (p9): a 27-week YTD and a 25-week PYTD are each
+    six months within the 14-day slack, but FY + YTD - PYTD is 379 days."""
+    assert _rolled_ltm(27, 25) == Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
+    assert _rolled_ltm(25, 27) == Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
+    # A 53rd week in the YTD's first quarter: a week apart, still read.
+    assert _rolled_ltm(27, 26).value == 365 + 189 - 182
+    assert _rolled_ltm(26, 26).value == 365
+
+
+def _bases(regs: Cp1Registers, **bases: tuple[str | None, str | None]) -> Cp1Registers:
+    """`regs` with no period stating a basis or perimeter, except the named
+    periods' (basis, perimeter)."""
+    return replace(
+        regs,
+        periods=tuple(
+            replace(
+                p,
+                accounting_basis=bases.get(p.period_id, (None, None))[0],
+                entity_perimeter=bases.get(p.period_id, (None, None))[1],
+            )
+            for p in regs.periods
+        ),
+    )
+
+
+_OFF = Cell(None, "COMPONENT_MISSING", note=OTHER_FOOTING)
+
+
+def test_two_stated_footings_that_differ_are_never_combined() -> None:
+    """The re-verify's M2 (p2): the anchor H1 2026 states no basis, FY2025
+    is as reported and H1 2025 restated. FY + YTD - PYTD would combine
+    them; each column alone is its own figure."""
+    regs = _bases(
+        example_registers(),
+        FY2025=("AS_REPORTED", None),
+        H1_2025=("RESTATED", None),
+    )
+    frame = _frame(regs)
+    assert frame["LTM:LTM_Q2_2026"]["acct:revenue"] == replace(
+        _OFF, stated=Decimal(11654)
+    )
+    assert frame["FY:FY2025"]["acct:revenue"].value == 11519
+    assert frame["PYTD:H1_2025"]["acct:revenue"].value == 5750
+    assert frame["YTD:H1_2026"]["acct:revenue"].value == 5885
+    model = credit_model(_model_inputs(regs))
+    assert f"{NOT_COMBINED}: H1_2025, FY2025" in model.limitations
+    assert _line_cell(model, "adjusted_ebitda", "LTM:LTM_Q2_2026").value is None
+
+    # A perimeter the anchor states none of, stated two ways.
+    regs = _bases(
+        example_registers(),
+        H1_2026=("US GAAP", None),
+        FY2025=("US GAAP", "Consolidated"),
+        H1_2025=("US GAAP", "Continuing operations"),
+    )
+    assert _frame(regs)["LTM:LTM_Q2_2026"]["acct:revenue"].note == OTHER_FOOTING
+
+
+def test_components_and_quarters_on_two_footings_are_never_summed() -> None:
+    """Pairwise within a sum, whatever the anchor states: H1 2025's
+    quarters, the twelve months ending Q2 2026, and a sparse cover."""
+    regs = _bases(example_registers(), Q1_2025=("IFRS", None), Q2_2025=("GAAP", None))
+    assert _frame(regs)["PYTD:H1_2025"]["acct:revenue"] == replace(
+        _OFF, stated=Decimal(5750)
+    )
+    regs = _bases(example_registers(), Q3_2025=("IFRS", None), Q4_2025=("GAAP", None))
+    frames = ltm_frames(regs, historical_columns(regs))
+    assert frames["Q:Q2_2026"]["acct:revenue"] == _OFF
+    assert frames["Q:Q2_2026"]["addback:restructuring"] == _OFF
+    assert frames["Q:Q3_2025"]["acct:revenue"].value is not None  # no Q4 2025
+    # FY2024 states none and has no restructuring row: its cover, two
+    # quarters on each footing, is no figure.
+    regs = _bases(
+        _without_addback(example_registers(), "FY2024"),
+        Q1_2024=("IFRS", None),
+        Q2_2024=("IFRS", None),
+        Q3_2024=("GAAP", None),
+        Q4_2024=("GAAP", None),
+    )
+    assert _frame(regs)["FY:FY2024"]["addback:restructuring"] == _OFF
+
+
+def _without_addback(regs: Cp1Registers, period_id: str) -> Cp1Registers:
+    """`regs` without the restructuring add-back's row for `period_id`."""
+    return replace(
+        regs,
+        addbacks=tuple(
+            b
+            for b in regs.addbacks
+            if (b.addback_id, b.period_id) != ("restructuring", period_id)
+        ),
+    )
+
+
+def test_a_period_on_another_footing_never_takes_its_parts_figure() -> None:
+    """The re-verify's L1 (p3, p6 b): FY2024 restated, its quarters as
+    reported, no FY2024 restructuring row: never 32 from the quarters, and
+    adjusted EBITDA never adds as-reported add-backs to restated EBITDA."""
+    regs = _without_addback(
+        _footing(example_registers(), FY2024=("RESTATED", "Consolidated")),
+        "FY2024",
+    )
+    assert off_footing(regs) == {"FY2024"}
+    assert _frame(regs)["FY:FY2024"]["addback:restructuring"] == _OFF
+    model = credit_model(_model_inputs(regs))
+    adjusted = _line_cell(model, "adjusted_ebitda", "FY:FY2024")
+    assert (adjusted.value, adjusted.reason) == (None, "COMPONENT_MISSING")
+    assert OTHER_FOOTING in (adjusted.note or "")
+    # Its quarters stating none still make no figure for it.
+    unstated = _footing(
+        regs, **{f"Q{n}_2024": (None, None) for n in range(1, 5)}, FY2024=("X", None)
+    )
+    assert _frame(unstated)["FY:FY2024"]["addback:restructuring"] == _OFF
+    # With its own row, it is its own figure.
+    own = _footing(example_registers(), FY2024=("RESTATED", "Consolidated"))
+    assert _frame(own)["FY:FY2024"]["addback:restructuring"].value == 32
