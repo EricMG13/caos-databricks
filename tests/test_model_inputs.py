@@ -18,7 +18,19 @@ from canonical_fixtures import BUNDLE
 from caos.calculators.credit_model.frame import Cell, Column, SourceRef
 from caos.methodology import model_inputs
 from caos.methodology.bundle import verified_bytes
+from caos.methodology.model_inputs import (
+    AccountRow,
+    AddbackRow,
+    Cp1Registers,
+    FacilityRow,
+    KpiRow,
+    PeriodRow,
+    PfAdjustmentRow,
+    SegmentRow,
+    cp1_registers,
+)
 from caos.methodology.tables import HandoffTable, TableCell
+from caos.refusals import Refusal, RefusalCode
 
 PERIOD_COLUMNS = (
     "period_id",
@@ -259,6 +271,293 @@ def debt_row_before_rates() -> tuple[TableCell, ...]:
     )
 
 
+def debt_table() -> HandoffTable:
+    rates = (
+        cell("floating"),
+        cell("term_sofr"),
+        figure("320", "320"),
+        figure("50", "50"),
+        NULL,
+        figure("10", "10"),
+    )
+    return HandoffTable(
+        "cp1.debt_facility_register",
+        (*DEBT_COLUMNS_BEFORE_RATES, *RATE_COLUMNS, *SOURCE_COLUMNS),
+        ((*debt_row_before_rates(), *rates, cell("S2"), cell("p.21")),),
+    )
+
+
+def pro_forma_table() -> HandoffTable:
+    return HandoffTable(
+        "cp1.pro_forma_adjustment_register",
+        (
+            "adjustment_id",
+            "label",
+            "period_id",
+            "effective_date",
+            "classification",
+            "metric_id",
+            "value",
+            *SOURCE_COLUMNS,
+        ),
+        (
+            (
+                cell("ACQ_1"),
+                cell("Acquired dealer group"),
+                cell("LTM_Q2_2026"),
+                cell("2026-08-01"),
+                cell("acquisition"),
+                cell("ebitda"),
+                figure("12.5 [C7]", "12.5"),
+                cell("S5"),
+                cell("Lender presentation p.8"),
+            ),
+        ),
+    )
+
+
+def full_set() -> list[HandoffTable]:
+    return [
+        period_table(period_row("Q2_2026")),
+        account_table(),
+        bridge_table(),
+        segment_table(),
+        kpi_table(),
+        debt_table(),
+        pro_forma_table(),
+    ]
+
+
+def test_cp1_registers_reads_each_register_into_typed_rows() -> None:
+    registers = cp1_registers(full_set())
+
+    assert isinstance(registers, Cp1Registers)
+    assert registers.currency == "USD"
+    assert registers.unit == "MILLIONS"
+    assert registers.periods == (
+        PeriodRow(
+            period_id="Q2_2026",
+            fiscal_year="2026",
+            fiscal_quarter="2",
+            period_type="QUARTER",
+            start_date="2026-04-01",
+            end_date="2026-06-30",
+            day_count=91,
+            currency="USD",
+            unit="MILLIONS",
+            component_period_ids=("Q1_2026", "H1_2026"),
+        ),
+    )
+    assert registers.accounts == (
+        AccountRow(
+            metric_id="revenue",
+            period_id="Q2_2026",
+            value=Decimal("1250.0"),
+            calculation_status="REPORTED",
+            source=SourceRef("S2", "10-Q p. 4", "1,250.0 [C3]"),
+        ),
+        AccountRow(
+            metric_id="cash_taxes_paid",
+            period_id="Q2_2026",
+            value=None,
+            calculation_status="REPORTED",
+            source=None,
+        ),
+    )
+    assert registers.addbacks == (
+        AddbackRow(
+            addback_id="SBC",
+            label="Share-based compensation",
+            classification="SBC",
+            realization_status="NOT_STATED",
+            display_priority=1,
+            period_id="Q2_2026",
+            value=Decimal("-45"),
+            source=SourceRef("S3", "p.12", "(45) [C1]"),
+        ),
+    )
+    assert registers.segments == (
+        SegmentRow(
+            segment_id="RETAIL",
+            segment_name="Retail vehicle sales",
+            segment_type="OPERATING_SEGMENT",
+            display_priority=1,
+            period_id="Q2_2026",
+            revenue=Decimal("3842"),
+            source=SourceRef("S2", "p.12", "3,842 [C4]"),
+        ),
+    )
+    assert registers.kpis == (
+        KpiRow(
+            kpi_id="retail_units_sold",
+            kpi_label="Retail units",
+            display_priority=1,
+            period_id="Q2_2026",
+            value=Decimal("143280"),
+            unit="UNITS",
+            value_type="PERIOD_FLOW",
+            source=SourceRef("S4", "p.3", "143,280 [C5]"),
+        ),
+    )
+    assert registers.facilities == (
+        FacilityRow(
+            facility_id="TLB",
+            facility_name="Term Loan B",
+            period_id="Q2_2026",
+            facility_type="TERM_LOAN",
+            currency="USD",
+            carrying_value=Decimal("996"),
+            commitment=None,
+            drawn_amount=Decimal("1005"),
+            secured_status="SECURED",
+            seniority="SENIOR",
+            lease_classification="NOT_LEASE",
+            maturity_date="2028-12-01",
+            margin_or_coupon="SOFR + 3.20%",
+            rate_type="FLOATING",
+            reference_rate="TERM_SOFR",
+            spread_bps=Decimal("320"),
+            floor_bps=Decimal("50"),
+            fixed_rate=None,
+            annual_amortisation=Decimal("10"),
+            source=SourceRef("S2", "p.21", "996 [C6]"),
+        ),
+    )
+    assert registers.pro_forma == (
+        PfAdjustmentRow(
+            adjustment_id="ACQ_1",
+            label="Acquired dealer group",
+            period_id="LTM_Q2_2026",
+            classification="ACQUISITION",
+            metric_id="ebitda",
+            value=Decimal("12.5"),
+            source=SourceRef("S5", "Lender presentation p.8", "12.5 [C7]"),
+        ),
+    )
+
+
+def test_a_debt_register_without_the_rate_columns_reads_them_as_not_stated() -> None:
+    older = HandoffTable(
+        "cp1.debt_facility_register",
+        (*DEBT_COLUMNS_BEFORE_RATES, *SOURCE_COLUMNS),
+        ((*debt_row_before_rates(), cell("S2"), cell("p.21")),),
+    )
+    tables = [t for t in full_set() if t.table_id != older.table_id] + [older]
+
+    (facility,) = cp1_registers(tables).facilities
+
+    assert facility.rate_type == "NOT_STATED"
+    assert facility.reference_rate == "NOT_STATED"
+    assert facility.spread_bps is None
+    assert facility.floor_bps is None
+    assert facility.fixed_rate is None
+    assert facility.annual_amortisation is None
+    assert facility.carrying_value == Decimal("996")
+
+
+def test_a_reference_rate_of_none_is_kept_and_not_read_as_null() -> None:
+    table = debt_table()
+    row = list(table.rows[0])
+    row[table.columns.index("reference_rate")] = cell("none")
+    fixed = HandoffTable(table.table_id, table.columns, (tuple(row),))
+    tables = [t for t in full_set() if t.table_id != table.table_id] + [fixed]
+
+    (facility,) = cp1_registers(tables).facilities
+
+    assert facility.reference_rate == "NONE"
+
+
+def test_a_missing_pro_forma_register_is_empty() -> None:
+    optional = {"cp1.pro_forma_adjustment_register", "cp1.operating_kpi_schedule"}
+    registers = cp1_registers([t for t in full_set() if t.table_id not in optional])
+
+    assert registers.pro_forma == ()
+    assert registers.kpis == ()
+    assert len(registers.facilities) == 1
+
+
+def test_a_present_table_missing_a_required_column_is_refused() -> None:
+    table = account_table()
+    dropped = table.columns.index("value")
+    narrowed = HandoffTable(
+        table.table_id,
+        table.columns[:dropped] + table.columns[dropped + 1 :],
+        tuple(row[:dropped] + row[dropped + 1 :] for row in table.rows),
+    )
+    tables = [t for t in full_set() if t.table_id != table.table_id] + [narrowed]
+
+    with pytest.raises(Refusal) as caught:
+        cp1_registers(tables)
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+def test_a_row_wider_than_its_header_is_refused() -> None:
+    table = segment_table()
+    wide = HandoffTable(table.table_id, table.columns, ((*table.rows[0], NULL),))
+    tables = [t for t in full_set() if t.table_id != table.table_id] + [wide]
+
+    with pytest.raises(Refusal) as caught:
+        cp1_registers(tables)
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+_REGISTERS = (
+    "cp1.model_period_register",
+    "cp1.model_account_register",
+    "cp1.adjusted_ebitda_bridge",
+    "cp1.segment_revenue_schedule",
+    "cp1.operating_kpi_schedule",
+    "cp1.debt_facility_register",
+    "cp1.pro_forma_adjustment_register",
+)
+
+
+def _with_second_row(table_id: str, period_id: str | None) -> list[HandoffTable]:
+    """`full_set()` with `table_id`'s first row written again, its period
+    id set to `period_id` (None: kept)."""
+    tables = []
+    for table in full_set():
+        if table.table_id == table_id:
+            first = list(table.rows[0])
+            if period_id is not None:
+                first[table.columns.index("period_id")] = cell(period_id)
+                if table_id == "cp1.model_period_register":
+                    first[table.columns.index("fiscal_quarter")] = figure("1", "1")
+                    # Q2's components name Q1: Q1 naming them too is a cycle.
+                    first[table.columns.index("component_period_ids")] = NULL
+            table = HandoffTable(
+                table.table_id, table.columns, (*table.rows, tuple(first))
+            )
+        tables.append(table)
+    return tables
+
+
+@pytest.mark.parametrize("table_id", _REGISTERS)
+def test_a_register_naming_one_row_twice_is_refused(table_id: str) -> None:
+    with pytest.raises(Refusal) as caught:
+        cp1_registers(_with_second_row(table_id, None))
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+@pytest.mark.parametrize("table_id", _REGISTERS)
+def test_one_id_in_two_periods_is_two_rows(table_id: str) -> None:
+    registers = cp1_registers(_with_second_row(table_id, "Q1_2026"))
+
+    assert "Q1_2026" in {
+        row.period_id
+        for rows in (
+            registers.periods,
+            registers.accounts,
+            registers.addbacks,
+            registers.segments,
+            registers.kpis,
+            registers.facilities,
+            registers.pro_forma,
+        )
+        for row in rows
+    }
+
+
 @pytest.mark.parametrize(
     ("text", "year"),
     [
@@ -280,6 +579,34 @@ def test_fiscal_year_number_reads_a_two_year_spelling_as_its_end_year(
     text: str, year: int | None
 ) -> None:
     assert model_inputs.fiscal_year_number(text) == year
+
+
+def test_a_missing_period_register_is_refused() -> None:
+    tables = [t for t in full_set() if t.table_id != "cp1.model_period_register"]
+
+    with pytest.raises(Refusal) as caught:
+        cp1_registers(tables)
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+def replaced(table: HandoffTable, column: str, new: TableCell) -> HandoffTable:
+    """`table` with `column` set to `new` in every row."""
+    at = table.columns.index(column)
+    rows = tuple((*row[:at], new, *row[at + 1 :]) for row in table.rows)
+    return HandoffTable(table.table_id, table.columns, rows)
+
+
+def with_table(table: HandoffTable) -> list[HandoffTable]:
+    return [t for t in full_set() if t.table_id != table.table_id] + [table]
+
+
+@pytest.mark.parametrize("column", ["rate_type", "reference_rate"])
+def test_a_null_rate_term_reads_as_not_stated(column: str) -> None:
+    table = replaced(debt_table(), column, NULL)
+
+    (facility,) = cp1_registers(with_table(table)).facilities
+
+    assert getattr(facility, column) == "NOT_STATED"
 
 
 def _validator_constant(name: str) -> object:
