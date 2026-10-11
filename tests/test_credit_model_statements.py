@@ -13,9 +13,11 @@ from hypothesis import strategies as st
 from caos.calculators.credit_model import statements
 from caos.calculators.credit_model._cells import (
     SIGN_NORMALISED,
+    TREATED_AS_ZERO,
     UNSPANNED,
     treated_as_zero,
 )
+from caos.calculators.credit_model.debt import notes_of
 from caos.calculators.credit_model.frame import Cell, Column, Frame, SourceRef
 from caos.calculators.credit_model.history import (
     OUTFLOW_METRICS,
@@ -1034,6 +1036,45 @@ def _restructuring(regs: Cp1Registers, figures: dict[str, int]) -> Cp1Registers:
     return replace(regs, addbacks=(*kept, *rows))
 
 
+def test_a_sum_that_takes_a_missing_part_as_nil_says_so() -> None:
+    """The adversary's MAJOR-5 probe: restructuring disclosed for FY2025 (32)
+    and H1 2026 (16) only."""
+    assert treated_as_zero("Q2_2025") == f"{TREATED_AS_ZERO} (Q2_2025)"
+    regs = _restructuring(example_registers(), {"FY2025": 32, "H1_2026": 16})
+    zero = treated_as_zero("addback:restructuring")
+    # Earlier rulings already leave the LTM missing, never 32 + 16 - 0.
+    ltm = _cells(regs, "LTM Q2 26")
+    assert ltm["addback:restructuring"].reason == "COMPONENT_MISSING"
+    assert ltm["adjusted_ebitda"].value is None
+    # A column without a row adds nothing to adjusted EBITDA, and says so;
+    # so does every figure built from it.
+    q1 = _cells(regs, "Q1 26")
+    assert q1["addback:restructuring"] == Cell(None, "NOT_SOURCED")
+    assert q1["adjusted_ebitda"].value == 1001
+    for key in ("adjusted_ebitda", "adjusted_ebitdar", "ffo", "other_operating"):
+        assert zero in notes_of(q1[key].note), key
+    assert zero not in notes_of(q1["ebitda"].note)
+    assert zero not in notes_of(_cells(regs, "FY25")["adjusted_ebitda"].note)
+
+    # A sparse period from parts some of which have no row: FY2025 is Q1 and
+    # Q3 2025's, Q2 and Q4 taken as nothing, named.
+    quarters = _restructuring(example_registers(), {"Q1_2025": 8, "Q3_2025": 8})
+    fy = _cells(quarters, "FY25")
+    assert fy["addback:restructuring"].value == 16
+    assert notes_of(fy["addback:restructuring"].note) == (
+        treated_as_zero("Q2_2025"),
+        treated_as_zero("Q4_2025"),
+    )
+    for name in ("Q2_2025", "Q4_2025"):
+        assert treated_as_zero(name) in notes_of(fy["adjusted_ebitda"].note)
+    # H1 2025 names its components: Q2 2025 is nothing there.
+    h1 = _cells(quarters, "PYTD H1 25")["addback:restructuring"]
+    assert (h1.value, h1.note) == (Decimal(8), treated_as_zero("Q2_2025"))
+    # Every part stated: no note.
+    stated = _cells(example_registers(), "FY25")
+    assert TREATED_AS_ZERO not in (stated["adjusted_ebitda"].note or "")
+
+
 def test_an_excluded_addback_keeps_its_own_notes() -> None:
     """The adversary's MINOR-11: "excluded" is appended, never overwrites
     "differs from components"."""
@@ -1056,3 +1097,22 @@ def test_an_excluded_addback_keeps_its_own_notes() -> None:
     assert _cells(differs, "FY25")["addback:transaction_costs"].note == (
         "differs from components"
     )
+
+
+def test_a_positive_cash_tax_is_a_refund_never_flipped() -> None:
+    """The adversary's MINOR-9: CP-1 writes inflows positive (REF_CP-1_STEPS,
+    sign convention), so +12 cash taxes is a refund, not -12 paid."""
+    regs = with_figures(
+        example_registers(), "Q2_2026", {"cash_taxes_paid": Decimal(12)}
+    )
+    q2 = _cells(regs, "Q2 26")
+    base = _cells(example_registers(), "Q2 26")
+    assert q2["acct:cash_taxes_paid"].value == 12
+    assert q2["acct:cash_taxes_paid"].note is None
+    assert q2["cash_taxes"].value == 12
+    # FFO takes the refund in, the residual moving with it.
+    assert q2["ffo"].value == base["ffo"].value
+    other, base_other = q2["other_operating"].value, base["other_operating"].value
+    assert other is not None and base_other is not None
+    assert other == base_other - (12 - (-42))
+    assert "cash_taxes_paid" not in OUTFLOW_METRICS

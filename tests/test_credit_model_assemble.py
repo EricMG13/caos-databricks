@@ -31,6 +31,7 @@ from caos.calculators.credit_model.assemble import (
 )
 from caos.calculators.credit_model.frame import Cell, Column
 from caos.calculators.credit_model.history import (
+    PARTLY_STATED,
     account_frame,
     historical_columns,
 )
@@ -1778,6 +1779,32 @@ def test_a_parenthesised_zero_is_never_a_negative_zero() -> None:
 
     assert _signed_zeros(model) == []
     assert str(_value(model, "pf:silverlake_interest", _PF)) == "0"
+
+
+def test_adjusted_ebitda_and_its_metrics_name_a_partly_stated_add_back() -> None:
+    """The audit's p10 (a): restructuring stated only in 2026."""
+    regs = example_registers()
+    kept = {"Q1_2026", "Q2_2026", "H1_2026"}
+    regs = replace(
+        regs,
+        addbacks=tuple(
+            a
+            for a in regs.addbacks
+            if a.addback_id != "restructuring" or a.period_id in kept
+        ),
+    )
+    model = _model(regs=regs)
+    ltm = "LTM:LTM_Q2_2026"
+    assert _cell(model, "ebitda", ltm).value is not None
+    for line_id in (
+        "addback:restructuring",
+        "adjusted_ebitda",
+        "ffo",
+        "metric:total_leverage_adjusted",
+        "metric:interest_coverage_adjusted",
+    ):
+        cell = _cell(model, line_id, ltm)
+        assert (cell.reason, cell.note) == ("COMPONENT_MISSING", PARTLY_STATED), line_id
 
 
 def test_pf_rows_for_an_ltm_without_a_pf_column_raise_a_limitation() -> None:
