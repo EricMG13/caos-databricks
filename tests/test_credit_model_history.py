@@ -10,13 +10,21 @@ from decimal import Decimal
 
 import pytest
 from credit_model_fixture import (
+    example_deck,
+    example_growth,
     example_registers,
+    example_slots,
 )
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from caos.calculators.credit_model import history
 from caos.calculators.credit_model._cells import SIGN_NORMALISED, UNSPANNED
+from caos.calculators.credit_model.assemble import (
+    CreditModel,
+    ModelInputs,
+    credit_model,
+)
 from caos.calculators.credit_model.frame import Cell, SourceRef
 from caos.calculators.credit_model.history import (
     BALANCE_METRICS,
@@ -1433,6 +1441,49 @@ def test_an_outflow_row_written_positive_is_negative_before_any_sum() -> None:
     )
     twelve = ltm_frames(hostile, columns)["Q:Q2_2026"]["acct:cash_interest_paid"]
     assert (twelve.value, twelve.note) == (Decimal(-862), SIGN_NORMALISED)
+
+
+def _model_inputs(regs: Cp1Registers) -> ModelInputs:
+    return ModelInputs(
+        registers=regs,
+        request=None,
+        growth=example_growth(),
+        slots=example_slots(),
+        deck=example_deck(),
+        exclude_unrealised=False,
+    )
+
+
+def _line_cell(model: CreditModel, line_id: str, column_id: str) -> Cell:
+    columns = [c.column_id for c in model.columns]
+    line = next(x for x in model.lines if x.line_id == line_id)
+    return line.cells[columns.index(column_id)]
+
+
+def test_the_audits_h1_2026_written_positive_keeps_the_ltm_coverage() -> None:
+    # The audit's C1 probe: Q1 and Q2 2026 capex and cash interest written
+    # positive read 681.5x interest coverage before the fix.
+    regs = _without_ltm_rows(example_registers())
+    flows = {"capex_and_intangible_investment", "cash_interest_paid"}
+    hostile = _written_positive(regs, {"Q1_2026", "Q2_2026"}, flows)
+    base = credit_model(_model_inputs(regs))
+    model = credit_model(_model_inputs(hostile))
+    ltm = "LTM:LTM_Q2_2026"
+    interest = _line_cell(model, "cash_interest", ltm)
+    assert (interest.value, interest.note) == (Decimal(-862), SIGN_NORMALISED)
+    for line_id in (
+        "capex",
+        "fcf",
+        "metric:interest_coverage_adjusted",
+        "metric:capex_adjusted_coverage",
+        "metric:fcf_to_debt",
+    ):
+        assert (
+            _line_cell(model, line_id, ltm).value
+            == _line_cell(base, line_id, ltm).value
+        ), line_id
+    coverage = _line_cell(model, "metric:interest_coverage_adjusted", ltm).value
+    assert coverage is not None and Decimal("4.74") < coverage < Decimal("4.75")
 
 
 def test_sixteen_nested_ltm_periods_resolve_a_sparse_item_in_under_a_second() -> None:
