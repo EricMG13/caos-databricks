@@ -760,7 +760,7 @@
       "local_path": "qualification/czr-2026q2/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR filing (Form 10-K primary document) converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000011, raw HTML SHA-256 41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f). Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Official EDGAR filing (Form 10-K primary document) converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492) (accession 0001590895-26-000011, raw HTML SHA-256 41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f). Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-10q",
@@ -773,7 +773,7 @@
       "local_path": "qualification/czr-2026q2/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR filing (Form 10-Q primary document) converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000028, raw HTML SHA-256 9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500). It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Official EDGAR filing (Form 10-Q primary document) converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492) (accession 0001590895-26-000028, raw HTML SHA-256 9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500). It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings",
@@ -786,7 +786,20 @@
       "local_path": "qualification/czr-2026q2/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000027, raw HTML SHA-256 a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f). It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492) (accession 0001590895-26-000027, raw HTML SHA-256 a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f). It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
+    },
+    {
+      "id": "czr-2026-merger-agreement-lite-earnings-update",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_EARNINGS_UPDATE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the pending merger's terms in full beside the 10-K, the 10-Q and the earnings release. Byte-identical to the czr-2026q2-covenant-refinancing set's copy. Demand inferred from the route's covenant, liquidity and transaction modules, not quoted from a SKILL.md. 411,229 bytes."
     },
     {
       "id": "czr-fy2025-10k-earnings-update",
@@ -799,7 +812,7 @@
       "local_path": "qualification/czr-2026q2-earnings-update/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-10q-earnings-update",
@@ -812,7 +825,7 @@
       "local_path": "qualification/czr-2026q2-earnings-update/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-earnings-update",
@@ -825,7 +838,7 @@
       "local_path": "qualification/czr-2026q2-earnings-update/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "czr-fy2025-10k-liquidity",
@@ -838,7 +851,7 @@
       "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-10q-liquidity",
@@ -851,7 +864,7 @@
       "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-liquidity",
@@ -864,20 +877,33 @@
       "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-liquidity",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL liquidity set copy)",
       "modules": ["CP-2D"],
       "pathways": ["LIQUIDITY_REVIEW"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-20-196232, raw HTML SHA-256 6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba). It supplies the revolving facility's controlling terms as executed; its stated commitment is at the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024) Amendments are not in this set, so no current commitment is inferred from it. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
+    },
+    {
+      "id": "czr-2026-merger-agreement-liquidity",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-2D"],
+      "pathways": ["LIQUIDITY_REVIEW"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the merger's financing and interim operating covenants for the liquidity review (CP-2D). Byte-identical to the czr-2026q2-covenant-refinancing set's copy. Demand inferred from the route's covenant, liquidity and transaction modules, not quoted from a SKILL.md. 411,229 bytes."
     },
     {
       "id": "czr-fy2025-10k-covenant-refinancing",
@@ -890,7 +916,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (total debt at 31 December 2025). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-10q-covenant-refinancing",
@@ -903,20 +929,20 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-covenant-refinancing",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL covenant-refinancing set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract)",
       "modules": ["CP-4"],
       "pathways": ["COVENANT_REFINANCING"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Official EDGAR exhibit (Ex. 10.2 to the Form 8-K filed 7 February 2024, Ex. 10.36 in the FY2025 10-K's index), admitted on the owner's ruling of 5 October 2026 after live runs C5 and LCR1 held back the covenant modules (F508); converted from HTML to plain text on 5 October 2026, split by sentence (F492) and by clause (F498) (accession 0001193125-24-026847, raw HTML SHA-256 aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa). It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment",
@@ -929,7 +955,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Fourth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-24-135268, raw HTML SHA-256 b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb). It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,473 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492); re-split by clause 4 October 2026 (F498) (accession 0001193125-24-135268, raw HTML SHA-256 b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb). It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,431 bytes."
     },
     {
       "id": "czr-2024-credit-agreement-fifth-amendment",
@@ -942,7 +968,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Fifth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-24-265157, raw HTML SHA-256 0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8). It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,841 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492); re-split by clause 4 October 2026 (F498) (accession 0001193125-24-265157, raw HTML SHA-256 0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8). It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,797 bytes."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture",
@@ -955,7 +981,33 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-24-026847, raw HTML SHA-256 a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c). It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492); re-split by clause 4 October 2026 (F498) (accession 0001193125-24-026847, raw HTML SHA-256 a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c). It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract)",
+      "modules": ["CP-4", "CP-3C"],
+      "pathways": ["COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Official EDGAR exhibit (Ex. 4.2 to the Form 10-Q filed 30 April 2024, Ex. 4.11 in the FY2025 10-K's index), admitted on the owner's ruling of 5 October 2026 after live runs C5 and LCR1 held back the covenant modules (F508); converted from HTML to plain text on 5 October 2026, split by sentence (F492) and by clause (F498) (accession 0001590895-24-000088, raw HTML SHA-256 18d810c415aef677f867ac73dee07a04382e71db794f3bfbc91cdd185e4b0dc4). It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract)",
+      "modules": ["CP-4", "CP-3C"],
+      "pathways": ["COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Official EDGAR exhibit (Ex. 4.17 to the Form 10-K filed 25 February 2025, Ex. 4.12 in the FY2025 10-K's index), admitted on the owner's ruling of 5 October 2026 after live runs C5 and LCR1 held back the covenant modules (F508); converted from HTML to plain text on 5 October 2026, split by sentence (F492) and by clause (F498) (accession 0001590895-25-000068, raw HTML SHA-256 0eedd7d398ee15f45dabc99df2003249d4dbe232be456767e7b972d355326b3c). It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-2026-merger-8k",
@@ -968,7 +1020,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2026_Merger_Agreement_8K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR filing (Form 8-K primary document) converted from HTML to plain text on 2 October 2026 (accession 0001193125-26-242995, raw HTML SHA-256 aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96). It supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them. 30,845 bytes."
+      "note": "Official EDGAR filing (Form 8-K primary document) converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492); re-split by clause 4 October 2026 (F498) (accession 0001193125-26-242995, raw HTML SHA-256 aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96). It supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them. 30,809 bytes."
     },
     {
       "id": "czr-2026-merger-press-release",
@@ -981,7 +1033,20 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2026_Merger_Press_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-26-242995, raw HTML SHA-256 2a4ed12c96147f2171451c93524bea31ecad37247448d27039f755a3cf85f51f). It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources. 19,050 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492) (accession 0001193125-26-242995, raw HTML SHA-256 2a4ed12c96147f2171451c93524bea31ecad37247448d27039f755a3cf85f51f). It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources. 19,048 bytes."
+    },
+    {
+      "id": "czr-2026-merger-agreement",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-3C", "CP-4"],
+      "pathways": ["COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the merger's financing covenants, conditions, change-of-control and end-date terms in full, beside the 8-K summary. Demand inferred from the route's covenant modules, not quoted from a SKILL.md. 411,229 bytes."
     },
     {
       "id": "czr-q2-2026-10q-lite-covenant-refinancing",
@@ -994,20 +1059,20 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-lite-covenant-refinancing",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-lite-covenant-refinancing",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE covenant-refinancing set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE covenant-refinancing set copy)",
       "modules": ["CP-3C"],
       "pathways": ["LITE_COVENANT_REFINANCING"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment-lite-covenant-refinancing",
@@ -1020,7 +1085,7 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Fourth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,473 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,431 bytes."
     },
     {
       "id": "czr-2024-credit-agreement-fifth-amendment-lite-covenant-refinancing",
@@ -1033,7 +1098,7 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Fifth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,841 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,797 bytes."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-covenant-refinancing",
@@ -1046,7 +1111,33 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-lite-covenant-refinancing",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE covenant-refinancing set copy)",
+      "modules": ["CP-3C"],
+      "pathways": ["LITE_COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-lite-covenant-refinancing",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE covenant-refinancing set copy)",
+      "modules": ["CP-3C"],
+      "pathways": ["LITE_COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-2026-merger-8k-lite-covenant-refinancing",
@@ -1059,7 +1150,20 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2026_Merger_Agreement_8K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them. 30,845 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them. 30,809 bytes."
+    },
+    {
+      "id": "czr-2026-merger-agreement-lite-covenant-refinancing",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-3C"],
+      "pathways": ["LITE_COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the merger's financing covenants, conditions, change-of-control and end-date terms in full, beside the 8-K summary. Byte-identical to the czr-2026q2-covenant-refinancing set's copy. Demand inferred from the route's covenant, liquidity and transaction modules, not quoted from a SKILL.md. 411,229 bytes."
     },
     {
       "id": "czr-q2-2026-10q-lite-relative-value",
@@ -1072,7 +1176,7 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-lite-relative-value",
@@ -1085,20 +1189,20 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-lite-relative-value",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-lite-relative-value",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE relative-value set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE relative-value set copy)",
       "modules": ["CP-0"],
       "pathways": ["LITE_RELATIVE_VALUE"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has a governing debt document for the issuer (the readiness gap N54 recorded for CCL); it supplies the facility's controlling terms as executed, and the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-relative-value",
@@ -1111,7 +1215,33 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has the governing document of the compared instrument (the readiness gap N54 recorded for CCL); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has the governing document of the compared instrument (the readiness gap N54 recorded for CCL); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-lite-relative-value",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE relative-value set copy)",
+      "modules": ["CP-0"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-lite-relative-value",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE relative-value set copy)",
+      "modules": ["CP-0"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "mgm-q2-2026-earnings",
@@ -1124,7 +1254,7 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/MGM_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0000789570-26-000075, raw HTML SHA-256 d23f2410e475eca7e0dfe2fdcca0210f449e4c1a93fb93a14549592c4554173c). Quarter ended 30 June 2026; it supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. A peer from the owner's Public Leveraged Loan Issuers Benchmark (2 October 2026). CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,623 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492) (accession 0000789570-26-000075, raw HTML SHA-256 d23f2410e475eca7e0dfe2fdcca0210f449e4c1a93fb93a14549592c4554173c). Quarter ended 30 June 2026; it supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. A peer from the owner's Public Leveraged Loan Issuers Benchmark (2 October 2026). CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,214 bytes."
     },
     {
       "id": "penn-q2-2026-earnings",
@@ -1137,7 +1267,59 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/PENN_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0000921738-26-000019, raw HTML SHA-256 be60f25fec25022c2fd6f48c2cf9bb99912b8f78356cebc4a7719bdcae9120bc). Three and six months ended 30 June 2026; it supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. A peer from the owner's Public Leveraged Loan Issuers Benchmark (2 October 2026). CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,859 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492) (accession 0000921738-26-000019, raw HTML SHA-256 be60f25fec25022c2fd6f48c2cf9bb99912b8f78356cebc4a7719bdcae9120bc). Three and six months ended 30 June 2026; it supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. A peer from the owner's Public Leveraged Loan Issuers Benchmark (2 October 2026). CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
+    },
+    {
+      "id": "czr-finra-trace-12769gac4-2026-10-02-lite-relative-value",
+      "issuer": "CZR",
+      "document": "FINRA TRACE observation for Caesars Entertainment 6.50% notes due 2032, CUSIP 12769GAC4 (LITE relative-value set copy)",
+      "modules": ["CP-L10"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.finra.org/finra-data/fixed-income/bond?symbol=ERI5740550&bondType=CORP",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It is the dated price evidence CP-0 asked for (F507): the last trade price, yield and date FINRA displayed, which FINRA did not label bid, mid, ask or evaluated; no spread, curve point or seniority is inferred. 1,361 bytes."
+    },
+    {
+      "id": "czr-finra-trace-12769gad2-2026-10-02-lite-relative-value",
+      "issuer": "CZR",
+      "document": "FINRA TRACE observation for Caesars Entertainment 6.00% notes due 2032, CUSIP 12769GAD2 (LITE relative-value set copy)",
+      "modules": ["CP-L10"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.finra.org/finra-data/fixed-income/bond?symbol=ERI5909471&bondType=CORP",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_FINRA_TRACE_12769GAD2_2026-10-02.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It is the dated price evidence CP-0 asked for (F507): the last trade price, yield and date FINRA displayed, which FINRA did not label bid, mid, ask or evaluated; no spread, curve point or seniority is inferred. 1,364 bytes."
+    },
+    {
+      "id": "mgm-finra-trace-552953ck5-2026-10-02-lite-relative-value",
+      "issuer": "MGM",
+      "document": "FINRA TRACE observation for MGM Resorts International 6.125% notes due 2029, CUSIP 552953CK5 (LITE relative-value set copy)",
+      "modules": ["CP-L10"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.finra.org/finra-data/fixed-income/bond?symbol=MGM5885613&bondType=CORP",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/MGM_FINRA_TRACE_552953CK5_2026-10-02.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It is the dated price evidence CP-0 asked for (F507): the last trade price, yield and date FINRA displayed, which FINRA did not label bid, mid, ask or evaluated; no spread, curve point or seniority is inferred. 1,277 bytes."
+    },
+    {
+      "id": "penn-finra-trace-707569av1-2026-10-02-lite-relative-value",
+      "issuer": "PENN",
+      "document": "FINRA TRACE observation for PENN Entertainment 4.125% notes due 2029, CUSIP 707569AV1 (LITE relative-value set copy)",
+      "modules": ["CP-L10"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.finra.org/finra-data/fixed-income/bond?symbol=PENN5210723&bondType=CORP",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/PENN_FINRA_TRACE_707569AV1_2026-10-02.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It is the dated price evidence CP-0 asked for (F507): the last trade price, yield and date FINRA displayed, which FINRA did not label bid, mid, ask or evaluated; no spread, curve point or seniority is inferred. 1,354 bytes."
     },
     {
       "id": "czr-q2-2026-10q-relative-value",
@@ -1150,7 +1332,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-fy2025-10k-relative-value",
@@ -1163,7 +1345,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (operating cash flow, total debt at 31 December 2025). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (operating cash flow, total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-earnings-relative-value",
@@ -1176,20 +1358,20 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-relative-value",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-relative-value",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL relative-value set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL relative-value set copy)",
       "modules": ["CP-4"],
       "pathways": ["RELATIVE_VALUE"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-relative-value",
@@ -1202,7 +1384,33 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes observed on FINRA; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes observed on FINRA; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-relative-value",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL relative-value set copy)",
+      "modules": ["CP-4"],
+      "pathways": ["RELATIVE_VALUE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-relative-value",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL relative-value set copy)",
+      "modules": ["CP-4"],
+      "pathways": ["RELATIVE_VALUE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02",
@@ -1241,7 +1449,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/MGM_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,623 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,214 bytes."
     },
     {
       "id": "penn-q2-2026-earnings-relative-value",
@@ -1254,7 +1462,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/PENN_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,859 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
       "id": "mgm-finra-trace-552953ck5-2026-10-02",
@@ -1293,7 +1501,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenant compliance and revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenant compliance and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-lite-full-credit-screen",
@@ -1306,7 +1514,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "czr-2026-merger-8k-lite-full-credit-screen",
@@ -1319,7 +1527,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2026_Merger_Agreement_8K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It names CP-1A's transaction and supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them; the Merger Agreement itself (its Exhibit 2.1) is not admitted. 30,845 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It names CP-1A's transaction and supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them; the Merger Agreement itself (its Exhibit 2.1) is not admitted. 30,809 bytes."
     },
     {
       "id": "czr-2026-merger-press-release-lite-full-credit-screen",
@@ -1332,7 +1540,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2026_Merger_Press_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources. 19,050 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources. 19,048 bytes."
     },
     {
       "id": "mgm-q2-2026-earnings-lite-full-credit-screen",
@@ -1345,7 +1553,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/MGM_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,623 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,214 bytes."
     },
     {
       "id": "penn-q2-2026-earnings-lite-full-credit-screen",
@@ -1358,20 +1566,20 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/PENN_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,859 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-lite-full-credit-screen",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-lite-full-credit-screen",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE full-credit-screen set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE full-credit-screen set copy)",
       "modules": ["CP-0", "CP-3C"],
       "pathways": ["LITE_FULL_CREDIT_SCREEN"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-full-credit-screen",
@@ -1384,7 +1592,33 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-lite-full-credit-screen",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE full-credit-screen set copy)",
+      "modules": ["CP-0", "CP-3C"],
+      "pathways": ["LITE_FULL_CREDIT_SCREEN"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-lite-full-credit-screen",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE full-credit-screen set copy)",
+      "modules": ["CP-0", "CP-3C"],
+      "pathways": ["LITE_FULL_CREDIT_SCREEN"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-lite-full-credit-screen",
@@ -1423,7 +1657,7 @@
       "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with the 6.50% 2032 notes' row, maturities and revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with the 6.50% 2032 notes' row, maturities and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-lite-portfolio",
@@ -1436,7 +1670,33 @@
       "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
+    },
+    {
+      "id": "fhsuhy-nport-2026-06-30",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. N-PORT schedule of investments at 30 June 2026 (SEC exhibit text extract)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000022531826000020/poi_fhsushybondfund.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-portfolio/documents/FHSUHY_NPORT_Schedule_of_Investments_2026-06-30.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (NPORT-EX, Federated Hermes Sustainable High Yield Bond Fund, Inc., schedule of investments as of 30 June 2026, filed 25 August 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0000225318-26-000020, raw HTML SHA-256 45dbee32a946cf9b582e22e97461735def3b5b8447f77d193ca0b08d92437df5, 1,513,979 bytes after SEC's 111-byte script tag is removed). It is the real holdings input that replaces the synthetic mandate (D80) in this set: it lists four Caesars Entertainment positions, among them the 6.500% 2/15/2032 secured notes (principal 550,000, value 536,927) and the 6.000% 10/15/2032 notes. It carries the net-assets line (NET ASSETS—100%, $491,554,960), the denominator of its percentages; the total of securities, 482,801,658, is the valuation table's Level 1–3 total (98.2% of net assets), not the denominator. The demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits), not quoted. 49,398 bytes."
+    },
+    {
+      "id": "fhsuhy-prospectus-sai-2026-05-26",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. prospectus and statement of additional information, Form 485BPOS of 26 May 2026 (SEC filing text extract)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000162363226000742/fhsuhy2481-form.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-portfolio/documents/FHSUHY_Prospectus_and_SAI_2026-05-26.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR filing (485BPOS, combined prospectus and statement of additional information of the same fund, filed 26 May 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0001623632-26-000742, raw HTML SHA-256 ace0ea46f895f93d9fa863dc43a7d5f402e689cf0b6fdb3c8c71f6893821f9cc, 2,009,358 bytes after SEC's 111-byte script tag is removed). It is the fund's mandate in place of the synthetic one (D80): the 80% policy, the investment limitations and the concentration restriction. It does not mention Caesars. It is under 500 KiB as text, so it carries no large-file pin and reaches CP-0 whole. The demand is inferred as for the schedule. 501,405 bytes."
     },
     {
       "id": "test-clo-i-mandate-2026-10-02",
@@ -1449,7 +1709,7 @@
       "local_path": "qualification/czr-2026q2-lite-portfolio/documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-L10's SKILL.md names no portfolio input, so the demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits) rather than quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes."
+      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-L10's SKILL.md names no portfolio input, so the demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits) rather than quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes. UNUSED since 6 October 2026 (D115): the owner approved the real fund's N-PORT schedule and prospectus in its place, so no set names this file; it stays registered and on disk because D80 adopted it."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-lite-portfolio",
@@ -1475,7 +1735,33 @@
       "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. The demand is inferred from CP-0's recorded refusal on ccl-fy2025-portfolio (applicable executed governing security documents) rather than quoted. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. The demand is inferred from CP-0's recorded refusal on ccl-fy2025-portfolio (applicable executed governing security documents) rather than quoted. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-lite-portfolio",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE portfolio set copy)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-lite-portfolio",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE portfolio set copy)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-q2-2026-10q-portfolio",
@@ -1488,7 +1774,7 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-fy2025-10k-portfolio",
@@ -1501,20 +1787,46 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (operating cash flow, total debt at 31 December 2025). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (operating cash flow, total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
-      "id": "czr-2020-credit-agreement-portfolio",
+      "id": "fhsuhy-nport-2026-06-30-portfolio",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. N-PORT schedule of investments at 30 June 2026 (SEC exhibit text extract)",
+      "modules": ["CP-0", "CP-6"],
+      "pathways": ["PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000022531826000020/poi_fhsushybondfund.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/FHSUHY_NPORT_Schedule_of_Investments_2026-06-30.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (NPORT-EX, Federated Hermes Sustainable High Yield Bond Fund, Inc., schedule of investments as of 30 June 2026, filed 25 August 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0000225318-26-000020, raw HTML SHA-256 45dbee32a946cf9b582e22e97461735def3b5b8447f77d193ca0b08d92437df5, 1,513,979 bytes after SEC's 111-byte script tag is removed). Byte-identical to the czr-2026q2-lite-portfolio set's copy. It is the real holdings input that replaces the synthetic mandate (D80) in this set: it lists four Caesars Entertainment positions, among them the 6.500% 2/15/2032 secured notes (principal 550,000, value 536,927) and the 6.000% 10/15/2032 notes. It carries the net-assets line (NET ASSETS—100%, $491,554,960), the denominator of its percentages; the total of securities, 482,801,658, is the valuation table's Level 1–3 total (98.2% of net assets), not the denominator. The demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits), not quoted. 49,398 bytes."
+    },
+    {
+      "id": "fhsuhy-prospectus-sai-2026-05-26-portfolio",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. prospectus and statement of additional information, Form 485BPOS of 26 May 2026 (SEC filing text extract)",
+      "modules": ["CP-0", "CP-6"],
+      "pathways": ["PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000162363226000742/fhsuhy2481-form.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/FHSUHY_Prospectus_and_SAI_2026-05-26.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR filing (485BPOS, combined prospectus and statement of additional information of the same fund, filed 26 May 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0001623632-26-000742, raw HTML SHA-256 ace0ea46f895f93d9fa863dc43a7d5f402e689cf0b6fdb3c8c71f6893821f9cc, 2,009,358 bytes after SEC's 111-byte script tag is removed). Byte-identical to the czr-2026q2-lite-portfolio set's copy. It is the fund's mandate in place of the synthetic one (D80): the 80% policy, the investment limitations and the concentration restriction. It does not mention Caesars. It is under 500 KiB as text, so it carries no large-file pin and reaches CP-0 whole. The demand is inferred as for the schedule. 501,405 bytes."
+    },
+    {
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-portfolio",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL portfolio set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL portfolio set copy)",
       "modules": ["CP-4"],
       "pathways": ["PORTFOLIO_DECISION"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-portfolio",
@@ -1527,7 +1839,33 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-portfolio",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL portfolio set copy)",
+      "modules": ["CP-4"],
+      "pathways": ["PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-portfolio",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL portfolio set copy)",
+      "modules": ["CP-4"],
+      "pathways": ["PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-portfolio",
@@ -1566,7 +1904,7 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. Byte-identical to the czr-2026q2-lite-portfolio set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-6's SKILL.md ranks \"current portfolio/mandate data\" in its highest evidence tier and debates \"Portfolio fit, sizing, and mandate constraints\", so the demand is quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes."
+      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. Byte-identical to the czr-2026q2-lite-portfolio set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-6's SKILL.md ranks \"current portfolio/mandate data\" in its highest evidence tier and debates \"Portfolio fit, sizing, and mandate constraints\", so the demand is quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes. UNUSED since 6 October 2026 (D115): the owner approved the real fund's N-PORT schedule and prospectus in its place, so no set names this file; it stays registered and on disk because D80 adopted it."
     },
     {
       "id": "czr-q2-2026-10q-full-credit-assessment",
@@ -1579,7 +1917,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, the Item 3 interest-rate exposure, covenant compliance, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, the Item 3 interest-rate exposure, covenant compliance, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-fy2025-10k-full-credit-assessment",
@@ -1592,7 +1930,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (net revenues, operating cash flow, total debt at 31 December 2025). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (net revenues, operating cash flow, total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-earnings-full-credit-assessment",
@@ -1605,20 +1943,46 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-full-credit-assessment",
+      "id": "fhsuhy-nport-2026-06-30-full-credit-assessment",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. N-PORT schedule of investments at 30 June 2026 (SEC exhibit text extract)",
+      "modules": ["CP-6"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000022531826000020/poi_fhsushybondfund.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/FHSUHY_NPORT_Schedule_of_Investments_2026-06-30.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (NPORT-EX, Federated Hermes Sustainable High Yield Bond Fund, Inc., schedule of investments as of 30 June 2026, filed 25 August 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0000225318-26-000020, raw HTML SHA-256 45dbee32a946cf9b582e22e97461735def3b5b8447f77d193ca0b08d92437df5, 1,513,979 bytes after SEC's 111-byte script tag is removed). Byte-identical to the czr-2026q2-lite-portfolio set's copy. It is the real holdings input that replaces the synthetic mandate (D80) in this set: it lists four Caesars Entertainment positions, among them the 6.500% 2/15/2032 secured notes (principal 550,000, value 536,927) and the 6.000% 10/15/2032 notes. It carries the net-assets line (NET ASSETS—100%, $491,554,960), the denominator of its percentages; the total of securities, 482,801,658, is the valuation table's Level 1–3 total (98.2% of net assets), not the denominator. The demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits), not quoted. 49,398 bytes."
+    },
+    {
+      "id": "fhsuhy-prospectus-sai-2026-05-26-full-credit-assessment",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. prospectus and statement of additional information, Form 485BPOS of 26 May 2026 (SEC filing text extract)",
+      "modules": ["CP-6"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000162363226000742/fhsuhy2481-form.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/FHSUHY_Prospectus_and_SAI_2026-05-26.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR filing (485BPOS, combined prospectus and statement of additional information of the same fund, filed 26 May 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0001623632-26-000742, raw HTML SHA-256 ace0ea46f895f93d9fa863dc43a7d5f402e689cf0b6fdb3c8c71f6893821f9cc, 2,009,358 bytes after SEC's 111-byte script tag is removed). Byte-identical to the czr-2026q2-lite-portfolio set's copy. It is the fund's mandate in place of the synthetic one (D80): the 80% policy, the investment limitations and the concentration restriction. It does not mention Caesars. It is under 500 KiB as text, so it carries no large-file pin and reaches CP-0 whole. The demand is inferred as for the schedule. 501,405 bytes."
+    },
+    {
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-full-credit-assessment",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL credit-assessment set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL credit-assessment set copy)",
       "modules": ["CP-4"],
       "pathways": ["FULL_CREDIT_ASSESSMENT"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the current commitment and margins are read from the 10-Q and the amendments, not inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment-full-credit-assessment",
@@ -1631,7 +1995,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_Credit_Agreement_Fourth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,473 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,431 bytes."
     },
     {
       "id": "czr-2024-credit-agreement-fifth-amendment-full-credit-assessment",
@@ -1644,7 +2008,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_Credit_Agreement_Fifth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,841 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,797 bytes."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-full-credit-assessment",
@@ -1657,7 +2021,33 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes, the proposed position; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes, the proposed position; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-full-credit-assessment",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL credit-assessment set copy)",
+      "modules": ["CP-4", "CP-3C"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-full-credit-assessment",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL credit-assessment set copy)",
+      "modules": ["CP-4", "CP-3C"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-2026-merger-8k-full-credit-assessment",
@@ -1670,7 +2060,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2026_Merger_Agreement_8K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It names CP-1A's transaction and supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them; the Merger Agreement itself (its Exhibit 2.1) is not admitted. 30,845 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It names CP-1A's transaction and supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them; the Merger Agreement itself (its Exhibit 2.1) is not admitted. 30,809 bytes."
     },
     {
       "id": "czr-2026-merger-press-release-full-credit-assessment",
@@ -1683,7 +2073,20 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2026_Merger_Press_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources; the financing commitments are not admitted. 19,050 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources; the financing commitments are not admitted. 19,048 bytes."
+    },
+    {
+      "id": "czr-2026-merger-agreement-full-credit-assessment",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-1A", "CP-3C", "CP-4"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the merger's terms, conditions, financing covenants and termination fees in full for CP-1A, CP-3C and CP-4, beside the 8-K summary. Byte-identical to the czr-2026q2-covenant-refinancing set's copy. Demand inferred from the route's covenant, liquidity and transaction modules, not quoted from a SKILL.md. 411,229 bytes."
     },
     {
       "id": "mgm-q2-2026-earnings-full-credit-assessment",
@@ -1696,7 +2099,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/MGM_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,623 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,214 bytes."
     },
     {
       "id": "penn-q2-2026-earnings-full-credit-assessment",
@@ -1709,7 +2112,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/PENN_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,859 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-full-credit-assessment",
@@ -1774,7 +2177,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. Byte-identical to the czr-2026q2-lite-portfolio set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-6's SKILL.md ranks \"current portfolio/mandate data\" in its highest evidence tier and debates \"Portfolio fit, sizing, and mandate constraints\", so the demand is quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes."
+      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. Byte-identical to the czr-2026q2-lite-portfolio set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-6's SKILL.md ranks \"current portfolio/mandate data\" in its highest evidence tier and debates \"Portfolio fit, sizing, and mandate constraints\", so the demand is quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes. UNUSED since 6 October 2026 (D115): the owner approved the real fund's N-PORT schedule and prospectus in its place, so no set names this file; it stays registered and on disk because D80 adopted it."
     }
   ],
   "key_sources": [

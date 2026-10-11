@@ -81,27 +81,30 @@
 
 :root {
   color-scheme: light;
-  --radius: 0.625rem;
+  /* Depth 1a (D122): cool neutral tiers, cards raised off the canvas, a
+     cobalt primary. 0.536rem puts radius-xl, a card's, at 12px and
+     radius-lg, a control's, near 8px. */
+  --radius: 0.536rem;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.975 0.004 255);
+  --foreground: oklch(0.18 0.015 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.18 0.015 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  /* 5.1:1 on muted, where shadcn's 0.556 reads 4.3:1. */
-  --muted-foreground: oklch(0.52 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --border: oklch(0.922 0 0);
+  --popover-foreground: oklch(0.18 0.015 260);
+  --primary: oklch(0.5 0.19 262);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.005 255);
+  --secondary-foreground: oklch(0.18 0.015 260);
+  --muted: oklch(0.96 0.005 255);
+  /* 5.3:1 on the selected row, the lightest-but-one surface it sits on. */
+  --muted-foreground: oklch(0.5 0.012 260);
+  --accent: oklch(0.96 0.005 255);
+  --accent-foreground: oklch(0.18 0.015 260);
+  --border: oklch(0.925 0.005 255);
   /* A field's edge: 3:1 on the card it sits on (WCAG 1.4.11). */
-  --input: oklch(0.64 0 0);
-  --ring: oklch(0.52 0.23 263);
+  --input: oklch(0.64 0.01 255);
+  --ring: oklch(0.5 0.19 262);
 
   /* Status: text-safe at 4.5:1 on white and on their own 10% tint. The
      severity mark carries the shape, so hue is never alone (DESIGN.md). */
@@ -112,7 +115,7 @@
   --idle: oklch(0.556 0 0);
   /* How much of a status hue a tinted surface takes, and a field's fill. */
   --tint: 10%;
-  --field-bg: transparent;
+  --field-bg: oklch(1 0 0);
 
   /* Seniority, 3:1 on the card. */
   --tranche-1l: oklch(0.6 0.118 184.704);
@@ -131,14 +134,54 @@
   --chart-neutral: #8a8f98;
   --chart-zero: #8e8e97;
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.955 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.52 0.23 263);
+  /* The sidebar is the lowest tier; its active item is raised to white. */
+  --sidebar: oklch(0.952 0.006 255);
+  --sidebar-foreground: oklch(0.22 0.015 260);
+  --sidebar-primary: oklch(0.5 0.19 262);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(1 0 0);
+  --sidebar-accent-foreground: oklch(0.45 0.19 262);
+  --sidebar-hover: oklch(0.925 0.008 255);
+  --sidebar-border: transparent;
+  --sidebar-ring: oklch(0.5 0.19 262);
+
+  /* Depth: the surfaces between canvas and card, and one elevation scale.
+     A shadow says how far a thing stands off its ground; charts take none. */
+  --header: oklch(1 0 0);
+  --card-border: oklch(0.9 0.006 255);
+  --card-header: oklch(0.985 0.003 255);
+  --card-footer: oklch(0.978 0.004 255);
+  --well: oklch(0.97 0.005 255);
+  --well-border: oklch(0.915 0.006 255);
+  --table-head: oklch(0.975 0.004 255);
+  --table-hover: oklch(0.975 0.006 262);
+  --selected: oklch(0.96 0.025 262);
+  --selected-border: oklch(0.86 0.06 262);
+  --segment: oklch(0.945 0.006 255);
+  --segment-active: oklch(1 0 0);
+  --button: oklch(1 0 0);
+  --button-border: oklch(0.87 0.008 255);
+  --route-edge: oklch(0.55 0.015 260);
+  --route-dot: oklch(0.83 0.01 255);
+  --main-shadow: 0 1px 3px oklch(0.3 0.03 260 / 0.08), 0 0 0 1px oklch(0.3 0.03 260 / 0.05);
+  --header-shadow: 0 2px 6px -3px oklch(0.3 0.03 260 / 0.14);
+  --card-shadow: 0 1px 2px oklch(0.3 0.03 260 / 0.06), 0 4px 12px -4px oklch(0.3 0.03 260 / 0.1);
+  --raised-shadow: 0 1px 2px oklch(0.3 0.03 260 / 0.1), 0 0 0 1px oklch(0.3 0.03 260 / 0.06);
+  --control-shadow: 0 1px 2px oklch(0.3 0.03 260 / 0.08);
+  --primary-shadow: 0 1px 2px oklch(0.3 0.1 262 / 0.25), inset 0 1px 0 oklch(1 0 0 / 0.18);
+  --recessed-shadow: inset 0 1px 2px oklch(0.3 0.03 260 / 0.06);
+  /* A status badge's fill: its hue's tint over the card, opaque, so its words
+     hold 4.5:1 on whatever band, row or menu it sits in, not only on the card
+     (D122, F615). Declared once: --card and --tint are each theme's own. */
+  --success-tint: color-mix(in oklab, var(--success) var(--tint), var(--card));
+  --warning-tint: color-mix(in oklab, var(--warning) var(--tint), var(--card));
+  --destructive-tint: color-mix(in oklab, var(--destructive) var(--tint), var(--card));
+  --info-tint: color-mix(in oklab, var(--info) var(--tint), var(--card));
+  /* What floats above the workflow (menus, the drawer, the passport) stands
+     furthest off it, so its shadow is the largest (DESIGN.md). */
+  --float-shadow:
+    0 1px 2px oklch(0.3 0.03 260 / 0.08), 0 12px 32px -8px oklch(0.3 0.03 260 / 0.2),
+    0 0 0 1px oklch(0.3 0.03 260 / 0.08);
 
   /* Paper: ink on cream, inside filed output only, in either theme. */
   --paper-bg: #f7f5ee;
@@ -153,26 +196,28 @@
   --paper-stamp: #1f6b3a;
   --paper-line: #c9c5b8;
   --paper-line-soft: #d8d5c9;
+  --paper-shadow: 0 1px 2px oklch(0.3 0.03 260 / 0.1), 0 10px 28px -10px oklch(0.3 0.03 260 / 0.25);
 
   @variant dark {
     color-scheme: dark;
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(0.52 0 0);
-    --ring: oklch(0.707 0.165 254.624);
+    --background: oklch(0.195 0.009 260);
+    --foreground: oklch(0.97 0.004 260);
+    --card: oklch(0.235 0.01 260);
+    --card-foreground: oklch(0.97 0.004 260);
+    /* Above the card it floats over: a menu reads lighter, not darker. */
+    --popover: oklch(0.255 0.012 260);
+    --popover-foreground: oklch(0.97 0.004 260);
+    --primary: oklch(0.7 0.14 262);
+    --primary-foreground: oklch(0.16 0.03 262);
+    --secondary: oklch(0.28 0.012 260);
+    --secondary-foreground: oklch(0.97 0.004 260);
+    --muted: oklch(0.28 0.012 260);
+    --muted-foreground: oklch(0.72 0.012 260);
+    --accent: oklch(0.28 0.012 260);
+    --accent-foreground: oklch(0.97 0.004 260);
+    --border: oklch(1 0 0 / 8%);
+    --input: oklch(0.52 0.01 260);
+    --ring: oklch(0.7 0.14 262);
 
     --success: oklch(0.792 0.209 151.711);
     --warning: oklch(0.828 0.189 84.429);
@@ -180,7 +225,7 @@
     --info: oklch(0.707 0.165 254.624);
     --idle: oklch(0.556 0 0);
     --tint: 15%;
-    --field-bg: color-mix(in oklab, var(--input) 30%, transparent);
+    --field-bg: oklch(0.2 0.009 260);
 
     --tranche-1l: oklch(0.777 0.152 181.912);
     --tranche-2l: oklch(0.707 0.165 254.624);
@@ -188,7 +233,7 @@
     --tranche-sub: oklch(0.714 0.203 305.504);
     --tranche-eq: oklch(0.704 0.04 256.788);
 
-    /* Validated on the dark card (#171717), all pairs. */
+    /* Validated on the dark card (#1b1e23, D122), all pairs. */
     --chart-1: #09a3bf;
     --chart-2: #b45700;
     --chart-3: #6a5bc6;
@@ -197,14 +242,43 @@
     --chart-neutral: #b8beca;
     --chart-zero: #686872;
 
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.707 0.165 254.624);
-    --sidebar-primary-foreground: oklch(0.145 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.707 0.165 254.624);
+    --sidebar: oklch(0.165 0.008 260);
+    --sidebar-foreground: oklch(0.96 0.005 260);
+    --sidebar-primary: oklch(0.7 0.14 262);
+    --sidebar-primary-foreground: oklch(0.16 0.03 262);
+    --sidebar-accent: oklch(0.255 0.012 260);
+    --sidebar-accent-foreground: oklch(0.8 0.11 262);
+    --sidebar-hover: oklch(0.22 0.01 260);
+    --sidebar-border: transparent;
+    --sidebar-ring: oklch(0.7 0.14 262);
+
+    --header: oklch(0.215 0.01 260);
+    --card-border: oklch(1 0 0 / 8%);
+    --card-header: oklch(0.25 0.011 260);
+    --card-footer: oklch(0.215 0.01 260);
+    --well: oklch(0.205 0.009 260);
+    --well-border: oklch(1 0 0 / 6%);
+    --table-head: oklch(0.215 0.01 260);
+    --table-hover: oklch(0.255 0.014 262);
+    --selected: oklch(0.28 0.04 262);
+    --selected-border: oklch(0.45 0.09 262);
+    --segment: oklch(0.2 0.009 260);
+    --segment-active: oklch(0.3 0.012 260);
+    --button: oklch(0.26 0.011 260);
+    --button-border: oklch(1 0 0 / 10%);
+    --route-edge: oklch(0.62 0.012 260);
+    --route-dot: oklch(1 0 0 / 9%);
+    --main-shadow: 0 0 0 1px oklch(1 0 0 / 0.06), 0 2px 8px oklch(0 0 0 / 0.35);
+    --header-shadow: 0 2px 8px -2px oklch(0 0 0 / 0.45);
+    --card-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05), 0 2px 10px -2px oklch(0 0 0 / 0.45);
+    --raised-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.4);
+    --control-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05), 0 1px 2px oklch(0 0 0 / 0.35);
+    --primary-shadow: 0 1px 2px oklch(0 0 0 / 0.4), inset 0 1px 0 oklch(1 0 0 / 0.25);
+    --recessed-shadow: inset 0 1px 3px oklch(0 0 0 / 0.4);
+    --float-shadow:
+      0 2px 4px oklch(0 0 0 / 0.4), 0 16px 40px -8px oklch(0 0 0 / 0.6),
+      0 0 0 1px oklch(1 0 0 / 0.08);
+    --paper-shadow: 0 2px 4px oklch(0 0 0 / 0.4), 0 14px 32px -10px oklch(0 0 0 / 0.6);
   }
 }
 
@@ -261,8 +335,31 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-hover: var(--sidebar-hover);
   --color-paper: var(--paper-bg);
   --color-paper-ink: var(--paper-ink);
+  --color-header: var(--header);
+  --color-card-border: var(--card-border);
+  --color-card-footer: var(--card-footer);
+  --color-field: var(--field-bg);
+  --color-segment: var(--segment);
+  --color-segment-active: var(--segment-active);
+  --color-selected: var(--selected);
+  --color-selected-border: var(--selected-border);
+  --color-button: var(--button);
+  --color-button-border: var(--button-border);
+  --color-success-tint: var(--success-tint);
+  --color-warning-tint: var(--warning-tint);
+  --color-destructive-tint: var(--destructive-tint);
+  --color-info-tint: var(--info-tint);
+
+  --shadow-main: var(--main-shadow);
+  --shadow-header: var(--header-shadow);
+  --shadow-card: var(--card-shadow);
+  --shadow-raised: var(--raised-shadow);
+  --shadow-control: var(--control-shadow);
+  --shadow-primary: var(--primary-shadow);
+  --shadow-recessed: var(--recessed-shadow);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);

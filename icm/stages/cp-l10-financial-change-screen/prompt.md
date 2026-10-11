@@ -1,7 +1,7 @@
 ---
 module: CP-L10
 blocks: [instruction, tagged, host_steps, final_check]
-conditional: [validator_feedback]
+conditional: [validator_feedback, validator_repair]
 ---
 
 # Prompt for CP-L10

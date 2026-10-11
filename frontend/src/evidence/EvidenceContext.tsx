@@ -20,7 +20,8 @@ import { SourceDrawer } from "./SourceDrawer";
 import { useVisibleSnapshot, type VisibleSnapshot } from "@/app/snapshot";
 import type { Citation, Passport } from "@/wire";
 import { shortDigest } from "@/ds/format";
-import type { CitationView, ReportDocument } from "@/wire/v1";
+import type { BlockedByView, CitationView, ReportDocument } from "@/wire/v1";
+import { blockedRecord } from "./Unverified";
 
 type NarrativeFigure = NonNullable<ReportDocument["body"]["narrative"][number][number]["figure"]>;
 
@@ -76,31 +77,79 @@ function figureFact(figure: NarrativeFigure): CitationView {
   return {
     document_sha256: figure.document_sha256,
     source_id: figure.source_id,
-    filename: `${figure.route_node_id} source ${shortDigest(figure.document_sha256)}`,
+    filename: `${figure.module_id} source ${shortDigest(figure.document_sha256)}`,
     page: figure.page,
     matched_text: figure.matched_text,
+    line: figure.line,
     rects: figure.rects,
     withdrawn_at: figure.withdrawn_at,
+    // A figure names the page its record's citation is on; it keeps no
+    // page the module named instead (D94).
+    cited_page: null,
+    // The record citation's own: false where no marker of the module's answer
+    // names it (D106, D107), which the drawer says.
+    linked: figure.linked,
+    marker: figure.marker,
   };
 }
 
+/** A Blocked answer's located quote as the drawer reads a citation (D106):
+    no record and no rectangle, its source and line as the server resolved
+    them. */
+function blockedFact(
+  blocked: BlockedByView,
+  quote: BlockedByView["verified"][number],
+): CitationView {
+  return {
+    document_sha256: quote.document_sha256,
+    source_id: quote.source_id,
+    filename: `${blocked.module_id} Blocked answer · source ${shortDigest(quote.document_sha256)}`,
+    page: quote.page,
+    matched_text: quote.matched_text,
+    line: quote.line,
+    rects: [],
+    withdrawn_at: quote.withdrawn_at,
+    cited_page: null,
+    linked: quote.linked,
+    marker: quote.marker,
+  };
+}
+
+/** The Blocked verdict a document carries: Analysis's, or the Run's run's. */
+function blockedOf(body: VisibleSnapshot["document"]["body"]): BlockedByView | null {
+  if ("blocked_by" in body) return body.blocked_by;
+  if ("run" in body && body.run && "blocked_by" in body.run) return body.run.blocked_by;
+  return null;
+}
+
 /** The citation a fact identity names in the visible snapshot; a saved
-    narrative's figure carries its rectangles and withdrawal as a citation does (N93). */
-function resolveFact(
+    narrative's figure carries its rectangles and withdrawal as a citation does (N93),
+    and a Blocked answer's located quote is keyed by its verdict's attempt. */
+export function resolveFact(
   snapshot: VisibleSnapshot,
   identity: FactIdentity,
 ): { fact: CitationView } | null {
   const body = snapshot.document.body;
+  const blocked = blockedOf(body);
+  if (blocked && identity.record_sha256 === blockedRecord(blocked)) {
+    const quote = blocked.verified[identity.index];
+    return quote && quote.source_id === identity.source_id && quote.page === identity.page
+      ? { fact: blockedFact(blocked, quote) }
+      : null;
+  }
   if ("narrative" in body) {
-    const figure = body.narrative
-      .flat()
-      .find(
-        ({ figure }) =>
-          figure?.record_sha256 === identity.record_sha256 &&
-          figure.citation_index === identity.index &&
-          figure.source_id === identity.source_id &&
-          figure.page === identity.page,
-      )?.figure;
+    // A narrative figure, or a saved artifact's marked citation (D107): both
+    // carry what the drawer needs, keyed by record and citation index.
+    const figure = [
+      ...body.narrative.flat().flatMap(({ figure }) => (figure ? [figure] : [])),
+      ...body.artifacts.flatMap((artifact) => artifact.figures),
+    ].find(
+      (figure) =>
+        figure.record_sha256 === identity.record_sha256 &&
+        figure.citation_index === identity.index &&
+        figure.source_id === identity.source_id &&
+        figure.page === identity.page,
+    );
     return figure ? { fact: figureFact(figure) } : null;
   }
   if (!("handoffs" in body)) return null;

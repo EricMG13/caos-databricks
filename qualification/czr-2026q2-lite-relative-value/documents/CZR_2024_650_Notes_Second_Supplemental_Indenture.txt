@@ -1,0 +1,351 @@
+Exhibit 4.17
+SECOND SUPPLEMENTAL INDENTURE
+THIS SECOND SUPPLEMENTAL INDENTURE (this “Supplemental Indenture”), dated as of August 23, 2024, among the entities listed in Schedule A hereto (each, a “New Guarantor”), CAESARS ENTERTAINMENT, INC., a Delaware corporation (the “Company”), the other Subsidiary Guarantors (as defined in the Indenture referred to herein), U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION, as trustee (in such capacity, the “Trustee”), and U.S. BANK NATIONAL ASSOCIATION, as collateral agent (in such capacity, the “Collateral Agent”).
+W I T N E S S E T H :
+WHEREAS, the Company has heretofore executed and delivered to the Trustee and the Collateral Agent an indenture, dated as of February 6, 2024, providing for the issuance of 6.500% Senior Secured Notes due 2032 (the “Notes”), initially in the aggregate principal amount of $1,500,000,000, by and among the Company, the Subsidiary Guarantors party thereto, the Trustee and the Collateral Agent, as supplemented by that certain supplemental indenture, dated as of March 1, 2024, by and among the Company, the Subsidiary Guarantors party thereto, the Trustee and the Collateral Agent (as further amended, supplemented or otherwise modified, the “Indenture”);
+WHEREAS, Section 4.11 of the Indenture provides that under certain circumstances the Company is required to cause each New Guarantor to execute and deliver to the Trustee a supplemental indenture pursuant to which each New Guarantor shall unconditionally guarantee all the Company’s Obligations under the Notes and the Indenture pursuant to a Note Guarantee on the terms and conditions set forth herein; and
+WHEREAS, pursuant to Section 9.01 of the Indenture, the Trustee, the Collateral Agent, the Company and the Subsidiary Guarantors, if any, are authorized to execute and deliver this Supplemental Indenture without the consent of the holders.
+NOW THEREFORE, in consideration of the foregoing and for other good and valuable consideration, the receipt of which is hereby acknowledged, each New Guarantor, the Company, the Subsidiary Guarantors, the Collateral Agent and the Trustee mutually covenant and agree for the equal and ratable benefit of the holders of the Notes as follows:
+1.Defined Terms.
+As used in this Supplemental Indenture, terms defined in the Indenture or in the preamble or recital hereto are used herein as therein defined, except that the term “holders” in this Supplemental Indenture shall refer to the term “holders” as defined in the Indenture and the Trustee acting on behalf of and for the benefit of such holders.
+The words “herein,” “hereof” and “hereby” and other words of similar import used in this Supplemental Indenture refer to this Supplemental Indenture as a whole and not to any particular section hereof.
+2.Agreement to Guarantee.
+Each New Guarantor hereby agrees, jointly and severally with all existing guarantors (if any), to unconditionally guarantee the Company’s Obligations under the Notes and the Indenture on the terms and subject to the conditions set forth in Article XIII of the Indenture and to be bound by all other applicable provisions of the Indenture and the Notes and to perform all of the obligations and agreements of a guarantor under the Indenture.
+From and after the date hereof, all
+references in the Indenture to the “Guarantors” and “Subsidiary Guarantors” shall include the New Guarantors.
+3.Notices.
+All notices or other communications to each New Guarantor shall be given at the following address: Caesars Entertainment, Inc., 100 West Liberty Street, 12th Floor, Reno, Nevada 89501, Facsimile: (775) 337-9218 Attn: Chief Financial Officer.
+4.Execution and Delivery.
+Each New Guarantor agrees that its Note Guarantee shall remain in full force and effect notwithstanding the absence of the endorsement of any notation of such Note Guarantee.
+5.Ratification of Indenture; Supplemental Indentures Part of Indenture.
+Except as expressly amended hereby, the Indenture is in all respects ratified and confirmed and all the terms, conditions and provisions thereof shall remain in full force and effect.
+This Supplemental Indenture shall form a part of the Indenture for all purposes, and every holder of Notes heretofore or hereafter authenticated and delivered shall be bound hereby.
+6.Governing Law.
+THIS SUPPLEMENTAL INDENTURE SHALL BE GOVERNED BY, AND CONSTRUED IN ACCORDANCE WITH, THE LAWS OF THE STATE OF NEW YORK.
+7.No Recourse Against Others.
+No director, officer, employee, manager, incorporator or holder of any Equity Interests in any New Guarantor or any direct or indirect parent corporation, as such, shall have any liability for any obligations of any New Guarantor under the Notes or the Indenture or this Supplemental Indenture or for any claim based on, in respect of, or by reason of, such obligations or their creation.
+Each holder of Notes by accepting a Note waives and releases all such liability.
+The waiver and release are part of the consideration for issuance of the Notes.
+8.Trustee Makes No Representation.
+The Trustee and the Collateral Agent make no representation as to the validity or sufficiency of this Supplemental Indenture.
+9.Counterparts.
+The parties may sign any number of copies of this Supplemental Indenture.
+Each signed copy shall be an original, but all of them together represent the same agreement.
+10.Effect of Headings.
+The Section headings herein are for convenience only and shall not affect the construction thereof.
+IN WITNESS WHEREOF, the parties hereto have caused this Supplemental Indenture to be duly executed as of the date first above written.
+CAESARS ENTERTAINMENT, INC.,
+as Company
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer, and Secretary
+[Signature Page to Second Supplemental Indenture – CEI 6.500% Senior Secured Notes due 2032]
+AMERICAN WAGERING, INC.
+AWI GAMING, INC.
+AWI MANUFACTURING, INC.
+AZTAR RIVERBOAT HOLDING COMPANY, LLC
+BLACK HAWK HOLDINGS, L.L.C.
+BRANDYWINE BOOKMAKING LLC
+BW SUB CO.
+CAESARS CONVENTION CENTER OWNER, LLC
+CAESARS DUBAI, LLC
+CAESARS GROWTH PARTNERS, LLC
+CAESARS HOLDINGS, INC.
+CAESARS HOSPITALITY, LLC
+CAESARS INTERNATIONAL HOSPITALITY, LLC
+CAESARS PARLAY HOLDING, LLC
+CCR NEWCO, LLC
+CCSC/BLACKHAWK, INC.
+CIE GROWTH, LLC
+CIRCUS AND ELDORADO JOINT VENTURE, LLC
+COMPUTERIZED BOOKMAKING SYSTEMS, INC.
+CRS ANNEX, LLC
+DIGITAL HOLDCO LLC
+EASTSIDE CONVENTION CENTER, LLC
+ELDO FIT, LLC
+ELDORADO HOLDCO LLC
+ELDORADO LIMITED LIABILITY COMPANY
+ELDORADO SHREVEPORT #1, LLC
+ELDORADO SHREVEPORT #2, LLC
+ELGIN HOLDINGS I LLC
+ELGIN HOLDINGS II LLC
+ELGIN RIVERBOAT RESORT–RIVERBOAT CASINO
+GB INVESTOR, LLC,
+as a Subsidiary Guarantor
+By: /s/ Bret Yunker
+Name: Bret Yunker
+Title: Chief Financial Officer
+[Signature Page to Second Supplemental Indenture – CEI 6.500% Senior Secured Notes due 2032]
+IC HOLDINGS COLORADO, INC.
+IOC - BLACK HAWK DISTRIBUTION COMPANY, LLC
+IOC - BOONVILLE, INC.
+IOC - LULA, INC.
+IOC BLACK HAWK COUNTY, INC.
+IOC HOLDINGS, L.L.C.
+IOC-VICKSBURG, INC.
+IOC-VICKSBURG, L.L.C.
+ISLE OF CAPRI BETTENDORF, L.C.
+ISLE OF CAPRI BLACK HAWK, L.L.C.
+ISLE OF CAPRI CASINOS LLC
+LIGHTHOUSE POINT, LLC
+MTR GAMING GROUP, INC.
+NEW JAZZ ENTERPRISES, L.L.C.
+OLD PID, INC.
+POMPANO PARK HOLDINGS, L.L.C.
+PPI DEVELOPMENT HOLDINGS LLC
+PPI DEVELOPMENT LLC
+PPI, INC.
+ROMULUS RISK AND INSURANCE COMPANY, INC.
+SCIOTO DOWNS, INC.
+ST. CHARLES GAMING COMPANY, L.L.C.
+TEI (ES), LLC
+TEI (ST. LOUIS RE), LLC
+TEI (STLH), LLC
+TROPICANA ENTERTAINMENT INC.
+TROPICANA LAUGHLIN, LLC
+TROPICANA ST. LOUIS LLC
+VEGAS DEVELOPMENT LAND OWNER LLC
+WH NV III, LLC
+WILLIAM HILL DFSB, INC.
+WILLIAM HILL NEVADA I
+WILLIAM HILL NEVADA II
+WILLIAM HILL NEW JERSEY, INC.
+WILLIAM HILL U.S. HOLDCO, INC.,
+as a Subsidiary Guarantor
+By: /s/ Bret Yunker
+Name: Bret Yunker
+Title: Chief Financial Officer
+[Signature Page to Second Supplemental Indenture – CEI 6.500% Senior Secured Notes due 2032]
+CAESARS INTERACTIVE ENTERTAINMENT NEW JERSEY, LLC
+TROPICANA ATLANTIC CITY CORP.
+BALLY’S PARK PLACE LLC
+BOARDWALK REGENCY LLC
+HARRAH’S ATLANTIC CITY OPERATING COMPANY,
+LLC
+as a Subsidiary Guarantor
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Secretary
+[Signature Page to Second Supplemental Indenture – CEI 6.500% Senior Secured Notes due 2032]
+3535 LV CORP.
+3535 LV NEWCO, LLC
+AC CONFERENCE NEWCO., LLC
+BENCO LLC
+BL DEVELOPMENT LLC
+BV MANAGER, LLC
+CAESARS GROWTH BALLY’S LV, LLC
+CAESARS GROWTH CROMWELL, LLC
+CAESARS GROWTH HARRAH’S NEW ORLEANS, LLC
+CAESARS GROWTH PH FEE, LLC
+CAESARS GROWTH PH, LLC
+CAESARS GROWTH QUAD, LLC
+CAESARS NEVADA NEWCO LLC
+CAESARS NEW JERSEY LLC
+CAESARS OCTAVIUS, LLC
+CAESARS PALACE LLC
+CAESARS PALACE REALTY LLC
+CAESARS RESORT COLLECTION, LLC
+CAESARS TREX, INC.
+CAESARS WORLD LLC
+CAESARS WORLD MARKETING LLC
+CALIFORNIA CLEARING CORPORATION
+CASINO COMPUTER PROGRAMMING, INC.
+CENTAUR ACQUISITION, LLC
+CENTAUR COLORADO, LLC
+CENTAUR HOLDINGS, LLC
+CEOC, LLC
+CHESTER DOWNS AND MARINA, LLC
+CHESTER FACILITY HOLDING COMPANY, LLC
+CORNER INVESTMENT COMPANY, LLC
+CRC FINCO, INC.
+DESERT PALACE LLC
+FLAMINGO LAS VEGAS OPERATING COMPANY, LLC
+GRAND CASINOS OF BILOXI, LLC
+GRAND CASINOS, INC.,
+as a New Guarantor
+By: /s/ Edmund L. Quatmann, Jr.__________
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+[Signature Page to Second Supplemental Indenture – CEI 6.500% Senior Secured Notes due 2032]
+HARRAH SOUTH SHORE CORPORATION
+HARRAH’S ARIZONA CORPORATION
+HARRAH’S ATLANTIC CITY PROPCO, LLC
+HARRAH’S CHESTER DOWNS INVESTMENT COMPANY, LLC
+HARRAH’S CHESTER DOWNS MANAGEMENT COMPANY, LLC
+HARRAH’S ILLINOIS LLC
+HARRAH’S INTERACTIVE INVESTMENT COMPANY
+HARRAH’S IOWA ARENA MANAGEMENT, LLC
+HARRAH’S LAS VEGAS, LLC
+HARRAH’S LAUGHLIN, LLC
+HARRAH’S MANAGEMENT COMPANY
+HARRAH’S NC CASINO COMPANY, LLC
+HARRAH’S NEBRASKA, LLC
+HARRAH’S NEW ORLEANS MANAGEMENT COMPANY LLC
+HARRAH’S NORTH KANSAS CITY LLC
+HARRAH’S OKLAHOMA, LLC
+HARRAH’S SHREVEPORT/BOSSIER CITY INVESTMENT COMPANY, LLC
+HARVEYS BR MANAGEMENT COMPANY, INC.
+HARVEYS IOWA MANAGEMENT COMPANY LLC
+HARVEYS TAHOE MANAGEMENT COMPANY LLC
+HBR REALTY COMPANY LLC
+HCAL, LLC
+HOLE IN THE WALL, LLC
+HOOSIER PARK, LLC
+HORSESHOE ENTERTAINMENT
+HORSESHOE GAMING HOLDING, LLC
+HORSESHOE GP, LLC
+HORSESHOE HAMMOND, LLC
+HP DINING & ENTERTAINMENT II, LLC
+HP DINING & ENTERTAINMENT, LLC
+HTM HOLDING LLC
+as a New Guarantor
+By: /s/ Edmund L. Quatmann, Jr.__________
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and
+Secretary
+[Signature Page to Second Supplemental Indenture – CEI 6.500% Senior Secured Notes due 2032]
+JAZZ CASINO COMPANY, L.L.C.
+JCC FULTON DEVELOPMENT, L.L.C.
+JCC HOLDING COMPANY II LLC
+LAUNDRY NEWCO, LLC
+LINQCUP, LLC
+NEW CENTAUR, LLC
+NEW GAMING CAPITAL PARTNERSHIP, A NEVADA LIMITED PARTNERSHIP
+NEW ROBINSON PROPERTY GROUP LLC
+OS HOLDCO, LLC
+PARBALL LLC
+PARBALL NEWCO, LLC
+PARIS LAS VEGAS OPERATING COMPANY, LLC
+PHW MANAGER, LLC
+PHWCUP, LLC
+PHWLV, LLC
+PIER AT CAESARS LLC
+PLAYERS HOLDING, LLC
+PLAYERS INTERNATIONAL, LLC
+RIO PROPERTIES, LLC
+ROBINSON PROPERTY GROUP LLC
+ROMAN HOLDING COMPANY OF INDIANA LLC
+SHOWBOAT ATLANTIC CITY OPERATING COMPANY, LLC
+SOUTHERN ILLINOIS RIVERBOAT/CASINO CRUISES LLC
+TUNICA ROADHOUSE LLC
+as a New Guarantor
+By:/s/ Edmund L. Quatmann, Jr._____________
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+IPB SERVICES, LLC,
+as a New Guarantor
+By: CEOC, LLC, its sole member
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Secretary
+[Signature Page to Second Supplemental Indenture – CEI 6.500% Senior Secured Notes due 2032]
+U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION,
+as Trustee
+By: /s/ Laurel Casasanta
+Name: Laurel Casasanta
+Title: Vice President
+U.S. BANK NATIONAL ASSOCIATION,
+as Collateral Agent
+By: /s/ Laurel Casasanta
+Name: Laurel Casasanta
+Title: Vice President
+[Signature Page to Second Supplemental Indenture – CEI 6.500% Senior Secured Notes due 2032]
+SCHEDULE A
+New Guarantors
+Legal Name | Jurisdiction of Organization
+3535 LV Corp. | Nevada
+3535 LV NewCo, LLC | Delaware
+AC Conference NewCo., LLC | Delaware
+Bally’s Park Place LLC | New Jersey
+Benco LLC | Nevada
+BL Development LLC | Minnesota
+Boardwalk Regency LLC | New Jersey
+BV Manager, LLC | Delaware
+Caesars Growth Bally’s LV, LLC | Delaware
+Caesars Growth Cromwell, LLC | Delaware
+Caesars Growth Harrah’s New Orleans, LLC | Delaware
+Caesars Growth PH Fee, LLC | Delaware
+Caesars Growth PH, LLC | Delaware
+Caesars Growth Quad, LLC | Delaware
+Caesars Nevada Newco LLC | Nevada
+Caesars New Jersey LLC | New Jersey
+CAESARS OCTAVIUS, LLC | Delaware
+Caesars Palace LLC | Delaware
+Caesars Palace Realty LLC | Nevada
+Caesars Resort Collection, LLC | Delaware
+CAESARS TREX, INC. | Delaware
+Caesars World LLC | Florida
+Caesars World Marketing LLC | New Jersey
+CALIFORNIA CLEARING CORPORATION | California
+Casino Computer Programming, Inc. | Indiana
+CENTAUR ACQUISITION, LLC | Indiana
+Centaur Colorado, LLC | Delaware
+Centaur Holdings, LLC | Delaware
+CEOC, LLC | Delaware
+Chester Downs and Marina, LLC | Pennsylvania
+Chester Facility Holding Company, LLC | Delaware
+Corner Investment Company, LLC | Nevada
+CRC Finco, Inc. | Delaware
+Desert Palace LLC | Nevada
+Flamingo Las Vegas Operating Company, LLC | Nevada
+Grand Casinos of Biloxi, LLC | Minnesota
+Grand Casinos, Inc. | Minnesota
+HARRAH SOUTH SHORE CORPORATION | California
+HARRAH’S ARIZONA CORPORATION | Nevada
+Harrah’s Atlantic City Operating Company, LLC | New Jersey
+Harrah’s Atlantic City Propco, LLC | Delaware
+Harrah’s Chester Downs Investment Company, LLC | Delaware
+Harrah’s Chester Downs Management Company, LLC | Nevada
+Harrah’s Illinois LLC | Nevada
+HARRAH’S INTERACTIVE INVESTMENT COMPANY | Nevada
+Harrah’s Iowa Arena Management, LLC | Delaware
+Harrah’s Las Vegas, LLC | Nevada
+Harrah’s Laughlin, LLC | Nevada
+Harrah’s Management Company | Nevada
+HARRAH’S NC Casino Company, LLC | North Carolina
+Harrah’s Nebraska, LLC | Delaware
+Harrah’s New Orleans Management Company LLC | Nevada
+Harrah’s North Kansas City LLC | Missouri
+Harrah’s Oklahoma, LLC | Delaware
+Harrah’s Shreveport/Bossier City Investment Company, LLC | Delaware
+HARVEYS BR MANAGEMENT COMPANY, INC. | Nevada
+Harveys Iowa Management Company LLC | Nevada
+Harveys Tahoe Management Company LLC | Nevada
+HBR Realty Company LLC | Nevada
+HCAL, LLC | Nevada
+Hole in the Wall, LLC | Nevada
+Hoosier Park, LLC | Indiana
+HORSESHOE ENTERTAINMENT | Louisiana
+Horseshoe Gaming Holding, LLC | Delaware
+Horseshoe GP, LLC | Nevada
+Horseshoe Hammond, LLC | Indiana
+HP DINING & ENTERTAINMENT II, LLC | Indiana
+HP Dining & Entertainment, LLC | Indiana
+HTM Holding LLC | Nevada
+IPB Services, LLC | Delaware
+Jazz Casino Company, L.L.C. | Louisiana
+JCC Fulton Development, L.L.C. | Louisiana
+JCC Holding Company II LLC | Delaware
+Laundry NewCo, LLC | Delaware
+LINQCUP, LLC | Delaware
+New Centaur, LLC | Delaware
+New Gaming Capital Partnership, a Nevada Limited Partnership | Nevada
+New Robinson Property Group LLC | Delaware
+OS Holdco, LLC | Nevada
+Parball LLC | Nevada
+A-2
+Parball NewCo, LLC | Delaware
+Paris Las Vegas Operating Company, LLC | Nevada
+PHW Manager, LLC | Nevada
+PHWCUP, LLC | Delaware
+PHWLV, LLC | Nevada
+Pier at Caesars LLC | New Jersey
+Players Holding, LLC | Nevada
+Players International, LLC | Nevada
+Rio Properties, LLC | Nevada
+Robinson Property Group LLC | Mississippi
+Roman Holding Company of Indiana LLC | Indiana
+Showboat Atlantic City Operating Company, LLC | New Jersey
+Southern Illinois Riverboat/Casino Cruises LLC | Illinois
+Tunica Roadhouse LLC | Delaware
+A-3

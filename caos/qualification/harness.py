@@ -85,6 +85,7 @@ from caos.graph.route import (
 from caos.graph.runtime import Execution, accepted_artifacts, run_route
 from caos.methodology.bundle import Bundle
 from caos.methodology.invocation import named_objects
+from caos.methodology.qualifiers import PINNED, stated_command
 from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice, worst_case
 from caos.provider import CompletionProvider
@@ -98,6 +99,7 @@ from caos.qualification.matrix import (
     assert_measurable,
     assert_unambiguous,
     build_matrix,
+    key_lines,
     qualification_set_digest,
     unlocatable_register_keys,
 )
@@ -108,7 +110,12 @@ from caos.store.budget import CEILING, validate_spend
 from caos.store.gates import execution_input
 from caos.store.outcomes import execution_reads, producer_identifier, require_idle
 from caos.store.routes import pin_route, resolved_route
-from caos.store.run_inputs import RunInput, pin_run_input, valid_subject
+from caos.store.run_inputs import (
+    RunInput,
+    pin_run_input,
+    pinned_run_command,
+    valid_subject,
+)
 from caos.store.runs import create_case, run_status, start_run
 from caos.store.source_sets import snapshot_source_set
 
@@ -277,6 +284,8 @@ def prepare(
                             else json.loads(case.research_brief)
                         ),
                         subject=case.subject,
+                        qualifiers=case_command(case),
+                        objective=case.objective,
                     ),
                     set_digest,
                     provider,
@@ -323,6 +332,7 @@ def assert_admissible(
     _consumers(qualification, routes)
     _affordable(qualification, harness, routes)
     _subjects(qualification)
+    _commands(harness.bundle, qualification, routes)
     _provider_identity(harness.completions)
     _model_identity(harness.completions)
     return routes
@@ -471,6 +481,26 @@ def _model_identity(provider: CompletionProvider) -> str:
     return model
 
 
+def case_command(case: QualificationCase) -> dict[str, dict[str, str]]:
+    """A case's qualifiers as the pin takes them: module id to name to value."""
+    stated: dict[str, dict[str, str]] = {}
+    for module_id, name, value in case.qualifiers:
+        stated.setdefault(module_id, {})[name] = value
+    return stated
+
+
+def stated_in(pin: RunInput) -> dict[str, dict[str, str]]:
+    """The values a pin's command marks `pinned` -- what its caller stated,
+    without what the host derived (D109)."""
+    text = None if pin.command is None else pin.command.text
+    stated: dict[str, dict[str, str]] = {}
+    for module_id, names in (json.loads(text) if text else {}).items():
+        for name, entry in names.items():
+            if entry["basis"] == PINNED:
+                stated.setdefault(module_id, {})[name] = entry["value"]
+    return stated
+
+
 def _eligible(
     conn: StoreConnection,
     harness: Harness,
@@ -513,6 +543,8 @@ def _eligible(
             != case.model_extension
         )
         or pin.research_json != case.research_brief
+        # D109: what the case stated, and nothing the pin did not derive.
+        or stated_in(pin) != stated_command(case_command(case), case.objective)
         # Who and when the run is about. Every other input was compared and this
         # one was not, so a real approved input pinned for another issuer and
         # another reporting period executed under this case and bound this set's
@@ -615,6 +647,25 @@ def _subjects(qualification: QualificationSet) -> None:
     for case in qualification.cases:
         if not valid_subject(case.subject):
             raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+
+
+def _commands(
+    bundle: Bundle, qualification: QualificationSet, routes: Sequence[ResolvedRoute]
+) -> None:
+    """Every case's command is one its pin would take, judged by the pin's own
+    rule against its route and subject before any write (F526): a module off
+    the route or an objective stated both ways (`RUN_QUALIFIER_INVALID`), a
+    period CP-2G's scope cannot be derived from
+    (`REPORTING_PERIOD_UNREADABLE`). Asked after `_subjects`, so every case
+    has a subject here."""
+    for case, route in zip(qualification.cases, routes, strict=True):
+        if case.subject is not None:
+            pinned_run_command(
+                bundle,
+                route,
+                stated_command(case_command(case), case.objective),
+                case.subject,
+            )
 
 
 def _perform_one(
@@ -863,8 +914,10 @@ def _answerable(bundle: Bundle, qualification: QualificationSet) -> None:
             sha256(document.data).hexdigest(): document.data
             for document in case.documents
         }
+        # A key's alternatives (D101) are held to its own line's two checks.
+        lines = [line for expect in case.expects for line in key_lines(expect)]
         if (
-            any(expect.document_sha256 not in by_digest for expect in case.expects)
+            any(document not in by_digest for document, _quote in lines)
             or (case.forecast is not None and not case.model_extension)
             # A refusal outside the methodology's own is a key about the host or
             # its infrastructure, which no run can be measured against (FP-01).
@@ -873,8 +926,7 @@ def _answerable(bundle: Bundle, qualification: QualificationSet) -> None:
                 and case.expected_refusal not in DECLARABLE_REFUSALS
             )
             or any(
-                not _locatable(by_digest[expect.document_sha256], expect.matched_text)
-                for expect in case.expects
+                not _locatable(by_digest[document], quote) for document, quote in lines
             )
         ):
             raise Refusal(RefusalCode.QUALIFICATION_KEY_UNANSWERABLE)

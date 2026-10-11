@@ -15,6 +15,7 @@ import {
 } from "./controls";
 import { NodeDetail } from "./NodeDetail";
 import { blockedByOf, blockingOf, reasonOf } from "./reason";
+import { BlockedQuotes } from "@/evidence/Unverified";
 import { RouteGraph, focusOf } from "./RouteGraph";
 import type { GateView } from "./types";
 import { SEVERITY_BADGE, SeverityMark } from "@/chrome/SeverityMark";
@@ -309,6 +310,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
                 </>
               ) : null}
             </dl>
+            {run.blocked_by ? <BlockedQuotes blocked={run.blocked_by} /> : null}
           </div>
         </section>
         <section className="pnl">

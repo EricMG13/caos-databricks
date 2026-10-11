@@ -15,7 +15,7 @@ from dataclasses import replace
 from uuid import UUID, uuid4
 
 import pytest
-from canonical_fixtures import CATALOG
+from canonical_fixtures import CATALOG, CONTRACT
 from conftest import priced, tamper
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -31,10 +31,13 @@ from caos.api.reads import analysis as analysis_read
 from caos.api.wire import CLEARS, AnalysisDocument
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.evidence.citations import ANY_RUN, EXCERPT, WHOLE_LINE, AnchoredCitation
 from caos.graph.route import RouteExtensions, resolve_route
 from caos.graph.runtime import Execution, run_route
+from caos.methodology.bundle import verified_bytes
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.methodology.runner import ModuleProvider
+from caos.methodology.tables import handoff_registers
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.gates import withdraw_source
@@ -173,14 +176,54 @@ def test_analysis_labels_source_facts_model_analysis_and_no_host_calculation(
         assert handoff.model_analysis.encode() == harness.blobs.get(artifact)
         # No LITE module's contract names a tagged table, and none is invented.
         assert (handoff.tables, handoff.tables_unavailable_reason) == ([], None)
+        # The registers are the host reader's own over the same bytes (N94).
+        located = handoff_registers(
+            CONTRACT,
+            verified_bytes(harness.bundle, handoff.module_id, "SKILL.md").decode(),
+            handoff.module_id,
+            handoff.model_analysis,
+        )
+        assert handoff.registers_unavailable_reason == located.unavailable_reason
+        assert [r.register_id for r in handoff.registers] == [
+            r.register_id for r in located.registers
+        ]
         [fact] = handoff.source_facts
         assert fact.filename == "report.txt"
         # The pinned live source the page endpoint is addressed by (4.4a).
         assert fact.source_id == harness.source_id
         assert fact.page == 1
         assert fact.matched_text == completions.quotes[0]
+        # The whole line the quote anchored in, the quote marked inside (D105).
+        assert fact.line.excerpt == completions.quotes[0]
         assert fact.withdrawn_at is None
         assert fact.rects and all(r.x1 > r.x0 for r in fact.rects)
+
+
+def test_an_excerpt_is_served_inside_the_whole_line_it_anchored_in() -> None:
+    """AI-4's guard on the wire: a source fact carries the record's whole line
+    (`line_text`) split around the excerpt, so the "not" just before it is
+    served beside it; a whole-line record is served its quote as the line,
+    and an `ANY_RUN` record its quote, not recorded as any line."""
+    source = uuid4()
+    documents: dict[str, tuple[UUID, str, object]] = {
+        "a" * 64: (source, "report.txt", None)
+    }
+    line = "We do not believe the Borrower will breach the leverage covenant."
+    excerpt = "believe the Borrower will breach the leverage covenant."
+    cited = AnchoredCitation("a" * 64, 3, excerpt, (), line_text=line)
+
+    fact = analysis_read._citation(cited, documents, EXCERPT)
+    assert (fact.line.before, fact.line.excerpt, fact.line.after) == (
+        "We do not ",
+        excerpt,
+        "",
+    )
+    assert fact.line.recorded
+    old = analysis_read._citation(replace(cited, line_text=None), documents, WHOLE_LINE)
+    assert (old.line.before, old.line.excerpt, old.line.after) == ("", excerpt, "")
+    assert old.line.recorded
+    run = analysis_read._citation(replace(cited, line_text=None), documents, ANY_RUN)
+    assert (run.line.excerpt, run.line.recorded) == (excerpt, False)
 
 
 def test_restricted_limitations_and_screening_scope_reach_the_wire(
@@ -271,7 +314,13 @@ def test_unaccepted_nodes_make_analysis_partial_with_a_note(
     assert response.status_code == 200
     document = AnalysisDocument.model_validate(response.json())
     # The budget is linear in accepted handoffs: one here.
-    assert counter.executed == analysis_read.FIXED_IO + analysis_read.PER_HANDOFF_IO
+    # The Blocked verdict's located quotes are resolved to their sources in
+    # one query more (D106).
+    assert counter.executed == (
+        analysis_read.FIXED_IO
+        + analysis_read.PER_HANDOFF_IO
+        + analysis_read.BLOCKED_QUOTES_IO
+    )
 
     assert document.status == "partial"
     assert [note.value for note in document.notes] == ["HANDOFFS_PENDING"]
@@ -313,6 +362,11 @@ def test_the_analysis_document_names_the_node_whose_verdict_ended_the_run(
     # The node it names is one of the nodes with no handoff, which is what lets
     # a reader tell the one that answered from the two that never ran.
     assert body.blocked_by.route_node_id in {p.route_node_id for p in body.pending}
+    # D106: its quotes as the host judged them, each with its line.
+    assert body.blocked_by.quotes_recorded
+    for quote in body.blocked_by.verified:
+        line = quote.line
+        assert quote.matched_text in line.before + line.excerpt + line.after
 
 
 def test_a_run_that_is_not_blocked_names_no_blocking_node(
@@ -481,9 +535,14 @@ def test_the_analysis_request_path_declares_its_store_budget(
     )
     assert longest == analysis_read.LONGEST_ROUTE_NODES
     assert analysis_read.IO_BUDGET == (
-        analysis_read.FIXED_IO + longest * per_handoff + analysis_read.MODEL_PROOFS_IO
+        analysis_read.FIXED_IO
+        + longest * per_handoff
+        + analysis_read.MODEL_PROOFS_IO
+        + analysis_read.BLOCKED_QUOTES_IO
     )
-    assert analysis_read.BLOB_BUDGET == longest * analysis_read.PER_HANDOFF_BLOBS
+    assert analysis_read.BLOB_BUDGET == (
+        longest * analysis_read.PER_HANDOFF_BLOBS + analysis_read.BLOCKED_QUOTES_BLOBS
+    )
 
 
 def _downloads(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -529,3 +588,23 @@ def test_the_analysis_route_is_read_analysis() -> None:
     ]
     assert served.path == "/api/v1/cases/{case_id}/analysis"
     assert served.endpoint is analysis_read.read_analysis
+
+
+def test_a_reanchored_citation_is_served_with_the_page_it_was_cited_on() -> None:
+    """D94: the evidence view serves the true page and rectangles, and the
+    page the module named beside them; null for a citation found where it
+    was cited."""
+    from caos.evidence.citations import AnchoredCitation, Rect
+
+    found = AnchoredCitation(
+        "a" * 64, 2, "Net leverage was 3.4x.", (Rect(2, 1, 2, 3, 4),)
+    )
+    source = uuid4()
+    documents: dict[str, tuple[UUID, str, object]] = {
+        "a" * 64: (source, "memo.pdf", None)
+    }
+    view = analysis_read._citation(found, documents, WHOLE_LINE)
+    assert (view.page, view.cited_page, view.source_id) == (2, None, source)
+    moved = analysis_read._citation(replace(found, cited_page=1), documents, WHOLE_LINE)
+    assert (moved.page, moved.cited_page) == (2, 1)
+    assert moved.rects == view.rects

@@ -190,7 +190,28 @@ async function scan(page, route, viewport) {
     // A route that names an act to arm has its confirm step opened first, so
     // the step is scanned as a reader meets it. An act that cannot be armed
     // is a scan error, never a quiet scan of the closed control.
-    const arm = new URL(route, BASE).searchParams.get("arm");
+    const params = new URL(route, BASE).searchParams;
+    // A route that names a tab to open, or a picker choice to make, has it
+    // done first (D106: the Audit tab's unverified citations, the picker's
+    // unverified option), so what a reader opens is what is scanned.
+    if (params.get("open")) {
+      await page
+        .locator(`[data-depth-tab="${params.get("open")}"]`)
+        .first()
+        .click();
+      await page
+        .locator(`[data-depth-panel="${params.get("open")}"]`)
+        .waitFor({ state: "visible", timeout: 15_000 });
+    }
+    if (params.get("pick")) {
+      const picker = page.locator("#figure-citation");
+      const value = await picker
+        .locator(`option[value*="${params.get("pick")}"]`)
+        .first()
+        .getAttribute("value");
+      await picker.selectOption(value ?? "");
+    }
+    const arm = params.get("arm");
     if (arm) {
       await page.locator(`[data-action="${arm}"][data-confirm-open]`).first().click();
       await page.locator(`[data-confirm="${arm}"]`).waitFor({ state: "visible", timeout: 15_000 });

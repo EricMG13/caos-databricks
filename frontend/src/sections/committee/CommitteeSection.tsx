@@ -5,6 +5,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
 import { NoteRows } from "@/ds/atoms";
+import { ArtifactMarkers } from "@/evidence/Markers";
 import { Narrative } from "@/evidence/Narrative";
 import type { Refusal } from "@/wire";
 import type { CommitteeDocument } from "@/wire/v1";
@@ -91,12 +92,14 @@ function Artifact({ artifact }: { artifact: CommitteeDocument["body"]["artifacts
           <NoteRows label="Limitations" values={artifact.limitation_flags} />
           <NoteRows label="Validation warnings" values={artifact.validation_warnings} />
         </dl>
-        <ArtifactTexts
-          markdown={artifact.markdown}
-          record={artifact.record}
-          label={`${artifact.route_node_id} saved artifact`}
-          section="committee"
-        />
+        <ArtifactMarkers artifact={artifact}>
+          <ArtifactTexts
+            markdown={artifact.markdown}
+            record={artifact.record}
+            label={`${artifact.route_node_id} saved artifact`}
+            section="committee"
+          />
+        </ArtifactMarkers>
       </div>
     </section>
   );

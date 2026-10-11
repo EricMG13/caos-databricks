@@ -173,7 +173,9 @@ def test_refuse_maps_each_step_to_the_callers_code_or_lets_it_through(
 ) -> None:
     """A citation moved to a page it is not on: the step's own code when the
     caller maps it to nothing (the deliverable), the caller's code otherwise
-    (the proof). No text in the chain either way."""
+    (the proof). No text in the chain either way. A stored page is checked,
+    never searched for again (D94), so the true page elsewhere rescues
+    nothing."""
     row = _row(ran, "CP-5")
     record = _decoded_record(ran.blobs.get(row.record_sha256))
     moved = replace(

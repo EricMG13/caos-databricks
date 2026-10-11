@@ -293,7 +293,12 @@ def _target(
     if endpoint == "input":
         run = _Run(conn, case_id, tmp_path, pinned=False)
         pin_route(conn, run.run_id, ROUTE)
-        return f"{runs}/{run.run_id}/input", {"subject": SUBJECT, "research": None}
+        return f"{runs}/{run.run_id}/input", {
+            "subject": SUBJECT,
+            "research": None,
+            "qualifiers": [],
+            "objective": None,
+        }
     if endpoint in ("preview", "approval"):
         run = _Run(conn, case_id, tmp_path, pinned=True)
         preview = gate_preview(conn, run.run_id, Gate.SOURCE_SET)

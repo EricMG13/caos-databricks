@@ -3,7 +3,7 @@
 # CP-0 capacity, batching and resume contract
 
 This contract is injected only into the generated Deploy V CP-0 package. It is
-binding whenever the complete triage set cannot be parsed safely within one
+binding whenever the complete source set cannot be parsed safely within one
 execution window. It changes neither CP-0's module identity nor its output
 ownership: `module_id=CP-0` remains the sole analytical handoff identity.
 For `IN_PROGRESS` and `READY_FOR_FINALIZATION` only, this narrower Deploy V
@@ -12,7 +12,8 @@ run emit canonical Markdown; final or blocked readiness remains governed below.
 
 ## Capacity preflight
 
-After inventory and frozen triage, but before extraction, record the immutable
+After inventory (each source's delivery is the host's preparation record's;
+no triage is frozen), but before extraction, record the immutable
 logical `run_id`, the SHA-256 of the ordered original-source inventory, the
 host/tool limits used for planning, the selected parse-job count and the
 estimated bytes/pages/work units. Classify the plan as `SINGLE_WINDOW`,
@@ -21,7 +22,7 @@ a labelled conservative default, but every active limit must be a positive
 integer and its source must be recorded.
 
 Page count and file size are capacity inputs, never evidence-value proxies.
-Triage remains downstream-aware: short controlling documents may outrank large
+Selection remains downstream-aware: short controlling documents may outrank large
 appendices, and unique lender presentations retain their narrative requirement.
 
 ## Deploy V runtime payload addendum
@@ -34,7 +35,7 @@ these additional required runtime fields:
 | `pipeline.execution_state` | `IN_PROGRESS`, `READY_FOR_FINALIZATION`, `FINALIZED` or `BLOCKED` |
 | `capacity_plan` | command-safe `run_id` (`[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`), frozen `source_set_sha256` and `batch_plan_sha256`, `limit_source`, recognized positive-integer limits (`max_source_bytes`, `max_batch_bytes`, `max_batch_pages`, `max_batch_sources`, `max_execution_seconds`, `max_work_units`), estimates, `capacity_outcome`, required-job count, planned-batch count and `all_required_jobs_terminal` |
 | `parse_batches[]` | contiguous `BATCH-NNN`, sequence, status, logical source IDs and non-empty auditable work boundaries |
-| `checkpoint` | matching run/source/batch-plan identities, managed `checkpoint_path`, positive sequence, state/previous hashes, exact completed batches, next batch and exact resume command |
+| `checkpoint` | matching run/source/batch-plan identities, `checkpoint_path`, positive sequence, state/previous hashes, exact completed batches, next batch and exact resume command |
 | `parse_jobs[]` extension | `batch_ids`, positive `work_unit_count`, bounded `completed_work_unit_count`; status also permits `QUEUED`/`IN_PROGRESS`, with `coverage_status=PENDING` |
 | `representation_catalog[]` extension | parse status also permits `QUEUED`/`IN_PROGRESS`; pending rows have no active or selected content |
 | `readiness_summary.finalized` | true only for `FINALIZED` or `BLOCKED` |
@@ -56,19 +57,19 @@ Parse jobs and execution batches use `QUEUED`, `IN_PROGRESS`, `COMPLETE`,
 Pending work has no active content representation and supplies no readiness
 content. A required parse never silently falls back to the original.
 
-Execution batches are not evidence ZIP batches. Evidence ZIPs remain final,
-reconciled supporting packages and keep one source's complete output set
-together; do not emit them while the logical run is in progress.
+Execution batches are not evidence packages, and CP-0 writes none: the host's
+preparation record stands for them (P8 is retired).
 
 ## Checkpoint and resume
 
-After every execution batch, atomically persist a checkpoint in the managed run
-workspace. It records `run_id`, source-set SHA-256, monotonic checkpoint sequence,
-state SHA-256, previous-checkpoint SHA-256, completed batch IDs, next batch ID and
-the exact resume command. Reject a resume if the run ID, source-set hash,
-checkpoint chain, original hashes or batch plan differs from the frozen values.
-The resume command must match the grammar below in full—with no suffix—and its
-absolute checkpoint path must resolve inside the managed run workspace.
+After every execution batch, record a checkpoint. It records `run_id`,
+source-set SHA-256, monotonic checkpoint sequence, state SHA-256,
+previous-checkpoint SHA-256, completed batch IDs, next batch ID and the exact
+resume command. Reject a resume if the run ID, source-set hash, checkpoint chain
+or batch plan differs from the frozen values. CP-0 keeps no workspace and
+re-checks no original hash: the host's preparation record pins the originals and
+their SHA-256 (P2 is retired). The resume command must match the grammar below
+in full—with no suffix.
 
 For pending parse work, the exact command starts:
 

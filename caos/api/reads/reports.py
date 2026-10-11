@@ -31,13 +31,20 @@ from caos.api.deps import (
     readable,
     revision_query,
 )
-from caos.api.wire import REVISIONS_MAX, CommitteeDocument, ReportDocument
+from caos.api.wire import (
+    REVISIONS_MAX,
+    CommitteeDocument,
+    LineView,
+    ReportDocument,
+    bounded,
+)
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import Revision, canonical_payload, payload_bytes
 from caos.deliverable.filing import revision_signatures
 from caos.deliverable.receipts import read_filed_receipt
 from caos.deliverable.revisions import prove_revision, read_revision, renderable
+from caos.evidence.citations import ANY_RUN
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -512,9 +519,29 @@ def _body(conn: Store, payload: dict[str, Any], digest: str | None) -> dict[str,
             "validation_warnings",
         ):
             artifacts[-1][key] = projections[key]
-    narrative = _narrative_view(
-        conn, UUID(payload["run_id"]), payload["narrative"], digests, records
+    # One lookup for every document a chip may open: a narrative figure's,
+    # and each marked record citation's (D107).
+    sources = cited_source_ids(
+        conn,
+        UUID(payload["run_id"]),
+        [
+            *(
+                span["figure"]["document_sha256"]
+                for paragraph in payload["narrative"]
+                for span in paragraph
+                if span.get("figure")
+            ),
+            *(
+                citation["document_sha256"]
+                for record in records.values()
+                for citation in record["citations"]
+                if citation.get("marker") is not None
+            ),
+        ],
     )
+    for artifact in artifacts:
+        artifact.update(_marked(artifact["route_node_id"], digests, records, sources))
+    narrative = _narrative_view(payload["narrative"], digests, records, sources)
     return dict(
         case_id=payload["case_id"],
         displayed_run_id=payload["run_id"],
@@ -526,12 +553,55 @@ def _body(conn: Store, payload: dict[str, Any], digest: str | None) -> dict[str,
     )
 
 
+def _marked(
+    node: str,
+    digests: dict[str, str],
+    records: dict[str, dict[str, Any]],
+    sources: dict[str, tuple[UUID, datetime | None]],
+) -> dict[str, list[dict[str, Any] | None]]:
+    """What a saved artifact's markers name (D107): each record citation with
+    a marker as a narrative figure carries it, so its chip opens the source
+    drawer, and each unverified one, whose chip opens nothing. A record
+    accepted before markers holds none, so its body's brackets stay text."""
+    record = records[node]
+    return {
+        "figures": [
+            _figure(
+                {
+                    "route_node_id": node,
+                    "citation_index": index,
+                    **{k: citation[k] for k in ("document_sha256", "page")},
+                    "matched_text": citation["matched_text"],
+                },
+                digests,
+                records,
+                sources,
+            )
+            for index, citation in enumerate(record["citations"])
+            if citation.get("marker") is not None
+        ],
+        "unverified": [
+            _unverified(
+                {
+                    "route_node_id": node,
+                    "unverified_index": index,
+                    **{k: entry[k] for k in ("source_id", "page", "code")},
+                    "matched_text": entry["matched_text"],
+                },
+                digests,
+                records,
+            )
+            for index, entry in enumerate(record.get("unverified", []))
+            if entry.get("marker") is not None
+        ],
+    }
+
+
 def _narrative_view(
-    conn: Store,
-    run_id: UUID,
     narrative: list[list[dict[str, Any]]],
     digests: dict[str, str],
     records: dict[str, dict[str, Any]],
+    sources: dict[str, tuple[UUID, datetime | None]],
 ) -> list[list[dict[str, Any]]]:
     """Each paragraph's spans, a bracketed figure filled out with the record
     digest its own node already carries (`digests`, from this same payload's
@@ -541,23 +611,40 @@ def _narrative_view(
     a `CitationView` carries them, the citation's rectangles from its record
     and its source's live withdrawal (N93). A hidden-text mark is the page's
     to show: the drawer reads it with the page's lines (F315)."""
-    documents = {
-        span["figure"]["document_sha256"]
-        for paragraph in narrative
-        for span in paragraph
-        if span.get("figure")
-    }
-    sources = cited_source_ids(conn, run_id, documents)
     return [
         [
             dict(
                 text=span.get("text"),
                 figure=_figure(span.get("figure"), digests, records, sources),
+                unverified=_unverified(span.get("unverified"), digests, records),
             )
             for span in paragraph
         ]
         for paragraph in narrative
     ]
+
+
+def _unverified(
+    figure: dict[str, Any] | None,
+    digests: dict[str, str],
+    records: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    """An unverified figure (D106): the model's locator, quote and code as the
+    record holds them, with the record digest its node already carries and
+    the entry's `linked` (written only when false). A quote past the wire's
+    bound is served cut, saying so (`bounded`)."""
+    if figure is None:
+        return None
+    node = figure["route_node_id"]
+    entry = records[node]["unverified"][figure["unverified_index"]]
+    return {
+        **figure,
+        "matched_text": bounded(figure["matched_text"]),
+        "module_id": records[node]["projections"]["module_id"],
+        "record_sha256": digests[node],
+        "linked": entry.get("linked", True),
+        "marker": entry.get("marker"),
+    }
 
 
 def _figure(
@@ -573,8 +660,18 @@ def _figure(
     source_id, withdrawn_at = sources[figure["document_sha256"]]
     return {
         **figure,
+        "matched_text": bounded(figure["matched_text"]),
+        "module_id": records[node]["projections"]["module_id"],
         "record_sha256": digests[node],
         "source_id": source_id,
+        "linked": citation.get("linked", True),
+        "marker": citation.get("marker"),
+        # The line the figure's quote is an excerpt of (D105), from the record.
+        "line": LineView.of(
+            citation.get("line_text"),
+            figure["matched_text"],
+            records[node].get("citation_rule", ANY_RUN),
+        ).model_dump(),
         "rects": [
             {key: box[key] for key in ("x0", "y0", "x1", "y1")}
             for box in citation["bboxes"]

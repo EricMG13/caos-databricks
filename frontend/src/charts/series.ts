@@ -1,7 +1,7 @@
 // What every series chart shares: the colour a series wears, how a mark is
 // named, and the table twin. One copy, so a bar and a line name a value the
 // same way.
-import { formatDecimal, readDatum } from "./decimal";
+import { formatDecimal, readDatum, type ReadValue } from "./decimal";
 import type {
   ChartColor,
   ChartSelection,
@@ -38,6 +38,21 @@ export const ORIGIN_WORD: Record<Origin, string> = {
 export function valueText(value: Decimal, unit: string | undefined, signed = false): string {
   const text = formatDecimal(value, signed);
   return unit ? `${text} ${unit}` : text;
+}
+
+/** "3.25 x", or "n/a (NOT_DISCLOSED)": a value read for a mark's name. */
+export function said(read: ReadValue, unit: string | undefined): string {
+  return read.value === null ? `n/a (${read.reason})` : valueText(read.value, unit);
+}
+
+/** A table cell of a row of values: empty where the row does not declare
+    the value, the value as served with its origin where it differs from its
+    row's, or "n/a" and why. */
+export function cellOf(read: ReadValue | undefined, origin: Origin): string {
+  if (read === undefined) return "";
+  if (read.value === null) return `n/a: ${read.reason}`;
+  const own = read.origin && read.origin !== origin ? ` (${ORIGIN_WORD[read.origin]})` : "";
+  return `${formatDecimal(read.value)}${own}`;
 }
 
 /** One (series, category) pair, read for drawing. */
@@ -83,13 +98,29 @@ export function cellSelection(cell: Cell): ChartSelection {
   };
 }
 
+/** How a count's mark is named: its unit for a value of exactly 1
+    ("issue"), and what it is in place of its origin ("a count of the
+    model's rows"). */
+export interface Counted {
+  unitOne?: string;
+  computed?: string;
+}
+
 /** "Revenue, Q2 2026: 3,412.0 USD m (model-authored)", or
     "Revenue, Q3 2026: n/a (ZERO_OR_NEGATIVE_DENOMINATOR)". `extra` follows
     the value: a share of a stack. */
-export function cellName(cell: Cell, unit: string | undefined, extra = "", signed = false): string {
+export function cellName(
+  cell: Cell,
+  unit: string | undefined,
+  extra = "",
+  signed = false,
+  counted: Counted = {},
+): string {
   const head = `${cell.series.label}, ${cell.category}`;
   if (cell.value === null) return `${head}: n/a (${cell.reason})`;
-  return `${head}: ${valueText(cell.value, unit, signed)}${extra} (${ORIGIN_WORD[cell.origin]})`;
+  const per = cell.value === "1" && counted.unitOne ? counted.unitOne : unit;
+  const what = counted.computed ?? ORIGIN_WORD[cell.origin];
+  return `${head}: ${valueText(cell.value, per, signed)}${extra} (${what})`;
 }
 
 /** A table cell: the value as the mark prints it, its origin said where it
@@ -101,7 +132,8 @@ export function cellText(cell: Cell, extra = "", signed = false): string {
 }
 
 /** The table twin of a series chart: a row per category, a column per series
-    headed by its label, unit and origin. `text` prints one cell. */
+    headed by its label, unit and origin, or by what it is where this host
+    computed it (`computed`, as its marks are named). `text` prints one cell. */
 export function seriesTable(
   categoryLabel: string,
   categories: readonly string[],
@@ -109,10 +141,13 @@ export function seriesTable(
   cells: readonly Cell[],
   unit: string | undefined,
   text: (cell: Cell) => string = (cell) => cellText(cell),
+  computed?: string,
 ): TableTwin {
   const head = [
     categoryLabel,
-    ...series.map((one) => `${one.label}${unit ? `, ${unit}` : ""} (${ORIGIN_WORD[one.origin]})`),
+    ...series.map(
+      (one) => `${one.label}${unit ? `, ${unit}` : ""} (${computed ?? ORIGIN_WORD[one.origin]})`,
+    ),
   ];
   const rows = categories.map((category, index) => ({
     key: `${index}`,

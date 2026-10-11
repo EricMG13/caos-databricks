@@ -5,3 +5,19 @@ qualification/*/documents/* -text whitespace=-trailing-space
 # rewrote all 249 line endings while changing six rows (`fa6bbfe`) made the
 # diff unreadable and the commit message untrue; this pins the bytes instead.
 docs/feature-status.csv -text whitespace=cr-at-eol
+
+# Byte-verified where they are used (invariant 4; icm/HOST_INTEGRITY_v1.json):
+# a checkout that converts line endings -- Git for Windows does by default --
+# must still hold these bytes, or the worker refuses to start (D79). The
+# goldens and fixtures are digest-compared against the legacy host the same way.
+vendor/deploy-v/** -text
+icm/** -text
+tests/parity/golden/** -text
+tests/fixtures/** -text
+
+# Code whose own bytes are pinned: `scripts/cash_flow.py` in HOST_INTEGRITY is
+# this file (caos/methodology/host.py), and the renderer and verifier are
+# hashed against `RENDERER_SHA256` and the archived copy (D79).
+caos/calculators/cash_flow.py -text
+caos/deliverable/render.py -text
+caos/deliverable/verify_package.py -text

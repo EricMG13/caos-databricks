@@ -25,7 +25,12 @@ sys.dont_write_bytecode = True
 from validate_handoff import validate_text as validate_common_handoff
 
 TABLE_MARKER = re.compile(r"^\s*<!--\s*table-id:\s*([a-z0-9_.-]+)\s*-->\s*$")
-SEPARATOR_CELL = re.compile(r"^:?-{3,}:?$")
+# One or more hyphens, optionally colon-aligned, as `cp_tables` reads it (fork r6).
+SEPARATOR_CELL = re.compile(r"^:?-+:?$")
+# A heading (### to ######) between a marker and its table, as `cp_tables` crosses it (fork r6):
+# never one naming a register ID, which `cp_tables.REGISTER_ID_RE` reads.
+MARKER_HEADING = re.compile(r"^\s*#{3,6}(?:\s.*)?$")
+REGISTER_ID = re.compile(r"\b([PT][0-9][A-Za-z0-9.]*|TL[0-9]+\.[0-9]+)\b")
 
 CP1_TABLES = {
     "cp1.model_period_register",
@@ -205,6 +210,9 @@ METRIC_IDS = {
     "pretax_income",
     "income_tax_expense",
     "effective_tax_rate",
+    "operating_lease_cost",
+    "lease_payments_in_financing",
+    "interest_paid_in_financing",
 }
 
 FLOW_ACCOUNT_METRICS = {
@@ -285,7 +293,11 @@ SENIORITY_STATUSES = SENIOR_DEBT_CLASSES | frozenset(
     {"SENIOR_SUBORDINATED", "SUBORDINATED", "JUNIOR", "NOT_STATED"}
 )
 PERIOD_ID = re.compile(r"^[A-Z0-9_-]+$")
-NULL_TEXT = {"", "null", "n/a", "not available", "not calculable", "-"}
+# The canon renders an absent value `—` (CANON_SHARED.md); CP-1 is told to write
+# `null` in its tagged tables, but a stray em or en dash is the same null and
+# must not void the table (deployment fork r7, D95).
+NULL_TEXT = {"", "null", "n/a", "not available", "not calculable", "-", "\u2014", "\u2013"}
+DASHES = frozenset({"-", "\u2014", "\u2013"})
 REQUIRED_CP1B_VALIDATION_METRICS = {
     "revenue",
     "ebitda",
@@ -326,25 +338,64 @@ def _split_row(line: str) -> list[str]:
     return [cell.strip() for cell in text.strip("|").split("|")]
 
 
+def _row_values(line: str, width: int) -> list[str]:
+    """A body row split at every `|`, or, only when that gives a width other
+    than the header's, at each `|` not escaped as `\\|` (fork r6, as
+    `cp_tables` reads it). A row read before is read the same."""
+    values = _split_row(line)
+    text = line.strip()
+    if len(values) == width or text.startswith("||") or text.endswith("||"):
+        return values
+    text = text.removeprefix("|")
+    if text.endswith("|") and not text.endswith("\\|"):
+        text = text[:-1]
+    escaped = [cell.strip().replace("\\|", "|") for cell in re.split(r"(?<!\\)\|", text)]
+    return escaped if len(escaped) == width else values
+
+
 def _normalise_header(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
 
 def parse_stable_tables(markdown: str) -> dict[str, TableRows]:
-    """Parse only Markdown tables immediately following stable table markers."""
+    """Parse only Markdown tables immediately following stable table markers.
+
+    Only blank lines may sit between a marker and its table, and heading
+    lines (### to ######) where `cp_tables` crosses them (fork r6): a heading
+    naming no register, after a marker with a heading between it and the
+    table above, or whose table above was bound by a marker that could
+    itself have crossed. Anything else is a ContractError.
+    """
     lines = markdown.splitlines()
     tables: dict[str, TableRows] = {}
+    # The last table above: None (none yet), "untagged", "clean" (bound by a
+    # marker that could have crossed) or "suspect"; and whether a heading has
+    # come since it.
+    last_table: str | None = None
+    heading_since = False
     index = 0
     while index < len(lines):
         marker = TABLE_MARKER.match(lines[index])
         if not marker:
+            text = lines[index].strip()
+            if text.startswith("|") and text.count("|") >= 2:
+                last_table, heading_since = "untagged", False
+            heading_since = heading_since or text.startswith("#")
             index += 1
             continue
         table_id = marker.group(1)
         if table_id in tables:
             raise ContractError(f"duplicate table-id marker: {table_id}")
+        may_cross = heading_since or last_table in (None, "clean")
         index += 1
-        while index < len(lines) and not lines[index].strip():
+        while index < len(lines) and (
+            not lines[index].strip()
+            or (
+                may_cross
+                and MARKER_HEADING.match(lines[index])
+                and not REGISTER_ID.search(lines[index])
+            )
+        ):
             index += 1
         if index + 1 >= len(lines):
             raise ContractError(f"{table_id}: missing Markdown table")
@@ -359,7 +410,7 @@ def parse_stable_tables(markdown: str) -> dict[str, TableRows]:
         index += 2
         rows = TableRows(headers)
         while index < len(lines) and lines[index].lstrip().startswith("|"):
-            values = _split_row(lines[index])
+            values = _row_values(lines[index], len(headers))
             if len(values) != len(headers):
                 raise ContractError(
                     f"{table_id}: row has {len(values)} cells; expected {len(headers)}"
@@ -367,6 +418,7 @@ def parse_stable_tables(markdown: str) -> dict[str, TableRows]:
             rows.append(dict(zip(headers, values, strict=True)))
             index += 1
         tables[table_id] = rows
+        last_table, heading_since = ("clean" if may_cross else "suspect"), False
     return tables
 
 
@@ -382,7 +434,7 @@ def _number(value: str, *, field: str, errors: list[str]) -> float | None:
     an underflow to 0.0 (deployment fork r3).
     """
     text = value.strip()
-    if text.lower() in {"", "null", "n/a", "not available", "not calculable", "-"}:
+    if text.lower() in NULL_TEXT:
         return None
     negative = text.startswith("(") and text.endswith(")")
     cleaned = text.strip("()").replace(",", "").replace("$", "")
@@ -406,7 +458,7 @@ def _number(value: str, *, field: str, errors: list[str]) -> float | None:
 
 
 def _list(value: str) -> list[str]:
-    if value.strip().lower() in {"", "null", "-", "[]"}:
+    if value.strip().lower() in {"", "null", "[]"} | DASHES:
         return []
     return [part.strip() for part in re.split(r"[;,]", value) if part.strip()]
 
@@ -693,7 +745,7 @@ def validate_cp_model_inputs(cp1_markdown: str, cp1b_markdown: str) -> Validatio
         fiscal_quarter = row.get("fiscal_quarter", "").strip().lower()
         if period_type == "QUARTER" and fiscal_quarter not in {"1", "2", "3", "4"}:
             errors.append(f"{period_id}: QUARTER requires fiscal_quarter 1-4")
-        if period_type != "QUARTER" and fiscal_quarter not in {"", "null", "-", "n/a"}:
+        if period_type != "QUARTER" and fiscal_quarter not in {"", "null", "n/a"} | DASHES:
             errors.append(f"{period_id}: {period_type} must not set fiscal_quarter")
         if row.get("audit_status") not in AUDIT_STATUSES:
             errors.append(f"{period_id}: invalid audit_status")

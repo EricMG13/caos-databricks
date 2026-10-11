@@ -23,6 +23,7 @@ from canonical_fixtures import (
     fields_from_prompt,
     skill,
     wire,
+    with_markers,
 )
 from canonical_route_fixtures import PACK as BASE_PACK
 from canonical_route_fixtures import QUOTES as BASE_QUOTES
@@ -556,6 +557,7 @@ class LiquidityCompletions:
                 readiness=self.readiness,
             ),
         )
+        markdown = with_markers(markdown, 1)
         self.answers.append(markdown)
         return Completion(
             wire(

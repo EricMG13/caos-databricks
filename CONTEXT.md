@@ -9,20 +9,24 @@ introduces a synonym for a term below.
 | Term | Means | Not |
 |---|---|---|
 | **case** | one issuer engagement, the unit of membership and audit | deal, project, file |
+| **issuer** | the borrower a case analyses, named by the `issuer_id` on a run's subject; one issuer has many cases, and the Book shows one row per issuer | company, obligor |
 | **source** | one user-provided document admitted into a case | file, upload, attachment |
 | **source set** | an immutable, versioned set of sources a run is pinned to | corpus, pack |
 | **block** | the unit `read_evidence` returns from a source | chunk, fragment, passage |
 | **citation** | `{document_sha256, page, bboxes, matched_text}` | reference, footnote |
 | **module** | one CP-* unit of methodology, one node in a route | agent, step, task |
 | **route** | the resolved, pinned node set and typed edges for a run | graph, pipeline, workflow |
+| **readiness check** | a run of CP-0 alone that rates every advertised module against a case's current source set, so an analyst sees which routes can run before choosing one | preflight, dry run |
 | **frontier** | the nodes currently RUNNABLE or RESTRICTED | queue, ready set |
 | **artifact** | one module's accepted, content-addressed output | result, response |
 | **snapshot** | the accepted artifact set that a case's conclusion rests on | version, state |
 | **build** | one release of the methodology bundle, named by its manifest's `build_id`; a run is pinned to one | version |
+| **rate deck** | the desk's dated, immutable statement of reference rates (SOFR, Term SOFR, EURIBOR, SONIA) per fiscal year for the Base and Downside cases; a run is pinned to one | rate sheet |
 | **revision** | an immutable analyst edit on the deliverable | draft, version |
 | **deliverable** | the document the host renders from a frozen snapshot | report, output, export |
 | **opinion** | the analyst's signature on an exact revision | approval, sign-off of the deliverable |
 | **filing** | the independent approval that makes a deliverable final | publication, release |
+| **book entry** | a completed run a case writer added to the Book: the desk-wide record of its subject and metrics; an issuer's newest entry is its Book row | listing |
 | **qualification set** | the immutable cases and answer keys one verdict is measured against | benchmark, golden set |
 | **tagged table** | a handoff's `<!-- table-id: x.y -->` pipe table: the machine interface the bundle's `cp_tables` reads, served on the Analysis read as `TableView` (D32) | — |
 

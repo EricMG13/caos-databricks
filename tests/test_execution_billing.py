@@ -5,6 +5,8 @@ On the canonical LITE route through the canonical executor (slice f-1a)."""
 from __future__ import annotations
 
 import hashlib
+import io
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from decimal import Decimal
@@ -35,7 +37,7 @@ from caos.methodology.runner import ModuleProvider
 from caos.provider import Completion
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, connect
-from caos.store.outcomes import CallOutcome, record_outcome
+from caos.store.outcomes import DROP_REATTEMPTS, CallOutcome, record_outcome
 
 __all__ = ["provider", "ready", "route"]
 
@@ -66,8 +68,8 @@ def _bills(
     status: str = "RUNNING",
 ) -> list[UUID]:
     """`calls` billed attempts, oldest first, each exactly `charge` against its
-    own reservation, and nothing accepted. More than one is a node's one second
-    attempt (D30) after a `HANDOFF_MALFORMED` refusal."""
+    own reservation, and nothing accepted. More than one is a node's guided
+    retries (D30, D82) after a refusal the checks can explain."""
     with connect(dsn) as observer:
         rows = observer.execute(
             "SELECT o.attempt_id,o.run_id,l.amount,r.amount FROM call_outcomes o"
@@ -144,14 +146,67 @@ def test_native_refusal_records_only_independently_known_money(
         _invoke(provider, uuid4(), "runtime", provider.route.nodes[0])
     assert "private" not in str(caught.value) + repr(caught.value)
     assert caught.value.__cause__ is None
-    # D30, N52: a refusal the checks can explain earns its node one second attempt.
-    calls = 2 if code in canonical.SECOND_ATTEMPT_CODES else 1
+    # D30, N52, D82: a refusal the checks can explain earns its node guided
+    # retries, each refused the same way here.
+    calls = (
+        1 + canonical.GUIDED_RETRIES if code in canonical.SECOND_ATTEMPT_CODES else 1
+    )
+    # D110: a drop the provider declared by its status earns one re-attempt.
+    if isinstance(response, StatusError) and code == "PROVIDER_UNAVAILABLE":
+        calls = 1 + DROP_REATTEMPTS
     assert chat.calls == calls
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     _bills(_url_for(provider.conn.info.dbname), provider.run_id, charge, calls)
 
 
-@pytest.mark.parametrize("failure", ["envelope", "readiness", "citation", "blob"])
+class _UnreadableBody(Exception):
+    """A provider error whose `body` cannot be read without raising."""
+
+    @property
+    def body(self) -> object:
+        raise RuntimeError("private")
+
+
+class _UnwritableStderr(io.StringIO):
+    """A stderr whose reader is gone."""
+
+    def write(self, text: str) -> int:
+        raise BrokenPipeError(32, "private")
+
+
+@pytest.mark.parametrize(
+    ("failure", "unwritable"),
+    [
+        pytest.param(ValueError("private"), True, id="stderr-cannot-be-written"),
+        pytest.param(_UnreadableBody("private"), False, id="a-body-that-raises"),
+        pytest.param(ValueError({"code": 10**5000}), False, id="a-code-str-refuses"),
+    ],
+)
+def test_a_failing_diagnostic_never_changes_the_recorded_outcome(
+    provider: ModuleProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    unwritable: bool,
+) -> None:
+    """F513's stderr line is a fail-open: whatever its facts or its write
+    raise, the call is refused PROVIDER_UNAVAILABLE and its outcome recorded
+    exactly as before the line existed (ST-8), never an untyped raise ahead
+    of the bill."""
+    chat = ScriptedChat(answer=failure)
+    provider = replace(
+        provider, completions=fake_completions(chat, model=MODEL, price=AT_ESTIMATE)
+    )
+    if unwritable:
+        monkeypatch.setattr(sys, "stderr", _UnwritableStderr())
+    with pytest.raises(Refusal, match=r"^PROVIDER_UNAVAILABLE$"):
+        _invoke(provider, uuid4(), "runtime", provider.route.nodes[0])
+    monkeypatch.undo()
+    assert chat.calls == 1
+    _bills(_url_for(provider.conn.info.dbname), provider.run_id, None, 1)
+
+
+# D106: a citation fault is no analysis failure any more, so "citation" left.
+@pytest.mark.parametrize("failure", ["envelope", "readiness", "blob"])
 def test_analysis_failure_preserves_bill_and_exact_replay(
     provider: ModuleProvider,
     monkeypatch: pytest.MonkeyPatch,
@@ -163,8 +218,6 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
         completions.content = "private"
     elif failure == "readiness":
         completions.readiness = {"CP-5": "NOT-A-STATUS"}
-    elif failure == "citation":
-        completions.source_id = uuid4()
 
     def broken_blob(self: BlobStore, data: bytes) -> str:
         raise OSError("synthetic")
@@ -174,7 +227,6 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
     codes = {
         "envelope": "HANDOFF_MALFORMED",
         "readiness": "HANDOFF_INCOMPLETE",
-        "citation": "CITATION_NOT_DELIVERED",
         # The response body could not be stored as the call's diagnostic.
         "blob": "STORE_UNAVAILABLE",
     }
@@ -183,9 +235,10 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
     assert str(caught.value) == codes[failure]
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     dsn = _url_for(provider.conn.info.dbname)
-    # D30, N52: a refusal the checks can explain earns one second attempt,
-    # refused the same way.
-    calls = 2 if codes[failure] in canonical.SECOND_ATTEMPT_CODES else 1
+    # D30, N52, D82: a refusal the checks can explain earns guided retries,
+    # each refused the same way.
+    explained = codes[failure] in canonical.SECOND_ATTEMPT_CODES
+    calls = 1 + canonical.GUIDED_RETRIES if explained else 1
     attempts = _bills(dsn, provider.run_id, REPORTED, calls)
     attempt = attempts[-1]
     assert len(completions.bodies) == calls
@@ -242,8 +295,10 @@ def test_a_blob_write_failing_after_analysis_keeps_the_bill_and_accepts_nothing(
     [
         ("sql", False, "STORE_UNAVAILABLE"),
         ("sql", True, "STORE_UNAVAILABLE"),
-        ("refusal", False, "CITATION_NOT_DELIVERED"),
-        ("refusal", True, "CITATION_NOT_DELIVERED"),
+        # Evidence that will not read, not a citation fault, which since
+        # D106 leaves a citation unverified rather than refusing.
+        ("refusal", False, "EVIDENCE_NOT_AVAILABLE"),
+        ("refusal", True, "EVIDENCE_NOT_AVAILABLE"),
         ("success", True, "STORE_UNAVAILABLE"),
     ],
 )
@@ -275,7 +330,7 @@ def test_postbilling_citation_cleanup_preserves_money_and_original_refusal(
         if failure == "sql":
             conn.execute("SELECT missing_private_column")
         elif failure == "refusal":
-            raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
+            raise Refusal(RefusalCode.EVIDENCE_NOT_AVAILABLE)
         return anchored
 
     monkeypatch.setattr(canonical, "verify_citations", fault)
@@ -287,8 +342,8 @@ def test_postbilling_citation_cleanup_preserves_money_and_original_refusal(
         or provider.conn.info.transaction_status is TransactionStatus.IDLE
     )
     assert isinstance(provider.completions, _Completions)
-    # N52: anchoring's refusal earns one second attempt when the store is sound.
-    calls = 2 if failure == "refusal" and not broken_cleanup else 1
+    # No refusal here earns a guided retry (D106 took anchoring's out).
+    calls = 1
     assert len(provider.completions.prompts) == calls
     monkeypatch.undo()
     _bills(dsn, provider.run_id, REPORTED, calls)

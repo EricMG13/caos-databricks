@@ -209,7 +209,10 @@ def _approved_run(analyst: Surface, approver: Surface, case: str) -> tuple[str, 
     assert run.status == 201, run.body
     run_id = str(run.body["run_id"])
     base = f"/api/v1/cases/{case}/runs/{run_id}"
-    pinned = analyst.post(f"{base}/input", {"subject": SUBJECT, "research": None})
+    pinned = analyst.post(
+        f"{base}/input",
+        {"subject": SUBJECT, "research": None, "qualifiers": [], "objective": None},
+    )
     assert pinned.status in (200, 201), pinned.body
     for gate in GATES:
         preview = approver.get(f"{base}/gates/{gate}/preview")

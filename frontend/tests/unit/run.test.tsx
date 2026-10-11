@@ -601,6 +601,8 @@ describe("Run", () => {
       expect(JSON.parse((init as RequestInit).body as string)).toEqual({
         subject: run.subject,
         research: null,
+        qualifiers: [],
+        objective: null,
       });
       expect(
         UUID.test(
@@ -1707,6 +1709,10 @@ describe("Run", () => {
             route_node_id: "rn-cp-6",
             module_id: "CP-6",
             attempt_id: attempt.attempt_id,
+            quotes_recorded: false,
+            quotes_refusal: null,
+            verified: [],
+            unverified: [],
           },
         },
       },

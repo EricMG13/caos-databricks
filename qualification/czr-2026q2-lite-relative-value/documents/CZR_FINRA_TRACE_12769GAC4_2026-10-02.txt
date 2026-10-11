@@ -1,0 +1,33 @@
+FINRA Fixed Income Security Lookup — governed observation
+
+Observed at: 2026-10-02T09:31:13Z
+Source: https://www.finra.org/finra-data/fixed-income/bond?symbol=ERI5740550&bondType=CORP
+Publisher: Financial Industry Regulatory Authority (FINRA)
+Access: public web page, reached through FINRA's Corporate and Agency Bonds search, subject to the Fixed Income Data User Agreement
+
+Issuer: CAESARS ENTMT INC NEW
+TRACE symbol: ERI5740550
+CUSIP: 12769GAC4
+Bond type: CORP
+Offering status shown by FINRA: transactions effected pursuant to SEC Rule 144A
+Coupon rate: 6.5000000000000000000%
+Maturity date: 2/15/2032
+Callable: Y
+Next call date: 2/15/2027
+
+Last trade price: $93.28
+Last trade yield: 8.063520%
+Last trade date: 10/1/2026
+
+Moody's rating shown: B1
+Moody's last-rated date shown: 2026-09-28
+Standard & Poor's rating shown: BB-
+Standard & Poor's last-rated date shown: 2024-02-02
+Industry group shown: OTHF
+
+Observation limits
+
+- FINRA labels the price and yield as the last trade, not bid, mid, ask, or an evaluated price.
+- The page displayed a price/yield chart, but this extract does not transcribe chart points.
+- No spread, benchmark curve, seniority, dealer quote, trade size, or intraday timestamp was displayed in the observed summary.
+- This record reports only page content visible at the observation time; it does not infer missing market fields.

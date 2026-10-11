@@ -10,14 +10,14 @@ Bundle folder `vendor/deploy-v/skills/cp-3d-market-implied-risk/`, read through 
 |---|---|---|---|
 | bundle | vendor/deploy-v/skills/cp-3d-market-implied-risk/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-3d-market-implied-risk/references/CP-3D_MarketImpliedRisk.schema.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-3d-market-implied-risk/references/CP-3D__MarketImpliedRiskMap__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-3d-market-implied-risk/references/REF_CP-3D_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |
 | prompt | icm/shared/prompt/tagged.md | whole | prompt block |
 | prompt | icm/shared/prompt/host_steps.md | whole | prompt block |
 | prompt | icm/shared/prompt/final_check.md | whole | prompt block |
-| prompt | icm/shared/prompt/validator_feedback.md | whole | prompt block, on a node's one second attempt after a refused answer (D30) |
+| prompt | icm/shared/prompt/validator_feedback.md | whole | prompt block, on a node's guided retry after a refused answer (D30, D82), when that answer is not carried (D104) |
+| prompt | icm/shared/prompt/validator_repair.md | whole | prompt block, on a node's guided retry that carries its refused answer to be corrected (D104) |
 | store | accepted upstream handoffs | whole | context labelled by `allowed_use`; never citable |
 | store | delivered evidence blocks | CP-0's T8 selection for this module | the only citable text |
 

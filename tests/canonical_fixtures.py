@@ -329,6 +329,13 @@ def upstream_ref(identity: HostIdentity, markdown: bytes) -> UpstreamRef:
     )
 
 
+def with_markers(markdown: bytes, count: int) -> bytes:
+    """`markdown` closed by one line naming each of `count` citations by its
+    marker, `[C1]` for the first (D107), so each is linked to a statement."""
+    named = " ".join(f"[C{n}]" for n in range(1, count + 1))
+    return markdown + f"Cited {named}.\n".encode()
+
+
 def wire(markdown: bytes, citations: list[dict[str, object]]) -> str:
     """The closed provider transport `{canonical_markdown, citations}` (§41)."""
     return json.dumps(
@@ -337,10 +344,18 @@ def wire(markdown: bytes, citations: list[dict[str, object]]) -> str:
 
 
 def fields_from_prompt(prompt: str) -> dict[str, Any]:
-    """The host-owned front matter a prompt handed over, parsed by the vendor."""
-    found = re.search(
-        r"--- HOST-OWNED FRONT MATTER ([0-9a-f]{16}) \(copy exactly\) ---\n", prompt
+    """The host-owned front matter a prompt handed over, parsed by the vendor:
+    the first block past the evidence that opens the prompt (D113), which may
+    quote a marker of its own, as the tag rule tells a model."""
+    opened = re.match(r"--- EVIDENCE ([0-9a-f]{16}) ---\n", prompt)
+    past = (
+        0
+        if opened is None
+        else prompt.index(f"\n--- END EVIDENCE {opened.group(1)} ---\n")
     )
+    found = re.compile(
+        r"--- HOST-OWNED FRONT MATTER ([0-9a-f]{16}) \(copy exactly\) ---\n"
+    ).search(prompt, past)
     assert found is not None
     end = prompt.index(f"\n--- END HOST-OWNED FRONT MATTER {found.group(1)} ---")
     block = prompt[found.end() : end]
@@ -441,6 +456,8 @@ class CanonicalCompletions:
                 (
                     f"{QUOTE} was recorded. {UNANCHORED} here.",
                     *(c[1] for c in self.cited),
+                    # D107: a marker names each citation, in list order.
+                    *(f"[C{n}]" for n in range(1, len(self.quotes + self.cited) + 1)),
                 )
             ),
         )

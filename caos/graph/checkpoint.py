@@ -41,7 +41,12 @@ from psycopg_pool import ConnectionPool
 
 from caos.graph.build import RunState
 from caos.refusals import Refusal, RefusalCode
-from caos.store import SOCKET_BOUNDS, owned_schema, startup_options
+from caos.store import (
+    SOCKET_BOUNDS,
+    idle_session_off,
+    owned_schema,
+    startup_options,
+)
 from caos.store.lakebase import (
     TOKEN_SECONDS,
     lakebase_database,
@@ -130,6 +135,16 @@ def serializer() -> JsonPlusSerializer:
 
 def _search_path(conn: psycopg.Connection[DictRow]) -> None:
     conn.execute(f"SET search_path TO {SCHEMA}")
+
+
+def configure_session(conn: psycopg.Connection[DictRow]) -> None:
+    """The pool's hook on every new session: its idle bound off first, as the
+    store's own sessions (`caos.store.idle_session_off`, D117, D120), then the
+    graph's search path. A fault closes it and refuses `STORE_UNAVAILABLE`,
+    which the pool takes as a failed connection: no session is handed out
+    whose `SET` failed for any reason but the server's refusal of it."""
+    idle_session_off(conn)
+    _search_path(conn)
 
 
 def _set_up(conn: psycopg.Connection[DictRow]) -> None:
@@ -225,6 +240,9 @@ def _pooled(
         connection_class=connection_class,
         # `connect`'s socket bounds (W4): a half-open socket otherwise stalls a
         # checkpoint write, or the pool's own check, for the kernel's timeout.
+        # The idle bound is turned off by `configure_session` (D117, D120): a
+        # database that ends idle sessions otherwise ends every pooled one
+        # between writes. The search path is the graph's own, set there too.
         kwargs={
             "autocommit": True,
             "row_factory": dict_row,
@@ -233,7 +251,7 @@ def _pooled(
                 conninfo, [f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"]
             ),
         },
-        configure=_search_path,
+        configure=configure_session,
         min_size=POOL_MIN,
         max_size=POOL_MAX,
         # A connection is retired within the credential's life, so the

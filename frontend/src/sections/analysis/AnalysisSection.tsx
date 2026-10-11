@@ -24,6 +24,10 @@ import { stamp } from "@/ds/format";
 import type { ModuleRef } from "@/ds/markdown";
 import { useEvidence, type FactIdentity } from "@/evidence/EvidenceContext";
 import { Overlay } from "@/evidence/Overlay";
+import { QUOTE_LABEL } from "@/evidence/TracedLine";
+import { BlockedQuotes, NOT_LINKED, UnverifiedFacts } from "@/evidence/Unverified";
+import { clampExcerpt } from "@/evidence/compact";
+import { HandoffMarkers } from "@/evidence/Markers";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
 export { PROSE_SHOWN } from "./module";
@@ -131,12 +135,32 @@ function SourceRegister({
   );
 }
 
-function SourceFacts({ record, facts }: { record: string; facts: readonly CitationView[] }) {
+/** Each source a located citation of this run names, by its file name: what
+    an unverified citation's model-named source is called where it is known. */
+export function sourceNames(handoffs: Handoffs): Map<string, string> {
+  return new Map(
+    handoffs.flatMap((handoff) =>
+      handoff.source_facts.map((fact) => [fact.source_id, fact.filename] as const),
+    ),
+  );
+}
+
+function SourceFacts({
+  record,
+  facts,
+  unverified,
+}: {
+  record: string;
+  facts: readonly CitationView[];
+  unverified: number;
+}) {
   const { openFact, activeFact } = useEvidence();
   if (facts.length === 0) {
     return (
       <p className="note" data-source-facts>
-        No citation is carried on this handoff.
+        {unverified
+          ? "No citation of this handoff was located by the host; its unverified citations are listed below."
+          : "No citation is carried on this handoff."}
       </p>
     );
   }
@@ -153,7 +177,7 @@ function SourceFacts({ record, facts }: { record: string; facts: readonly Citati
             <button
               type="button"
               className={`chip${fact.withdrawn_at !== null ? " withdrawn" : ""}`}
-              aria-label={`Evidence ${fact.filename} p.${fact.page}${fact.withdrawn_at !== null ? " · source withdrawn" : ""}`}
+              aria-label={`${fact.marker === null ? `p.${fact.page}, evidence` : `C${fact.marker}, citation ${fact.marker}:`} ${fact.filename}, page ${fact.page}${fact.withdrawn_at !== null ? " · source withdrawn" : ""}`}
               aria-haspopup="dialog"
               aria-expanded={activeFact?.record_sha256 === record && activeFact.index === index}
               data-fact-chip={fact.source_id}
@@ -164,11 +188,25 @@ function SourceFacts({ record, facts }: { record: string; facts: readonly Citati
                 )
               }
             >
-              p.{fact.page}
+              {fact.marker === null ? `p.${fact.page}` : `C${fact.marker}`}
             </button>{" "}
             {fact.filename} · p.{fact.page}
           </span>
-          <blockquote className="matched">{fact.matched_text}</blockquote>
+          {/* Compact (D107): the excerpt, about one line; its whole source line
+              is the drawer's to show, one press away. */}
+          <span className="excerpt" data-fact-excerpt>
+            {fact.line.recorded ? null : (
+              <span className="lbl" data-line-not-recorded>
+                {QUOTE_LABEL}:{" "}
+              </span>
+            )}
+            <q>{clampExcerpt(fact.matched_text)}</q>
+          </span>
+          {fact.linked ? null : (
+            <div className="note" data-not-linked>
+              {NOT_LINKED}
+            </div>
+          )}
           {fact.withdrawn_at !== null ? (
             <div className="note limitation" data-withdrawn-at={fact.withdrawn_at}>
               <b>This source has been withdrawn</b> at {stamp(fact.withdrawn_at)}. The citation
@@ -198,6 +236,10 @@ function HostCalculation({ handoff, model }: { handoff: HandoffView; model: stri
 
 /** The pressed mark, said beside the figures it came from. */
 function Picked({ pick }: { pick: FigurePick }) {
+  const amount = (value: string) => {
+    const unit = value === "1" && pick.unitOne ? pick.unitOne : pick.unit;
+    return `${formatDecimal(value)}${unit ? ` ${unit}` : ""}`;
+  };
   return (
     <section className="pnl" data-picked aria-labelledby="picked-heading" aria-live="polite">
       <header>
@@ -209,12 +251,21 @@ function Picked({ pick }: { pick: FigurePick }) {
         <dd>{pick.label}</dd>
         <dt>Value</dt>
         <dd className="mono tabular" data-picked-value>
-          {pick.value === null
-            ? "n/a"
-            : `${formatDecimal(pick.value)}${pick.unit ? ` ${pick.unit}` : ""}`}
+          {/* An interquartile bar is no one figure: Q1 to Q3, each as served. */}
+          {pick.interval
+            ? `${amount(pick.interval.from)} to ${amount(pick.interval.to)}`
+            : pick.value === null
+              ? "n/a"
+              : amount(pick.value)}
         </dd>
         <dt>Origin</dt>
-        <dd>Model-authored, not host-verified</dd>
+        <dd>
+          {pick.computed
+            ? `Computed here: ${pick.computed}, not served`
+            : pick.origin === null
+              ? "Computed here: the stated total less the running level, not served"
+              : "Model-authored, not host-verified"}
+        </dd>
         <dt>Table</dt>
         <dd className="mono">{pick.table}</dd>
         <dt>Stated source</dt>
@@ -245,7 +296,9 @@ function ModuleView({
   const { hash } = useLocation();
   const { openFact } = useEvidence();
   const register = sourceRegister(handoffs);
-  const [pick, setPick] = useState<FigurePick | null>(null);
+  // Where the pressed mark is, so the panel is said beside it: the Figures,
+  // or the Audit tab's counts.
+  const [pick, setPick] = useState<{ at: "figures" | "counts"; pick: FigurePick } | null>(null);
   const [opener, setOpener] = useState<HTMLElement | null>(null);
   const pendingFact = useRef<FactIdentity | null>(null);
   const citations = register.reduce((sum, entry) => sum + entry.count, 0);
@@ -290,9 +343,9 @@ function ModuleView({
       <Figures
         handoff={handoff}
         calculation={<HostCalculation handoff={handoff} model={model} />}
-        onPick={(next) => setPick(next)}
+        onPick={(next) => setPick({ at: "figures", pick: next })}
       />
-      {pick ? <Picked pick={pick} /> : null}
+      {pick?.at === "figures" ? <Picked pick={pick.pick} /> : null}
       {reader.length ? <ReaderParts parts={reader} /> : null}
       <Depth
         key={hash}
@@ -300,8 +353,19 @@ function ModuleView({
         read={read}
         tab={tab}
         onTab={onTab}
-        sourceFacts={<SourceFacts record={handoff.record_sha256} facts={handoff.source_facts} />}
+        sourceFacts={
+          <SourceFacts
+            record={handoff.record_sha256}
+            facts={handoff.source_facts}
+            unverified={handoff.unverified_facts.length}
+          />
+        }
+        unverifiedFacts={
+          <UnverifiedFacts entries={handoff.unverified_facts} names={sourceNames(handoffs)} />
+        }
         documents={<SourceRegister register={register} />}
+        onPick={(next) => setPick({ at: "counts", pick: next })}
+        picked={pick?.at === "counts" ? <Picked pick={pick.pick} /> : null}
       />
       {opener ? (
         <Overlay
@@ -394,6 +458,9 @@ function PendingList({
                   its verdict ended the run · attempt {blockedBy.attempt_id}
                 </span>
               ) : null}
+              {blockedBy?.route_node_id === node.route_node_id ? (
+                <BlockedQuotes blocked={blockedBy} />
+              ) : null}
               <span className={`tag ${nodeTone(node.state)}`}>
                 <SeverityMark severity={NODE_SEVERITY[node.state]} decorative /> {node.state}
               </span>
@@ -483,17 +550,21 @@ export function AnalysisSection({
             <div className="pb note">No handoff has been accepted on this run yet.</div>
           </section>
         ) : (
-          <ModuleView
-            key={handoff.route_node_id}
-            handoff={handoff}
-            handoffs={body.handoffs}
-            subject={
-              body.subject ? `${body.subject.issuer_name} · ${body.subject.reporting_period}` : null
-            }
-            model={model}
-            tab={depth}
-            onTab={setDepth}
-          />
+          <HandoffMarkers key={handoff.route_node_id} handoff={handoff}>
+            <ModuleView
+              key={handoff.route_node_id}
+              handoff={handoff}
+              handoffs={body.handoffs}
+              subject={
+                body.subject
+                  ? `${body.subject.issuer_name} · ${body.subject.reporting_period}`
+                  : null
+              }
+              model={model}
+              tab={depth}
+              onTab={setDepth}
+            />
+          </HandoffMarkers>
         )}
         <PendingList
           pending={body.pending}

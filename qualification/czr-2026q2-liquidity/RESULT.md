@@ -1,11 +1,25 @@
 # CZR Q2 2026 FULL liquidity qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (citation keys)**. Prepared offline; the live results are in the last section.
+
+Corpus changed 2026-10-06, D115; earlier runs were on the old corpus. See "Corpus changed 2026-10-06 (D115)" below.
 
 This immutable set prepares `FULL_CREDIT_32 / LIQUIDITY_REVIEW` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`5856a33c19be398edb84a3106729400fb7b531dcccb95603f96b32cbc714eaf0`.
+`2f274851157840d674ec1308bb9337e1444379175be10bf9564d3a3edb362af0`.
+
+## Corpus changed 2026-10-06 (D115)
+
+On the owner's approval of 6 October 2026 (D115) exactly three files were downloaded from sec.gov (User-Agent declared on every request; the SEC's 111-byte script tag removed, so each size equals the filing index's) and admitted. They were converted with the F498 converter (sentence per line, F492; clause split for the Merger Agreement, F498). **Every live run, verdict and snapshot recorded below was made on the old corpus and is not comparable with a run of this set as it now stands**; the set digest above is the new one.
+
+| document | source | accession | text SHA-256 | raw HTML SHA-256 |
+|---|---|---|---|---|
+| `CZR_2026_Merger_Agreement.txt` (Ex. 2.1 to the 8-K of 28 May 2026, Agreement and Plan of Merger, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm | 0001193125-26-242995 | `e01077c1ed37c5b08c4d2dbfc15da19b78d50b4b38a42e3da22c3cf0e4c3038c` | `fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b` |
+
+Text bytes: `CZR_2026_Merger_Agreement.txt` 411,229. None is over 500 KiB as text, so no large-file pin moves; none is near the 1.5 MiB page-map threshold. The set's CP-0 request, encoded with CP-0's delivered authority, is 2,360,708 bytes (56.3% of `MAX_REQUEST_BYTES`); no source is shown as a page map.
+
+The Merger Agreement is the full agreement beside the 8-K's summary where the set carries it. Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit, so a claim about commitment-letter terms stays unsupported. No key is added: every existing key binds its own document and is unchanged.
 
 ## Corpus provenance
 
@@ -16,14 +30,60 @@ the digest the keys bind; the raw SHA-256 is the HTML as fetched.
 
 | document | source | accession | text SHA-256 | raw HTML SHA-256 |
 |---|---|---|---|---|
-| `CZR_FY2025_10K.txt` (Form 10-K, year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `204904832a3a51442a5c33d791ea35265586f43fac34530cd4d051787d0c0874` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
-| `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
-| `CZR_Q2_2026_Earnings_Release.txt` (Ex. 99.1, 28 July 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm | 0001590895-26-000027 | `17f1795b42b4b7aa32ef72582813986c3b98ea9c205d2b4cb446944bcf494ffc` | `a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f` |
-| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `b4f124cb0e058b06453f2037bb70e4455600a6006b6559c03721918b5e36f2e2` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
+| `CZR_FY2025_10K.txt` (Form 10-K, year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
+| `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
+| `CZR_Q2_2026_Earnings_Release.txt` (Ex. 99.1, 28 July 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm | 0001590895-26-000027 | `b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8` | `a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f` |
+| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `25bea1d14fd9bb22838775f6fe056cd00741dc3d50eb1b79cc53498db502941c` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
 
-The credit agreement is 936,079 bytes: over 500 KiB, so its path is pinned in
-the large-file excludes, but under 1.5 MiB, so it reaches CP-0 whole rather
-than as a page map. All four are inside `MAX_REQUEST_BYTES`.
+Incremental Assumption Agreement No. 3 is 1,077,810 bytes: over 500 KiB, so its
+path is pinned in the large-file excludes, but under 1.5 MiB, so it reaches
+CP-0 whole rather than as a page map. All four are inside `MAX_REQUEST_BYTES`.
+The exhibits F508 adds were fetched from SEC EDGAR on 5 October 2026 and
+converted the same day, split by sentence (F492) and by clause (F498); they are
+byte-identical to the `czr-2026q2-covenant-refinancing` set's copies. Since
+F508 the conformed copy in its Exhibit A replaces the 2020 credit agreement
+(Ex. 10.1, accession 0001193125-20-196232, 935,517 bytes). The set's CP-0
+request, encoded with CP-0's delivered authority, is 1,927,280 bytes (45.9% of
+`MAX_REQUEST_BYTES`, up from 1,778,362), and no source is shown as a page map.
+
+## Why the pack carries the current legal chain (F508)
+
+Live runs C5 (`czr-2026q2-covenant-refinancing`) and LCR1
+(`czr-2026q2-lite-covenant-refinancing`) held back the covenant modules at CP-0
+(CP-4, then CP-L10): the sets carried the 2020 credit agreement with only its
+Fourth and Fifth Amendments, and the 6.50% 2032 notes indenture without its
+supplemental indentures, though the FY2025 10-K's exhibit index lists them. On
+the owner's ruling of 5 October 2026 ("Latest chain only"), every CZR set now
+carries the exhibits beside the instrument each modifies; this set, which held
+the credit agreement but not the indenture, carries Incremental Assumption
+Agreement No. 3 in its place.
+
+Incremental Assumption Agreement No. 3 (6 February 2024) adds the
+`$2,900.0 million` Incremental Term B-1 Loans. Its Exhibit A is the credit
+agreement conformed through Incremental Assumption Agreement No. 1, the First
+to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with
+the Fourth and Fifth Amendments, which this set does not carry, it is the
+current chain, and where Exhibit A and a later amendment differ, the later
+amendment governs. Exhibit A comes without the credit agreement's own exhibits
+and schedules: after its Annex A Pricing Grid the file goes straight to
+Agreement No. 3's own Exhibit B, a form of solvency certificate. Exhibit A is a
+changed copy, Agreement No. 3's insertions double-underlined and its deletions
+struck through. On the owner's ruling of 5 October 2026 the text renders the
+agreement as amended: every struck run from Exhibit A's cover on is removed
+with its content (295 runs, 167 of them with text, 484 characters: superseded
+table-of-contents page numbers and 38 words, labels or punctuation) and the
+insertions are kept as plain text, with the spacing the filing renders once a
+run is gone (one space restored where a run carried the only space between two
+words, three places; none left before closing punctuation, three places), so
+`Section 2.01(e)` and `Section 2.11(a)(iv)` read as amended. The one struck run
+before the cover, the word `strikethrough` in the Agreement's own Section 3
+legend, deletes nothing and is kept.
+
+No key is added or changed. On the owner's ruling of 5 October 2026 ("Replace
+the 2020 base"), the conformed copy replaces the 2020 credit agreement (Ex.
+10.1, accession 0001193125-20-196232), which this set no longer carries: the
+agreement as amended is the one in force, and the superseded 2020 text cost
+about 0.9 MB of every request. No key here bound it.
 
 ## Keys
 
@@ -42,14 +102,59 @@ Keys authored from the documents; material figures pending owner confirmation.
   / `$5,335` million for the rest of 2026, 2027–2030 and thereafter, totalling
   `$11,807` million; and the 10-Q's statement that the CEI Credit Agreement,
   as amended, provides for a `$2.25 billion` CEI Revolving Credit Facility
-  maturing on 31 January 2028 (keyed as that whole Note 6 line, which also
-  states the `$388` million letter-of-credit sub-facility and `$40` million
-  of reserves; F475).
+  maturing on 31 January 2028, and its next sentence, the `$388` million
+  letter-of-credit sub-facility and `$40` million of reserves (each keyed as
+  its whole Note 6 sentence; F475, F492).
 
-The credit agreement carries no key. Its revolving commitment is stated as at
-the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024)
-Amendments are not in this set, so the current commitment is keyed to the
-10-Q; the agreement is admitted for the facility's controlling terms.
+The credit agreement carries no key. Since F508 it is the conformed copy in
+Incremental Assumption Agreement No. 3's Exhibit A, which replaces the 2020
+text; the Fourth (9 May 2024) and Fifth (25 November 2024) Amendments are not
+in this set and post-date it, so the current commitment is keyed to the 10-Q;
+the agreement is admitted for the facility's controlling terms. Since F498 its
+sentences over 400 characters are cut further at their clause boundaries
+(`; (b)`, `, (b)`, `; and`, `, and (c)`, `; provided`, `, provided that`,
+`: (a)`); no key moves with them.
+
+Alternative lines (D101). A figure key is also met by another whole evidence
+line, cited under the same module, that states the key's lead figures -- the
+current figure and the comparative the key line leads with -- for the same
+measure, period and consolidated scope; a % change, a further period or a third
+year on the key line need not be on it. Prose keys have none: a statement is
+its sentence. Each alternative is one whole evidence line, unique in its
+document (F475), and is listed with why it states the key's figures:
+
+- CP-1, the 10-Q's `Cash and cash equivalents | $965 | $887`:
+  - the release's `Cash and cash equivalents | $965 | $887`, its balance sheet
+    row, the same two dates.
+  Not alternatives: the 10-Q's `Cash and cash equivalents | $965 | $982` (its
+    comparative is 30 June 2025) and the one-figure `Cash and cash equivalents
+    | $965` rows of the liquidity tables (no comparative, and not a unique
+    run).
+- CP-2, the 10-Q's `Net cash provided by operating activities | 675 | 680`:
+  - the 10-Q's `During the six months ended June 30, 2026, our operating
+    activities generated operating cash inflows of $675 million, as compared to
+    operating cash inflows of $680 million during the six months ended June 30,
+    2025, primarily due to changes in working capital, coupled with the results
+    of operations described above.`, its liquidity sentence, the six months
+    against the prior six months.
+- CP-2, the 10-Q's `Purchase of property and equipment | (335) | (453)`:
+  - the 10-Q's `Cash used for capital expenditures totaled $335 million and
+    $453 million for the six months ended June 30, 2026 and 2025, respectively,
+    related to our growth, renovation, maintenance, and other capital
+    projects.`, its capital-expenditure sentence: the same cash measure and six
+    months.
+  Not alternatives: the 10-Q's `Total | $167 | $230 | $335 | $453` under
+    `Capital Expenditures, Net - By Segment` (a net segment measure, not the
+    cash-flow line, though the figures agree).
+- CP-2D, the release's `CEI Revolving Credit Facility capacity, net of
+outstanding balance | 2,130`:
+  - the 10-Q's `CEI Revolving Credit Facility capacity, net of outstanding
+    balance | 2,130`, its liquidity table's row at the same date.
+
+The other figure keys (`Total debt`, `CEI Revolving Credit Facility`, `Annual
+maturities of long-term debt`) have none: no other whole line states their
+figures for the same measure, period and basis (rounded prose such as `$11.8
+billion` or `$1.3 billion` is not the figure).
 
 The readiness key expects CP-0 to clear CP-1, CP-2 and CP-2D, and CP-2D to
 carry `FULL` decision scope. No register key is set: the release's liquidity
@@ -61,5 +166,18 @@ defensible reading and no single bridge cell is unambiguous.
 The 10-Q discloses the 27 May 2026 merger agreement with Fertitta Gaming
 Holdco, LLC as pending; no fact about it after the 10-Q's filing is in this set.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 (`L1-czr-liquidity.json`) | 9043ba7f / b1a7bec | COMPLETE | 4/4 | 8 | 139 (139 anch., 0 unver.) | 8/9 | met / met / — | — | +0.56 / $0.79 |
+| LIQ1 (`LIQ1-czr-liquidity.json`) | 9043ba7f / ~14b9bec | COMPLETE | 4/4 | 6 | 102 (100 anch., 4 unver.) | 5/9 | met / met / — | — | +0.66 / $0.70 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**. L1 completed with 8 of 9 keys and every node accepted on its second attempt; its one miss was CP-2D's $388m letter-of-credit sub-facility sentence (no module used the figure). LIQ1, the later run with the conformed credit agreement (requests of about 1.9 MB), completed with the ready and projection keys met and 5 of 9 citation keys; its four misses are all "not cited". Single-sample quality_compare (records `q6`, `q12`): one LARGE, CP-0 committee_status Restricted against the baseline Requires More Work, recurring since L1 and defensible (the corpus has no forward cash forecast or transaction-funding inputs).
+
+Owner-decision stops and provider limits: None.

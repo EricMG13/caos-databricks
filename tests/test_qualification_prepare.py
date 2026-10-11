@@ -43,7 +43,7 @@ from caos.qualification.matrix import (
     QualificationCase,
     QualificationSet,
 )
-from caos.refusals import Refusal
+from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, apply_schema, connect, run_inputs
 from caos.store.budget import CEILING
 from caos.store.gates import Gate, GateState, gate_preview, gate_state
@@ -597,10 +597,10 @@ def test_a_canonical_case_pins_its_declared_subject(ready: Fixture) -> None:
 
     disabled, canonical = subject.prepare(conn, blobs, harness, qualification=mixed)
 
-    assert disabled.input.format_version == 2
+    assert disabled.input.format_version == 3
     assert disabled.input.subject == first.subject
     assert disabled.input.adapter_version == methodology.CANONICAL_ADAPTER_VERSION
-    assert canonical.input.format_version == 2
+    assert canonical.input.format_version == 3
     assert canonical.input.subject == LITE_SUBJECT
     assert canonical.input.adapter_version == methodology.CANONICAL_ADAPTER_VERSION
     assert canonical.input == load_run_input(conn, canonical.input.run_id)
@@ -608,7 +608,7 @@ def test_a_canonical_case_pins_its_declared_subject(ready: Fixture) -> None:
         "SELECT issuer_id, issuer_name, reporting_period, analysis_date,"
         " format_version FROM run_inputs WHERE run_id=%s",
         (canonical.input.run_id,),
-    ).fetchone() == (*asdict(LITE_SUBJECT).values(), 2)
+    ).fetchone() == (*asdict(LITE_SUBJECT).values(), 3)
     _unapproved_and_unspent(conn, harness)
 
 
@@ -672,3 +672,44 @@ def test_the_harness_admits_pdfs_through_the_pdf_extractor(ready: Fixture) -> No
     tokens = conn.execute("SELECT text FROM source_tokens ORDER BY token_id").fetchall()
     assert [row[0] for row in tokens][:2] == ["Total", "debt"]
     conn.rollback()
+
+
+@pytest.mark.parametrize(
+    ("fault", "code"),
+    [
+        ("period", RefusalCode.REPORTING_PERIOD_UNREADABLE),
+        ("objective-twice", RefusalCode.RUN_QUALIFIER_INVALID),
+        ("off-route", RefusalCode.RUN_QUALIFIER_INVALID),
+    ],
+)
+def test_a_set_whose_command_cannot_be_pinned_is_refused_before_any_write(
+    ready: Fixture, fault: str, code: RefusalCode
+) -> None:
+    """F526 (adversary probe): `assert_admissible`, which `scripts/qualify.py`
+    asks before it creates a database, judged no command, so `prepare`
+    created, admitted and pinned the first case before the second refused."""
+    conn, blobs, harness, qualification = ready
+    first, second = qualification.cases
+    assert second.subject is not None
+    changed = {
+        "period": replace(
+            second,
+            profile_id="FULL_CREDIT_32",
+            selection_id="RELATIVE_VALUE",
+            subject=replace(second.subject, reporting_period="1H26"),
+        ),
+        "objective-twice": replace(
+            second, qualifiers=(("CP-0", "objective", "a"),), objective="b"
+        ),
+        "off-route": replace(second, qualifiers=(("CP-2G", "cases", "base"),)),
+    }[fault]
+    faulty = replace(qualification, cases=(first, changed))
+    with pytest.raises(Refusal) as refused:
+        subject.assert_admissible(harness, qualification=faulty)
+    assert refused.value.code is code
+    with pytest.raises(Refusal) as refused:
+        subject.prepare(conn, blobs, harness, qualification=faulty)
+    assert refused.value.code is code
+    conn.rollback()
+    for table in ("cases", "runs", "run_inputs"):
+        assert _count(conn, "SELECT count(*) FROM " + table) == 0, table

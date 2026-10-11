@@ -12,7 +12,8 @@ rule it was accepted under (`ANY_RUN`), which it names.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+import dataclasses
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from uuid import UUID
 
@@ -25,8 +26,10 @@ from caos.boundary_text import BoundaryText
 from caos.evidence.citations import (
     ANY_RUN,
     CITATION_RULES,
+    EXCERPT,
     WHOLE_LINE,
     WHOLE_LINE_AS_STORED,
+    AnchoredCitation,
     Citation,
     CitationRule,
     _line_run,
@@ -83,8 +86,10 @@ def test_part_of_a_line_that_drops_a_word_no_longer_anchors(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:
     """AI-4: the part anchored uniquely and was labelled host-verified,
-    stating the opposite of its line. Accepted answers are held to the whole
-    line; the run rule a stored record was accepted under still finds it."""
+    stating the opposite of its line. Answers accepted under N28 were held
+    to the whole line, and their records still are; the run rule a stored
+    record was accepted under still finds it. (D105's `EXCERPT`, which
+    answers are held to now, is `tests/test_excerpt_citations.py`.)"""
     conn, case_id = case
     source_id = _admit(conn, case_id, tmp_path)
 
@@ -98,7 +103,7 @@ def test_part_of_a_line_that_drops_a_word_no_longer_anchors(
         RefusalCode.CITATION_NOT_LOCATED
     )
     assert _code(conn, source_id, PART_OF_LINE, ANY_RUN) == 1
-    assert CITATION_RULES == {ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE}
+    assert CITATION_RULES == {ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE, EXCERPT}
 
 
 def test_a_whole_line_keeps_the_edge_forgiveness_the_matcher_declares(
@@ -334,3 +339,897 @@ def test_two_lines_shown_alike_are_ambiguous_however_each_is_stored(
     for quote in (f"Revenue caf{E_ACUTE}", f"Revenue caf{DECOMPOSED_E_ACUTE}"):
         assert _code(conn, source_id, quote) is RefusalCode.CITATION_AMBIGUOUS
     assert _code(conn, source_id, f"Revenue caf{E_ACUTE}", WHOLE_LINE_AS_STORED) == 1
+
+
+PAGES = (
+    (
+        "The Company did not breach its leverage covenant during FY2025 or in"
+        " any later quarter of the year",
+        "Liquidity was USD 310.5m at year end.",
+    ),
+    ("Net leverage was 3.4x at year end.",),
+    ("Cash interest cover was 2.1x.", "Cash interest cover was 2.1x in FY2024."),
+)
+
+
+def _pages_pdf(pages: tuple[tuple[str, ...], ...] = PAGES) -> bytes:
+    """`pages` as a PDF, one page each, each line drawn apart from the next."""
+    from test_admission_limits import multi_page_pdf
+    from test_pdf_extraction import LEFT_MARGIN
+
+    return multi_page_pdf(
+        [
+            "".join(
+                f"BT\n/F1 12 Tf\n1 0 0 1 {LEFT_MARGIN:.0f} {700 - 40 * n} Tm\n"
+                f"({line}) Tj\nET\n"
+                for n, line in enumerate(lines)
+            ).encode("ascii")
+            for lines in pages
+        ]
+    )
+
+
+def _blocks_by_page(
+    conn: StoreConnection, source_id: UUID
+) -> dict[int, dict[str, str]]:
+    by_page: dict[int, dict[str, str]] = {}
+    for page, block_id, text in conn.execute(
+        "SELECT page, block_id, text FROM source_blocks WHERE source_id = %s",
+        (source_id,),
+    ).fetchall():
+        by_page.setdefault(int(page), {})[str(block_id)] = str(text)
+    return by_page
+
+
+def test_find_line_places_a_quote_the_whole_line_rule_refused(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """D82: with the host's own search -- `ANY_RUN` on the cited page, then
+    `WHOLE_LINE` on each other delivered page -- a quote that is part of a
+    longer delivered line names that line; one that is a whole line of
+    another delivered page names the page; one on no delivered page is
+    absent; and one found but not as one line (twice on its page) or only
+    on an undelivered line is placed nowhere."""
+    from caos.evidence.citations import LineFinding, TokenIndex, find_line
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf())
+    by_page = _blocks_by_page(conn, source_id)
+    every = frozenset(block for blocks in by_page.values() for block in blocks)
+    [covenant] = [b for b, text in by_page[1].items() if text.startswith("The")]
+
+    def found(
+        page: int,
+        quote: str,
+        blocks: frozenset[str] = every,
+        pages: set[int] | None = None,
+    ) -> LineFinding:
+        return find_line(
+            conn,
+            blocks=blocks,
+            pages=set(by_page) if pages is None else pages,
+            citation=Citation(source_id, page, quote),
+            index=TokenIndex(),
+        )
+
+    part = "breach its leverage covenant during FY2025"
+    elsewhere = "Net leverage was 3.4x at year end."
+    for quote in (part, "Leverage was unchanged"):
+        assert _code(conn, source_id, quote) is RefusalCode.CITATION_NOT_LOCATED
+    # A whole line of one other delivered page is anchored there (D94); the
+    # search below still names that page when asked directly.
+    assert _code(conn, source_id, elsewhere) == 1
+    assert found(1, part) == LineFinding(block_id=covenant)
+    assert found(1, elsewhere) == LineFinding(pages=(2,))
+    assert found(1, "Leverage was unchanged") == LineFinding(absent=True)
+    # Part of a longer line of another delivered page: found, but not as one
+    # line of any page, so never told absent (I1).
+    assert found(1, "Net leverage was 3.4x") == LineFinding()
+    # Twice on its page as a run: found, but not one line.
+    assert found(3, "Cash interest cover was") == LineFinding()
+    # The longer line withheld: never shown, so never named, and no line the
+    # node was given holds the quote.
+    assert found(1, part, every - {covenant}) == LineFinding(absent=True)
+    # Page 2 not given: no delivered line holds the quote.
+    unpaged = every - frozenset(by_page[2])
+    assert found(1, elsewhere, unpaged, {1, 3}) == LineFinding(absent=True)
+    # A cited page the node was not given is never read (M2): what it holds
+    # cannot change the answer.
+    index = TokenIndex()
+    cited = Citation(source_id, 2, "Net leverage was 3.4x")
+    given = find_line(conn, blocks=unpaged, pages={1, 3}, citation=cited, index=index)
+    assert given == LineFinding(absent=True)
+    assert (source_id, 2) not in index.pages
+
+
+def test_a_placed_citation_is_told_it_is_too_short_or_where_it_is(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """D82, D105: fewer than `MIN_EXCERPT_WORDS` words of a longer delivered
+    line are told they are too few, eight are no fault at all, and a page
+    found by `find_line` passes through as it is."""
+    from caos.evidence.citations import EXCERPT, TokenIndex
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf())
+    by_page = _blocks_by_page(conn, source_id)
+    delivered = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in by_page.items()
+        for block_id, text in blocks.items()
+    ]
+    blocks = {source_id: frozenset(d.block_id for d in delivered)}
+
+    def hint(quote: str) -> LineHint:
+        citation = Citation(source_id, 1, quote)
+        return _line_hint(conn, delivered, blocks, citation, TokenIndex())
+
+    assert hint("breach its leverage covenant") == LineHint(short=True)
+    eight = "did not breach its leverage covenant during FY2025"
+    assert _code(conn, source_id, eight, EXCERPT) == 1
+    assert hint("Net leverage was 3.4x at year end.") == LineHint(pages=(2,))
+    assert hint("Leverage was unchanged") == LineHint(absent=True)
+
+
+def test_a_repeated_line_or_a_straddle_is_told_what_it_is(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """Fix round 1 of D105: a whole line the page holds twice is ambiguous
+    however long an excerpt of it is, so the retry is told it cannot be
+    cited there, from the delivered text alone; and a short quote running
+    from one line onto the next is told that, not that it is short."""
+    from caos.evidence.citations import TokenIndex
+    from caos.methodology.canonical import _anchoring_line, _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import LineHint
+
+    conn, case_id = case
+    source_id = _admit(conn, case_id, tmp_path)
+    delivered = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    line = _anchoring_line(conn, delivered, [Citation(source_id, 1, "Repeated line")])
+    assert line is not None
+    assert "is a whole evidence line that appears more than once" in line
+    assert "quote a longer excerpt" not in line
+    blocks = {source_id: frozenset(d.block_id for d in delivered)}
+    straddle = Citation(source_id, 1, "during FY2025. Liquidity")
+    found = _line_hint(conn, delivered, blocks, straddle, TokenIndex())
+    assert found == LineHint(across=True)
+    # The next line never delivered: never named, so no straddle is told.
+    first = [d for d in delivered if d.text.value == LINE]
+    alone = {source_id: frozenset(d.block_id for d in first)}
+    unsent = _line_hint(conn, first, alone, straddle, TokenIndex())
+    assert unsent == LineHint(absent=True)
+    # Running past its line keeping six of its words: keep eight, or all.
+    runs_on = "breach its leverage covenant during FY2025. Liquidity"
+    over = Citation(source_id, 1, runs_on)
+    ends = " ".join(LINE.split()[-8:])
+    hinted = _line_hint(conn, delivered, blocks, over, TokenIndex())
+    assert hinted == LineHint(near=1, ends=ends, short=True)
+
+
+def test_a_search_that_cannot_read_a_page_leaves_the_citation_unplaced(
+    case: tuple[StoreConnection, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D82 (M3): the search is help, not a verdict. A page whose blocks no
+    longer read as written refuses inside `find_line`; the retry still goes
+    out, the citation told by the rule alone."""
+    from caos.evidence import citations
+    from caos.evidence.citations import TokenIndex
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf())
+    delivered = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    blocks = {source_id: frozenset(d.block_id for d in delivered)}
+
+    def unreadable(*_args: object, **_kwargs: object) -> None:
+        raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+
+    monkeypatch.setattr(citations, "_verdict", unreadable)
+    citation = Citation(source_id, 1, "Net leverage was 3.4x at year end.")
+    assert _line_hint(conn, delivered, blocks, citation, TokenIndex()) == LineHint()
+
+
+REANCHOR_PAGES = (
+    ("Revenue grew 4% in FY2025.",),
+    ("Net leverage was 3.4x at year end.", "The same line on two pages."),
+    ("The same line on two pages.", "Cover was 2.1x."),
+    ("Only on page four.",),
+)
+
+
+def test_a_whole_line_cited_on_the_wrong_page_is_anchored_at_its_true_page(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """D94: a quote that is no line of its cited page but exactly one whole
+    delivered evidence line of another delivered page of its source is
+    anchored at that page -- the stored page and rectangles are the true
+    page's, and the page the module named is kept as `cited_page`. Two such
+    lines, one the node was not given, a page it was not given, and part of
+    a line all refuse as before; and only `WHOLE_LINE` re-anchors, so a
+    record accepted under another rule is located as it always was."""
+
+    from caos.evidence.citations import ANY_RUN, TokenIndex
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(REANCHOR_PAGES))
+    by_page = _blocks_by_page(conn, source_id)
+    every = frozenset(block for blocks in by_page.values() for block in blocks)
+    leverage = "Net leverage was 3.4x at year end."
+
+    def anchor(
+        page: int,
+        quote: str,
+        blocks: frozenset[str] = every,
+        rule: CitationRule = WHOLE_LINE,
+        index: TokenIndex | None = None,
+    ) -> object:
+        try:
+            [anchored] = verify_citations(
+                conn,
+                delivered={source_id: blocks},
+                citations=[Citation(source_id, page, quote)],
+                rule=rule,
+                index=index,
+            )
+        except Refusal as refused:
+            assert refused.__cause__ is None and refused.__context__ is None
+            return refused.code
+        return anchored
+
+    true, moved = anchor(2, leverage), anchor(1, leverage)
+    assert isinstance(true, AnchoredCitation) and true.cited_page is None
+    assert moved == dataclasses.replace(true, cited_page=1)
+    assert {box.page for box in true.bboxes} == {2}
+
+    not_located = RefusalCode.CITATION_NOT_LOCATED
+    # On two delivered pages: which one the module read is not known.
+    assert anchor(1, "The same line on two pages.") is not_located
+    # Part of the line: no line at all, wherever it is cited.
+    assert anchor(1, "Net leverage was 3.4x") is not_located
+    # Its one line withheld from the node, its page still delivered.
+    [line_block] = [b for b, t in by_page[2].items() if t.startswith("Net")]
+    assert anchor(1, leverage, every - {line_block}) is not_located
+    # Its page never delivered: never read, so never a place to anchor.
+    index = TokenIndex()
+    unpaged = every - frozenset(by_page[4])
+    assert anchor(1, "Only on page four.", unpaged, index=index) is not_located
+    assert (source_id, 4) not in index.pages
+    # Under the rules older records name, a wrong page is not located.
+    for rule in (WHOLE_LINE_AS_STORED, ANY_RUN):
+        assert anchor(1, leverage, rule=rule) is not_located
+
+
+def test_a_stored_citation_is_checked_where_it_is_stored(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """D94: a reader re-checks a stored citation at the page it stores, never
+    searching the run's capture for it, and keeps its `cited_page` only when
+    that page holds no such line -- the one case acceptance re-anchors."""
+    from caos.evidence.citations import TokenIndex, verify_stored_citations
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(REANCHOR_PAGES))
+    every = every_block(conn, source_id)
+    leverage = "Net leverage was 3.4x at year end."
+
+    def stored(page: int, cited: int | None, quote: str = leverage) -> object:
+        try:
+            [found] = verify_stored_citations(
+                conn,
+                delivered=every,
+                citations=[(Citation(source_id, page, quote), cited)],
+                index=TokenIndex(),
+                rule=WHOLE_LINE,
+            )
+        except Refusal as refused:
+            return refused.code
+        return found
+
+    [live] = verify_citations(
+        conn,
+        delivered=every,
+        citations=[Citation(source_id, 1, leverage)],
+        rule=WHOLE_LINE,
+    )
+    assert stored(2, 1) == live
+    # A cited page that does hold the line: no re-anchoring was due.
+    shared = "The same line on two pages."
+    found = stored(2, 3, shared)
+    assert isinstance(found, AnchoredCitation) and found.cited_page is None
+    # A stored page the quote is not on is never searched for elsewhere.
+    assert stored(1, None) is RefusalCode.CITATION_NOT_LOCATED
+
+
+def test_placing_a_quote_reads_each_page_once_and_never_re_anchors(
+    case: tuple[StoreConnection, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D94 (I1): the retry placement asks each delivered page once, at that
+    page; it never runs the re-anchoring search, which would make it
+    quadratic in the pages delivered."""
+    from caos.evidence import citations
+    from caos.evidence.citations import TokenIndex, find_line
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(REANCHOR_PAGES))
+    by_page = _blocks_by_page(conn, source_id)
+    every = frozenset(block for blocks in by_page.values() for block in blocks)
+    searched: list[int] = []
+    shown = citations._shown_line_run
+
+    def counted(
+        page: _Page,
+        cuts: Mapping[int, tuple[int, ...]] | None,
+        lines: Mapping[int, tuple[str, ...]],
+        matched_text: str,
+        *,
+        tracking: bool,
+    ) -> tuple[list[_Token], str]:
+        searched.append(1)
+        return shown(page, cuts, lines, matched_text, tracking=tracking)
+
+    def never(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError
+
+    monkeypatch.setattr(citations, "_shown_line_run", counted)
+    monkeypatch.setattr(citations, "_true_page", never)
+    found = find_line(
+        conn,
+        blocks=every,
+        pages=set(by_page),
+        citation=Citation(source_id, 1, "A paraphrase on no page at all."),
+        index=TokenIndex(),
+    )
+    assert found.absent
+    assert len(searched) <= len(by_page)
+
+
+# R2's CP-0 shape (F493): a long sentence copied whole with one phrase
+# rewritten, or one letter added.
+MERGER = (
+    "On March 4, 2026, the Company entered into the Merger Agreement with"
+    " Parent and Merger Sub, pursuant to which, on the terms and subject to the"
+    " conditions of the Merger Agreement (as defined below), Merger Sub will"
+    " merge with and into the Company, with the Company surviving the merger"
+    " as a wholly owned subsidiary of Parent, and each share of common stock"
+    " outstanding immediately prior to the effective time will be converted"
+    " into the right to receive the merger consideration in cash."
+)
+SUBSTITUTED = MERGER.replace("of the Merger Agreement (as defined below),", "therein,")
+ONE_LETTER = MERGER.replace("each share", "each shares")
+
+
+def test_near_line_names_the_one_line_a_slipped_quote_nearly_matches() -> None:
+    """F493: a quote that copied a long line with a phrase rewritten or a
+    letter added is near that line -- the same first or last `NEAR_WORDS`
+    words, a length within `NEAR_LENGTH` and the same ends or a word
+    similarity of at least `NEAR_RATIO`; two such lines, an unrelated quote
+    or a line far shorter are no answer."""
+    from caos.evidence.citations import NEAR_LENGTH, NEAR_RATIO, NEAR_WORDS, near_line
+
+    lines = [
+        "Revenue grew 4% in FY2025.",
+        MERGER,
+        "The Company expects the merger to close in the second half of 2026.",
+    ]
+    assert near_line(SUBSTITUTED, lines) == 1
+    assert near_line(ONE_LETTER, lines) == 1
+    # A slip in the opening words still matches by the closing ones.
+    assert near_line(MERGER.replace("On March 4", "On 4 March"), lines) == 1
+    # Two near lines: no answer, never a guess.
+    assert near_line(ONE_LETTER, [*lines, MERGER.replace("cash.", "cash")]) is None
+    assert near_line("Liquidity was USD 310.5m at year end.", lines) is None
+    assert near_line("", lines) is None
+    # Same first words, far shorter: a fragment, not a near miss.
+    assert near_line(" ".join(MERGER.split()[:20]), lines) is None
+    # Same first words, the rest rewritten: below the similarity floor.
+    head = " ".join(MERGER.split()[:NEAR_WORDS])
+    rewritten = head + " " + " ".join(f"word{n}" for n in range(60))
+    assert (
+        near_line(rewritten, [head + " " + " ".join(f"other{n}" for n in range(60))])
+        is None
+    )
+    assert (NEAR_WORDS, NEAR_RATIO, NEAR_LENGTH) == (6, 0.9, 0.15)
+
+
+NEAR_PAGES = (
+    ("Revenue grew 4% in FY2025.",),
+    ("The facility matures in 2029 and bears interest at SOFR plus 2.75% per annum.",),
+    ("Cover was 2.1x.",),
+)
+
+
+def test_a_near_miss_is_hinted_from_delivered_lines_only(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """F493: a quote one letter off a delivered line of another page is
+    still refused (invariant 11), and the retry is told that line's page
+    and first words; with that page not delivered, the quote is absent and
+    the page is never read (D82's M2)."""
+    from caos.evidence.citations import TokenIndex
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import HINT_WORDS, LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(NEAR_PAGES))
+    every = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    slipped = NEAR_PAGES[1][0].replace("matures", "matured")
+    citation = Citation(source_id, 1, slipped)
+    assert _code(conn, source_id, slipped) is RefusalCode.CITATION_NOT_LOCATED
+
+    def hint(delivered: list[Delivery], index: TokenIndex) -> LineHint:
+        blocks = {source_id: frozenset(d.block_id for d in delivered)}
+        return _line_hint(conn, delivered, blocks, citation, index)
+
+    begins = " ".join(NEAR_PAGES[1][0].split()[:HINT_WORDS])
+    assert hint(every, TokenIndex()) == LineHint(begins=begins, near=2, moved=True)
+    index = TokenIndex()
+    withheld = [d for d in every if d.page != 2]
+    assert hint(withheld, index) == LineHint(absent=True)
+    assert (source_id, 2) not in index.pages
+
+
+def _recorded(monkeypatch: pytest.MonkeyPatch, name: str) -> list[tuple[object, ...]]:
+    """The arguments of every call to `caos.evidence.citations.<name>`, each
+    answered by the function itself."""
+    from caos.evidence import citations
+
+    calls: list[tuple[object, ...]] = []
+    real: Callable[..., object] = getattr(citations, name)
+
+    def recording(*args: object) -> object:
+        calls.append(args)
+        return real(*args)
+
+    monkeypatch.setattr(citations, name, recording)
+    return calls
+
+
+def _widest(calls: list[tuple[object, ...]], at: int) -> int:
+    """The most words in the `at`th argument of any of `calls`."""
+    sizes = []
+    for args in calls:
+        words = args[at]
+        assert isinstance(words, list)
+        sizes.append(len(words))
+    return max(sizes)
+
+
+class _Looked(str):
+    """A line that counts the `in` tests made on it, each answered by `str`."""
+
+    looks = 0
+
+    def __contains__(self, key: object, /) -> bool:
+        self.looks += 1
+        assert isinstance(key, str), key
+        return super().__contains__(key)
+
+
+def test_placing_a_near_miss_stays_linear_in_the_lines_delivered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F493 (D94's I1 lesson): 360 delivered pages of 30 lines each are
+    searched for a near miss in one pass. Lines that share neither end of
+    the quote cost one comparison; when every line shares its first words
+    at a near length, at most `NEAR_MEASURED` are measured and the search
+    gives up -- no hint, never a quadratic cost. Counted, not timed: one
+    candidate test per line delivered, and a ratio only on the lines that
+    pass it, each of at most `NEAR_MEASURED_WORDS` words."""
+    import random
+
+    from caos.evidence.citations import (
+        NEAR_MEASURED,
+        NEAR_MEASURED_WORDS,
+        NEAR_WORDS,
+        near_line,
+    )
+
+    tested = _recorded(monkeypatch, "_candidate")
+    measured = _recorded(monkeypatch, "_similar")
+    lines = [
+        f"Page {page} line {line} " + " ".join(f"w{n}" for n in range(70))
+        for page in range(360)
+        for line in range(30)
+    ]
+    lines[5000] = MERGER
+    placed = near_line(ONE_LETTER, lines)
+    assert placed == 5000
+    # One test a line, the merger's included. None but the merger shares an
+    # end of the quote, and it shares both, so no ratio is asked.
+    looks = len(tested)
+    assert len(lines) == 10_800
+    assert looks == 10_800
+    assert not measured
+    words = MERGER.split()
+    rows = random.Random(0)
+    lookalikes = [
+        " ".join(words[:NEAR_WORDS] + rows.sample(words[NEAR_WORDS:], 70))
+        for _ in range(360 * 30)
+    ]
+    tested.clear()
+    placed = near_line(ONE_LETTER, [*lookalikes, MERGER])
+    assert placed is None
+    # The search gives up at the 65th look-alike, so it never reaches the
+    # merger at the end: 65 tests, and 64 ratios.
+    assert NEAR_MEASURED == 64
+    looks = len(tested)
+    assert looks == NEAR_MEASURED + 1
+    ratios = len(measured)
+    assert ratios == NEAR_MEASURED
+    assert _widest(measured, 1) <= NEAR_MEASURED_WORDS
+
+
+def test_a_near_miss_never_measures_a_long_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F493 fix round 1: the word ratio is quadratic in words, so neither a
+    quote nor a candidate past `NEAR_MEASURED_WORDS` is measured: 64
+    look-alikes of 5,000 words give no hint and no ratio is measured; a long
+    line is still named when it shares both ends. At the cap, 64 look-alikes
+    of `NEAR_MEASURED_WORDS` words from a small vocabulary are the ceiling."""
+    import difflib
+    import random
+    from types import SimpleNamespace
+
+    from caos.evidence import citations
+    from caos.evidence.citations import (
+        NEAR_MEASURED,
+        NEAR_MEASURED_WORDS,
+        NEAR_WORDS,
+        near_line,
+    )
+
+    measured: list[tuple[int, int]] = []
+
+    def recording(
+        isjunk: Callable[[str], bool] | None,
+        a: Sequence[str],
+        b: Sequence[str],
+        autojunk: bool = True,
+    ) -> difflib.SequenceMatcher[str]:
+        measured.append((len(a), len(b)))
+        return difflib.SequenceMatcher(isjunk, a, b, autojunk)
+
+    monkeypatch.setattr(
+        citations, "difflib", SimpleNamespace(SequenceMatcher=recording)
+    )
+    rows = random.Random(0)
+
+    def lookalikes(count: int) -> tuple[list[str], list[str]]:
+        """A line of `count` words from 40, and `NEAR_MEASURED` lines with
+        its ends and its middle shuffled."""
+        base = [f"w{rows.randrange(40)}" for _ in range(count)]
+        middle = base[NEAR_WORDS:-NEAR_WORDS]
+        lines = [
+            " ".join(
+                base[:NEAR_WORDS]
+                + rows.sample(middle, len(middle))
+                + base[-NEAR_WORDS:]
+            )
+            for _ in range(NEAR_MEASURED)
+        ]
+        return base, lines
+
+    # Sharing only the last words, each look-alike would need the ratio.
+    base, lines = lookalikes(5000)
+    assert near_line(" ".join(["Opening", *base[1:]]), lines) is None
+    assert measured == []
+    # Both ends shared: named without a ratio, however long.
+    slipped = [*base[:100], "slipped", *base[101:]]
+    assert near_line(" ".join(slipped), [" ".join(base)]) == 0
+    assert measured == []
+    base, lines = lookalikes(NEAR_MEASURED_WORDS)
+    assert near_line(" ".join(["Opening", *base[1:]]), lines) is None
+    assert measured == [(NEAR_MEASURED_WORDS, NEAR_MEASURED_WORDS)] * NEAR_MEASURED
+    assert NEAR_MEASURED_WORDS == 300
+
+
+# C1's CP-1 shape (F495): a table row quoted with alternate period columns
+# left out, which `near_line`'s length bound passes over.
+ROW = "Balance at June 30 | 41 | 39 | 92 | 86 | 545 | 586"
+DROPPED = "Balance at June 30 | 41 | 92 | 545"
+
+
+def test_cells_line_names_the_one_row_a_quote_left_cells_out_of() -> None:
+    """F495: a quote with the row's first cell and some of its cells, in
+    order, names that row; a reordered quote, a quote as wide as the row,
+    two such rows, a quote that is no row, or more than `NEAR_MEASURED`
+    rows sharing the first cell are no answer."""
+    from caos.evidence.citations import (
+        CELL_SEPARATOR,
+        NEAR_MEASURED,
+        cells_line,
+        near_line,
+    )
+
+    lines = [
+        "Balance at December 31 | 40 | 38 | 90 | 85 | 540 | 580",
+        "Revenue grew 4% in FY2025.",
+        ROW,
+    ]
+    assert near_line(DROPPED, lines) is None
+    assert cells_line(DROPPED, lines) == 2
+    assert cells_line("Balance  at June 30 |41| 545 | 586", lines) == 2
+    assert (
+        cells_line("Balance at June 30 | 41 | 92 | 545 | 39 | 86 | 586", lines) is None
+    )
+    assert cells_line(ROW, lines) is None
+    assert cells_line(DROPPED, [*lines, ROW.replace("586", "587")]) is None
+    assert cells_line("Balance at June 30 41 92 545", lines) is None
+    assert cells_line("Balance at March 31 | 41 | 92", lines) is None
+    alike = [f"Balance at June 30 | {n} | {n}" for n in range(NEAR_MEASURED)]
+    assert cells_line(DROPPED, [*alike, ROW]) is None
+    assert cells_line(DROPPED, [*alike[1:], ROW]) == NEAR_MEASURED - 1
+    assert CELL_SEPARATOR == " | "
+
+
+CELL_PAGES = (
+    ("Revenue grew 4% in FY2025.",),
+    (ROW,),
+    ("Cover was 2.1x.",),
+)
+
+
+def test_a_dropped_cells_row_is_hinted_from_delivered_lines_only(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """F495: a row quoted with cells left out is still refused (invariant
+    11), and the retry is told that row's page and first words; with that
+    page not delivered, the quote is absent and the page is never read
+    (D82's M2)."""
+    from caos.evidence.citations import TokenIndex
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import HINT_WORDS, LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(CELL_PAGES))
+    every = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    assert ROW in {d.text.value for d in every}
+    assert _code(conn, source_id, DROPPED) is RefusalCode.CITATION_NOT_LOCATED
+
+    def hint(delivered: list[Delivery], index: TokenIndex, page: int) -> LineHint:
+        blocks = {source_id: frozenset(d.block_id for d in delivered)}
+        citation = Citation(source_id, page, DROPPED)
+        return _line_hint(conn, delivered, blocks, citation, index)
+
+    begins = " ".join(ROW.split()[:HINT_WORDS])
+    assert hint(every, TokenIndex(), 2) == LineHint(begins=begins, near=2, cells=True)
+    assert hint(every, TokenIndex(), 1) == LineHint(
+        begins=begins, near=2, moved=True, cells=True
+    )
+    index = TokenIndex()
+    withheld = [d for d in every if d.page != 2]
+    assert hint(withheld, index, 1) == LineHint(absent=True)
+    assert (source_id, 2) not in index.pages
+
+
+def test_placing_a_dropped_cells_row_stays_linear_in_the_lines_delivered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F495, bounded as F493: 360 delivered pages of 30 rows are searched in
+    one pass; rows sharing the quote's first cell are checked at most
+    `NEAR_MEASURED` times, each check linear in cells. Counted, not timed:
+    one first-cell read per row delivered, and one subsequence check per
+    row sharing it, up to the cap."""
+    from caos.evidence.citations import NEAR_MEASURED, cells_line
+
+    first = _recorded(monkeypatch, "_first_cell")
+    checked = _recorded(monkeypatch, "_in_order")
+    cells = " | ".join(str(n) for n in range(40))
+    lines = [
+        f"Row {page} {line} | {cells}" for page in range(360) for line in range(30)
+    ]
+    lines[5000] = ROW
+    placed = cells_line(DROPPED, lines)
+    assert placed == 5000
+    # One read a row, the dropped row's included; only it shares the quote's
+    # first cell, so it alone is checked.
+    reads = len(first)
+    assert len(lines) == 10_800
+    assert reads == 10_800
+    assert len(checked) == 1
+    first.clear()
+    checked.clear()
+    alike = [f"Balance at June 30 | {cells}" for _ in range(360 * 30)]
+    placed = cells_line(DROPPED, [*alike, ROW])
+    assert placed is None
+    # The search gives up at the 65th row sharing the first cell, before its
+    # check, so it never reaches the dropped row at the end.
+    assert NEAR_MEASURED == 64
+    reads = len(first)
+    assert reads == NEAR_MEASURED + 1
+    checks = len(checked)
+    assert checks == NEAR_MEASURED
+    # Each check is of the 40 cells after the first against the 40 after it.
+    assert _widest(checked, 1) == 40
+
+
+def test_an_unknown_source_id_is_told_so_and_a_delivered_one_keeps_its_wording(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """F495 (C1's CP-1 attempt 1): a citation whose source_id splices two
+    real ids is not one of the request's sources and is told so, grouped by
+    that id, with the one delivered source holding its line; a valid id on
+    a page the node was not given keeps D82's wording."""
+    from caos.methodology.canonical import _anchoring_line
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import ADVISORY
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(CELL_PAGES))
+    delivered = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+        if page != 3
+    ]
+    spliced = UUID(str(source_id)[:24] + "0" * 12)
+    citations = [
+        Citation(spliced, 2, ROW),
+        Citation(source_id, 3, "Cover was 2.1x."),
+        Citation(spliced, 1, "Not a delivered line."),
+        Citation(source_id, 1, "Revenue grew 4% in FY2025."),
+        Citation(spliced, 2, ROW),
+    ]
+    line = _anchoring_line(conn, delivered, citations)
+    assert line == (
+        f"host anchoring check: citations 1 and 5 of 5 name source_id {spliced},"
+        " which is not one of this request's sources; use one of the source_id"
+        f" values listed in the final check, and the lines are in source {source_id};"
+        f" citation 3 of 5 names source_id {spliced}, which is not one of this"
+        " request's sources; use one of the source_id values listed in the final"
+        " check; citation 2 of 5 names a page or line this node was not given;"
+        " keep citation 4 exactly as it was; any citation you add or change must"
+        " be an exact excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
+        " (numbered from 1 in the order given)" + ADVISORY
+    )
+
+
+# C2's CP-4 shape (F496): a page break ends the evidence line mid-sentence,
+# and the quote carries the sentence on past it.
+SPLIT = (
+    "The Company shall execute all documents and take all actions required by"
+    " such Security"
+)
+OVERRUN = SPLIT + " Documents."
+
+
+def test_overrun_line_names_the_one_line_a_quote_runs_past() -> None:
+    """F496: a quote that is one line and then more names that line, word
+    for word as anchoring reads them; the line itself, a line sharing fewer
+    than `NEAR_WORDS` words, two such lines, or more than `NEAR_MEASURED`
+    candidates are no answer."""
+    from caos.evidence.citations import NEAR_MEASURED, NEAR_WORDS, overrun_line
+
+    lines = ["Revenue grew 4% in FY2025.", SPLIT, "Documents to perfect the Liens."]
+    assert overrun_line(OVERRUN, lines) == 1
+    assert overrun_line('"' + OVERRUN.replace("Security", "Security,"), lines) == 1
+    assert overrun_line(SPLIT, lines) is None
+    assert overrun_line(SPLIT.replace("actions", "action") + " More.", lines) is None
+    assert overrun_line(OVERRUN, [*lines, SPLIT + "  "]) is None
+    assert overrun_line("Revenue grew 4% in FY2025. It rose.", lines) is None
+    heading = " ".join(SPLIT.split()[: NEAR_WORDS - 1])
+    assert overrun_line(OVERRUN, [heading]) is None
+    head = " ".join(SPLIT.split()[:NEAR_WORDS])
+    alike = [f"{head} other {n}" for n in range(NEAR_MEASURED)]
+    assert overrun_line(OVERRUN, [*alike, SPLIT]) is None
+    assert overrun_line(OVERRUN, [*alike[1:], SPLIT]) == NEAR_MEASURED - 1
+
+
+OVERRUN_PAGES = (
+    ("Revenue grew 4% in FY2025.",),
+    (SPLIT,),
+    ("Documents to perfect the Liens.",),
+)
+
+
+def test_an_overrun_is_hinted_before_a_near_miss_from_delivered_lines_only(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """F496: a quote running past the end of a delivered line is still
+    refused (invariant 11), and the retry is told that line's page and last
+    words rather than the near miss it also is; with that page not
+    delivered, the quote is absent and the page is never read (D82's M2)."""
+    from caos.evidence.citations import TokenIndex, near_line
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import END_WORDS, LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(OVERRUN_PAGES))
+    every = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    assert SPLIT in {d.text.value for d in every}
+    assert near_line(OVERRUN, [d.text.value for d in every]) is not None
+    assert _code(conn, source_id, OVERRUN) is RefusalCode.CITATION_NOT_LOCATED
+
+    def hint(delivered: list[Delivery], index: TokenIndex, page: int) -> LineHint:
+        blocks = {source_id: frozenset(d.block_id for d in delivered)}
+        citation = Citation(source_id, page, OVERRUN)
+        return _line_hint(conn, delivered, blocks, citation, index)
+
+    ends = " ".join(SPLIT.split()[-END_WORDS:])
+    assert hint(every, TokenIndex(), 2) == LineHint(near=2, ends=ends)
+    assert hint(every, TokenIndex(), 1) == LineHint(near=2, moved=True, ends=ends)
+    index = TokenIndex()
+    withheld = [d for d in every if d.page != 2]
+    assert hint(withheld, index, 1) == LineHint(absent=True)
+    assert (source_id, 2) not in index.pages
+
+
+def test_placing_an_overrun_stays_linear_in_the_lines_delivered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F496, bounded as F493: 360 delivered pages of 30 lines are searched in
+    one pass; lines holding the quote's first words are checked at most
+    `NEAR_MEASURED` times, each check linear in words. Counted, not timed:
+    one `in` test per line delivered, and one prefix check per place in a
+    line that holds them, up to the cap."""
+    from caos.evidence.citations import NEAR_MEASURED, NEAR_WORDS, overrun_line
+
+    starts = _recorded(monkeypatch, "_quote_starts")
+    checked = _recorded(monkeypatch, "_overruns")
+    tail = " ".join(f"w{n}" for n in range(70))
+    lines = [
+        _Looked(f"Page {page} line {line} {tail}")
+        for page in range(360)
+        for line in range(30)
+    ]
+    lines[5000] = _Looked(SPLIT)
+    placed = overrun_line(OVERRUN, lines)
+    assert placed == 5000
+    # One test a line, the split line's included; only it holds the quote's
+    # second word, so only it is read for a place, and checked once.
+    looks = {line.looks for line in lines}
+    assert looks == {1}
+    assert len(starts) == 1
+    assert len(checked) == 1
+    starts.clear()
+    checked.clear()
+    head = " ".join(SPLIT.split()[:NEAR_WORDS])
+    alike = [_Looked(f"{head} {tail}") for _ in range(360 * 30)]
+    lines = [*alike, _Looked(SPLIT)]
+    placed = overrun_line(OVERRUN, lines)
+    assert placed is None
+    # Each look-alike holds one place, so the search gives up at the 65th,
+    # after its read and before its check: the lines past it are not looked
+    # at, the split line at the end among them.
+    assert NEAR_MEASURED == 64
+    looked = sum(line.looks for line in lines)
+    assert looked == NEAR_MEASURED + 1
+    reads = len(starts)
+    assert reads == NEAR_MEASURED + 1
+    checks = len(checked)
+    assert checks == NEAR_MEASURED

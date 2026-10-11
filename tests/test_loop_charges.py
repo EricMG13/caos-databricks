@@ -39,7 +39,8 @@ from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import NodeState, ResolvedRoute, node_states, resolve_route
 from caos.graph.runtime import Execution, accepted_artifacts, run_route
 from caos.methodology.bundle import Bundle
-from caos.methodology.handoff import _decoded_record
+from caos.methodology.citation_markers import qualified
+from caos.methodology.handoff import UnverifiedCitation, _decoded_record
 from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice, priced_request, worst_case
 from caos.provider import MAX_REQUEST_BYTES
@@ -233,32 +234,40 @@ def test_the_artifact_is_the_handoff_and_the_record_the_host_built(
 
     assert stored.identity.module_id == "CP-0", "the host's module id, not the module's"
     assert stored.artifact_sha256 == artifact
-    assert stored.build_id.startswith("994a1b3f")
+    assert stored.build_id.startswith("d73f4b91")
     assert len(stored.authority_digest) == 64
     [citation] = stored.citations
     assert citation.matched_text == QUOTE and citation.bboxes, "anchored by the host"
 
 
-def test_a_module_that_cannot_be_anchored_stops_the_run(
+def test_a_module_whose_citations_cannot_be_anchored_still_completes(
     ready: tuple[StoreConnection, UUID, UUID, BlobStore], route: ResolvedRoute
 ) -> None:
-    """A refusal inside a node is not a node that quietly produced nothing. The
-    attempt and its reservation stay; the run does not complete."""
-    conn, run_id, _source_id, _blobs = ready
-    completions = _Completions(UUID(int=0))  # cites evidence never delivered
+    """D106: a citation that does not anchor refuses the citation, never the
+    answer. Every module cites evidence never delivered; each is accepted
+    with its one citation unverified and none anchored, each paid for once,
+    and the run completes -- no retry is spent on a citation."""
+    conn, run_id, _source_id, blobs = ready
+    stranger = UUID(int=0)
+    completions = _Completions(stranger)  # cites evidence never delivered
 
-    with pytest.raises(Refusal, match=r"^CITATION_NOT_DELIVERED$"):
-        _run(ready, route, completions)
+    _run(ready, route, completions)
 
     with connect(_url_for(conn.info.dbname)) as observer:
-        # N52: the refusal earns one second attempt, refused the same way;
-        # both keep their reservation and bill.
-        assert run_status(observer, run_id) is RunStatus.RUNNING
-        assert _reserved(observer, run_id) == [ESTIMATE, ESTIMATE]
-        assert _charges(observer, run_id) == [REPORTED, REPORTED]
-        assert observer.execute("SELECT count(*) FROM call_outcomes").fetchone() == (2,)
-        assert observer.execute("SELECT count(*) FROM artifacts").fetchone() == (0,)
-    assert len(completions.prompts) == 2
+        assert run_status(observer, run_id) is RunStatus.COMPLETE
+        assert _charges(observer, run_id) == [REPORTED] * 3
+        records = observer.execute(
+            "SELECT record_sha256 FROM artifacts WHERE run_id = %s", (run_id,)
+        ).fetchall()
+    assert len(completions.prompts) == 3 and len(records) == 3
+    for (digest,) in records:
+        stored = _decoded_record(blobs.get(str(digest)))
+        assert stored.citations == ()
+        assert stored.unverified == (
+            UnverifiedCitation(
+                stranger, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED, marker=1
+            ),
+        )
 
 
 def test_the_loop_hands_each_node_its_predecessors_results(
@@ -275,7 +284,7 @@ def test_the_loop_hands_each_node_its_predecessors_results(
     first, second, _third = completions.prompts
     assert "--- UPSTREAM" not in first
     assert "--- UPSTREAM" in second
-    assert completions.answers[0].decode() in second
+    assert qualified(completions.answers[0].decode(), "CP-0") in second
 
 
 def test_a_predecessor_artifact_of_another_shape_is_refused_not_raised(
@@ -462,8 +471,12 @@ def test_a_prompt_rebuilt_larger_than_the_one_priced_is_refused_before_the_call(
 
     def padded(*args: object, **kwargs: object) -> str:
         nonlocal builds
-        builds += 1
         prompt = real(*args, **kwargs)  # type: ignore[arg-type]
+        # A prompt built only to be measured, to fit the node (D116), is
+        # never sent or priced: only the sent builds count.
+        if getattr(args[3], "measured_tag", None) is not None:
+            return prompt
+        builds += 1
         # Every build after the priced one grows. A byte would do; a kilobyte
         # makes the refusal unambiguous at any price this fixture could carry.
         return prompt if builds == 1 else prompt + ("\n# padding" * 128)

@@ -64,7 +64,11 @@ export interface ChartSelection {
   category: string;
   /** The category's position. */
   index: number;
+  /** `null` where unavailable, and for an interval: no one figure stands
+      for a range, so its two ends are in `interval`. */
   value: Decimal | null;
+  /** A range strip's interquartile bar: Q1 and Q3 as served. */
+  interval?: { from: Decimal; to: Decimal };
   /** `null` only for a waterfall's unreconciled residual: nobody served it. */
   origin: Origin | null;
   /** A waterfall step's kind; absent elsewhere. */
@@ -102,6 +106,88 @@ export interface WaterfallStep {
   kind: "total" | "delta";
   value: Decimal | null;
   reason?: string | null;
+  origin: Origin;
+  /** A change's colour in place of its pole's: what its `status` stands for.
+      A total stays neutral. */
+  color?: ChartColor;
+  /** The word the colour stands for, said in the step's name and its table
+      row: colour is never the only carrier. */
+  status?: string;
+  /** Said after the amount in the step's name and its table row: how the
+      value drawn was read from the one served. */
+  note?: string;
+}
+
+/** One test of a bullet chart: a current basis against its threshold. The
+    headroom is the module's own figure, printed as served and never drawn
+    or computed here. */
+export interface BulletRow {
+  key: string;
+  label: string;
+  /** `max`: the threshold is a ceiling; `min`: a floor; `null`: not stated. */
+  direction: "max" | "min" | null;
+  threshold: Datum;
+  current: Datum;
+  headroom: Datum;
+  origin: Origin;
+}
+
+/** One metric of a range strip. A statistic absent from the row is one its
+    register does not declare: nothing is drawn for it and its table cell is
+    empty. One present with a null value is a gap with its reason. */
+export interface RangeRow {
+  key: string;
+  label: string;
+  min?: Datum;
+  q1?: Datum;
+  median?: Datum;
+  q3?: Datum;
+  max?: Datum;
+  /** The value held against the range: the borrower's, an implied EV. */
+  marker?: Datum;
+  origin: Origin;
+}
+
+/** One metric of a dumbbell: two of its values, each a dot (an expected
+    value and the one realised), joined where both are available. */
+export interface DumbbellRow {
+  key: string;
+  label: string;
+  from: Datum;
+  to: Datum;
+  origin: Origin;
+}
+
+/** One point of a scatter: a value against the date it is served with. A
+    point with no readable date or no value is not placed; the table twin
+    lists it with its reason. */
+export interface ScatterPoint {
+  key: string;
+  label: string;
+  /** A date as served: placed where it reads as `YYYY-MM-DD`, `YYYY-MM` or
+      `YYYY`, never guessed from any other spelling. */
+  at: string;
+  /** Why no one date is served, where the figure says (a date stated
+      twice): the point's reason for not being placed, in place of an
+      unread spelling's. */
+  unread?: string;
+  value: Datum;
+  /** What colours the point: the series colours by first appearance. */
+  group: string;
+  origin: Origin;
+}
+
+/** One event of a probability and impact matrix, its cells as the figure
+    gives them: a label that is not one of High, Medium, Low or Unknown
+    counts as Unknown. */
+export interface RiskEvent {
+  key: string;
+  /** Its id, naming it in its cell's mark. */
+  label: string;
+  description: string;
+  probability: string;
+  impact: string;
+  classification: string;
   origin: Origin;
 }
 
@@ -157,8 +243,9 @@ export interface LegendEntry {
   key: string;
   label: string;
   tone: Tone;
-  /** A swatch for bars, a stroke for lines. */
-  shape: "fill" | "line";
+  /** A swatch for bars, a stroke with its point for lines, a short rule or a
+      dot for a value marked across its row. */
+  shape: "fill" | "line" | "rule" | "dot";
   /** Drawn in the series' own form; solid when absent, outlined when `null`
       (the residual, which nobody served). */
   origin?: Origin | null;

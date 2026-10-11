@@ -28,6 +28,7 @@ from canonical_fixtures import (
     skill,
     whole_line,
     wire,
+    with_markers,
 )
 from lite_route_fixtures import _table, _yaml
 
@@ -220,6 +221,12 @@ def _cp1() -> dict[str, list[list[str]]]:
                 "5 percent fixed",
                 "2030",
                 "not a lease",
+                "FIXED",
+                "NONE",
+                "null",
+                "null",
+                "5.000",
+                "null",
                 "issuer-pack",
                 "issuer-pack p1",
             ]
@@ -493,11 +500,17 @@ def canonical_markdown(ident: HostIdentity, knobs: HandoffKnobs | None = None) -
         + (
             appendix
             if h == "Analysis"
-            else (knobs.quote or QUOTES[ident.module_id]) + "\n\n"
+            else marked(knobs.quote or QUOTES[ident.module_id]) + "\n\n"
         )
         for h in CONTRACT.validate_handoff.CANONICAL_HEADINGS
     )
     return ("---\n" + _yaml(front) + "\n---\n" + body).encode()
+
+
+def marked(quote: str) -> str:
+    """Each line of `quote` with the marker of the citation `RouteCompletions`
+    makes of it, `[C1]` for the first (D107)."""
+    return "\n".join(f"{line} [C{n}]" for n, line in enumerate(quote.splitlines(), 1))
 
 
 @dataclass
@@ -860,6 +873,7 @@ class LedgerCompletions:
                 quote=replaced,
             ),
         )
+        markdown = with_markers(markdown, len(quotes))
         self.answers.append(markdown)
         ids = {"memo": self.memo_id, "outcome": self.outcome_id}
         citations: list[dict[str, object]] = [
@@ -1195,6 +1209,7 @@ class ResearchCompletions:
                 quote=replaced,
             ),
         )
+        markdown = with_markers(markdown, len(quotes))
         self.answers.append(markdown)
         ids = {"release": self.release_id, "facility": self.facility_id}
         citations: list[dict[str, object]] = [

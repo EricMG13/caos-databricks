@@ -4,8 +4,9 @@
 // they go. Recharts draws the axes, grid and bars (D61); the bars are this
 // module's shapes, so provenance stays in the mark, and what Recharts has no
 // word for -- an unavailable value's "n/a", a label that is left out rather
-// than clipped, a stack's total, a bridge's joins -- is drawn here from the
-// same geometry. One value axis always, holding zero (no dual axis, no
+// than clipped, a stack's total, a bridge's joins, a value marked across its
+// row (a threshold's rule, a borrower's dot) -- is drawn here from the same
+// geometry. One value axis always, holding zero (no dual axis, no
 // floating baseline); bars no thicker than 24px, with square ends.
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Focus, Reported, useMarks } from "./ChartFrame";
@@ -18,10 +19,10 @@ import {
   type Placed,
   type Tick,
 } from "./axes";
-import { formatDecimal, toNumber } from "./decimal";
-import { BarShape, GapMark, HatchPatterns } from "./marks";
+import { formatDecimal, toNumber, type ReadValue } from "./decimal";
+import { BarShape, DOT, GapMark, HatchPatterns, MarkerShape } from "./marks";
 import { TICK_SIZE, VALUE_SIZE, fitLines, textWidth } from "./scale";
-import { cellName, cellSelection, type Cell } from "./series";
+import { ORIGIN_WORD, cellName, cellSelection, said, type Cell } from "./series";
 import type { Box, ChartSelection, Orientation, Origin, Plot, PlotKit, Tone } from "./types";
 
 /** One bar, in value space. */
@@ -51,6 +52,27 @@ export interface BandBar {
   selection: ChartSelection;
 }
 
+/** One value marked across its category's band rather than as a bar from
+    zero: a threshold's `rule`, a statistic's or an end's `dot`. */
+export interface BandMarker {
+  key: string;
+  category: number;
+  /** Where it stands on the value axis. A number for geometry only. */
+  at: number;
+  tone: Tone;
+  origin: Origin;
+  /** Unavailable: the labelled gap is drawn in its row instead. */
+  gap: boolean;
+  /** A line across the band, perpendicular to the value axis; or a point at
+      the band's centre. */
+  shape: "rule" | "dot";
+  /** Pixels across the band off its centre: two dots at one value set apart. */
+  offset?: number;
+  name: string;
+  readout?: string;
+  selection: ChartSelection;
+}
+
 export interface BandSpec {
   orientation: Orientation;
   categories: readonly string[];
@@ -61,6 +83,14 @@ export interface BandSpec {
   totals?: readonly { category: number; at: number; text: string }[];
   /** Ticks read as percent, over 0 to 100. */
   percent?: boolean;
+  /** Values marked across their rows, reached after their category's bars. */
+  markers?: readonly BandMarker[];
+  /** A thin line along the value axis at a band's centre, under its bars and
+      markers, joining two of its values (a range's min and max), or, with
+      `across`, a line across the band that far either side of its centre
+      at `from` (two equal values set apart); drawn only, never a button:
+      the values it joins are marks of their own. */
+  spans?: readonly { category: number; from: number; to: number; across?: number }[];
   /** Join each bar's end to the next bar that spans that level (a bridge). */
   connect?: boolean;
   /** A vertical chart's height, axes included. */
@@ -74,6 +104,8 @@ const ROW = 26; // a horizontal chart's least row
 const AXIS_BAND = 22; // the band beside the plot its tick labels sit in
 const EDGE = 8;
 const BAND_FILL = 0.8; // a band's share its bars may take; the rest parts them
+const RULE_OVER = 4; // how far a rule stands past its bars each side
+const RULE_WIDTH = 2; // a rule's stroke (.chart-line)
 // How far each further gap in one slot steps off the baseline: past the one
 // before it, "n/a" and its tick.
 const GAP_STEP = { vertical: 14, horizontal: 34 };
@@ -101,6 +133,31 @@ export function cellBar(
   };
 }
 
+/** A row's statistic or end marked across its band: its key and selection
+    series `part`, named "label: word value (origin)". The range strip's and
+    the dumbbell's one builder. */
+export function rowMarker(
+  row: { key: string; label: string; origin: Origin },
+  index: number,
+  part: string,
+  word: string,
+  value: ReadValue,
+  unit: string | undefined,
+  look: { tone: Tone; shape: BandMarker["shape"] },
+): BandMarker {
+  const origin = value.origin ?? row.origin;
+  return {
+    key: `${row.key}:${part}`,
+    category: index,
+    at: value.value === null ? 0 : toNumber(value.value),
+    ...look,
+    origin,
+    gap: value.value === null,
+    name: `${row.label}: ${word} ${said(value, unit)} (${ORIGIN_WORD[origin]})`,
+    selection: { series: part, category: row.label, index, value: value.value, origin },
+  };
+}
+
 /** Which way a bar grows: towards larger values. */
 function grows(bar: BandBar): boolean {
   return bar.to >= bar.from;
@@ -121,6 +178,8 @@ function extentOf(spec: BandSpec): [number, number] {
     0,
     ...spec.bars.filter((bar) => !bar.gap).flatMap((bar) => [bar.from, bar.to]),
     ...(spec.totals ?? []).map((total) => total.at),
+    ...(spec.markers ?? []).filter((marker) => !marker.gap).map((marker) => marker.at),
+    ...(spec.spans ?? []).flatMap((span) => [span.from, span.to]),
   ];
   return [Math.min(...values), Math.max(...values)];
 }
@@ -148,7 +207,9 @@ function layoutOf(spec: BandSpec, width: number): Layout {
   const count = Math.max(1, spec.categories.length);
   if (vertical) {
     const height = spec.height ?? 240;
-    const above = spec.bars.some((bar) => bar.gap || (bar.label && grows(bar)));
+    const above =
+      spec.bars.some((bar) => bar.gap || (bar.label && grows(bar))) ||
+      (spec.markers ?? []).some((marker) => marker.gap);
     const up = above || spec.totals?.length ? 16 : 4;
     const down = spec.bars.some((bar) => bar.label && !grows(bar)) ? 16 : 0;
     const top = 4;
@@ -166,7 +227,7 @@ function layoutOf(spec: BandSpec, width: number): Layout {
       room: { up, down },
       axis,
       step,
-      thick: Math.max(1, Math.min(THICK, (step * BAND_FILL) / spec.slots - GAP)),
+      thick: thickOf(spec, step),
     };
   }
   const widest = Math.max(0, ...spec.categories.map((category) => textWidth(category, TICK_SIZE)));
@@ -191,8 +252,20 @@ function layoutOf(spec: BandSpec, width: number): Layout {
     room: { up, down },
     axis,
     step: row,
-    thick: Math.max(1, Math.min(THICK, (row * BAND_FILL) / spec.slots - GAP)),
+    thick: thickOf(spec, row),
   };
+}
+
+/** A bar's thickness in a band `step` long: its share of the band, at most
+    `THICK`. Where markers share the band, the bars give up `RULE_OVER` each
+    side of the longest rule the band holds (`step - 2 * GAP`), so a rule
+    always reads past both sides of its bars. */
+function thickOf(spec: BandSpec, step: number): number {
+  const share = (step * BAND_FILL) / spec.slots - GAP;
+  const ruled = spec.markers?.length
+    ? (step - 2 * GAP - 2 * RULE_OVER - (spec.slots - 1) * GAP) / spec.slots
+    : share;
+  return Math.max(1, Math.min(THICK, share, ruled));
 }
 
 /** The centre of a category's band, across the band axis. */
@@ -237,11 +310,11 @@ function drawnBox(bar: BandBar, rect: Box, vertical: boolean): Box {
   return { x, y, width, height };
 }
 
-/** Where an unavailable bar's gap is marked: its slot, on the baseline, or
-    stepped off it past the `earlier` gaps already marked in that slot (two
-    segments of one stack), so no two "n/a" marks overprint. */
-function gapPoint(bar: BandBar, layout: Layout, slots: number, earlier: number) {
-  const along = slotCentre(layout, bar.category, bar.slot, slots);
+/** Where an unavailable value's gap is marked: `along` its band (a bar's
+    slot, a marker's centre), on the baseline, or stepped off it past the
+    `earlier` gaps already marked there (two segments of one stack, a bar and
+    its marker), so no two "n/a" marks overprint. */
+function gapPoint(along: number, layout: Layout, earlier: number) {
   const base = layout.axis.at(0);
   return layout.vertical
     ? { x: along, y: base - earlier * GAP_STEP.vertical }
@@ -254,24 +327,76 @@ function gapBox(point: { x: number; y: number }, vertical: boolean): Box {
     : { x: point.x, y: point.y - 8, width: 30, height: 16 };
 }
 
-/** A value label past the bar's end, or nothing when it would not fit whole:
-    a label is never clipped by its mark or crowded into its neighbour's. */
-function labelOf(bar: BandBar, box: Box, layout: Layout, slots: number): Placed | null {
+/** A stretch along the value axis, in plot pixels, low end first. */
+type Span = readonly [number, number];
+
+/** A rule's length across its band: past its bars by `RULE_OVER` each side,
+    but never into the next band. */
+function ruleSpan(layout: Layout, slots: number): number {
+  const group = slots * layout.thick + (slots - 1) * GAP;
+  return Math.min(layout.step - 2 * GAP, group + 2 * RULE_OVER);
+}
+
+/** Where a marker is drawn: a rule's two ends (a dot sits at their midpoint),
+    its box, and the stretch of the value axis it covers. */
+function markerPlace(marker: BandMarker, layout: Layout, slots: number) {
+  const centre = centreOf(layout, marker.category) + (marker.offset ?? 0);
+  const at = layout.axis.at(marker.at);
+  const dot = marker.shape === "dot";
+  const half = dot ? 0 : ruleSpan(layout, slots) / 2; // the rule's half-length
+  const reach = dot ? DOT : half; // the box's half-extent across the band
+  const across = dot ? DOT : RULE_WIDTH / 2; // and along the value axis
+  const span: Span = [at - across, at + across];
+  return layout.vertical
+    ? {
+        line: { x1: centre - half, x2: centre + half, y1: at, y2: at },
+        box: { x: centre - reach, y: at - across, width: 2 * reach, height: 2 * across },
+        span,
+      }
+    : {
+        line: { x1: at, x2: at, y1: centre - half, y2: centre + half },
+        box: { x: at - across, y: centre - reach, width: 2 * across, height: 2 * reach },
+        span,
+      };
+}
+
+/** A label's stretch along the value axis: across its text sideways, its
+    height upright. */
+function labelSpan(placed: Placed, wide: number, vertical: boolean): Span {
+  if (vertical) return [placed.y - VALUE_SIZE, placed.y];
+  return placed.anchor === "start" ? [placed.x, placed.x + wide] : [placed.x - wide, placed.x];
+}
+
+/** A value label past the bar's end, or nothing when it would not fit whole
+    or a marker in its row would cross it: a label is never clipped by its
+    mark, crowded into its neighbour's or struck through. */
+function labelOf(
+  bar: BandBar,
+  box: Box,
+  layout: Layout,
+  slots: number,
+  marked: readonly Span[],
+): Placed | null {
   if (!bar.label) return null;
   const up = grows(bar);
   const wide = textWidth(bar.label, VALUE_SIZE);
+  let placed: Placed;
   if (layout.vertical) {
     const room = slots === 1 ? layout.step : (layout.step * BAND_FILL) / slots;
     if (wide > room - GAP) return null;
     const x = box.x + box.width / 2;
     const y = up ? box.y - LABEL_GAP : box.y + box.height + LABEL_GAP + VALUE_SIZE - 2;
-    return { text: bar.label, x, y, anchor: "middle" };
+    placed = { text: bar.label, x, y, anchor: "middle" };
+  } else {
+    if (wide + LABEL_GAP > (up ? layout.room.up : layout.room.down)) return null;
+    const y = box.y + box.height / 2 + VALUE_SIZE / 2 - 2;
+    placed = up
+      ? { text: bar.label, x: box.x + box.width + LABEL_GAP, y, anchor: "start" }
+      : { text: bar.label, x: box.x - LABEL_GAP, y, anchor: "end" };
   }
-  if (wide + LABEL_GAP > (up ? layout.room.up : layout.room.down)) return null;
-  const y = box.y + box.height / 2 + VALUE_SIZE / 2 - 2;
-  return up
-    ? { text: bar.label, x: box.x + box.width + LABEL_GAP, y, anchor: "start" }
-    : { text: bar.label, x: box.x - LABEL_GAP, y, anchor: "end" };
+  const [low, high] = labelSpan(placed, wide, layout.vertical);
+  const struck = marked.some(([from, to]) => from < high + GAP && low < to + GAP);
+  return struck ? null : placed;
 }
 
 function totalOf(
@@ -305,8 +430,84 @@ function connectors(spec: BandSpec, boxes: ReadonlyMap<string, Box>, layout: Lay
   });
 }
 
-/** Everything drawn past the bars: gaps, labels, totals, joins and the zero
-    baseline. Labels and joins follow the bars' boxes as Recharts drew them. */
+/** Every unavailable value's gap: a bar's in its slot, a marker's at its
+    band's centre past every gap already marked in that band. */
+function gapsOf(spec: BandSpec, layout: Layout) {
+  // `slot` null: a marker's, which steps past every gap in its band.
+  const unavailable: { mark: BandBar | BandMarker; slot: number | null; along: number }[] = [
+    ...spec.bars
+      .filter((bar) => bar.gap)
+      .map((bar) => ({
+        mark: bar,
+        slot: bar.slot,
+        along: slotCentre(layout, bar.category, bar.slot, spec.slots),
+      })),
+    ...(spec.markers ?? [])
+      .filter((marker) => marker.gap)
+      .map((marker) => ({ mark: marker, slot: null, along: centreOf(layout, marker.category) })),
+  ];
+  // Gaps marked so far, per band and per slot of a band.
+  const inBand = new Map<number, number>();
+  const inSlot = new Map<string, number>();
+  return unavailable.map((gap) => {
+    const { category } = gap.mark;
+    const slot = `${category}:${gap.slot}`;
+    const earlier = (gap.slot === null ? inBand.get(category) : inSlot.get(slot)) ?? 0;
+    inBand.set(category, (inBand.get(category) ?? 0) + 1);
+    if (gap.slot !== null) inSlot.set(slot, (inSlot.get(slot) ?? 0) + 1);
+    return { mark: gap.mark, point: gapPoint(gap.along, layout, earlier) };
+  });
+}
+
+/** Each span, a thin line at its band's centre: drawn before the bars, so
+    they lie over it. Decoration only; nothing is reported. */
+function Spans({ spec, layout }: { spec: BandSpec; layout: Layout }) {
+  return (
+    <g className="chart-spans">
+      {(spec.spans ?? []).map((span, index) => {
+        const centre = centreOf(layout, span.category);
+        const from = layout.axis.at(span.from);
+        const [to, side] = span.across
+          ? [from, [centre - span.across, centre + span.across]]
+          : [layout.axis.at(span.to), [centre, centre]];
+        const ends = layout.vertical
+          ? { x1: side[0], x2: side[1], y1: from, y2: to }
+          : { x1: from, x2: to, y1: side[0], y2: side[1] };
+        return <line key={index} className="chart-span" data-span={span.category} {...ends} />;
+      })}
+    </g>
+  );
+}
+
+/** A marker drawn in its shape and reported to the frame, so a button can be
+    laid over it. */
+function Marker({ marker, place }: { marker: BandMarker; place: ReturnType<typeof markerPlace> }) {
+  return (
+    <>
+      <MarkerShape
+        mark={marker.key}
+        shape={marker.shape}
+        line={place.line}
+        tone={marker.tone}
+        origin={marker.origin}
+      />
+      <Reported
+        mark={{
+          key: marker.key,
+          name: marker.name,
+          readout: marker.readout,
+          box: place.box,
+          round: marker.shape === "dot",
+          selection: marker.selection,
+        }}
+      />
+    </>
+  );
+}
+
+/** Everything drawn past the bars: markers, gaps, labels, totals, joins and
+    the zero baseline. Labels and joins follow the bars' boxes as Recharts
+    drew them. */
 function Annotations({ spec, layout }: { spec: BandSpec; layout: Layout }) {
   const marks = useMarks();
   const boxes = new Map(
@@ -315,14 +516,16 @@ function Annotations({ spec, layout }: { spec: BandSpec; layout: Layout }) {
       return !bar.gap && mark ? [[bar.key, mark.box] as const] : [];
     }),
   );
-  const marked = new Map<string, number>();
-  const gaps = spec.bars.flatMap((bar) => {
-    if (!bar.gap) return [];
-    const slot = `${bar.category}:${bar.slot}`;
-    const earlier = marked.get(slot) ?? 0;
-    marked.set(slot, earlier + 1);
-    return [{ bar, point: gapPoint(bar, layout, spec.slots, earlier) }];
-  });
+  const markers = (spec.markers ?? [])
+    .filter((marker) => !marker.gap)
+    .map((marker) => ({ marker, place: markerPlace(marker, layout, spec.slots) }));
+  const marked = new Map<number, Span[]>();
+  for (const { marker, place } of markers) {
+    const spans = marked.get(marker.category);
+    if (spans) spans.push(place.span);
+    else marked.set(marker.category, [place.span]);
+  }
+  const gaps = gapsOf(spec, layout);
   const { area, vertical } = layout;
   const zero = layout.axis.at(0);
   return (
@@ -337,23 +540,28 @@ function Annotations({ spec, layout }: { spec: BandSpec; layout: Layout }) {
             <line key={`join-${key}`} className="chart-connector" {...ends} />
           ))
         : null}
-      {gaps.map(({ bar, point }) => (
-        <g key={bar.key}>
-          <GapMark mark={bar.key} x={point.x} y={point.y} vertical={vertical} />
+      {markers.map(({ marker, place }) => (
+        <Marker key={marker.key} marker={marker} place={place} />
+      ))}
+      {gaps.map(({ mark, point }) => (
+        <g key={mark.key}>
+          <GapMark mark={mark.key} x={point.x} y={point.y} vertical={vertical} />
           <Reported
             mark={{
-              key: bar.key,
-              name: bar.name,
-              readout: bar.readout,
+              key: mark.key,
+              name: mark.name,
+              readout: mark.readout,
               box: gapBox(point, vertical),
-              selection: bar.selection,
+              selection: mark.selection,
             }}
           />
         </g>
       ))}
       {spec.bars.map((bar) => {
         const box = boxes.get(bar.key);
-        const placed = box ? labelOf(bar, box, layout, spec.slots) : null;
+        const placed = box
+          ? labelOf(bar, box, layout, spec.slots, marked.get(bar.category) ?? [])
+          : null;
         return placed ? (
           <Label
             key={`label-${bar.key}`}
@@ -530,6 +738,7 @@ export function bandPlot(spec: BandSpec, kit: PlotKit): Plot {
           />
         </>
       )}
+      <Spans spec={spec} layout={layout} />
       {lanes.map((lane) => (
         <Bar
           key={lane}
@@ -553,9 +762,17 @@ export function bandPlot(spec: BandSpec, kit: PlotKit): Plot {
       <Focus />
     </BarChart>
   );
-  // Tab follows the eye: category by category, and slot by slot within one.
-  const order = [...spec.bars]
-    .sort((a, b) => a.category - b.category || a.slot - b.slot)
-    .map((bar) => bar.key);
+  // Tab follows the eye: category by category, slot by slot within one, then
+  // the category's markers in the order given (the sort is stable).
+  const order = [
+    ...spec.bars.map((bar) => ({ key: bar.key, category: bar.category, rank: bar.slot })),
+    ...(spec.markers ?? []).map((marker) => ({
+      key: marker.key,
+      category: marker.category,
+      rank: spec.slots,
+    })),
+  ]
+    .sort((a, b) => a.category - b.category || a.rank - b.rank)
+    .map((entry) => entry.key);
   return { height: layout.height, chart, order };
 }

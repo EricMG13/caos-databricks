@@ -11,9 +11,7 @@ CP-PARSE is CP-0's authority under its own route node (host carve-out, legacy de
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-0_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-0_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-0__SourceReadiness__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-PARSE_SCHEMA_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-PARSE__DataPreparation__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP0_CAPACITY_RESUME_CONTRACT_v1.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP0_PROFILE_ANCHOR_CONTRACT_v1.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md | whole | delivered authority file |
@@ -23,7 +21,8 @@ CP-PARSE is CP-0's authority under its own route node (host carve-out, legacy de
 | prompt | icm/shared/prompt/tagged.md | whole | prompt block |
 | prompt | icm/shared/prompt/host_steps.md | whole | prompt block |
 | prompt | icm/shared/prompt/final_check.md | whole | prompt block |
-| prompt | icm/shared/prompt/validator_feedback.md | whole | prompt block, on a node's one second attempt after a refused answer (D30) |
+| prompt | icm/shared/prompt/validator_feedback.md | whole | prompt block, on a node's guided retry after a refused answer (D30, D82), when that answer is not carried (D104) |
+| prompt | icm/shared/prompt/validator_repair.md | whole | prompt block, on a node's guided retry that carries its refused answer to be corrected (D104) |
 | store | accepted upstream handoffs | whole | context labelled by `allowed_use`; never citable |
 | store | delivered evidence blocks | CP-0's T8 selection for this module | the only citable text |
 

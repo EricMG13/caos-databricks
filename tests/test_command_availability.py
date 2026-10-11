@@ -112,7 +112,15 @@ class _Journey:
         if action is A.CREATE_RUN:
             path, body = runs, dict(ROUTE)
         elif action is A.PIN_RUN_INPUT:
-            path, body = f"{run}/input", {"subject": SUBJECT, "research": None}
+            path, body = (
+                f"{run}/input",
+                {
+                    "subject": SUBJECT,
+                    "research": None,
+                    "qualifiers": [],
+                    "objective": None,
+                },
+            )
         elif action in GATE_SLUG:
             slug = GATE_SLUG[action]
             path, body = f"{run}/gates/{slug}/approval", dict(self._digests(slug))
@@ -641,3 +649,46 @@ def test_a_frozen_head_offers_no_save_until_it_is_filed() -> None:
     assert save_on(frozen=False, filed=False) is None
     assert save_on(frozen=True, filed=False) == "DELIVERABLE_ALREADY_FROZEN"
     assert save_on(frozen=True, filed=True) is None
+
+
+def test_a_run_parked_over_its_reservation_is_offered_no_retry() -> None:
+    """R2.6: `requeue_run` refuses a run parked `BUDGET_CHARGE_OVER_RESERVATION`
+    whatever else holds, so the section names that code, not a retry."""
+    for cancel_requested in (False, True):
+        parked = RunFacts(
+            running=True,
+            route_pinned=True,
+            input_pinned=True,
+            this_build=True,
+            sources_live=True,
+            gates_released=True,
+            adapter_route=True,
+            work_state="STOPPED",
+            cancel_requested=cancel_requested,
+            stop_code=RefusalCode.BUDGET_CHARGE_OVER_RESERVATION,
+        )
+        [retry] = [
+            view
+            for view in run_actions(GlobalRole.ANALYST, Standing.WRITER, parked, 1, 0)
+            if view.action is A.RETRY_RUN
+        ]
+        assert retry.refusal is not None
+        assert retry.refusal.code == "BUDGET_CHARGE_OVER_RESERVATION"
+    other = RunFacts(
+        running=True,
+        route_pinned=True,
+        input_pinned=True,
+        this_build=True,
+        sources_live=True,
+        gates_released=True,
+        adapter_route=True,
+        work_state="STOPPED",
+        cancel_requested=False,
+        stop_code=RefusalCode.CONTEXT_OVER_CEILING,
+    )
+    [retry] = [
+        view
+        for view in run_actions(GlobalRole.ANALYST, Standing.WRITER, other, 1, 0)
+        if view.action is A.RETRY_RUN
+    ]
+    assert retry.refusal is None

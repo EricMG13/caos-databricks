@@ -60,8 +60,9 @@ describe("readMarkdown holds render.py's grammar", () => {
       "code",
     ]);
     expect(blocks[0]).toEqual({ kind: "heading", level: 3, text: "Credit view" });
-    expect(blocks[1]).toEqual({ kind: "paragraph", text: "One line and its continuation." });
-    expect(blocks[2]).toEqual({ kind: "quote", text: "quoted twice" });
+    // Joined at the written line break, which the page shows as a space (D107).
+    expect(blocks[1]).toEqual({ kind: "paragraph", text: "One line\nand its continuation." });
+    expect(blocks[2]).toEqual({ kind: "quote", text: "quoted\ntwice" });
     expect(blocks[4]).toEqual({
       kind: "code",
       info: "caos-forecast-v1",
@@ -101,7 +102,7 @@ describe("readMarkdown holds render.py's grammar", () => {
     });
     // A pipe in prose above a bare rule is not a one-column table (render.py's
     // DELIMITER note): the rule joins the paragraph, as the host's does.
-    expect(readMarkdown(md("a | b", "---"))).toEqual([{ kind: "paragraph", text: "a | b ---" }]);
+    expect(readMarkdown(md("a | b", "---"))).toEqual([{ kind: "paragraph", text: "a | b\n---" }]);
   });
 
   test("refuses whatever the host refuses: no faithful drawing exists", () => {
@@ -327,14 +328,18 @@ describe("a module's text in the places every module shares", () => {
   });
 
   test("every table the bundle tags is placed by its id, under its schema reference's name", () => {
-    // Every `<!-- table-id: -->` the methodology's Markdown declares.
+    // Every `<!-- table-id: -->` the methodology's Markdown declares, read as
+    // the bundle's own reader does (cp_tables.TABLE_ID_RE), so prose that
+    // names the comment is no table.
     const declared = new Set<string>();
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = resolve(dir, entry.name);
         if (entry.isDirectory()) walk(path);
         else if (entry.name.endsWith(".md")) {
-          for (const match of readFileSync(path, "utf8").matchAll(/table-id:\s*([a-z0-9_.-]+)/g)) {
+          for (const match of readFileSync(path, "utf8").matchAll(
+            /<!--\s*table-id:\s*([A-Za-z0-9_.]+)\s*-->/g,
+          )) {
             declared.add(match[1]!);
           }
         }

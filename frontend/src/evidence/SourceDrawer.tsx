@@ -7,6 +7,9 @@ import { useEffect, useState } from "react";
 import { toFraction, type Box } from "./geometry";
 import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
+import { Reanchored } from "./Reanchored";
+import { TracedLine, lineLabel } from "./TracedLine";
+import { NOT_LINKED } from "./Unverified";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, fetchPage, type PageStatus } from "@/app/transport";
 import type { CitationView, PageDocument, PageLine } from "@/wire/v1";
 
@@ -229,9 +232,9 @@ export function SourceDrawer({
             )}
           </div>
         )}
-        <div className="lbl">Matched text</div>
+        <div className="lbl">{lineLabel(fact.line)}</div>
         <blockquote className="matched" style={{ margin: 0 }}>
-          <mark>{fact.matched_text}</mark>
+          <TracedLine line={fact.line} />
         </blockquote>
         <dl className="kv">
           <dt>Document</dt>
@@ -241,6 +244,12 @@ export function SourceDrawer({
           <dt>Rectangles</dt>
           <dd>{fact.rects.length}</dd>
         </dl>
+        <Reanchored cited={fact.cited_page} found={fact.page} />
+        {fact.linked ? null : (
+          <div className="note" data-not-linked>
+            {NOT_LINKED}
+          </div>
+        )}
         <div className="focusnote">
           <b>Escape</b> returns focus to the chip that opened this.
         </div>

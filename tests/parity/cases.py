@@ -24,6 +24,12 @@ prompt group covers every other adapter module and names CP-CF as the one it
 cannot. Citation anchoring is exercised at the pure level below the store
 (`_unique_run` and `_rectangles` over `_Token`), because both public entry
 points read the token index from a connection.
+
+One divergence is mirrored rather than masked (D113): the host's prompt opens
+with the evidence, under a tag of its own, where the legacy prompt carried it
+last. The `prompt` goldens come from a legacy copy that makes the same move
+(`tests/parity/test_prompt.py`), so the rest of the assembly is still the
+legacy host's.
 """
 
 from __future__ import annotations
@@ -761,7 +767,9 @@ def _bound(target: Target, defect: str = "") -> _Bound:
     block = _forecast_markdown(target, request, bindings)
     markdown = block + "\n".join(quotes.values()).encode() + b"\n"
     upstream = {m: q.encode() for m, q in quotes.items()}
-    if defect == "quote-not-upstream":
+    # D107: the binder takes the owner's marker-linked citation and searches
+    # no handoff for the quote, so an owner body that quotes nothing binds.
+    if defect == "owner-body-quotes-nothing":
         upstream["CP-1"] = b""
     return _Bound(markdown, upstream, quotes)
 
@@ -878,7 +886,13 @@ def _forecast_cases() -> dict[str, CaseFn]:
         "duplicate_keys",
     ):
         cases[f"projection_{variant}"] = functools.partial(_projection_case, variant)
-    for defect in ("empty", "bound", "missing", "wrong-owner", "quote-not-upstream"):
+    for defect in (
+        "empty",
+        "bound",
+        "missing",
+        "wrong-owner",
+        "owner-body-quotes-nothing",
+    ):
         cases[f"bindings_{defect.replace('-', '_')}"] = functools.partial(
             _bindings_case, defect
         )

@@ -10,6 +10,7 @@ from typing import Any, NamedTuple
 
 from caos.calculators.cash_flow import cash_flow_forecast
 from caos.evidence.citations import AnchoredCitation
+from caos.methodology.citation_markers import unmarked
 from caos.methodology.host import verified_host_bytes
 from caos.methodology.vendor import VendorContract
 from caos.refusals import Refusal, RefusalCode
@@ -31,6 +32,36 @@ _OWNERS = {
     "tolerance": "CP-2G",
     "contractual": "CP-4",
 }
+# The modules whose citations CP-CF binds as calculation inputs (D106).
+FORECAST_OWNERS = frozenset(_OWNERS.values())
+# How a binding states one request value: `<pointer> = <JSON value>`.
+_SEPARATOR = " = "
+
+
+def _owner(pointer: str) -> str | None:
+    """The module that owns a request pointer's value (`_OWNERS`), by its
+    first segment; None for a pointer of no owned section."""
+    first = pointer.split("/")[1] if pointer.startswith("/") else ""
+    return _OWNERS.get(first)
+
+
+def _assignment(pointer: str, value: object) -> str:
+    """The one line a binding's quote must hold for `pointer`'s value."""
+    return pointer + _SEPARATOR + json.dumps(value, ensure_ascii=False)
+
+
+def binds_input(owner: str, quote: str) -> bool:
+    """Whether CP-CF would bind `quote`, cited by `owner`, as a calculation
+    input (D106): a line of it states a value (`_assignment`'s form, a
+    pointer then the separator) of a section `owner` owns. Read from the
+    quote alone, before any CP-CF answer exists, so a quote that slipped
+    after the separator still counts as one the calculator will need."""
+    for line in quote.splitlines():
+        pointer, separator, _value = line.partition(_SEPARATOR)
+        if separator and pointer == pointer.strip() and " " not in pointer:
+            if _owner(pointer) == owner:
+                return True
+    return False
 
 
 def _blocks(text: str) -> list[str]:
@@ -125,6 +156,11 @@ def validate_forecast_bindings(
 ) -> None:
     """Every requested value must be an exact assignment anchored by its owner.
 
+    The bound quote is one of the owner's anchored citations that a marker
+    in the owner's body names (`linked`, D107), as its verified record
+    holds it: the owner's body cites it by marker and quotes no source
+    text, so neither handoff is searched for the quote. A record from
+    before D107 keeps its own `linked`, the quote verbatim in that body.
     Empty arrays are also bound: absence of contractual repayments is an
     explicit CP-4 statement, never a missing-input default.
     """
@@ -135,19 +171,18 @@ def validate_forecast_bindings(
     if set(bindings) != set(leaves) or not {"CP-1", "CP-2G", "CP-4"} <= set(upstream):
         raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
     for pointer, value in leaves.items():
-        owner = _OWNERS[pointer.split("/")[1]]
+        owner = _owner(pointer)
         binding = bindings[pointer]
         if not isinstance(binding, dict) or set(binding) != {"module_id", "quote"}:
             raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
         quote = binding["quote"]
-        assignment = pointer + " = " + json.dumps(value, ensure_ascii=False)
+        assignment = _assignment(pointer, value)
         if (
             binding["module_id"] != owner
             or not isinstance(quote, str)
             or assignment not in quote.splitlines()
-            or quote not in {c.matched_text for c in citations.get(owner, ())}
-            or quote not in upstream[owner].decode("utf-8")
-            or quote not in markdown.decode("utf-8")
+            or quote
+            not in {c.matched_text for c in citations.get(owner, ()) if c.linked}
         ):
             raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
 
@@ -251,7 +286,7 @@ def validate_driver_mapping(
 
 def driver_line(contract: VendorContract, markdown: bytes, owner: bytes) -> str | None:
     """Which CP-2G driver rows a refused CP-CF answer's request cannot map, for
-    its one second attempt (D30): each by driver ID, case and period, never a
+    its guided retry (D30, D82): each by driver ID, case and period, never a
     value (G3-9). None when the answer carries no readable request or every
     row maps."""
     try:
@@ -282,11 +317,19 @@ def _faults_or_none(
         return None
 
 
+def _unmarked_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Each row with every cell read without its citation markers
+    (`unmarked`, D107)."""
+    return [{key: unmarked(cell) for key, cell in row.items()} for row in rows]
+
+
 def _faults(
     contract: VendorContract, request: Mapping[str, Any], rows: list[dict[str, str]]
 ) -> list[tuple[str, str]]:
     """(row, fault) for each CP-2G driver row the request needs and CP-CF cannot
-    map, in request order."""
+    map, in request order. Each cell is read without its citation markers
+    (`_unmarked_rows`, D107): `(45) [C1]` is the figure `(45)`."""
+    rows = _unmarked_rows(rows)
     if request["units"]["scale"] != "millions":
         raise ValueError
     faults: list[tuple[str, str]] = []

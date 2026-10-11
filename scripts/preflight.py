@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -113,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
     chosen = approved_choices(args.choices, args.run_ceiling, endpoint=args.endpoint)
     if chosen is None:
         return 1
+    for warning in context_warnings((args.endpoint, *chosen)):
+        print(warning)
 
     from databricks.sdk import WorkspaceClient
 
@@ -175,6 +177,21 @@ def main(argv: list[str] | None = None) -> int:
             continue  # said already, and not a reason to stop (W5)
         print(f"ok      {name}")
     return 1 if missing else 0
+
+
+def context_warnings(endpoints: Sequence[str]) -> list[str]:
+    """A warning per endpoint a run may be started on that has no declared
+    context (D116, N170): its requests are bounded by the transport ceiling
+    alone, as before D116. Said before any run; never a failure. A
+    `copilot:` name is declared (`caos.copilot.context_tokens`)."""
+    from caos.copilot import context_tokens
+
+    return [
+        f"WARNING {name}: no declared context; its requests are bounded by the"
+        " transport ceiling alone (D116)"
+        for name in dict.fromkeys(endpoints)
+        if context_tokens(name) is None
+    ]
 
 
 def approved_choices(

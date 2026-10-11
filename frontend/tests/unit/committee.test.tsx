@@ -31,10 +31,16 @@ describe("Committee v1", () => {
       "[data-committee-artifact], [data-committee-narrative]",
     )) {
       expect(saved.querySelector("img, script, a, input, textarea, [contenteditable]")).toBeNull();
-      // Its only other buttons are the host's Formatted / As written tabs (D60).
+      // Its only other buttons are the host's Formatted / As written tabs (D60)
+      // and a marker's chip (D107), whose only text is its `C<n>`.
       expect(
-        saved.querySelector("button:not([data-figure-chip]):not([data-artifact-view-tab])"),
+        saved.querySelector(
+          "button:not([data-figure-chip]):not([data-artifact-view-tab]):not([data-marker-chip])",
+        ),
       ).toBeNull();
+      for (const chip of saved.querySelectorAll("button[data-marker-chip]")) {
+        expect(chip.textContent).toMatch(/^C[1-9][0-9]*$/);
+      }
     }
     expect(root.querySelectorAll("[data-committee-artifact]")).toHaveLength(
       document.body.artifacts.length,
@@ -154,7 +160,7 @@ describe("Committee v1", () => {
     expect(narrative).toHaveTextContent("<svg onload=window.pwned=1>");
     // The figure is its quote and a chip naming its module and page (N59).
     expect(narrative.querySelector("q")).toHaveTextContent("Coverage 2.1x");
-    expect(narrative.querySelector("[data-figure-chip]")).toHaveTextContent("CP-1 · p.7");
+    expect(narrative.querySelector("[data-figure-chip]")).toHaveTextContent("CP-1 C1 · p.7");
     expect(narrative.querySelector("svg, img, script")).toBeNull();
   });
 });

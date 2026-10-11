@@ -15,6 +15,7 @@ reservation held, and the run is reclaimed once its lease expires (ST-15).
 
 from __future__ import annotations
 
+import ctypes
 import os
 import secrets
 import signal
@@ -34,6 +35,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.copilot import require_ready
 from caos.graph.checkpoint import checkpointer, close_checkpointer
 from caos.graph.route import ResolvedRoute, route_digest
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
@@ -544,9 +546,55 @@ def _store_configuration() -> tuple[str, str]:
     return store_url(), root
 
 
+# What stops a worker: SIGTERM from a platform, and Ctrl+C (SIGINT) or, on
+# Windows, Ctrl+Break (SIGBREAK) from the console an analyst runs it in (D79).
+STOP_SIGNALS: tuple[signal.Signals, ...] = tuple(
+    getattr(signal, name)
+    for name in ("SIGTERM", "SIGINT", "SIGBREAK")
+    if hasattr(signal, name)
+)
+
+# Closing the console window is no Python signal: Windows runs a console control
+# handler on its own thread and ends the process when it returns, five seconds
+# at most after the event. The handler asks for the orderly stop and holds the
+# process open until `main` has drained and released its lease, or the grace is
+# up (the lease then expires on its own, D6).
+CTRL_CLOSE_EVENT = 2
+CTRL_LOGOFF_EVENT = 5
+CTRL_SHUTDOWN_EVENT = 6
+CLOSE_EVENTS = frozenset({CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT})
+CLOSE_GRACE_SECONDS = 4.0
+DRAINED = Event()  # set by `main` once the worker has stopped and released
+CONSOLE_CLOSE_UNHANDLED = "CONSOLE_CLOSE_UNHANDLED: closing this window will not drain"
+_console_routines: list[object] = []  # the OS holds no reference to the callback
+
+
 def install_stop_handler(stopping: Event) -> None:
-    """SIGTERM only sets `stopping`; the loop decides when that is safe."""
-    signal.signal(signal.SIGTERM, lambda _signum, _frame: stopping.set())
+    """A stop signal only sets `stopping`; the loop decides when that is safe."""
+    for number in STOP_SIGNALS:
+        signal.signal(number, lambda _signum, _frame: stopping.set())
+    _handle_console_close(stopping)
+
+
+def _handle_console_close(stopping: Event) -> None:
+    """Map the console close event to the same stop as SIGTERM. A console that
+    will not take the handler (no console at all) is said on stderr, once, and
+    the worker still runs: Ctrl+C and Ctrl+Break are signals and stay handled.
+    Elsewhere there is no console to handle and nothing is done."""
+    if sys.platform != "win32":
+        return
+
+    def routine(event: int) -> bool:
+        if event not in CLOSE_EVENTS:
+            return False  # Ctrl+C and Ctrl+Break arrive as the signals above
+        stopping.set()
+        DRAINED.wait(CLOSE_GRACE_SECONDS)
+        return True
+
+    callback = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint)(routine)
+    _console_routines.append(callback)
+    if not ctypes.windll.kernel32.SetConsoleCtrlHandler(callback, 1):
+        print(CONSOLE_CLOSE_UNHANDLED, file=sys.stderr)
 
 
 @dataclass(frozen=True, slots=True)
@@ -569,6 +617,9 @@ def _configured() -> Configured:
     # until the first run a caller starts under it.
     configured_ceiling()
     choices = model_choices()
+    # The Copilot models among them answer on this machine (D77): ready here,
+    # or refused before the store is touched or a run claimed.
+    require_ready(choices)
     url, root = _store_configuration()
     bundle = Bundle(VENDORED_BUNDLE)
     bundle.verify_manifest()
@@ -634,7 +685,10 @@ def main() -> int:
         print(RefusalCode.STORE_UNAVAILABLE.value, file=sys.stderr)
         return 2
     install_stop_handler(stopping)
-    return _worker(configured, stopping)
+    try:
+        return _worker(configured, stopping)
+    finally:
+        DRAINED.set()  # a console close waits on this (D79)
 
 
 def start_in_process(stopping: Event) -> threading.Thread | None:

@@ -24,9 +24,12 @@ export function citationOf(fact: CitationView, observedAt: string): Citation {
     page: fact.page,
     bboxes: [],
     matched_text: fact.matched_text,
+    line: fact.line,
     observed_at: observedAt,
     render_url: null,
     withdrawn_at: fact.withdrawn_at,
+    cited_page: fact.cited_page,
+    linked: fact.linked,
   };
 }
 

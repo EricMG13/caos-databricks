@@ -12,7 +12,6 @@ import dataclasses
 import hashlib
 import json
 import shutil
-import time
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -36,6 +35,8 @@ from caos.blobs import BlobStore
 from caos.digest import canonical_json
 from caos.evidence.citations import (
     ANY_RUN,
+    EXCERPT,
+    REANCHORING_RULES,
     WHOLE_LINE,
     WHOLE_LINE_AS_STORED,
     AnchoredCitation,
@@ -72,9 +73,8 @@ SECRET = "Confidential covenant headroom 7.3x"
 # Fixed, not uuid4(): it reaches parametrize ids, which pytest-xdist workers
 # must collect identically.
 SOURCE = UUID("6da212c6-65a1-46b3-9e5c-7ed56acccd18")
-DELIVERED = frozenset({SOURCE})
 CP0 = _identity("CP-0")
-CP0_MD = _markdown(CP0, body_note="Recorded source p1. " + SECRET)
+CP0_MD = _markdown(CP0, body_note="Recorded source p1 [C1]. " + SECRET)
 QUOTE = "Recorded source p1"
 CITED = json.dumps({"source_id": str(SOURCE), "page": 1, "matched_text": QUOTE})
 
@@ -93,15 +93,21 @@ def _refused(call: Callable[[], object]) -> Refusal:
 
 
 def _parse_refused(body: str) -> RefusalCode:
-    return _refused(lambda: parse_response(body, delivered=DELIVERED)).code
+    return _refused(lambda: parse_response(body)).code
+
+
+def _linked(body: str) -> tuple[bool, ...]:
+    """Whether a marker in the body names each citation (D107: one no marker
+    names is flagged, not linked to a statement, never the answer's
+    refusal)."""
+    return parse_response(body)[2]
 
 
 def test_a_closed_transport_yields_the_exact_markdown_and_its_citations() -> None:
-    markdown, citations = parse_response(
-        wire(CP0_MD, [_citation()]), delivered=DELIVERED
-    )
+    markdown, citations, linked = parse_response(wire(CP0_MD, [_citation()]))
     assert markdown == CP0_MD
     assert citations == (Citation(source_id=SOURCE, page=1, matched_text=QUOTE),)
+    assert linked == (True,)
 
 
 def test_claims_only_json_is_not_a_canonical_handoff() -> None:
@@ -144,14 +150,21 @@ def test_a_malformed_transport_refuses(body: str) -> None:
     assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
 
 
-def test_a_citation_of_undelivered_evidence_refuses() -> None:
-    body = wire(CP0_MD, [_citation(source_id=str(uuid4()))])
-    assert _parse_refused(body) is RefusalCode.CITATION_NOT_DELIVERED
+def test_a_citation_of_undelivered_evidence_is_left_to_anchoring() -> None:
+    """D106: the transport no longer refuses a source the node was not
+    given; anchoring keeps that citation as unverified."""
+    other = uuid4()
+    _markdown, citations, linked = parse_response(
+        wire(CP0_MD, [_citation(source_id=str(other))])
+    )
+    assert citations[0].source_id == other and linked == (True,)
 
 
-def test_a_quote_absent_from_the_markdown_refuses_the_handoff() -> None:
+def test_a_citation_no_marker_names_is_not_linked() -> None:
+    """D107: a citation no `[C<n>]` marker names is flagged, not linked to a
+    statement, and never refuses the handoff."""
     body = wire(CP0_MD, [_citation(), _citation(matched_text="headroom 9.9x")])
-    assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
+    assert _linked(body) == (True, False)
 
 
 def _record(**changes: object) -> CanonicalRecord:
@@ -263,6 +276,93 @@ def test_a_record_names_the_rule_its_citations_were_accepted_under(
         _mismatch(blobs, artifact, sha, CP0)
 
 
+def test_a_record_keeps_the_page_a_reanchored_citation_was_cited_on(
+    tmp_path: Path,
+) -> None:
+    """D94: a citation the host re-anchored at its true page carries the page
+    the module named as `cited_page`; one found where it was cited carries
+    none, so every record written before reads back byte for byte. A stored
+    `cited_page` that is null, not a page, or the page itself is not one this
+    host wrote."""
+    [found] = _record().citations
+    assert "cited_page" not in json.loads(record_bytes(_record()))["citations"][0]
+    moved = _record(
+        citation_rule=WHOLE_LINE,
+        citations=(dataclasses.replace(found, page=2, cited_page=7),),
+    )
+    [stored] = json.loads(record_bytes(moved))["citations"]
+    assert (stored["page"], stored["cited_page"]) == (2, 7)
+    blobs, artifact, sha = _stored(tmp_path, moved)
+    read = read_record(blobs, artifact_sha256=artifact, record_sha256=sha, expected=CP0)
+    assert read == moved and read.citations[0].cited_page == 7
+    for value in (None, 2, 0, "7", 7.0, True):
+        document = json.loads(record_bytes(moved))
+        document["citations"][0]["cited_page"] = value
+        sha = blobs.put(canonical_json(document).encode("utf-8"))
+        _mismatch(blobs, artifact, sha, CP0)
+    # Only the whole-line rule re-anchors: under any other a `cited_page` is
+    # not this host's (M2).
+    for rule in (ANY_RUN, WHOLE_LINE_AS_STORED):
+        other = dataclasses.replace(moved, citation_rule=rule)
+        _mismatch(blobs, artifact, blobs.put(record_bytes(other)), CP0)
+
+
+def test_an_excerpt_record_keeps_the_line_of_each_citation(tmp_path: Path) -> None:
+    """D105: a record accepted under `EXCERPT` names `excerpt-of-shown-line`
+    and writes every citation's `line_text`, the whole line it anchored in,
+    and reads back as written; a record under any earlier rule writes none,
+    so every record stored before it is the same bytes, and holds None. A
+    line missing from an excerpt record, empty, not a string, or held under
+    another rule is not one this host wrote; an excerpt record re-anchors at
+    its true page as a whole-line one does (D94)."""
+    [found] = _record().citations
+    line = f"{QUOTE} and the rest of its line"
+    part = " ".join(line.split()[1:])
+    excerpt = _record(
+        citation_rule=EXCERPT,
+        citations=(
+            dataclasses.replace(found, matched_text=part, line_text=line, cited_page=7),
+        ),
+    )
+    document = json.loads(record_bytes(excerpt))
+    assert document["citation_rule"] == "excerpt-of-shown-line"
+    assert document["citations"][0]["line_text"] == line
+    for rule in (ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE):
+        older = json.loads(record_bytes(_record(citation_rule=rule)))
+        assert "line_text" not in older["citations"][0]
+    assert REANCHORING_RULES == {WHOLE_LINE, EXCERPT}
+    blobs, artifact, sha = _stored(tmp_path, excerpt)
+    read = read_record(blobs, artifact_sha256=artifact, record_sha256=sha, expected=CP0)
+    assert read == excerpt and read.citations[0].line_text == line
+    whole = dataclasses.replace(found, line_text=QUOTE)
+    exact = _record(citation_rule=EXCERPT, citations=(whole,))
+    assert json.loads(record_bytes(exact))["citations"][0]["line_text"] == QUOTE
+    # Never written without its lines, nor with a line its quote cannot be
+    # in (fix round 1): `record_bytes` fails closed.
+    for odd in (
+        _record(citation_rule=WHOLE_LINE, citations=(whole,)),
+        _record(citation_rule=EXCERPT),
+        _record(
+            citation_rule=EXCERPT,
+            citations=(dataclasses.replace(found, line_text="Unrelated text"),),
+        ),
+    ):
+        with pytest.raises(ValueError):
+            record_bytes(odd)
+    for value in (None, "", 5, "Unrelated text"):
+        document = json.loads(record_bytes(excerpt))
+        document["citations"][0]["line_text"] = value
+        _mismatch(blobs, artifact, blobs.put(canonical_json(document).encode()), CP0)
+    document = json.loads(record_bytes(excerpt))
+    del document["citations"][0]["line_text"]
+    _mismatch(blobs, artifact, blobs.put(canonical_json(document).encode()), CP0)
+    for rule in ("whole-line-as-shown", "whole-line"):
+        document = json.loads(record_bytes(excerpt))
+        document["citation_rule"] = rule
+        del document["citations"][0]["cited_page"]
+        _mismatch(blobs, artifact, blobs.put(canonical_json(document).encode()), CP0)
+
+
 def _mismatch(blobs: BlobStore, artifact: str, sha: str, expected: object) -> None:
     refusal = _refused(
         lambda: read_record(
@@ -366,126 +466,6 @@ def test_the_record_carries_no_model_authored_claims() -> None:
 
 
 @pytest.mark.parametrize(
-    "marks",
-    ['"{}"', "\u201c{}\u201d", "\u2018{}\u2019", "\u00ab{}\u00bb", "'{}'", "`{}`"],
-)
-def test_a_quote_the_body_wraps_in_quotation_marks_is_still_quoted(
-    marks: str,
-) -> None:
-    """Typography around a quotation does not make the quotation absent.
-
-    A module writes its Evidence Trace as prose, and prose puts quotation marks
-    around a quotation. The whole-token rule then reads `\u201cRecorded` and
-    `p1\u201d` and refuses the entire handoff -- a host defect recorded as the
-    model's answer, and what the CP-L10 attempt of the second paid Terra run
-    actually died of -- and a Markdown code span is the same thing, which the
-    CP-0 of the 18 September 2026 relative-value run died of twice. The
-    evidence anchor is untouched: `verify_citations`
-    still matches the document's own tokens exactly, so nothing here widens
-    what may be cited, only what counts as having quoted it.
-    """
-    body = wire(
-        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- E-01, p.1: "
-        f"{marks.format(QUOTE)}\n".encode(),
-        [_citation()],
-    )
-    markdown, citations = parse_response(body, delivered=DELIVERED)
-    assert len(citations) == 1
-    assert citations[0].matched_text == QUOTE
-    assert markdown
-
-
-@pytest.mark.parametrize(
-    "marks",
-    [
-        '"{}".',
-        "\u201c{}\u201d,",
-        "({})",
-        "({}).",
-        "[{}];",
-        "{}.",
-        "{}:",
-        "\u201c({}),\u201d",
-    ],
-)
-def test_a_quote_the_body_ends_a_sentence_with_is_still_quoted(marks: str) -> None:
-    """Sentence punctuation and brackets around a quotation are typography too.
-
-    Prose closes a quotation with a full stop or a comma and puts a citation in
-    brackets. Of the 75 quotes the live CP-0 answers of 23 September 2026 were
-    refused for (`qualification/PROVIDER_RUNBOOK.md`), 12 were in the body
-    word for word with only this around them -- all nine of one Claude Opus 5.5
-    answer's, and the one quote that sank an otherwise vendor-clean Gemini
-    answer. Only the outer tokens may wear it: opening marks before the first
-    word, closing marks after the last, and the quote's own words exactly."""
-    body = wire(
-        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- E-01, p.1: "
-        f"{marks.format(QUOTE)}\n".encode(),
-        [_citation()],
-    )
-    _markdown, citations = parse_response(body, delivered=DELIVERED)
-    assert citations[0].matched_text == QUOTE
-
-
-def test_a_quote_starting_with_its_own_punctuation_survives_outer_quotes() -> None:
-    from caos.methodology.handoff import _openings, _quoted
-
-    words = "“(Unaudited) revenue was 100 million.”".split()
-    assert _quoted(words, _openings(words), "(Unaudited) revenue was 100 million.")
-    assert not _quoted(words, _openings(words), "(Unaudited) revenue was 101 million.")
-
-
-@pytest.mark.parametrize("marks", ['\\"{}\\".', "\\({}\\)", "\\[{}\\]:"])
-def test_a_quote_the_body_writes_with_markdown_escapes_is_still_quoted(
-    marks: str,
-) -> None:
-    """A backslash before punctuation is Markdown's own spelling of that mark
-    (CommonMark's backslash escape): `\\"Total debt\\"` reads `"Total debt"`.
-    One Claude Sonnet 5 CP-0 answer of 23 September 2026 wrote all eight of the
-    quotes it was refused for that way (F149)."""
-    body = wire(
-        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- "
-        f"{marks.format(QUOTE)}\n".encode(),
-        [_citation()],
-    )
-    _markdown, citations = parse_response(body, delivered=DELIVERED)
-    assert citations[0].matched_text == QUOTE
-
-
-@pytest.mark.parametrize("marks", ["{}s", "x{}", "{}-1", "({}x)", "\\{}"])
-def test_a_quote_whose_edge_word_is_a_different_word_is_not_quoted(
-    marks: str,
-) -> None:
-    """Only punctuation is forgiven at the edges: a letter, digit or dash
-    touching the quote makes the edge word a different word."""
-    body = wire(
-        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- "
-        f"{marks.format(QUOTE)}\n".encode(),
-        [_citation()],
-    )
-    assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
-
-
-def test_a_quotation_mark_inside_the_quote_still_matches_whole_tokens() -> None:
-    """Only the edges are typography; the middle is the quote itself."""
-    body = wire(
-        b"---\nmodule_id: CP-0\n---\n\nRecorded elsewhere p1\n",
-        [_citation()],
-    )
-    assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
-
-
-@pytest.mark.parametrize(
-    "quote",
-    ["Example", "credit_os_run_id:", "ecorded sour", "Recorded source p"],
-)
-def test_a_quote_must_be_whole_words_of_the_body(quote: str) -> None:
-    # Front matter is host identity, and a quote matches whole tokens.
-    body = wire(CP0_MD, [_citation(matched_text=quote)])
-    assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
-
-
-@pytest.mark.parametrize(
     "citations",
     [[_citation(page=2**31)], [_citation(), _citation()]],
 )
@@ -508,131 +488,14 @@ def test_more_citations_than_a_handoff_may_carry_refuse() -> None:
     assert _parse_refused(wire(CP0_MD, quotes)) is RefusalCode.HANDOFF_MALFORMED
 
 
-def test_the_body_is_indexed_once_rather_than_scanned_per_citation() -> None:
-    """The same answer as the scan, at the ceiling, in a time a worker can
-    spend: the body's words are indexed once and each quote looks only at the
-    positions its first word occupies."""
-    words = [f"w{n}" for n in range(40_000)]
-    body = "---\nmodule_id: CP-0\n---\n\n" + " ".join(words) + "\n"
-    quotes = [
-        _citation(matched_text=" ".join(words[-3 - n : -n or None]))
-        for n in range(MAX_CITATIONS)
-    ]
-    started = time.perf_counter()
-    markdown, citations = parse_response(
-        wire(body.encode(), quotes), delivered=DELIVERED
-    )
-    spent = time.perf_counter() - started
-    assert len(citations) == MAX_CITATIONS and markdown
-    assert spent < 2.0, spent
-    # A quote the body does not carry is still refused, index or no index.
-    missing = _citation(matched_text="w1 w0 w2")
-    assert (
-        _parse_refused(wire(body.encode(), [*quotes[:1], missing]))
-        is RefusalCode.HANDOFF_MALFORMED
-    )
-
-
-class _Counted(str):
-    """A body word that counts how often it is compared."""
-
-    compared = 0
-    __hash__ = str.__hash__
-
-    def __eq__(self, other: object) -> bool:
-        _Counted.compared += 1
-        return str.__eq__(self, other)
-
-    def __ne__(self, other: object) -> bool:
-        _Counted.compared += 1
-        return str.__ne__(self, other)
-
-
-@pytest.mark.parametrize("found", [True, False])
-def test_a_near_match_repeated_through_the_body_costs_the_body_not_its_product(
-    found: bool,
-) -> None:
-    """R24-09: every place the quote's first word stands was compared a whole
-    quote's length, so a body of one repeated word and a quote failing only
-    at its last word cost the body times the quote -- per citation, up to
-    `MAX_CITATIONS` of them. The work is now bounded by the two together."""
-    from caos.methodology import handoff
-
-    size, span = 600, 200
-    words = [_Counted("a")] * (size - 1) + [_Counted("b" if found else "c")]
-    openings = handoff._openings(list(words))
-    quote = " ".join(["a"] * (span - 1) + ["b"])
-    _Counted.compared = 0
-    assert handoff._quoted(list(words), openings, quote) is found
-    assert _Counted.compared <= 4 * (size + span), _Counted.compared
-
-
-def test_the_bounded_quote_check_finds_what_every_start_found() -> None:
-    """R24-09: the bounded check against the check it replaced -- every start,
-    a quote's length each -- on bodies built to collide: a two-word vocabulary
-    wearing quotation marks, brackets and full stops, so both the one-by-one
-    and the one-pass branch are taken, over thousands of quotes."""
-    import random
-
+def test_occurrences_finds_every_run_overlapping_or_not() -> None:
+    """`occurrences`, the one-pass search the evidence's own excerpt search
+    uses (D105): every start of the pattern, overlapping runs included."""
     from caos.evidence.citations import occurrences
-    from caos.methodology import handoff
 
     assert list(occurrences(["a", "a", "b", "a", "a"], ["a", "a"])) == [0, 3]
     assert list(occurrences(["a", "a", "a"], ["a", "a"])) == [0, 1]
     assert list(occurrences(["a", "b"], ["c"])) == []
-
-    def every_start(words: list[str], quote: str) -> bool:
-        wanted = quote.split()
-        return bool(wanted) and any(
-            handoff._carried(words[start : start + len(wanted)], wanted)
-            for start in range(len(words) - len(wanted) + 1)
-        )
-
-    rng = random.Random(24_09)
-    spellings = ["a", "b", '"a', 'b"', "(a", "a).", "b,", "\u201ca\u201d"]
-    for _ in range(3_000):
-        words = [rng.choice(spellings) for _ in range(rng.randint(1, 30))]
-        openings = handoff._openings(words)
-        quote = " ".join(rng.choice("ab") for _ in range(rng.randint(1, 8)))
-        assert handoff._quoted(words, openings, quote) is every_start(words, quote), (
-            words,
-            quote,
-        )
-
-
-def test_the_public_parser_answers_repeated_near_matches_in_linear_work(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """R24-09 at the public boundary: quotes that each match only at the body's
-    end, after a near match at every earlier word, used to cost about half a
-    second each here, and `MAX_CITATIONS` of them far longer. Typography is
-    judged as before: the edge words may wear quotation marks, the inner words
-    match exactly."""
-    from caos.methodology import handoff
-
-    # Count work at the public boundary without measuring CI scheduling time.
-    body_words = handoff._body_words
-    monkeypatch.setattr(
-        handoff,
-        "_body_words",
-        lambda text: [_Counted(word) for word in body_words(text)],
-    )
-    size = 600
-    body = "---\nmodule_id: CP-0\n---\n\n" + " ".join(["a"] * size) + " b.\n"
-    quotes = [
-        _citation(matched_text=" ".join(["a"] * (size // 2 + n) + ["b"]))
-        for n in range(8)
-    ]
-    _Counted.compared = 0
-    _markdown, citations = parse_response(
-        wire(body.encode(), quotes), delivered=DELIVERED
-    )
-    assert len(citations) == len(quotes)
-    assert _Counted.compared <= 4 * len(quotes) * (size + size // 2 + len(quotes))
-    missing = _citation(matched_text=" ".join(["a"] * (size // 2) + ["c"]))
-    assert (
-        _parse_refused(wire(body.encode(), [missing])) is RefusalCode.HANDOFF_MALFORMED
-    )
 
 
 def test_a_record_contradicting_its_own_identity_refuses(tmp_path: Path) -> None:

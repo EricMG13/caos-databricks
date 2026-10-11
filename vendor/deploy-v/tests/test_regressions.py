@@ -1,7 +1,9 @@
 """Regressions for the September 2026 package review; stdlib unless integration is enabled."""
+import ast
 import importlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -269,9 +271,12 @@ class ForkR3Tests(unittest.TestCase):
         cases = (
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.1', ['Source File Name', 'Document Type', 'Period Coverage', 'Currency', 'Unit',
                                                               'Perimeter', 'Accounting Basis', 'Evidence Quality Tier', 'Analytical Use', 'Limitations']),
+            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.4', ['Line Item', 'FY2025', 'FY2024']),
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.10', ['KPI Category', 'Metric Name', 'FY2025', 'FY2024', 'Trend Direction', 'Analyst Note']),
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.14', pipes('period_id | fiscal_year | fiscal_quarter | period_type | start_date | end_date | day_count | audit_status | currency | unit | accounting_basis | entity_perimeter | source_id | source_locator | component_period_ids')),
-            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.18', pipes('facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | source_id | source_locator')),
+            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.18', pipes('facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | rate_type | reference_rate | spread_bps | floor_bps | fixed_rate | annual_amortisation | source_id | source_locator')),
+            ('cp-1b-earnings-delta', 'CP-1B', 'T4.5', ['KPI Category', 'Metric Name', 'FY2025', 'FY2024', 'YoY Change', 'Trend Direction',
+                                                       'Calculation Status', 'Analyst Note']),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.6', ['Metric', 'Comparison Basis', 'Prior Value', 'Current Value', 'Abs Change', '% Change', 'Mgmt Driver', 'Analyst Driver', 'Credit Implication']),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.12', pipes('metric_id | current_period_id | reference_period_id | comparison_basis | current_value | reference_value | absolute_change | percentage_change | calculation_status | restatement_flag | basis_change_flag | perimeter_change_flag | definition_change_flag | values | changes')),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.15', pipes('downstream_module | status | blocking_metric_ids | blocking_period_ids | conflict_refs | explanation')),
@@ -447,6 +452,1338 @@ class ForkR4Tests(unittest.TestCase):
         self.assertEqual(paragraphs, 20)
         canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
         self.assertIn('Where `skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with a module, follow it', canon)
+
+
+class ForkR5Tests(unittest.TestCase):
+    """Deployment fork r5: the method states the rules its checkers enforce (2 October 2026 live runs)."""
+
+    def test_cp1_audit_sections_are_the_validators_h2s(self):
+        # CP-1's method said Evidence Trace and Source Registry were appendix sub-sections;
+        # the validator requires each once at H2, and a model demoted both to ####.
+        steps = (ROOT / 'skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+        self.assertNotIn('holds ALL audit items as sub-sections', steps)
+        self.assertIn('Source Registry in place of the H2 fails validation', steps)
+        self.assertNotIn('Source Gate / Readiness', steps)
+        rule = 'H2 headings must be exactly once and in canonical order: ' + ' -> '.join(handoff.CANONICAL_HEADINGS)
+        self.assertIn(f'("{rule}")', steps)
+        demoted = markdown().replace('## Evidence Trace', '#### Evidence Trace')
+        errors = handoff.validate_text(demoted, filename='EXAMPLE_CP-1_20260907.md').errors
+        self.assertTrue(any(error.startswith(rule + ';') for error in errors), errors)
+
+    def test_a_register_heading_binds_within_four_non_blank_lines(self):
+        # CP-0 T6 was refused as missing: five blockquote lines sat between its heading and table.
+        canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
+        self.assertIn('Failing that, the nearest heading above the table finds it at any\ndistance', canon)
+        self.assertNotIn('A heading five or\nmore non-blank lines above its table leaves the register missing', canon)
+        table = '| Evidence | Locator |\n| --- | --- |\n| Cash | p1 |\n'
+        # Fork r6: past the four lines, the nearest heading above the table still binds it.
+        for notes in (3, 4):
+            text = '#### T6 — Evidence Trace\n\n' + ''.join(f'> note {n}\n\n' for n in range(notes)) + table
+            with self.subTest(notes=notes):
+                self.assertIn('T6', complete.find_registers(text, ['T6']))
+
+    def test_a_cp1_interface_register_is_one_tagged_table(self):
+        # A CP-1 that wrote T4.14-T4.19 untagged and again as tagged copies ran to 84 KB, and its
+        # copies drifted from the registers. One tagged table serves the register check, the
+        # interface parser and CP-MODEL; the two-copy form still reads the same.
+        skill = skill_text('cp-1-canonical-data-foundation')
+        self.assertIn('Never repeat a register as a second, tagged copy. An absent value in these tables is `null` '
+                      "(every reader also accepts the canon's `—` as null, but write `null`). Every `null` in a "
+                      'value-bearing column is also listed in `## Gaps & Conflicts`', skill)
+        columns = complete.load_contract(skill, 'CP-1')['registers']['T4.14']['columns']
+        row = ['FY2025', '2025', 'null', 'FY', '2025-01-01', '2025-12-31', '365', 'Audited', 'USD', 'millions',
+               'US GAAP', 'Consolidated', 'S1', '10-K p. 53', 'null']
+        table = register('T4.14', columns, [row]).split('\n', 1)[1]
+        tag = '<!-- table-id: cp1.model_period_register -->\n'
+        single = '#### T4.14 — Model Period Register\n\n' + tag + table
+        two_copy = '#### T4.14 — Model Period Register\n\n' + table + '\n' + tag + table
+        for form, text in (('single', single), ('two-copy', two_copy)):
+            with self.subTest(form=form):
+                violations, _, present = complete.check(skill, text, 'CP-1')
+                self.assertEqual(about(violations, 'T4.14'), [])
+                self.assertEqual(present['T4.14'][1][0]['component_period_ids'], 'null')
+                self.assertNotIn('cp1.model_period_register: CP-MODEL interface table missing -- it is emitted on '
+                                 'every run, not only when CP-MODEL was requested', violations)
+                parsed = tables.parse_tables(text)['cp1.model_period_register']
+                self.assertTrue(tables.is_null(parsed.rows[0]['fiscal_quarter']))
+                stable = model_inputs.parse_stable_tables(text)['cp1.model_period_register']
+                self.assertEqual(model_inputs._list(stable[0]['component_period_ids']), [])
+        # A critical `null` passes the critical-cell check, as the canon's `—` did; n/a and blanks do not.
+        blocked = complete.load_contract(skill, 'CP-1')['blocklist']
+        self.assertNotIn('null', blocked)
+        self.assertTrue({'', 'n/a', 'tbd'} <= blocked)
+        # CP-MODEL skips only blank and heading lines after a tag: a comment between tag and table is refused.
+        commented = single.replace(tag, tag + '\n<!-- note -->\n')
+        with self.assertRaises(model_inputs.ContractError):
+            model_inputs.parse_stable_tables(commented)
+        # Notes and the tag between heading and table: the nearest heading still binds it (fork r6).
+        late = '#### T4.14 — Model Period Register\n\n' + ''.join(f'note {n}\n' for n in range(3)) + tag + table
+        self.assertIn('T4.14', complete.find_registers(late, ['T4.14']))
+        self.assertIn('cp1.model_period_register', tables.parse_tables(late))
+
+
+def _r5_parse_tables(text, cells=False):
+    """`cp_tables.parse_tables` as fork r5 shipped it: the reference every r6 tolerance is held to.
+    With `cells`, its binding with r6's cell reading (one-hyphen separators, escaped pipes)."""
+    import re
+    lines = handoff.unfenced_markdown(text).splitlines()
+    out, pending_id, i = {}, None, 0
+    while i < len(lines):
+        line = lines[i]
+        m = tables.TABLE_ID_RE.fullmatch(line.strip())
+        if m:
+            if pending_id is not None:
+                raise ValueError(f'{pending_id}: table-id has no following table')
+            if m.group(1) in out:
+                raise ValueError(f'{m.group(1)}: duplicate table-id')
+            pending_id = m.group(1)
+            i += 1
+            continue
+        stripped = line.strip()
+        if pending_id and stripped.startswith('|') and stripped.count('|') >= 2:
+            header = tables._split_row(stripped)
+            if not all(header) or len(header) != len(set(header)):
+                raise ValueError('columns')
+            i += 1
+            if i >= len(lines) or len(tables._split_row(lines[i])) != len(header) or not all(
+                    re.fullmatch(r':?-+:?' if cells else r':?-{3,}:?', cell) for cell in tables._split_row(lines[i])):
+                raise ValueError('separator')
+            i += 1
+            rows = []
+            while i < len(lines):
+                row = lines[i].strip()
+                if not row.startswith('|'):
+                    break
+                split = tables._row_cells(row, len(header)) if cells else tables._split_row(row)
+                if len(split) != len(header):
+                    raise ValueError('width')
+                rows.append(dict(zip(header, split)))
+                i += 1
+            out[pending_id] = (header, rows)
+            pending_id = None
+            continue
+        if stripped and not stripped.startswith('<!--'):
+            pending_id = pending_id if stripped.startswith('|') else None
+        i += 1
+    if pending_id is not None:
+        raise ValueError('dangling')
+    return out
+
+
+def _r5_find_registers(text):
+    """`completeness_check.find_registers(text)` as fork r5 shipped it, with no ID list."""
+    lines = handoff.unfenced_markdown(text).splitlines()
+    out, recent, i = {}, [], 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            header, j = tables._split_row(s), i + 1
+            if j < len(lines) and tables.SEPARATOR_RE.match(lines[j].strip()) and '|' in lines[j]:
+                j += 1
+            rows = []
+            while j < len(lines) and lines[j].strip().startswith('|'):
+                cells = tables._split_row(lines[j].strip())
+                cells += [''] * (len(header) - len(cells))
+                rows.append(dict(zip(header, cells[:len(header)])))
+                j += 1
+            labels = [x for x in reversed(recent) if x.startswith('#')] + [x for x in reversed(recent) if not x.startswith('#')]
+            for label in labels:
+                match = complete.REGISTER_ID_RE.search(label)
+                if match:
+                    out.setdefault(match.group(1), (header, rows))
+                    break
+            i, recent = j, []
+            continue
+        if s:
+            recent = (recent + [s])[-4:]
+        i += 1
+    return out
+
+
+def _r6_find_registers(text, ids):
+    """`completeness_check.find_registers(text, ids)` as fork r6 shipped it (snake_case titles aside)."""
+    import re
+    alternatives = '|'.join(re.escape(i) for i in sorted(set(ids), key=lambda v: (-len(v), v)))
+    id_re = re.compile(rf'(?<![A-Za-z0-9_.])({alternatives})(?![A-Za-z0-9_]|\.[A-Za-z0-9])')
+
+    def label(line):
+        match = id_re.search(line)
+        return match.group(1) if match else None
+    lines = handoff.unfenced_markdown(text).splitlines()
+    out, distant, recent, heading, i = {}, [], [], None, 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            header, j = tables._split_row(s), i + 1
+            if j < len(lines) and tables.SEPARATOR_RE.match(lines[j].strip()) and '|' in lines[j]:
+                j += 1
+            rows = []
+            while j < len(lines) and lines[j].strip().startswith('|'):
+                cells = complete._row_cells(lines[j].strip(), len(header))
+                cells += [''] * (len(header) - len(cells))
+                rows.append(dict(zip(header, cells[:len(header)])))
+                j += 1
+            labels = [x for x in reversed(recent) if x.startswith('#')] + [x for x in reversed(recent) if not x.startswith('#')]
+            reg = next((found for found in map(label, labels) if found), None)
+            if reg:
+                out.setdefault(reg, (header, rows))
+            elif heading is not None and heading not in recent and label(heading):
+                distant.append((label(heading), (header, rows)))
+            i, recent, heading = j, [], None
+            continue
+        if s:
+            recent = (recent + [s])[-4:]
+            heading = s if s.startswith('#') else heading
+        i += 1
+    for reg, table in distant:
+        out.setdefault(reg, table)
+    return out
+
+
+def _r7_expected(text, ids, retired_ids=(), reader=None):
+    """What fork r7 must bind: r6's reading (or `reader`'s), once the prose in the window of a table whose
+    heading is led by one of the module's retired IDs (CP-1's "#### T4.7 ...") is made a plain note."""
+    import re
+    led = re.compile(r'#+\s*[*_]*\s*(TL\d+\.\d+|[PT]\d+[A-Z]?(?:\.\d+)?)(?![A-Za-z0-9])')
+
+    def retired(line):
+        match = led.match(line)
+        return bool(match) and match.group(1) in retired_ids
+    lines, window = text.split('\n'), []
+    for n, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            if window and not (n and lines[n - 1].strip().startswith('|')):
+                near = window[-4:]
+                if any(retired(lines[k].strip()) for k in near if lines[k].strip().startswith('#')):
+                    for k in near:
+                        if not lines[k].strip().startswith('#'):
+                            lines[k] = 'A note.'
+            window = []
+        elif s:
+            window.append(n)
+    return (reader or _r6_find_registers)('\n'.join(lines), ids)
+
+
+def _r12_candidates(text, ids=None):
+    """Every table's own claim, as fork r12 reads it: (kind, ID, table, led) in document order, where kind is
+    'near' (a heading in the table's four-line window), 'prose' (a prose line in that window) or 'distant' (its
+    nearest heading at any distance, no table between), and led says the claiming line opens with the ID -- a
+    heading past its marks and emphasis, a prose line past emphasis or a backtick; `ids` None reads the default
+    ID pattern."""
+    import re
+    if ids is None:
+        id_re = complete.REGISTER_ID_RE
+    else:
+        alternatives = '|'.join(re.escape(i) for i in sorted(set(ids), key=lambda v: (-len(v), v)))
+        id_re = re.compile(rf'(?<![A-Za-z0-9_.])({alternatives})(?![A-Za-z0-9_]|\.[A-Za-z0-9])')
+
+    def label(line):
+        match = id_re.search(line)
+        return match.group(1) if match else None
+
+    def led(line, reg):
+        lead = r'#+\s*[*_]*\s*' if line.startswith('#') else r'[*_`]*\s*'
+        return re.match(lead + re.escape(reg) + r'\.?(?![A-Za-z0-9_]|\.[A-Za-z0-9])', line) is not None
+    lines = handoff.unfenced_markdown(text).splitlines()
+    claims, recent, heading, i = [], [], None, 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            header, j = tables._split_row(s), i + 1
+            if j < len(lines) and tables.SEPARATOR_RE.match(lines[j].strip()) and '|' in lines[j]:
+                j += 1
+            rows = []
+            while j < len(lines) and lines[j].strip().startswith('|'):
+                cells = complete._row_cells(lines[j].strip(), len(header))
+                cells += [''] * (len(header) - len(cells))
+                rows.append(dict(zip(header, cells[:len(header)])))
+                j += 1
+            window = [('near', x) for x in reversed(recent) if x.startswith('#')] + \
+                [('prose', x) for x in reversed(recent) if not x.startswith('#')]
+            claim = next(((kind, x) for kind, x in window if label(x)), None)
+            if claim is None and heading is not None and heading not in recent and label(heading):
+                claim = ('distant', heading)
+            if claim:
+                reg = label(claim[1])
+                claims.append((claim[0], reg, (header, rows), led(claim[1], reg)))
+            i, recent, heading = j, [], None
+            continue
+        if s:
+            recent = (recent + [s])[-4:]
+            heading = s if s.startswith('#') else heading
+        i += 1
+    return claims
+
+
+def _r12_find_registers(text, ids=None):
+    """What fork r12 must bind: r6's reading -- the first table claimed in its window, else the first claimed by
+    a distant heading -- except that a table a prose line claimed without opening with the ID gives way to the
+    first table a heading opening with it claims in its window, else at a distance."""
+    claims, out = _r12_candidates(text, ids), {}
+    for reg in dict.fromkeys(claim[1] for claim in claims):
+        near = [c for c in claims if c[1] == reg and c[0] != 'distant']
+        distant = [c for c in claims if c[1] == reg and c[0] == 'distant']
+        held = near[0] if near else distant[0]
+        if held[0] == 'prose' and not held[3]:
+            held = next((c for c in near + distant if c[0] != 'prose' and c[3]), held)
+        out[reg] = held[2]
+    return out
+
+
+def _r13_candidates(text, ids=None):
+    """Every table's own claim, as fork r13 reads it: r12's, except that in the four-line window a line opening
+    with its ID (a heading or a prose line, past heading marks, emphasis and a backtick) wins before one only
+    mentioning one, and only then the nearest heading before the nearest prose line."""
+    import re
+    if ids is None:
+        id_re = complete.REGISTER_ID_RE
+    else:
+        alternatives = '|'.join(re.escape(i) for i in sorted(set(ids), key=lambda v: (-len(v), v)))
+        id_re = re.compile(rf'(?<![A-Za-z0-9_.])({alternatives})(?![A-Za-z0-9_]|\.[A-Za-z0-9])')
+
+    def label(line):
+        match = id_re.search(line)
+        return match.group(1) if match else None
+
+    def led(line, reg):
+        return re.match(r'#*\s*[*_`]*\s*' + re.escape(reg) + r'\.?(?![A-Za-z0-9_]|\.[A-Za-z0-9])', line) is not None
+    lines = handoff.unfenced_markdown(text).splitlines()
+    claims, recent, heading, i = [], [], None, 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            header, j = tables._split_row(s), i + 1
+            if j < len(lines) and tables.SEPARATOR_RE.match(lines[j].strip()) and '|' in lines[j]:
+                j += 1
+            rows = []
+            while j < len(lines) and lines[j].strip().startswith('|'):
+                cells = complete._row_cells(lines[j].strip(), len(header))
+                cells += [''] * (len(header) - len(cells))
+                rows.append(dict(zip(header, cells[:len(header)])))
+                j += 1
+            window = [('near', x) for x in reversed(recent) if x.startswith('#')] + \
+                [('prose', x) for x in reversed(recent) if not x.startswith('#')]
+            named = [(kind, x) for kind, x in window if label(x)]
+            claim = next(((kind, x) for kind, x in named if led(x, label(x))), named[0] if named else None)
+            if claim is None and heading is not None and heading not in recent and label(heading):
+                claim = ('distant', heading)
+            if claim:
+                reg = label(claim[1])
+                claims.append((claim[0], reg, (header, rows), led(claim[1], reg)))
+            i, recent, heading = j, [], None
+            continue
+        if s:
+            recent = (recent + [s])[-4:]
+            heading = s if s.startswith('#') else heading
+        i += 1
+    return claims
+
+
+def _r13_find_registers(text, ids=None):
+    """What fork r13 must bind: the first table claimed in its window, else the first claimed by a distant
+    heading -- except that a table any line claimed without opening with the ID gives way to the first table a
+    line opening with it claims in its window, else at a distance."""
+    claims, out = _r13_candidates(text, ids), {}
+    for reg in dict.fromkeys(claim[1] for claim in claims):
+        near = [c for c in claims if c[1] == reg and c[0] != 'distant']
+        distant = [c for c in claims if c[1] == reg and c[0] == 'distant']
+        held = near[0] if near else distant[0]
+        if not held[3]:
+            held = next((c for c in near + distant if c[3]), held)
+        out[reg] = held[2]
+    return out
+
+
+class ForkR6Tests(unittest.TestCase):
+    """Deployment fork r6: the readers tolerate what well-meaning answers wrote, and refuse what they did before."""
+
+    GOOD = '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
+
+    def test_one_malformed_interface_table_is_named_alone(self):
+        # P1 CP-1 #1: one 14-cell row of a 15-column table voided all seven interface tables.
+        short = '| a | b |\n| --- | --- |\n| 1 | 2 |\n| FY2024 |\n| 3 |\n'
+        text = '<!-- table-id: x.good -->\n' + self.GOOD + '\n<!-- table-id: x.short -->\n' + short
+        found, errors = tables.read_tables(text)
+        self.assertEqual(list(found), ['x.good'])
+        self.assertEqual(errors, {'x.short': 'x.short: row 2 (first cell `FY2024`) has 1 cells, header has 2 -- '
+                                             'table row width differs from its header; 1 more row(s) differ'})
+        # The guarantee: a short row is still refused, and `parse_tables` still refuses the whole document.
+        with self.assertRaisesRegex(ValueError, '^x.short: row 2 '):
+            tables.parse_tables(text)
+        skill = skill_text('cp-1-canonical-data-foundation').replace(
+            'cp1.model_period_register; cp1.model_account_register', 'x.good; x.short; cp1.model_account_register')
+        violations = complete.check(skill, text, 'CP-1')[0]
+        self.assertIn(errors['x.short'], violations)
+        self.assertFalse([v for v in violations if v.startswith(('x.good', 'x.short: CP-MODEL'))], violations)
+        self.assertIn('cp1.model_account_register: CP-MODEL interface table missing -- it is emitted on every run, '
+                      'not only when CP-MODEL was requested', violations)
+        for fault, message in (('| a | a |\n| --- | --- |\n', 'table columns must be nonempty and unique'),
+                               ('| a | b |\n| 1 | 2 |\n', 'missing or malformed table separator')):
+            with self.subTest(fault=message):
+                found, errors = tables.read_tables('<!-- table-id: x.bad -->\n' + fault + '\n<!-- table-id: x.good -->\n' + self.GOOD)
+                self.assertEqual((list(found), errors), (['x.good'], {'x.bad': f'x.bad: {message}'}))
+
+    def test_a_tag_crosses_a_heading_to_the_next_table_only(self):
+        # P1 CP-1 #3 put the readiness tag above `#### CP-MODEL Readiness`; the heading broke the bind.
+        crossed = '<!-- table-id: x.t -->\n\n#### CP-MODEL Readiness\n\n' + self.GOOD
+        self.assertEqual(tables.parse_tables(crossed)['x.t'].rows, [{'a': '1', 'b': '2'}])
+        self.assertEqual(model_inputs.parse_stable_tables(crossed)['x.t'], [{'a': '1', 'b': '2'}])
+        # The guarantees: a tag binds only the next table, across nothing but blank, comment and heading lines.
+        for name, text in (('prose', '<!-- table-id: x.t -->\n#### H\nA note.\n' + self.GOOD),
+                           ('h2', '<!-- table-id: x.t -->\n## Gaps & Conflicts\n' + self.GOOD),
+                           ('next tag', '<!-- table-id: x.t -->\n#### H\n<!-- table-id: x.u -->\n' + self.GOOD),
+                           ('malformed', '<!-- table-id: x.t -->\n#### H\n| a | b |\n| 1 | 2 |\n'),
+                           ('twice', '<!-- table-id: x.t -->\n#### H\n' + self.GOOD + '\n<!-- table-id: x.t -->\n#### H\n' + self.GOOD)):
+            with self.subTest(case=name):
+                self.assertNotIn('x.t', tables.parse_tables(text))
+        # A tag that binds the strict way wins over one that crossed a heading, as before.
+        later = '<!-- table-id: x.t -->\n#### H\n| a | b |\n| --- | --- |\n| 0 | 0 |\n\n<!-- table-id: x.t -->\n' + self.GOOD
+        self.assertEqual(tables.parse_tables(later)['x.t'].rows, [{'a': '1', 'b': '2'}])
+        # Directly under the tag, a malformed table is still refused.
+        with self.assertRaisesRegex(ValueError, 'separator'):
+            tables.parse_tables('<!-- table-id: x.t -->\n| a | b |\n| 1 | 2 |\n')
+
+    def test_one_hyphen_separators_and_escaped_pipes_read_alike(self):
+        # A row that splits to the header's width at every `|` reads as before: `C:\` ends its cell.
+        text = '<!-- table-id: x.t -->\n| a | b |\n|-|:-:|\n| x \\| y | z |\n| w | C:\\|\n'
+        rows = [{'a': 'x | y', 'b': 'z'}, {'a': 'w', 'b': 'C:\\'}]
+        self.assertEqual(tables.parse_tables(text)['x.t'].rows, rows)
+        self.assertEqual(model_inputs.parse_stable_tables(text)['x.t'], rows)
+        with self.assertRaises(ValueError):
+            tables.parse_tables(text.replace('| x \\| y | z |', '| x \\| y \\| z |'))
+
+    def test_every_document_read_before_reads_the_same(self):
+        # Held against fork r5's reader over random documents: a tolerance only reads what it refused.
+        import random
+        vocabulary = ['', '<!-- table-id: x.a -->', '<!-- table-id: x.b -->', '<!-- note -->', '#### H', '## H2',
+                      'prose', '| a | b |', '| --- | --- |', '|-|-|', '| 1 | 2 |', '| 3 |', '| x \\| y | z |',
+                      '| --- | --- | --- |', '| w | C:\\|',
+                      '| 1 | 2 | 3 |', '|', '---|---', '```', '> quote']
+        generator = random.Random(20261003)
+        compared = 0
+        for _ in range(6000):
+            text = '\n'.join(generator.choice(vocabulary) for _ in range(generator.randint(1, 14)))
+            try:
+                before = _r5_parse_tables(text)
+            except ValueError:
+                continue
+            compared += 1
+            now = {k: (t.columns, t.rows) for k, t in tables.parse_tables(text).items()}
+            self.assertEqual({k: now[k] for k in before}, before, text)
+            self.assertEqual([k for k in now if k in before], list(before), text)
+        self.assertGreater(compared, 1000)
+
+    def test_every_register_bound_before_is_bound_the_same(self):
+        import random
+        vocabulary = ['', '#### T6 — Trace', '### T4.5', '## Analysis', '#### Notes', 'see T4.5', '> note', 'prose',
+                      '| a | b |', '| --- | --- |', '| 1 | 2 |', '| c | d |', '```'] + ['> note', 'prose'] * 4
+        # Fork r12: a caption opening with an ID, and a heading only mentioning one.
+        vocabulary += ['**T4.5 — Register**', '### Notes (see T4.5)']
+        # Fork r13: a mention and an ID-led line in one window, a backticked caption, a heading naming two IDs.
+        vocabulary += ['**T6 — Trace**', 'see T6', '### Bridge T4.5 to T6', '`T4.5` schedule:']
+        generator = random.Random(3102026)
+        added = rebound = 0
+        for _ in range(6000):
+            text = '\n'.join(generator.choice(vocabulary) for _ in range(generator.randint(1, 24)))
+            before, r12, now = _r5_find_registers(text), _r12_find_registers(text), complete.find_registers(text)
+            self.assertEqual(now, _r13_find_registers(text), text)
+            # Fork r13: a binding fork r12 made by a line opening with the ID moves only to another table a
+            # line opening with the ID claims -- an earlier one whose window r12 gave to a mention of another
+            # ID; every other binding that moves was a mention's (r12's own moves from r5 were too).
+            claims12, claims13 = _r12_candidates(text), _r13_candidates(text)
+            for reg in r12:
+                if now.get(reg) != r12[reg]:
+                    rebound += 1
+                    if (any(c[1:] == (reg, r12[reg], True) for c in claims12)):
+                        self.assertIn(now.get(reg), [t for kind, k, t, led in claims13 if k == reg and led], text)
+            added += len(now) > len(before)
+        self.assertGreater(added, 50)
+        self.assertGreater(rebound, 15)
+
+    def test_the_cp1_skeleton_reads_as_every_reader_requires(self):
+        # No CP-1 answer of 2-3 October had a worked example of heading, tag, table and its nulls' gap lines.
+        import re
+        from datetime import date
+        steps = (ROOT / 'skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+        [skeleton] = re.findall(r'^```markdown\n(#### T4\.14 .*?)^```$', steps, re.M | re.S)
+        skill = skill_text('cp-1-canonical-data-foundation')
+        self.assertIn('A worked skeleton is in `references/REF_CP-1_STEPS.md` § REF_CP-1_13.', skill)
+        self.assertIn('never a note row inside them (its empty cells fail the register check); a note goes to T4.12', skill)
+        violations, _, present = complete.check(skill, skeleton, 'CP-1')
+        self.assertEqual(about(violations, 'T4.14'), [])
+        self.assertEqual(len(present['T4.14'][1]), 2)
+        self.assertEqual(complete.load_contract(skill, 'CP-1')['registers']['T4.14']['columns'], present['T4.14'][0])
+        self.assertFalse([v for v in violations if v.startswith('cp1.model_period_register')], violations)
+        rows = model_inputs.parse_stable_tables(skeleton)['cp1.model_period_register']
+        self.assertEqual([r for r in tables.parse_tables(skeleton)['cp1.model_period_register'].rows], list(rows))
+        gaps = skeleton.split('## Gaps & Conflicts', 1)[1]
+        for row in rows:
+            self.assertIn(row['period_type'], model_inputs.PERIOD_TYPES)
+            self.assertIn(row['audit_status'], model_inputs.AUDIT_STATUSES)
+            self.assertIn(row['unit'], model_inputs.PERIOD_UNITS)
+            start, end = date.fromisoformat(row['start_date']), date.fromisoformat(row['end_date'])
+            self.assertEqual(int(row['day_count']), (end - start).days + 1)
+            self.assertEqual(model_inputs._list(row['component_period_ids']), [])
+            # Fork r7 (D95): the skeleton's nulls are all reference columns, so none has a gap line.
+            for column, value in row.items():
+                if value == 'null':
+                    self.assertIn(column, ('fiscal_quarter', 'component_period_ids'))
+                    self.assertNotIn(f'`{column}`', gaps)
+        # The gap line shown is the form for a value-bearing null.
+        self.assertRegex(gaps, r'\n- T4\.15, cash_taxes_paid / Q2_2026, `value`: null — ')
+
+    def test_the_canon_spells_null_and_qa_status_as_the_checkers_read_them(self):
+        canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
+        # `blank` is on every critical-cell blocklist and `Not Reviewed` is not a handoff's qa_status.
+        self.assertNotIn('null/blank', canon)
+        self.assertNotIn('null / blank', canon)
+        self.assertNotIn('| Not Reviewed / Passed', canon)
+        self.assertNotIn('qa_status(Not Reviewed', canon)
+        self.assertEqual(canon.count('| QA status | Passed / Restricted / Blocked (never Not Reviewed) |'), 4)
+        self.assertEqual(canon.count('never an empty cell: `—` in an untagged register, `null` in a tagged table'), 3)
+        self.assertNotIn('Not Reviewed', handoff.QA_STATUSES)
+        # The QA severity rule the validator enforces (`_finding_severities`) is stated beside the caps.
+        self.assertIn('The validator reads every table under `## QA Validation` with a Severity column as findings\n'
+                      '  against this handoff', canon)
+        table = '| Finding | Severity |\n| --- | --- |\n| Source gap | MATERIAL |\n'
+        body = markdown().replace('## QA Validation\nSupported conclusion.\n', '## QA Validation\n' + table)
+        errors = handoff.validate_text(body, filename='EXAMPLE_CP-1_20260907.md').errors
+        self.assertTrue(any(e.startswith('a MATERIAL finding requires qa_status Restricted') for e in errors), errors)
+        moved = markdown().replace('## Analysis\nSupported conclusion.\n', '## Analysis\n' + table)
+        self.assertEqual(handoff.validate_text(moved, filename='EXAMPLE_CP-1_20260907.md').exit_code, 0)
+
+    def test_a_tag_below_its_table_never_crosses_into_the_next(self):
+        # Fix round 1 (C1): tags written below their tables crossed the next heading and bound
+        # the next register's table under the wrong id.
+        def block(k, heading):
+            return f'{heading}\n\n| c{k} | v{k} |\n| --- | --- |\n| r{k} | 1 |\n\n<!-- table-id: x.t{k} -->\n\n'
+        for heading in ('#### T{k} — Register', '#### Operating KPI Schedule {k}'):
+            text = ''.join(block(k, heading.format(k=k)) for k in (1, 2, 3))
+            with self.subTest(heading=heading):
+                self.assertEqual(tables.read_tables(text)[0], {})
+                with self.assertRaises(model_inputs.ContractError):
+                    model_inputs.parse_stable_tables(text)
+        # Nor across a heading naming a register, even after a tagged table.
+        named = '<!-- table-id: x.a -->\n' + self.GOOD + '\n<!-- table-id: x.b -->\n#### T4.15 — Accounts\n' + self.GOOD
+        self.assertEqual(list(tables.parse_tables(named)), ['x.a'])
+        # Across a heading naming no register, after a tagged table or a heading, it still binds.
+        after = named.replace('#### T4.15 — Accounts', '#### CP-MODEL Readiness')
+        self.assertEqual(list(tables.parse_tables(after)), ['x.a', 'x.b'])
+        self.assertEqual(list(model_inputs.parse_stable_tables(after)), ['x.a', 'x.b'])
+
+    def test_a_crossing_tag_binds_only_when_its_id_is_tagged_once(self):
+        # Fix round 1 (I1): a second tag of the id, before a malformed table, prose or nothing, left
+        # the crossed read bound, and CP-MODEL refused the duplicate.
+        bad = '| a | b |\n| --- | --- |\n| 1 |\n'
+        first = '<!-- table-id: x.t -->\n#### H\n' + self.GOOD + '\n<!-- table-id: x.t -->\n'
+        for name, rest in (('malformed', '#### H2\n' + bad), ('prose', '#### H2\nA note.\n'), ('nothing', '#### H2\n')):
+            with self.subTest(second=name):
+                self.assertEqual(tables.read_tables(first + rest), ({}, {}))
+                with self.assertRaises(model_inputs.ContractError):
+                    model_inputs.parse_stable_tables(first + rest)
+        # Only blank and heading lines across a crossing, as CP-MODEL reads it.
+        for line in ('<!-- c -->', '|'):
+            with self.subTest(between=line):
+                self.assertNotIn('x.t', tables.parse_tables('<!-- table-id: x.t -->\n#### H\n' + line + '\n' + self.GOOD))
+
+    def test_an_escaped_pipe_never_shifts_a_critical_cell(self):
+        # Fix round 1 (C2): the interface reader read `\|` as text while the register locator split
+        # at it and truncated, so a blank or placeholder critical cell slid out of its column.
+        skill = ('\n## Output profile — binding on CP-X\'s canonical Markdown\n\n'
+                 '- **completeness_contract**: structured below\n'
+                 '  - **full_run_disqualifiers**: structured below\n'
+                 '    - **critical_cell_values_casefold**: ; n/a; tbd\n'
+                 '  - **required_registers**: structured below\n'
+                 '    - **T1.1**: structured below\n'
+                 '      - **columns**: Item; Locator; Refs\n'
+                 '      - **critical_columns**: identical to columns\n'
+                 '      - **disqualifier_exempt_columns**: none\n'
+                 '      - **minimum_body_rows**: 1\n')
+        for refs in ('', 'n/a', 'TBD'):
+            row = f'| Revenue | FY2024 results \\| p. 4 | {refs} |'
+            text = f'### T1.1 — Accounts\n<!-- table-id: x.t -->\n| Item | Locator | Refs |\n| --- | --- | --- |\n{row}\n'
+            with self.subTest(refs=refs):
+                violations = complete.check(skill, text, 'CP-X')[0]
+                self.assertEqual(violations, [f"T1.1 row 1: critical column 'Refs' holds a disqualifying placeholder {refs!r}"])
+                cells = complete.find_registers(text, ['T1.1'])['T1.1'][1][0]
+                self.assertEqual(list(cells.values()), list(tables.parse_tables(text)['x.t'].rows[0].values()))
+
+    def test_a_row_opening_on_a_double_pipe_is_never_re_read(self):
+        # Fix round 1 (M1): CP-MODEL strips every edge pipe and `cp_tables` one, so the escaped
+        # re-read of `|| S1 | ... \| note 4 |` gave the two readers different cells.
+        head = '<!-- table-id: x.t -->\n| a | b | c |\n| --- | --- | --- |\n'
+        for row in ('|| S1 | 10-K p. 53 \\| note 4 |', '| S1 | 10-K p. 53 \\| note 4 ||'):
+            with self.subTest(row=row):
+                with self.assertRaisesRegex(ValueError, 'table row width differs'):
+                    tables.parse_tables(head + row + '\n')
+                self.assertEqual(tables._row_cells(row, 3), tables._split_row(row))
+                self.assertEqual(model_inputs._row_values(row, 3), model_inputs._split_row(row))
+
+    def test_the_three_readers_agree_on_what_the_tolerances_accept(self):
+        # Fix round 1 (M4): over documents the r5 reader refused or read otherwise, each table the
+        # r6 interface reader newly binds is the one its tag was written for, its id is tagged once,
+        # CP-MODEL reads it alike, and the register locator reads the same cells. (A tag directly
+        # above the next table binds it, as in r5, whichever table the writer meant: only a binding
+        # across a heading is held to the writer's table.)
+        import random
+        generator = random.Random(4102026)
+        rows = ['| r{k} | 1 |', '| r{k} \\| s | 2 |', '|| r{k} | 3 |', '| r{k} | TBD |', '| r{k} \\| s | |',
+                '| r{k} |', '| r{k} | 4 ||']
+        headings = ['#### T{k} — Register', '#### Section {k}', '#### CP-MODEL Readiness', '## H2', 'A note.', '',
+                    # Fork r7 (M1): IDs inside a heading, an umbrella or another family's token, prose naming IDs.
+                    '### Inputs (CP-1 T4.6, T{k})', '### T4 — Statements', '#### LTM / T12M build', '### P90 case',
+                    'Restated from T{k} above.', 'Upstream CP-1 T4.6 and T{k}.']
+        # Fork r7 (M1, round 2): a heading naming other modules' IDs, then prose naming this register, directly
+        # above an untagged table -- the shape the prose binds and no heading names.
+        leads = [[], ['### Inputs (CP-1 T4.6, T2E.1)', '**T{k} — register**'], ['#### T4.18 Debt (from CP-1)', 'See T{k}.'],
+                 ['#### T5B.2 Bridge (from CP-5)', 'Restated from T{k}.'], ['#### TL10.2 Topics (CP-L10)', '**T{k} — register**'],
+                 ['### T4 — Statements', 'T{k} schedule:'], ['#### LTM / T12M build', '**T{k}**']]
+        prose_bound = 0
+        placements = ['above heading', 'below heading', 'below table', 'none', 'twice', 'twice bad']
+        fresh_docs = 0
+        for _ in range(20000):
+            lines = []
+            for k in range(1, generator.randint(1, 4) + 1):
+                tag, heading = f'<!-- table-id: x.t{k} -->', generator.choice(headings).format(k=k)
+                place = generator.choice(placements)
+                table = [f'| c{k} | v{k} |', generator.choice(['| --- | --- |', '|-|:-:|'])]
+                table += [generator.choice(rows).format(k=k) for _ in range(generator.randint(1, 2))]
+                lead = [line.format(k=k) for line in generator.choice(leads)] if place == 'none' else []
+                lines += [tag, ''] if place in ('above heading', 'twice', 'twice bad') else []
+                lines += [heading, ''] if heading and not lead else []
+                lines += lead
+                lines += [tag, ''] if place == 'below heading' else []
+                lines += table + ['']
+                lines += [tag, ''] if place == 'below table' else []
+                lines += [tag, '#### Again', '', 'A note.', ''] if place == 'twice' else []
+                lines += [tag, '#### Again', '', f'| c{k} | v{k} |', '| --- | --- |', '| r |', ''] if place == 'twice bad' else []
+            text = '\n'.join(lines)
+            try:
+                now = tables.parse_tables(text)
+            except ValueError:
+                continue
+            try:
+                before = _r5_parse_tables(text)
+            except ValueError:
+                before = {}
+            try:
+                bound = _r5_parse_tables(text, cells=True)
+            except ValueError:
+                bound = {}
+            fresh = [i for i, t in now.items() if before.get(i) != (t.columns, t.rows)]
+            fresh_docs += bool(fresh)
+            for table_id in fresh:
+                table, tag = now[table_id], f'<!-- table-id: {table_id} -->'
+                if bound.get(table_id) != (table.columns, table.rows):  # bound across a heading
+                    self.assertEqual(table.columns, ['c' + table_id[3:], 'v' + table_id[3:]], text)
+                self.assertEqual(lines.count(tag), 1, text)
+                start = lines.index(tag)
+                end = next(j for j in range(start + 1, len(lines)) if lines[j].startswith('|'))
+                while end < len(lines) and lines[end].startswith('|'):
+                    end += 1
+                model = model_inputs.parse_stable_tables('\n'.join(lines[start:end]))[table_id]
+                self.assertEqual([list(r.values()) for r in model], [list(r.values()) for r in table.rows], text)
+                register = 'T' + table_id[3:]
+                found = complete.find_registers(text, [register]).get(register)
+                if found and found[0] == table.columns:
+                    self.assertEqual([list(r.values()) for r in found[1]], [list(r.values()) for r in table.rows], text)
+            # Fork r7 (M1, round 2): every register's binding, fresh table or not, is the expected one: with no
+            # retired ID, exactly r6's, so nothing unbinds or moves.
+            for k in range(1, 5):
+                register = f'T{k}'
+                found = complete.find_registers(text, [register]).get(register)
+                self.assertEqual(found, _r7_expected(text, [register]).get(register), text)
+                prose_bound += bool(found) and f'**T{k} — register**' in text
+            try:
+                model = model_inputs.parse_stable_tables(text)
+            except model_inputs.ContractError:
+                continue
+            for table_id, table in now.items():
+                self.assertEqual([list(r.values()) for r in model[table_id]], [list(r.values()) for r in table.rows], text)
+        self.assertGreater(fresh_docs, 1000)
+        self.assertGreater(prose_bound, 500)
+
+    def test_the_nearest_heading_binds_its_next_table_at_any_distance(self):
+        # N4 CP-0 #5: five blockquote lines sat between `#### T6 — Evidence Trace` and its table.
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        self.assertIn('T6', complete.find_registers('#### T6 — Evidence Trace\n\n' + notes + self.GOOD, ['T6']))
+        # The guarantees: a heading binds only the next table below it, and only as the nearest heading.
+        other = '| c | d |\n| --- | --- |\n| 3 | 4 |\n\n'
+        between = complete.find_registers('#### T6\n\n' + notes + other + notes + self.GOOD, ['T6'])
+        self.assertEqual(between['T6'][0], ['c', 'd'])
+        shadowed = '#### T6\n\n' + notes + '#### Notes\n\n' + notes + self.GOOD
+        self.assertNotIn('T6', complete.find_registers(shadowed, ['T6']))
+        # Within the four lines, the nearest line naming a register binds, past a heading naming none.
+        self.assertIn('T6', complete.find_registers('#### T6\n#### Notes\n' + self.GOOD, ['T6']))
+        # A binding made the near way, anywhere, is never displaced by a distant heading.
+        near = '#### T6\n\n' + notes + other + '#### T6 — again\n' + self.GOOD
+        self.assertEqual(complete.find_registers(near, ['T6'])['T6'][0], ['a', 'b'])
+
+
+class ForkR7Tests(unittest.TestCase):
+    """Deployment fork r7 (D95): one CP-1 register per figure, CP-MODEL reads the canon's dash as null,
+    and only a value-bearing null is a gap."""
+
+    def test_cp1_writes_no_consolidated_copy_of_its_statements(self):
+        # T4.7 consolidated T4.4-T4.6 (its own step said "consolidation only -- no new data"), but 5 of
+        # 20 stored answers put a period in it alone, so T4.4-T4.6 now carry every period. T4.10 stays: in
+        # 10 of 20 it held KPIs found nowhere else (fix round 1, I1). No other reader names CP-1's T4.7.
+        skill = skill_text('cp-1-canonical-data-foundation')
+        contract = complete.load_contract(skill, 'CP-1')
+        self.assertEqual(sorted(contract['registers'], key=lambda r: int(r.split('.')[1])),
+                         [f'T4.{n}' for n in (1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)])
+        catalog = json.loads((ROOT / 'skills/cp-os-credit-os/references/CREDIT_OS_V_MODULE_CATALOG_v2.json')
+                             .read_text(encoding='utf-8'))
+        [cp1] = [m['artifact_contract'] for m in catalog['modules'] if m['module_id'] == 'CP-1']
+        self.assertEqual((set(cp1['required_table_ids']), cp1['required_table_count']), (set(contract['registers']), 18))
+        self.assertIn('give them every line item and every period the answer reports, FY included, so no figure '
+                      'exists only in a consolidated table', skill)
+        self.assertIn("T4.15 is the CP-MODEL account interface: keep it complete", skill)
+        steps = (ROOT / 'skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+        self.assertIn('Every line item and every period the answer reports, FY included, is in T4.4, T4.5 or T4.6', steps)
+        self.assertIn('## Output — T4.10 KPI Dashboard', steps)
+        self.assertNotIn('repeated', steps)
+        for name in ('REF_CP-1_STEPS.md', 'CP-1_RUNBOOK.md', 'CP-1_SCHEMA_REFERENCE.md'):
+            text = (ROOT / 'skills/cp-1-canonical-data-foundation/references' / name).read_text(encoding='utf-8')
+            for retired in ('T4.7 Normalized', 'T4.7 Consolidated', '| T4.7 |'):
+                with self.subTest(file=name, retired=retired):
+                    self.assertNotIn(retired, text)
+        # An answer that still writes the retired tables is not refused for them.
+        violations = complete.check(skill, '#### T4.7 — Normalized Financials\n\n| Line Item | FY2025 |\n| --- | --- |\n'
+                                    '| Revenue | 1 |\n', 'CP-1')[0]
+        self.assertFalse([v for v in violations if v.startswith('T4.7')], violations)
+        self.assertIn('T4.4: required register missing from the handoff', violations)
+
+    def test_a_retired_register_heading_keeps_its_table(self):
+        # N2's accepted CP-1 still wrote `#### T4.7`; with T4.7 unlisted, the T4.6 note's mention of
+        # T4.18 claimed the T4.7 table as T4.18, and 5 of 21 stored CP-1 answers newly failed.
+        def table(*cells):
+            return '| ' + ' | '.join(cells) + ' |\n|' + '---|' * len(cells) + '\n| ' + ' | '.join('x' * len(cells)) + ' |\n\n'
+        text = ('#### T4.6 Balance Sheet\n\n' + table('Line Item', 'FY2025') + 'Debt detail is in T4.18.\n\n'
+                '#### T4.7 Normalized Financials\n\n' + table('Line Item', 'Statement Source', 'FY2025')
+                + '#### T4.18 Debt Facility Register\n\n' + table('facility_id', 'facility_name'))
+        self.assertEqual(complete.load_contract(skill_text('cp-1-canonical-data-foundation'), 'CP-1')['retired_registers'],
+                         ['T4.7'])
+        found = complete.find_registers(text, ['T4.6', 'T4.18'], ['T4.7'])
+        self.assertEqual(found['T4.18'][0], ['facility_id', 'facility_name'])
+        self.assertEqual(complete.find_registers(text)['T4.7'][0], ['Line Item', 'Statement Source', 'FY2025'])
+        # A heading naming no register still lets the prose line bind (fork r2), but only while no heading
+        # binds the ID: T4.18's own heading below takes it back (fork r12).
+        notes = text.replace('#### T4.7 Normalized Financials', '#### Notes')
+        self.assertEqual(complete.find_registers(notes, ['T4.6', 'T4.18'], ['T4.7'])['T4.18'][0],
+                         ['facility_id', 'facility_name'])
+        alone = notes.replace('#### T4.18 Debt Facility Register', '#### Debt facilities')
+        self.assertEqual(complete.find_registers(alone, ['T4.6', 'T4.18'], ['T4.7'])['T4.18'][0],
+                         ['Line Item', 'Statement Source', 'FY2025'])
+
+    def test_another_modules_id_leading_a_heading_never_stops_the_prose(self):
+        # Review fix round 2: CP-1B, CP-1C and CP-4 share CP-1's "T4." numbering, so a family rule read
+        # CP-1B's "#### T4.18 Debt facilities (from CP-1)" as retired: a TBD copy passed beside a clean one
+        # and a lone register was refused as missing. Only the module's own retired list stops the prose.
+        skill = skill_text('cp-1b-earnings-delta')
+        contract = complete.load_contract(skill, 'CP-1B')
+        self.assertEqual(contract['retired_registers'], [])
+        columns = contract['registers']['T4.12']['columns']
+        head = '| ' + ' | '.join(columns) + ' |\n|' + '---|' * len(columns) + '\n'
+        bad = head + '| ' + ' | '.join(['TBD'] + ['x'] * (len(columns) - 1)) + ' |\n'
+        good = head + '| ' + ' | '.join('x' for _ in columns) + ' |\n'
+        lead = '#### T4.18 Debt facilities (from CP-1)\n\n**T4.12 — Model comparator register**\n\n'
+        two = lead + bad + '\n### Summary\n\nRestated from T4.12 above.\n\n' + good
+        self.assertEqual([v for v in complete.check(skill, two, 'CP-1B')[0] if v.startswith('T4.12')],
+                         [f"T4.12 row 1: critical column '{columns[0]}' holds a disqualifying placeholder 'TBD'"])
+        one = lead + good
+        self.assertEqual(complete.find_registers(one, list(contract['registers']))['T4.12'][0], columns)
+        self.assertFalse([v for v in complete.check(skill, one, 'CP-1B')[0] if v.startswith('T4.12')])
+
+    def test_an_id_inside_a_heading_never_stops_the_prose(self):
+        # Review fix round 1 (I2): an upstream citation in a heading ("Inputs (CP-1 T4.6, T4.18)")
+        # stopped the prose binding, so a TBD copy passed while a clean copy bound, and a lone
+        # register written under such a heading was refused as missing.
+        skill = skill_text('cp-2d-liquidity-cash-flow-bridge')
+        contract = complete.load_contract(skill, 'CP-2D')
+        first = list(contract['registers'])[0]
+        columns = contract['registers'][first]['columns']
+        head = '| ' + ' | '.join(columns) + ' |\n|' + '---|' * len(columns) + '\n'
+        bad = head + '| ' + ' | '.join(['TBD'] + ['x'] * (len(columns) - 1)) + ' |\n'
+        good = head + '| ' + ' | '.join('x' for _ in columns) + ' |\n'
+        lead = f'### Liquidity inputs (CP-1 T4.6, T4.18)\n\n**{first} — register**\n\n'
+        two = lead + bad + f'\n### Summary\n\nRestated from {first} above.\n\n' + good
+        self.assertEqual([v for v in complete.check(skill, two, 'CP-2D')[0] if v.startswith(first)],
+                         [f"{first} row 1: critical column '{columns[0]}' holds a disqualifying placeholder 'TBD'"])
+        one = lead + good
+        self.assertIn(first, complete.find_registers(one, list(contract['registers'])))
+        self.assertFalse([v for v in complete.check(skill, one, 'CP-2D')[0] if v.startswith(first + ':')])
+
+    def test_an_umbrella_or_another_familys_heading_never_stops_the_prose(self):
+        # Review fix round 1 (I2): "### T4 — ..." over "**T4.4 — Income Statement**", "T12M", "P90".
+        ids = list(complete.load_contract(skill_text('cp-1-canonical-data-foundation'), 'CP-1')['registers'])
+        table = '| Line Item | FY2025 | FY2024 |\n| --- | --- | --- |\n| Revenue | 10 | 9 |\n'
+        docs = {
+            '### T4 — Historical financial statements\n\n**T4.4 — Income Statement**\n\n': 'T4.4',
+            '#### LTM / T12M build\n\nT4.4 Income statement (USD m):\n\n': 'T4.4',
+            '### Downside P90 case\nTable T4.9 KPIs\n': 'T4.9',
+            '#### T12M build\n\nT4.4 Income statement:\n\n': 'T4.4',
+        }
+        for lead, register in docs.items():
+            with self.subTest(lead=lead):
+                self.assertEqual(sorted(complete.find_registers(lead + table, ids)), [register])
+        # A heading led by the module's retired ID keeps its table; another unlisted ID does not.
+        self.assertEqual(complete.find_registers('#### T4.7 Normalized\nSee T4.18.\n' + table, ids, ['T4.7']), {})
+        self.assertEqual(complete.find_registers('### **T4.7** Normalized\nSee T4.18.\n' + table, ids, ['T4.7']), {})
+        self.assertEqual(sorted(complete.find_registers('#### T4.20 Notes\nSee T4.18.\n' + table, ids, ['T4.7'])), ['T4.18'])
+
+    def test_the_locator_binds_as_r6_but_under_a_retired_heading(self):
+        # Review fix round 1 (M1): over documents mixing listed, retired, umbrella and cited IDs in headings
+        # and prose, every binding is r6's, but a retired heading's table, which no prose claims, and (forks
+        # r12, r13) a table a line opening with the ID claims, which no table a mention bound keeps from its ID,
+        # and which wins its window from a mention; nothing else unbinds or moves.
+        import random
+        lines_from = ['#### {f}1 — Register', '#### {f}3 Debt', '#### {f}7 Retired', '### **{f}7** Retired',
+                      '#### {f}10 Other', '#### T4.18 Debt facilities (from CP-1)', '#### T4.7 Normalized (CP-1)',
+                      '#### T2E.1 Inputs (from CP-2E)', '#### TL10.2 Topics (CP-L10)', '### T4 — Statements',
+                      '### Inputs (CP-1 T4.6, {f}2)', '#### LTM / T12M build', '### Downside P90 case', '#### Notes',
+                      '## Analysis', 'See {f}3.', 'Restated from {f}1 above.', '**{f}2 — register**', '{f}1 schedule:',
+                      'A note.', '> quote', 'Upstream CP-1 T4.6 and T4.18.', '']
+        generator = random.Random(5102026)
+        retired_docs = moved = 0
+        for _ in range(20000):
+            family = generator.choice(['T4.', 'T2E.', 'T5B.', 'TL10.'])
+            ids, retired = [family + n for n in ('1', '2', '3')], [family + '7']
+            parts = []
+            for k in range(1, generator.randint(1, 4) + 1):
+                parts += [generator.choice(lines_from).format(f=family) for _ in range(generator.randint(0, 5))]
+                parts += [f'| c{k} | v{k} |', '| --- | --- |', f'| r{k} | 1 |', '']
+            text = '\n'.join(parts)
+            now, before = complete.find_registers(text, ids, retired), _r6_find_registers(text, ids)
+            self.assertEqual(now, _r7_expected(text, ids, retired, _r13_find_registers), text)
+            retired_docs += now != before
+            moved += any(now.get(r) not in (None, before.get(r)) for r in ids)
+        self.assertGreater(retired_docs, 500)
+        self.assertGreater(moved, 100)
+
+    def test_cp_model_reads_the_canons_dash_as_null(self):
+        # The canon renders an absent value `—`; CP-MODEL read it as text, so one dash in a tagged
+        # CP-1 table broke a period's components or a figure.
+        for dash in ('\u2014', '\u2013', ' \u2014 '):
+            with self.subTest(dash=dash):
+                errors = []
+                self.assertIsNone(model_inputs._number(dash, field='f', errors=errors))
+                self.assertEqual(errors, [])
+                self.assertEqual(model_inputs._list(dash), [])
+                self.assertIn(dash.strip(), model_inputs.NULL_TEXT)
+                self.assertTrue(tables.is_null(dash))
+        errors = []
+        self.assertIsNone(model_inputs._number('n.a.', field='f', errors=errors))
+        self.assertEqual(errors, ["f: invalid numeric value 'n.a.'"])
+        source = (ROOT / 'skills/cp-model/scripts/cp_model_v3/domain.py').read_text(encoding='utf-8')
+        [line] = [l for l in source.splitlines() if l.startswith('NULL_TEXT = ')]
+        self.assertEqual(ast.literal_eval(line.split('=', 1)[1].strip()), model_inputs.NULL_TEXT)
+        period = {'period_id': 'FY2025', 'fiscal_year': '2025', 'fiscal_quarter': '\u2014', 'period_type': 'FY',
+                  'start_date': '2025-01-01', 'end_date': '2025-12-31', 'day_count': '365', 'audit_status': 'AUDITED',
+                  'currency': 'USD', 'unit': 'MILLIONS', 'accounting_basis': 'US GAAP', 'entity_perimeter': 'Group',
+                  'source_id': 'S1', 'source_locator': '10-K p. 53', 'component_period_ids': '\u2014'}
+        header = '| ' + ' | '.join(period) + ' |\n|' + '---|' * len(period) + '\n'
+        text = '<!-- table-id: cp1.model_period_register -->\n' + header + '| ' + ' | '.join(period.values()) + ' |\n'
+        rows = model_inputs.parse_stable_tables(text)['cp1.model_period_register']
+        result = model_inputs.validate_cp_model_inputs(text, '')
+        # Before fork r7: 'FY must not set fiscal_quarter' and an unknown component period '—'.
+        self.assertFalse([e for e in result.errors if 'fiscal_quarter' in e or 'component' in e], result.errors)
+        self.assertEqual(model_inputs._list(rows[0]['component_period_ids']), [])
+
+    def test_only_a_value_bearing_null_is_a_gap(self):
+        # D85 listed every critical null in Gaps & Conflicts; a reference column's null means none applies.
+        skill = skill_text('cp-1-canonical-data-foundation')
+        steps = (ROOT / 'skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+        self.assertIn('a `null` in a reference column means none applies, is not a gap and is not listed: '
+                      '`conflict_refs`, `limitation_refs`, `component_period_ids` on a directly reported period, '
+                      '`fiscal_quarter` on a row that is not a QUARTER.', skill)
+        self.assertIn('The\nreference columns are `conflict_refs` and `limitation_refs` (T4.15),\n`component_period_ids` on a '
+                      'directly reported period and `fiscal_quarter` on a\nrow that is not a QUARTER (T4.14).', steps)
+        columns = complete.load_contract(skill, 'CP-1')['registers']
+        self.assertTrue({'conflict_refs', 'limitation_refs'} <= set(columns['T4.15']['columns']))
+        self.assertTrue({'component_period_ids', 'fiscal_quarter'} <= set(columns['T4.14']['columns']))
+        # Still critical: a reference column's `null` passes, its blank or n/a does not.
+        self.assertNotIn('null', complete.load_contract(skill, 'CP-1')['blocklist'])
+
+
+class ForkR9Tests(unittest.TestCase):
+    """Deployment fork r9 (D97): CP-0 writes only the preparation registers that hold its own findings."""
+
+    RETIRED = ['P1', 'P2', 'P4', 'P6', 'P7', 'P8']
+
+    def test_cp0_keeps_its_findings_and_leaves_the_host_record_to_the_host(self):
+        # 90 stored CP-0 answers: P3 held identity, period and version facts found nowhere else (110 dates in
+        # 46) and P5 the fidelity findings (64 cells in 35); the other six restated the host's record or said
+        # NA about workspaces and ZIPs this host never makes.
+        skill = skill_text('cp-0-source-readiness')
+        contract = complete.load_contract(skill, 'CP-0')
+        self.assertEqual(sorted(contract['registers']), ['P3', 'P5'] + [f'T{n}' for n in range(1, 9)])
+        self.assertEqual(contract['retired_registers'], self.RETIRED)
+        catalog = json.loads((ROOT / 'skills/cp-os-credit-os/references/CREDIT_OS_V_MODULE_CATALOG_v2.json')
+                             .read_text(encoding='utf-8'))
+        [cp0] = [m['artifact_contract'] for m in catalog['modules'] if m['module_id'] == 'CP-0']
+        self.assertEqual((set(cp0['required_table_ids']), cp0['required_table_count']), (set(contract['registers']), 10))
+        self.assertIn('### Host preparation — the record CP-0 does not restate', skill)
+        self.assertIn('**P3 — Input Sources**', skill)
+        self.assertIn('**P5 — Parse Jobs**', skill)
+        references = ROOT / 'skills/cp-0-source-readiness/references'
+        # Fork r11 (D99): nothing CP-0 is handed asks for work on a retired register -- no triage
+        # scores or register, no ZIP, checksum or batch gate, no column the host's record lacks.
+        stale_r11 = ('once in the triage register', 'inventory and triage register', 'Scores add correctly', '## Scoring rubric', 'score and freeze',
+                     'Freeze one decision per source', 'batch-reconciliation', 'ZIP-verification',
+                     'BATCH-[NNN]-of-[NNN].zip` packages', 'the host\'s record carries them',
+                     'active_content_artifact_id', '`PASS_THROUGH` attaches its original',
+                     'package validation', 'package status', 'same-run preparation validation',
+                     # Fork r11 fix round 1: the residual triage, workspace and package text.
+                     '| Case | Expected decision | Reason |', '## ZIP batching', '## Triage-only run',
+                     'TRIAGE_REGISTER.md', 'CHECKSUMS.sha256', '| State | Original role | Parsed role |',
+                     'sha256_before', 'checksums and packages only in the workspace',
+                     'Keep source roots immutable', 'Package or fidelity validation failure', 'unsafe package',
+                     'frozen triage', 'Evidence ZIPs remain', 'evidence packages use',
+                     # Fork r11 fix round 2: the role, entry contract, export and step text that still asked
+                     # for triage, a managed workspace, original-hash re-checks or supporting packages.
+                     'Inventory and triage the complete pack', 'package one validated', 'Triage the whole pack',
+                     'it still appears in the manifest', 'managed run workspace', 'Parsed evidence ZIPs',
+                     'validated package links', 'link validated supporting packages', 'Validated prepared packages',
+                     'owns triage, extraction, fidelity and packaging', 'changed hashes, failed package',
+                     '## Frozen decision', '## Calibration defaults', 'evidence_value 0-5', 're-triage',
+                     'Verify the original SHA-256 again', 'original-hash verification', 'supporting evidence ZIP',
+                     'selected artifact hash present', 'original hashes', 'derivative paths outside source roots',
+                     'PASS_THROUGH', 'SKIP_DUPLICATE', 'SKIP_LOW_VALUE', 'package-level limitations',
+                     'source hash when available', 'Master Index and managed workspace', 'original paths/hashes',
+                     'their own artifact ID, path, hash', 'Every prepared artifact records')
+        for path in (ROOT / 'skills/cp-0-source-readiness/SKILL.md', ROOT / 'CANON_SHARED.md',
+                     references / 'REF_CP-0_STEPS.md', references / 'CP-PARSE_SCHEMA_REFERENCE.md',
+                     references / 'CP-0_SYSTEM_REFERENCE.md',
+                     references / 'REF_CP-PARSE_STEPS.md', references / 'CP-0_SCHEMA_REFERENCE.md',
+                     references / 'CP0_PROFILE_ANCHOR_CONTRACT_v1.md',
+                     references / 'CP0_CAPACITY_RESUME_CONTRACT_v1.md',
+                     ROOT / 'skills/cp-os-credit-os/references/CP-OS_MIRROR_CP0_PROFILE_ANCHOR_CONTRACT_v1.md'):
+            text = path.read_text(encoding='utf-8')
+            for stale in ('P1-P8', 'P1–P8', 'Triage it `PARSE_TARGETED`', '| P7 | Representation Catalog |') + stale_r11:
+                with self.subTest(file=path.name, stale=stale):
+                    self.assertNotIn(stale, text)
+        # What CP-0 still owes stays: execution batching and resume (capacity), and the eight T8 rules.
+        capacity = (references / 'CP0_CAPACITY_RESUME_CONTRACT_v1.md').read_text(encoding='utf-8')
+        for kept in ('## Deterministic parse work', '`BATCH-NNN`', '[resume_from: <checkpoint>]',
+                     'CP-0 keeps no workspace', '`READY_FOR_FINALIZATION`'):
+            with self.subTest(kept=kept):
+                self.assertIn(kept, capacity)
+        steps = (references / 'REF_CP-0_STEPS.md').read_text(encoding='utf-8')
+        rules = steps.split('step="I" name="DownstreamReadiness">', 1)[1].split('## CP-MODEL boundary', 1)[0]
+        self.assertEqual(re.findall(r'^(\d+)\. ', rules, re.M), [str(n) for n in range(1, 9)])
+
+    def test_cp0_verifies_only_what_its_own_registers_hold(self):
+        # Fork r11 (D99): the preparation phase's Verification block asked PASS/FAIL/NA of 14 checks, 8 of
+        # them on what P2, P4, P7 and P8 held (frozen triage, ZIP paths, checksums, batches). Each block
+        # now keeps the checks P3, P5 and T1-T8 hold and points at the host's preparation record.
+        skill = skill_text('cp-0-source-readiness')
+        blocks = re.findall(r'#### Verification — fail closed\n(.*?)</verification>', skill, re.S)
+        self.assertEqual(len(blocks), 2)
+        preparation, readiness = blocks
+        for block in blocks:
+            for retired in ('triage', 'ZIP', 'checksum', 'batch', 'original hashes', 'package validation',
+                            'representation uniqueness', 'source-root immutability', 'unique members'):
+                with self.subTest(retired=retired):
+                    self.assertNotIn(retired, block)
+            self.assertIn("the host's preparation record", block.replace('host’s', "host's"))
+        self.assertIn('(P3)', preparation)
+        self.assertIn('(P5)', preparation)
+        self.assertIn('downstream readiness', readiness)
+        parse = (ROOT / 'skills/cp-0-source-readiness/references/REF_CP-PARSE_STEPS.md').read_text(encoding='utf-8')
+        gates = parse.split('## Verification gates\n', 1)[1]
+        self.assertEqual(re.findall(r'^(\d+)\. ', gates, re.M), [str(n) for n in range(1, 8)])
+        self.assertIn("appears exactly once in P3 and in P5", gates)
+
+    def test_an_answer_with_the_retired_registers_still_reads_the_same(self):
+        # Every stored CP-0 answer writes all sixteen. A retired heading keeps its table, so the prose under
+        # it ("feeds T2") never claims a table as a T register, and nothing is refused for the extra tables.
+        skill = skill_text('cp-0-source-readiness')
+        def table(*cells):
+            return '| ' + ' | '.join(cells) + ' |\n|' + '---|' * len(cells) + '\n| ' + ' | '.join(['x'] * len(cells)) + ' |\n\n'
+        parts = []
+        for n in range(1, 9):
+            parts.append(f'#### P{n} — Preparation\n\nThe selected artifact feeds T2.\n\n' + table(f'p{n}_id', 'value'))
+        for n in range(1, 9):
+            parts.append(f'#### T{n} — Readiness\n\n' + table(f't{n}_id', 'value'))
+        text = ''.join(parts)
+        ids = list(complete.load_contract(skill, 'CP-0')['registers'])
+        found = complete.find_registers(text, ids, self.RETIRED)
+        self.assertEqual({rid: found[rid][0][0] for rid in found},
+                         {rid: rid.lower() + '_id' for rid in ids})
+        self.assertEqual(complete.check(skill, text, 'CP-0')[0], [])
+        # Without its retired tables the answer is complete; without P3 it is not.
+        lean = ''.join(p for p in parts if not any(p.startswith(f'#### {rid} ') for rid in self.RETIRED))
+        self.assertEqual(complete.check(skill, lean, 'CP-0')[0], [])
+        self.assertIn('P3: required register missing from the handoff',
+                      complete.check(skill, lean.replace('#### P3 — Preparation', '#### Inputs'), 'CP-0')[0])
+
+
+class ForkR11Tests(unittest.TestCase):
+    """Deployment fork r11 (D100): an interface table written without its table-id comment is told so."""
+
+    TITLES = {'T4.12': 'Model Comparator Register', 'T4.13': 'Model Validation Register',
+              'T4.14': 'Add-Back Validation Register', 'T4.15': 'Model Readiness'}
+
+    def handoff(self, tag=lambda reg: '', title=lambda reg, name: name):
+        parts = []
+        for reg, name in self.TITLES.items():
+            parts.append(f'#### {title(reg, name)}\n\n{tag(reg)}| a | b |\n|---|---|\n| x | y |\n\n')
+        return ''.join(parts)
+
+    def interface(self, text):
+        skill = skill_text('cp-1b-earnings-delta')
+        return [v for v in complete.check(skill, text, 'CP-1B')[0] if 'table-id' in v or 'interface' in v]
+
+    def test_a_register_written_without_its_comment_names_the_comment(self):
+        # R1b CP-1B attempt 2 wrote T4.12-T4.15 under their register headings and no table-id comment,
+        # and was told the four tables were missing.
+        found = self.interface(self.handoff(title=lambda reg, name: f'{reg} — {name}'))
+        self.assertEqual(found, [
+            '`<!-- table-id: cp1b.model_comparator_register -->` comment not found above the T4.12 table',
+            '`<!-- table-id: cp1b.model_validation_register -->` comment not found above the T4.13 table',
+            '`<!-- table-id: cp1b.addback_validation_register -->` comment not found above the T4.14 table',
+            'cp1b.cp_model_snapshot_fields: CP-MODEL interface table missing -- it is emitted on every run, '
+            'not only when CP-MODEL was requested',
+            '`<!-- table-id: cp1b.model_readiness -->` comment not found above the T4.15 table',
+        ])
+        # Emphasis and a trailing parenthetical are not part of the title.
+        found = self.interface(self.handoff(title=lambda reg, name: f'**{reg}** {name} (CP-MODEL interface)'))
+        self.assertIn('`<!-- table-id: cp1b.model_readiness -->` comment not found above the T4.15 table', found)
+
+    def test_a_missing_register_or_an_unbound_comment_is_still_a_missing_table(self):
+        # No heading led by the register's ID: the table is missing.
+        found = self.interface(self.handoff(title=lambda reg, name: name))
+        self.assertEqual(len(found), 5)
+        self.assertTrue(all('CP-MODEL interface table missing' in v for v in found), found)
+        # A heading whose title is another register's pairs with nothing.
+        found = self.interface(self.handoff(title=lambda reg, name: f'{reg} — Readiness notes'))
+        self.assertTrue(all('CP-MODEL interface table missing' in v for v in found), found)
+        # The comment written, with prose between it and the table: present but unbound.
+        ids = dict(zip(self.TITLES, ('cp1b.model_comparator_register', 'cp1b.model_validation_register',
+                                     'cp1b.addback_validation_register', 'cp1b.model_readiness')))
+        unbound = self.handoff(tag=lambda reg: f'<!-- table-id: {ids[reg]} -->\nA note.\n\n',
+                               title=lambda reg, name: f'{reg} — {name}')
+        self.assertEqual(tables.read_tables(unbound), ({}, {}))
+        found = self.interface(unbound)
+        self.assertEqual(len(found), 5)
+        self.assertTrue(all('CP-MODEL interface table missing' in v for v in found), found)
+        # Bound, the four are read and only the snapshot table is missing.
+        bound = self.handoff(tag=lambda reg: f'<!-- table-id: {ids[reg]} -->\n', title=lambda reg, name: f'{reg} — {name}')
+        self.assertEqual(sorted(tables.read_tables(bound)[0]), sorted(ids.values()))
+        self.assertEqual(self.interface(bound), [
+            'cp1b.cp_model_snapshot_fields: CP-MODEL interface table missing -- it is emitted on every run, '
+            'not only when CP-MODEL was requested'])
+
+
+class ForkR12Tests(unittest.TestCase):
+    """Deployment fork r12 (D103): a register's heading-bound table wins over one a prose line bound."""
+
+    SUMMARY = ('| Metric | Q2 2026 | Q2 2025 | Change / read-through |\n|---|---|---|---|\n'
+               '| Revenue | 2,912 | 2,834 | Higher |\n\n')
+    REGISTER = '| Line Item | Q2 2026 | Q2 2025 |\n|---|---|---|\n| Revenue | 2,912 | 2,834 |\n\n'
+    LEAD = ('### Analytical read-through\n\nQ2 figures are in T4.4 and T4.9.\n\n'
+            '**Key financial changes (USD millions):**\n\n')
+
+    def test_a_prose_bound_summary_never_takes_the_register_below_it(self):
+        # R4 CP-1 attempt 1 (b5e0b653): a summary under a paragraph naming T4.4 bound T4.4 first, and the
+        # real `#### T4.4 — Income Statement` table was ignored: "T4.4: missing column(s) ['Line Item']".
+        text = self.LEAD + self.SUMMARY + '#### T4.4 — Income Statement\n\n' + self.REGISTER
+        self.assertEqual(_r6_find_registers(text, ['T4.4', 'T4.9'])['T4.4'][0][0], 'Metric')
+        found = complete.find_registers(text, ['T4.4', 'T4.9'])
+        self.assertEqual(found['T4.4'][0], ['Line Item', 'Q2 2026', 'Q2 2025'])
+        self.assertNotIn('T4.9', found)
+        violations = complete.check(skill_text('cp-1-canonical-data-foundation'), text, 'CP-1')[0]
+        self.assertEqual(about(violations, 'T4.4'), [])
+        # A distant heading too: notes between the register's heading and its table.
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        distant = self.LEAD + self.SUMMARY + '#### T4.4 — Income Statement\n\n' + notes + self.REGISTER
+        self.assertEqual(complete.find_registers(distant, ['T4.4'])['T4.4'][0][0], 'Line Item')
+
+    def test_a_heading_bound_register_keeps_its_table_before_a_later_prose_mention(self):
+        text = '#### T4.4 — Income Statement\n\n' + self.REGISTER + self.LEAD + self.SUMMARY
+        self.assertEqual(complete.find_registers(text, ['T4.4'])['T4.4'][0][0], 'Line Item')
+
+    def test_a_prose_bound_table_still_binds_where_no_heading_does(self):
+        self.assertEqual(complete.find_registers(self.LEAD + self.SUMMARY, ['T4.4'])['T4.4'][0][0], 'Metric')
+        # Two prose-bound tables: the first keeps the ID, as before.
+        two = self.LEAD + self.SUMMARY + 'Restated from T4.4.\n\n' + self.REGISTER
+        self.assertEqual(complete.find_registers(two, ['T4.4'])['T4.4'][0][0], 'Metric')
+        # A heading naming another ID binds its own table only; the prose-bound T4.4 stays.
+        other = self.LEAD + self.SUMMARY + '#### T4.5 — Cash Flow\n\n' + self.REGISTER
+        found = complete.find_registers(other, ['T4.4', 'T4.5'])
+        self.assertEqual((found['T4.4'][0][0], found['T4.5'][0][0]), ('Metric', 'Line Item'))
+
+    def test_two_headings_keep_the_first(self):
+        twice = '#### T4.4 — Income Statement\n\n' + self.SUMMARY + '#### T4.4 — again\n\n' + self.REGISTER
+        self.assertEqual(complete.find_registers(twice, ['T4.4'])['T4.4'][0][0], 'Metric')
+        # A near heading still wins over an earlier distant one (fork r6), and neither yields to prose.
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        near = ('#### T4.4 — Income Statement\n\n' + notes + self.SUMMARY + self.LEAD + self.SUMMARY
+                + '#### T4.4 — again\n\n' + self.REGISTER)
+        self.assertEqual(complete.find_registers(near, ['T4.4'])['T4.4'][0][0], 'Line Item')
+
+
+    # Review fix round 1 (I1, I2): only a heading opening with the ID displaces, and only a prose mention.
+    TBD = '| Line Item | Q2 2026 | Q2 2025 |\n|---|---|---|\n| Revenue | TBD | 2,834 |\n| EBITDA | 920 | N/A |\n\n'
+    CAPTION = '**T4.4 — Income Statement**\n\n'
+
+    def t44(self, text):
+        return about(complete.check(skill_text('cp-1-canonical-data-foundation'), text, 'CP-1')[0], 'T4.4')
+
+    def test_a_caption_opening_with_the_id_is_never_displaced(self):
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        header_only = '| Line Item | Q2 2026 |\n|---|---|\n\n'
+        # A deficient register under its caption stays refused, whatever table a later heading leads.
+        for later in ('### Summary of T4.4\n\n' + self.REGISTER, '#### T4.4 — recap\n\n' + notes + self.REGISTER,
+                      '#### T4.4 — Income Statement\n\n' + header_only):
+            with self.subTest(later=later[:24]):
+                self.assertEqual(len(self.t44(self.CAPTION + self.TBD + later)), 2)
+        # And a compliant one stays accepted under a later heading's junk table.
+        for later in ('#### T4.4 — recap\n\n', '### T4.4 checks\n\n' + notes):
+            with self.subTest(later=later[:24]):
+                text = self.CAPTION + self.REGISTER + later + self.SUMMARY
+                self.assertEqual(complete.find_registers(text, ['T4.4'])['T4.4'][0][0], 'Line Item')
+                self.assertEqual(self.t44(text), [])
+        # A backticked or plain caption opening with the ID is a caption too.
+        for caption in ('`T4.4` — Income Statement\n', 'T4.4 schedule:\n'):
+            with self.subTest(caption=caption):
+                text = caption + self.REGISTER + '#### T4.4 — again\n\n' + self.SUMMARY
+                self.assertEqual(complete.find_registers(text, ['T4.4'])['T4.4'][0][0], 'Line Item')
+
+    def test_a_heading_only_mentioning_the_id_displaces_nothing(self):
+        for heading in ('### Notes (see T4.4)', '### Bridge T4.4 to T4.5', '### Summary of T4.4'):
+            with self.subTest(heading=heading):
+                # Neither a compliant caption-bound register nor a prose-bound table gives way to it.
+                text = self.CAPTION + self.REGISTER + heading + '\n\n' + self.SUMMARY
+                self.assertEqual(self.t44(text), [])
+                mention = self.LEAD + self.SUMMARY + heading + '\n\n' + self.REGISTER
+                self.assertEqual(complete.find_registers(mention, ['T4.4', 'T4.5'])['T4.4'][0][0], 'Metric')
+
+    def test_a_retired_heading_displaces_nothing(self):
+        retired = '#### T4.7 Normalized Financials (from T4.4)\n\n'
+        for first in (self.CAPTION + self.REGISTER, self.LEAD + self.SUMMARY):
+            with self.subTest(first=first[:12]):
+                text = first + retired + '| Line Item | X |\n|---|---|\n| r | 1 |\n\n'
+                kept = complete.find_registers(first, ['T4.4'], ['T4.7'])['T4.4']
+                self.assertEqual(complete.find_registers(text, ['T4.4'], ['T4.7'])['T4.4'], kept)
+
+    def test_a_title_heading_takes_a_register_only_from_a_mention(self):
+        # CP-1A's snake_case registers: `**gaps_ledger**` is a caption opening with the ID; "### Gaps ledger"
+        # opens with its title.
+        skill = skill_text('cp-1a-business-transaction-fact-pack')
+        ids = list(complete.load_contract(skill, 'CP-1A')['registers'])
+        columns = complete.load_contract(skill, 'CP-1A')['registers']['gaps_ledger']['columns']
+        good = '| ' + ' | '.join(columns) + ' |\n|' + '---|' * len(columns) + '\n| ' + ' | '.join(
+            f'v{n}' for n in range(len(columns))) + ' |\n\n'
+        junk = '| Gap | Impact |\n|---|---|\n| no price | high |\n\n'
+        caption = '**gaps_ledger**\n\n' + good + '## Gaps & Conflicts\n\n### Gaps ledger\n\nThe main gaps:\n\n' + junk
+        self.assertEqual(complete.find_registers(caption, ids)['gaps_ledger'][0], columns)
+        self.assertFalse([v for v in complete.check(skill, caption, 'CP-1A')[0] if v.startswith('gaps_ledger')])
+        mention = 'Open items are listed in gaps_ledger.\n\n' + junk + '### Gaps ledger\n\n' + good
+        self.assertEqual(complete.find_registers(mention, ids)['gaps_ledger'][0], columns)
+
+
+class ForkR13Tests(unittest.TestCase):
+    """Deployment fork r13 (D111): a line opening with a register's ID beats one only mentioning it, a fixture
+    marker is a front-matter value or a line of its own, and a short row's message names its width."""
+
+    @staticmethod
+    def table(*columns):
+        return ('| ' + ' | '.join(columns) + ' |\n|' + '---|' * len(columns) + '\n| '
+                + ' | '.join('x' for _ in columns) + ' |\n\n')
+
+    def heads(self, text, ids):
+        return {reg: found[0] for reg, found in complete.find_registers(text, ids).items()}
+
+    def test_v1_a_heading_only_mentioning_the_id_gives_way_to_one_opening_with_it(self):
+        # N151 V1: the bridge's heading names T4.4 first, bound T4.4 by heading and kept it, so the register
+        # below it read "missing column".
+        text = ('### Bridge T4.4 to T4.5\n\n' + self.table('From', 'To')
+                + '#### T4.4 — Income Statement\n\n' + self.table('Line Item', 'FY2025'))
+        self.assertEqual(_r12_find_registers(text, ['T4.4', 'T4.5'])['T4.4'][0], ['From', 'To'])
+        self.assertEqual(self.heads(text, ['T4.4', 'T4.5']), {'T4.4': ['Line Item', 'FY2025']})
+        violations = complete.check(skill_text('cp-1-canonical-data-foundation'), text, 'CP-1')[0]
+        self.assertEqual(about(violations, 'T4.4'), [])
+        # A caption opening with the ID takes it too, and at a distance a heading does.
+        caption = text.replace('#### T4.4 — Income Statement', '**T4.4 — Income Statement**')
+        self.assertEqual(self.heads(caption, ['T4.4'])['T4.4'], ['Line Item', 'FY2025'])
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        distant = text.replace('#### T4.4 — Income Statement\n\n', '#### T4.4 — Income Statement\n\n' + notes)
+        self.assertEqual(self.heads(distant, ['T4.4'])['T4.4'], ['Line Item', 'FY2025'])
+        # Another mention, heading or prose, does not.
+        for later in ('### Notes (see T4.4)\n\n', 'Restated from T4.4.\n\n'):
+            with self.subTest(later=later):
+                again = text.replace('#### T4.4 — Income Statement\n\n', later)
+                self.assertEqual(self.heads(again, ['T4.4'])['T4.4'], ['From', 'To'])
+
+    def test_v2_a_caption_opening_with_the_id_takes_it_from_a_mention(self):
+        # N151 V2, and the one stored answer that moves (d2688647, CP-0 T8 under "Analytical read-through").
+        text = ('The summary below draws on TL10.2.\n\n' + self.table('Metric', 'Value')
+                + '**TL10.2 — Covenant register**\n\n' + self.table('topic_id', 'status'))
+        self.assertEqual(_r12_find_registers(text, ['TL10.2'])['TL10.2'][0], ['Metric', 'Value'])
+        self.assertEqual(self.heads(text, ['TL10.2']), {'TL10.2': ['topic_id', 'status']})
+        for caption in ('`TL10.2` — Covenant register', 'TL10.2 schedule:', '*TL10.2* Covenant register'):
+            with self.subTest(caption=caption):
+                led = text.replace('**TL10.2 — Covenant register**', caption)
+                self.assertEqual(self.heads(led, ['TL10.2'])['TL10.2'], ['topic_id', 'status'])
+        # A caption bound first is never displaced, by a heading or another caption opening with the ID.
+        first = '**TL10.2 — Covenant register**\n\n' + self.table('topic_id', 'status')
+        for later in ('**TL10.2 — recap**', '#### TL10.2 — recap'):
+            with self.subTest(later=later):
+                twice = first + later + '\n\n' + self.table('Metric', 'Value')
+                self.assertEqual(self.heads(twice, ['TL10.2'])['TL10.2'], ['topic_id', 'status'])
+
+    def test_v3_a_line_opening_with_an_id_beats_a_nearer_mention_in_the_window(self):
+        # N151 V3: the nearest prose line named T4.5, so the T4.4 register bound T4.5 and T4.4 was "missing".
+        text = '**T4.4 — Income Statement**\n\nFigures reconcile to T4.5.\n\n' + self.table('Line Item', 'FY2025')
+        self.assertEqual(sorted(_r12_find_registers(text, ['T4.4', 'T4.5'])), ['T4.5'])
+        self.assertEqual(self.heads(text, ['T4.4', 'T4.5']), {'T4.4': ['Line Item', 'FY2025']})
+        # A heading only mentioning IDs is a mention: the caption opening with one wins the window.
+        bridge = '### Bridge T4.4 to T4.5\n**T4.5 — Cash Flow**\n' + self.table('Line Item', 'FY2025')
+        self.assertEqual(sorted(self.heads(bridge, ['T4.4', 'T4.5'])), ['T4.5'])
+        # Unchanged: of two lines opening with IDs the heading wins, of two mentions the heading wins, and a
+        # heading opening with its ID beats a prose mention (fork r2).
+        for lead, reg in (('#### T4.4 — Income\n**T4.5 — Cash Flow**\n', 'T4.4'),
+                          ('### Notes (see T4.4)\nFigures reconcile to T4.5.\n', 'T4.4'),
+                          ('### T4.5 — Cash flow statement\nThis reconciles to the T4.4 revenue base.\n', 'T4.5')):
+            with self.subTest(lead=lead):
+                self.assertEqual(sorted(self.heads(lead + self.table('Line Item', 'FY2025'), ['T4.4', 'T4.5'])), [reg])
+        # Under a retired heading prose still claims nothing (fork r7), an ID-led caption included.
+        retired = '#### T4.7 Normalized Financials\n**T4.4 — Income Statement**\n' + self.table('Line Item', 'FY2025')
+        self.assertEqual(complete.find_registers(retired, ['T4.4'], ['T4.7']), {})
+
+    def test_v4_a_fixture_marker_is_a_front_matter_value_or_a_line_of_its_own(self):
+        # N151 V4: an honest pack that denied being a fixture carried two fixture markers.
+        skill = skill_text('cp-0-source-readiness')
+        base = ('---\nmodule_id: CP-0\nlimitation_flags: []\nvalidation_warnings: []\n---\n'
+                '## Summary\n\n{body}\n')
+
+        def markers(text):
+            return [v for v in complete.check(skill, text, 'CP-0')[0] if 'fixture marker' in v]
+        denial = 'The pack is issuer filings, not an integration fixture or synthetic test input.'
+        self.assertEqual(markers(base.format(body=denial)), [])
+        integration = "document contains the fixture marker text 'integration fixture'"
+        for body in ('Integration fixture', '**Synthetic test input.**', '> integration fixture', '1. Integration fixture'):
+            with self.subTest(body=body):
+                self.assertEqual(len(markers(base.format(body=body))), 1)
+        declared = base.replace('validation_warnings: []', 'validation_warnings: []\nsource_note: "An integration fixture pack."')
+        self.assertEqual(markers(declared.format(body=denial)), [integration])
+        listed = base.replace('limitation_flags: []', 'limitation_flags:\n  - "integration fixture"')
+        self.assertIn(integration, markers(listed.format(body='Issuer filings.')))
+        # Fenced lines stay out, as before.
+        self.assertEqual(markers(base.format(body='```\nintegration fixture\n```')), [])
+
+    def test_n154_a_short_register_row_names_its_width_against_the_header(self):
+        # LCR4 and LCR6 CP-3C merged two cells of T3D.2 row 7 and were told only that 'Source Trace' held ''.
+        skill = skill_text('cp-3c-refinancing-lme-risk')
+        columns = complete.load_contract(skill, 'CP-3C')['registers']['T3D.2']['columns']
+        self.assertEqual((len(columns), columns[-1]), (12, 'Source Trace'))
+        head = '### T3D.2 — Maturity wall\n\n| ' + ' | '.join(columns) + ' |\n|' + '---|' * 12 + '\n'
+
+        def t3d2(*widths):
+            rows = ''.join('| ' + ' | '.join(f'v{n}' for n in range(width)) + ' |\n' for width in widths)
+            return [v for v in complete.check(skill, head + rows, 'CP-3C')[0] if v.startswith('T3D.2')]
+        self.assertEqual(t3d2(12, 11), ["T3D.2 row 2: critical column 'Source Trace' is empty because the row "
+                                        "has 11 cells under a 12-cell header"])
+        self.assertEqual(t3d2(10), [
+            "T3D.2 row 1: critical column 'Credit Implication' is empty because the row has 10 cells under a "
+            "12-cell header",
+            "T3D.2 row 1: critical column 'Source Trace' is empty because the row has 10 cells under a 12-cell header"])
+        # A cell written empty keeps the placeholder message; a full or long row is judged as before.
+        empty = head + '| ' + ' | '.join(f'v{n}' for n in range(11)) + ' |  |\n'
+        self.assertEqual([v for v in complete.check(skill, empty, 'CP-3C')[0] if v.startswith('T3D.2')],
+                         ["T3D.2 row 1: critical column 'Source Trace' holds a disqualifying placeholder ''"])
+        self.assertEqual(t3d2(12, 13), [])
+
+
+class ForkR14Tests(unittest.TestCase):
+    """Deployment fork r14 (owner-authorised 2026-10-10): CP-1 carries what a host credit model needs -- rate and
+    amortisation terms on each debt row, the lease and interest classification ids, total debt without leases,
+    and an optional pro forma adjustment register."""
+
+    CP1 = 'cp-1-canonical-data-foundation'
+    OLD_DEBT = ('facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | '
+                'commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | '
+                'lease_classification | source_id | source_locator').split(' | ')
+    TERMS = ['rate_type', 'reference_rate', 'spread_bps', 'floor_bps', 'fixed_rate', 'annual_amortisation']
+    NEW_IDS = ('operating_lease_cost', 'lease_payments_in_financing', 'interest_paid_in_financing')
+    PRO_FORMA = 'cp1.pro_forma_adjustment_register'
+
+    def steps(self):
+        return (ROOT / 'skills' / self.CP1 / 'references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+
+    def test_the_debt_register_carries_rate_and_amortisation_terms_in_order(self):
+        debt = self.OLD_DEBT[:14] + self.TERMS + self.OLD_DEBT[14:]
+        skill = skill_text(self.CP1)
+        self.assertEqual(complete.load_contract(skill, 'CP-1')['registers']['T4.18']['columns'], debt)
+        self.assertIn('`' + ' | '.join(debt) + '`', self.steps())
+        schema = (ROOT / 'skills' / self.CP1 / 'references/CP-1_SCHEMA_REFERENCE.md').read_text(encoding='utf-8')
+        self.assertIn('| T4.18 | Debt Facility Register | ' + ', '.join(debt) + ' |', schema)
+        # New output must carry the terms; a register written without them is refused for each one.
+        self.assertEqual(about(complete.check(skill, register('T4.18', debt, [['x'] * len(debt)]), 'CP-1')[0],
+                               'T4.18'), [])
+        refused = about(complete.check(skill, register('T4.18', self.OLD_DEBT, [['x'] * 16]), 'CP-1')[0], 'T4.18')
+        for column in self.TERMS:
+            with self.subTest(column=column):
+                self.assertTrue([v for v in refused if column in v], refused)
+        # CP-MODEL still reads an older run's register, which has none of them.
+        required = model_inputs.STABLE_TABLE_REQUIRED_COLUMNS['cp1.debt_facility_register']
+        self.assertEqual(required & set(self.TERMS), set())
+        self.assertEqual(required, set(self.OLD_DEBT))
+
+    def test_debt_terms_tell_a_bullet_and_an_unsourced_reference_from_unknown(self):
+        # Fix round 1: `null` amortisation read both "bullet" and "not stated"; `NONE` both "fixed" and "unsourced".
+        terms = ' '.join(self.steps().partition('Rate and amortisation terms')[2]
+                         .partition('A lease liability is')[0].split())
+        self.assertIn('- `reference_rate`: `SOFR`, `TERM_SOFR`, `EURIBOR`, `SONIA`, `NONE` or `NOT_STATED`. '
+                      '`NONE` is a fixed-rate or no-reference instrument; `NOT_STATED` is a floating instrument '
+                      'whose reference rate is not sourced;', terms)
+        self.assertIn('`0` for a bullet or an instrument with no scheduled amortisation, and `null` only when the '
+                      'amortisation is not stated.', terms)
+        self.assertIn('An `annual_amortisation` of `null` is always a gap: a bullet is `0`.', terms)
+        self.assertIn('`floor_bps` with no floor stated, `fixed_rate` on a `FLOATING` row, `spread_bps` on a `FIXED` '
+                      'row.', terms)
+        self.assertNotIn('`null` for a bullet', terms)
+        skill = skill_text(self.CP1)
+        self.assertIn("A bullet's `annual_amortisation` is `0`; `null` there means not stated and is a gap.", skill)
+        schema = ' '.join((ROOT / 'skills' / self.CP1 / 'references/CP-1_SCHEMA_REFERENCE.md')
+                          .read_text(encoding='utf-8').split())
+        self.assertIn('`reference_rate` is `SOFR`, `TERM_SOFR`, `EURIBOR`, `SONIA`, `NONE` (a fixed-rate or '
+                      'no-reference instrument) or `NOT_STATED` (a floating instrument whose reference rate is not '
+                      'sourced); `annual_amortisation` is `0` for a bullet or no scheduled amortisation and `null` '
+                      'only when not stated.', schema)
+
+    def test_the_debt_and_lease_account_ids_are_controlled_and_optional(self):
+        for metric_id in self.NEW_IDS:
+            with self.subTest(metric_id=metric_id):
+                self.assertIn(metric_id, model_inputs.METRIC_IDS)
+                self.assertNotIn(metric_id, model_inputs.MANDATORY_ACCOUNT_METRICS)
+                self.assertIn(f'`{metric_id}`', self.steps().partition('Controlled metric IDs:')[2]
+                              .partition('## Segment, EBITDA and debt registers')[0])
+
+    def test_total_debt_excludes_lease_liabilities_and_pro_forma_is_optional(self):
+        steps = self.steps()
+        flat = ' '.join(steps.split())
+        self.assertIn('The account metric `total_debt` excludes lease liabilities.', flat)
+        self.assertIn('the sum of the carrying values of the `NOT_LEASE` and `NOT_STATED` rows, plus any '
+                      '`DEBT ADJUSTMENT` row, equals `total_debt`', flat)
+        self.assertIn('`DEBT_TOTAL_EX_LEASES`', steps)
+        self.assertIn(f'<!-- table-id: {self.PRO_FORMA} -->', steps)
+        self.assertIn('`adjustment_id | label | period_id | effective_date | classification | metric_id | value | '
+                      'source_id | source_locator`', steps)
+        for value in ('ACQUISITION', 'DISPOSAL', 'REFINANCING', 'SUBSEQUENT_EVENT', 'LENDER_UPDATE', 'OTHER_EXPLICIT',
+                      '`facility:`'):
+            with self.subTest(value=value):
+                self.assertIn(value, steps.partition('## Pro forma adjustment register')[2])
+        self.assertIn('Income taxes paid that the issuer classified outside operating activities have no metric ID: '
+                      'record the classification as a limitation in Gaps & Conflicts.', flat)
+        skill = skill_text(self.CP1)
+        self.assertIn(f'**conditional_stable_table**: {self.PRO_FORMA} — ', skill)
+        self.assertNotIn(self.PRO_FORMA, complete.load_contract(skill, 'CP-1')['unconditional_stable_tables'])
+        schema = (ROOT / 'skills' / self.CP1 / 'references/CP-1_SCHEMA_REFERENCE.md').read_text(encoding='utf-8')
+        self.assertIn(f'| `{self.PRO_FORMA}` |', schema)
 
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')

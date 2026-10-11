@@ -375,22 +375,45 @@ def test_the_driver_line_names_each_row_by_its_id_never_a_value() -> None:
     assert driver_line(CONTRACT, markdown, b"no driver table") is None
 
 
-def test_unclosed_block_openers_cost_no_more_than_their_length() -> None:
+def test_unclosed_block_openers_cost_no_more_than_their_length(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """EV-6: the block was found by a lazy DOTALL expression, and each opener
     with no closer after it scanned to the end of the document: one real block
     and 8,000 unclosed openers inside a `~~~` fence took about 6 s, GIL held,
-    on every read of the model analysis. Found by a forward scan now."""
-    import time
+    on every read of the model analysis. Found by a forward scan now, counted
+    as searches: the real block's opener and closer, then the first unclosed
+    opener, whose missing closer ends the scan."""
+    import re
 
+    from caos.methodology import forecast
     from caos.methodology.forecast import forecast_projection
 
+    class Searched:
+        """A block expression that records where each search begins and
+        answers by the real one."""
+
+        def __init__(self, real: re.Pattern[str], starts: list[int]) -> None:
+            self.real = real
+            self.starts = starts
+
+        def search(self, text: str, at: int) -> re.Match[str] | None:
+            self.starts.append(at)
+            return self.real.search(text, at)
+
+    openers: list[int] = []
+    closers: list[int] = []
+    monkeypatch.setattr(forecast, "_OPENER", Searched(forecast._OPENER, openers))
+    monkeypatch.setattr(forecast, "_CLOSER", Searched(forecast._CLOSER, closers))
     tail = b"~~~\n" + b"```caos-forecast-v1\n" * 8_000 + b"~~~\n"
     carried = b"## Analysis\n\n" + forecast_markdown() + b"\n## Next\n\n" + tail
-    started = time.perf_counter()
-    result = forecast_projection(carried)
-    spent = time.perf_counter() - started
-    assert result == cash_flow_forecast(forecast_request())
-    assert spent < 1.0, spent
+    assert forecast_projection(carried) == cash_flow_forecast(forecast_request())
+    # Two openers searched for (from the start, and after the real block's
+    # closer) and two closers (after each opener found): the 7,999 openers
+    # after the unclosed one are never searched for, nor closed.
+    searches = (len(openers), len(closers))
+    assert searches == (2, 2)
+    assert openers[0] == 0
 
 
 @pytest.mark.parametrize(

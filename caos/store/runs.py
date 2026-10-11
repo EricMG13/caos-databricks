@@ -26,7 +26,7 @@ from caos import methodology
 from caos.boundary_text import BoundaryText
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, committed_unit, rollback_or_close
-from caos.store.budget import CEILING, validate_spend
+from caos.store.budget import CEILING, overspent, validate_spend
 from caos.store.cases import lock_case
 from caos.store.events import RunEvent, append, lock_run
 from caos.store.gates import approved_run_input, require_adapter_route
@@ -37,6 +37,7 @@ from caos.store.outcomes import (
     _locked_attempt,
     accepted_owner,
     artifact_digests,
+    drop_stop_owed,
     record_outcome,
 )
 from caos.store.work import (
@@ -234,6 +235,12 @@ def _start(
     conn: StoreConnection, run_id: UUID, route_node_id: str, lease: Lease | None
 ) -> UUID:
     """The attempt row and its event, under the caller's run lock."""
+    # R2.6 (F589): a run whose AI-unit bill overshot its reservation starts
+    # no attempt on any node, under the lock and ahead of every other check:
+    # the ledger holds the charge even when the park after its refusal was
+    # lost to a crash or a store fault.
+    if overspent(conn, run_id):
+        raise Refusal(RefusalCode.BUDGET_CHARGE_OVER_RESERVATION)
     if (
         conn.execute(
             _UNSETTLED,
@@ -247,6 +254,12 @@ def _start(
         is not None
     ):
         raise Refusal(RefusalCode.ATTEMPT_UNSETTLED)
+    # F530 round 2: a node whose one re-attempt was itself a declared drop,
+    # with no park after it, is stopped here -- under the lock, in the unit
+    # that would start the attempt -- so a drop billed after a pass read the
+    # ledger still stops it; nothing is written and nothing is called.
+    if drop_stop_owed(conn, run_id=run_id, route_node_id=route_node_id):
+        raise Refusal(RefusalCode.PROVIDER_UNAVAILABLE)
     # Under the run lock, so two starts cannot take one ordinal. Counting rows
     # rather than reading the maximum keeps attempts that predate ordinals.
     counted = conn.execute(
@@ -483,7 +496,7 @@ def block_run(
     *,
     lease: Lease | None = None,
     accepted: frozenset[str] | None = None,
-    verdict: UUID | None = None,
+    verdict: UUID | BlockingVerdict | None = None,
 ) -> bool:
     """End a run whose route has required work nothing can release (§39).
 
@@ -496,11 +509,24 @@ def block_run(
     moves. None when no node's verdict ended it: an empty frontier with
     required work unfinished is the route's own rule and names no node.
     With `accepted`, the accepted set re-read under the lock must equal it,
-    else `RUN_TERMINAL_STALE`.
+    else `RUN_TERMINAL_STALE`. A `BlockingVerdict` also names the blob of
+    that answer's citations as judged (D106), written on the verdict's row.
     """
+    if isinstance(verdict, UUID):
+        verdict = BlockingVerdict(verdict)
     return _transition(
         conn, run_id, RunStatus.BLOCKED, RunEvent.RUN_BLOCKED, lease, accepted, verdict
     )
+
+
+@dataclass(frozen=True, slots=True)
+class BlockingVerdict:
+    """The attempt whose validated Blocked answer ended a run, and the blob
+    address of its citations as the host judged them (D106,
+    `handoff.blocked_citations_bytes`), or None for a verdict given none."""
+
+    attempt_id: UUID
+    citations_sha256: str | None = None
 
 
 def cancel_run(
@@ -518,7 +544,7 @@ def _transition(  # noqa: PLR0913 -- one terminal move and its re-derived decisi
     event: RunEvent,
     lease: Lease | None,
     accepted: frozenset[str] | None = None,
-    verdict: UUID | None = None,
+    verdict: BlockingVerdict | None = None,
 ) -> bool:
     """Move a RUNNING run into a terminal status, appending `event` only if the
     move actually happened. Zero rows updated, no event -- the rule that makes a
@@ -552,7 +578,7 @@ def _transition(  # noqa: PLR0913 -- one terminal move and its re-derived decisi
 
 
 def _record_blocking_verdict(
-    conn: StoreConnection, run_id: UUID, into: RunStatus, verdict: UUID
+    conn: StoreConnection, run_id: UUID, into: RunStatus, verdict: BlockingVerdict
 ) -> None:
     """Name the attempt whose Blocked answer ended this run, once.
 
@@ -564,10 +590,10 @@ def _record_blocking_verdict(
     if into is not RunStatus.BLOCKED:
         raise Refusal(RefusalCode.ATTEMPT_NOT_FOUND)
     written = conn.execute(
-        "INSERT INTO run_blocking_verdicts (run_id, attempt_id)"
-        " SELECT run_id, attempt_id FROM run_attempts"
+        "INSERT INTO run_blocking_verdicts (run_id, attempt_id, citations_sha256)"
+        " SELECT run_id, attempt_id, %s FROM run_attempts"
         " WHERE attempt_id = %s AND run_id = %s",
-        (verdict, run_id),
+        (verdict.citations_sha256, verdict.attempt_id, run_id),
     ).rowcount
     if written != 1:
         raise Refusal(RefusalCode.ATTEMPT_NOT_FOUND)

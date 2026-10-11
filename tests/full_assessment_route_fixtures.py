@@ -19,6 +19,7 @@ from canonical_fixtures import (
     fields_from_prompt,
     skill,
     wire,
+    with_markers,
 )
 from canonical_route_fixtures import (
     PACK as CANONICAL_PACK,
@@ -373,6 +374,7 @@ class FullAssessmentCompletions:
             self.readiness,
             selection=self.selection,
         )
+        markdown = with_markers(markdown, 1)
         self.answers.append(markdown)
         return Completion(
             wire(

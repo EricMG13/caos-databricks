@@ -22,6 +22,7 @@ from canonical_fixtures import (
     skill,
     whole_line,
     wire,
+    with_markers,
 )
 from canonical_route_fixtures import (
     PACK as CANONICAL_PACK,
@@ -728,6 +729,7 @@ class PortfolioDecisionCompletions:
             ),
             self.readiness,
         )
+        markdown = with_markers(markdown, 1)
         self.answers.append(markdown)
         body = wire(
             markdown,

@@ -13,10 +13,11 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
-from canonical_fixtures import CATALOG, CONTRACT, CanonicalCompletions
+from canonical_fixtures import CATALOG, CONTRACT, QUOTE, CanonicalCompletions
 from test_canonical_execution import (
     _accept,
     _node,
+    _record,
     _refused,
     _run,
     harness,
@@ -30,6 +31,7 @@ from caos.boundary_text import BoundaryText
 from caos.methodology import canonical
 from caos.methodology.canonical import check_context
 from caos.methodology.executor import Assignment, Delivery
+from caos.methodology.handoff import UnverifiedCitation
 from caos.methodology.invocation import (
     _evidence_section,
     evidence_sizes,
@@ -38,8 +40,11 @@ from caos.methodology.invocation import (
 from caos.methodology.selection import (
     GATE_SOURCE_BYTES,
     Basis,
+    DemandFault,
+    Fault,
     Selection,
     demand_cells,
+    demand_fault,
     demand_items,
     gate_view,
     select_sources,
@@ -147,6 +152,84 @@ def test_a_name_two_members_answer_to_is_refused() -> None:
         select_sources(shared, "34" * 32)
 
 
+# Run C3's pin and its CP-0's accepted CP-3C cell (F497): seven items name
+# members, and the seventh of eight misspells `CZR_2026_Merger_Agreement_8K.txt`.
+C3_MEMBERS = (
+    "CZR_2026_Merger_Agreement_8K.txt",
+    "CZR_2026_Merger_Press_Release.txt",
+    "CZR_2024_Credit_Agreement_Fourth_Amendment.txt",
+    "CZR_Q2_2026_10Q.txt",
+    "CZR_FY2025_10K.txt",
+    "CZR_2024_Credit_Agreement_Fifth_Amendment.txt",
+    "CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
+    "CZR_2020_Credit_Agreement.txt",
+)
+C3_CELL = (
+    "CZR_Q2_2026_10Q.txt; CZR_FY2025_10K.txt; CZR_2020_Credit_Agreement.txt;"
+    " CZR_2024_Credit_Agreement_Fourth_Amendment.txt;"
+    " CZR_2024_Credit_Agreement_Fifth_Amendment.txt;"
+    " CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt;"
+    " CZR_2026_Merger_8K.txt; CZR_2026_Merger_Press_Release.txt"
+)
+
+
+def test_demand_fault_names_the_item_select_sources_refuses() -> None:
+    """F497: `demand_fault` is `select_sources`' own rule, the refusal
+    returned as the first item at fault and why: a misspelt name beside
+    readable ones (C3's cell), a name two members answer to, a page range the
+    member cannot carry. A cell that selects, or names nothing pinned, or is
+    empty, has none, exactly when `select_sources` does not refuse."""
+    c3 = tuple(_member(name) for name in C3_MEMBERS)
+    a, b = _member("a.txt"), _member("b.txt")
+    twins = (_member("x.txt", "34" * 32), _member("y.txt", "34" * 32))
+    pages = {a.source_id: 5}
+    cases = [
+        (c3, C3_CELL, DemandFault("CZR_2026_Merger_8K.txt", Fault.UNKNOWN)),
+        ((a, b), "a.txt; b.txt", None),
+        ((a, b), "the prepared artifact; an exhibit", None),
+        ((a, b), "", None),
+        ((a, b), None, None),
+        ((a, *twins), "a.txt; " + "34" * 32, DemandFault("34" * 32, Fault.AMBIGUOUS)),
+        ((a, b), "b.txt; a.txt pages 3-9", DemandFault("a.txt pages 3-9", Fault.PAGES)),
+        ((a, b), "a.txt pages 3-5", None),
+    ]
+    for members, cell, fault in cases:
+        assert demand_fault(members, cell, last_pages=pages) == fault
+        if fault is None:
+            select_sources(members, cell, last_pages=pages)
+            continue
+        with pytest.raises(Refusal) as refused:
+            select_sources(members, cell, last_pages=pages)
+        assert refused.value.code is RefusalCode.EVIDENCE_DEMAND_UNRESOLVED
+        assert fault.item not in str(refused.value)
+
+
+def test_a_page_phrase_the_form_cannot_read_is_told_as_such() -> None:
+    """F497 (review): an item that begins with a member's exact filename,
+    by `_named`'s own matching, then a page phrase Step I rule 5's form does
+    not read -- run a82a07ad's CP-0 attempt 3 wrote two ranges in one item --
+    is `PAGE_FORM`, not `UNKNOWN`. Only the wording moves: beside a readable
+    item the cell is still refused, and alone it is still delivered whole."""
+    c3 = tuple(_member(name) for name in C3_MEMBERS)
+    item = "CZR_FY2025_10K.txt pages 14-15 and 26-27"
+    cell = f"CZR_Q2_2026_10Q.txt; {item}"
+    assert demand_fault(c3, cell) == DemandFault(item, Fault.PAGE_FORM)
+    with pytest.raises(Refusal) as refused:
+        select_sources(c3, cell)
+    assert refused.value.code is RefusalCode.EVIDENCE_DEMAND_UNRESOLVED
+    assert demand_fault(c3, item) is None
+    assert select_sources(c3, item).basis is Basis.WHOLE_UNMAPPED
+    # A name the matching does not accept stays unknown: no looser test.
+    loose = "CZR_FY2025_10K pages 14-15 and 26-27"
+    assert demand_fault(c3, f"CZR_Q2_2026_10Q.txt; {loose}") == DemandFault(
+        loose, Fault.UNKNOWN
+    )
+    paged = "CZR_FY2025_10K.txt (page 3 and 5)"
+    assert demand_fault(c3, f"CZR_Q2_2026_10Q.txt; {paged}") == DemandFault(
+        paged, Fault.PAGE_FORM
+    )
+
+
 def test_selection_is_a_pure_function_of_its_inputs() -> None:
     a, b = _member("a.txt"), _member("b.txt")
     assert select_sources((a, b), "b.txt; a.txt") == select_sources(
@@ -211,26 +294,43 @@ def test_an_absent_demand_delivers_the_whole_pin_as_before(harness: _Harness) ->
     _accept(harness, attempt, result)
 
 
-def test_a_quote_on_an_undelivered_member_is_refused_on_a_real_run(
+def test_a_quote_on_an_undelivered_member_is_unverified_on_a_real_run(
     harness: _Harness,
 ) -> None:
     """The first real run shape on which `CITATION_NOT_DELIVERED` fires: the
-    witness is pinned, live, captured and not named for CP-L10."""
+    witness is pinned, live, captured and not named for CP-L10. Since D106
+    that citation is kept unverified and the screen is accepted on the one
+    it anchored."""
     _gate(harness, {"CP-L10": REPORT})
     screen = CanonicalCompletions(
         harness.source_id, cited=((harness.witness_id, WITNESS_QUOTE),)
     )
-    assert _refused(harness, "CP-L10", screen) is RefusalCode.CITATION_NOT_DELIVERED
+    _attempt, result = _run(harness, "CP-L10", screen)
     [prompt] = screen.prompts
     assert WITNESS_QUOTE not in prompt
-    # Billed and recorded, no artifact for the screen: one attempt each.
+    record = _record(harness, result)
+    assert [c.matched_text for c in record.citations] == [QUOTE]
+    assert record.unverified == (
+        UnverifiedCitation(
+            harness.witness_id,
+            1,
+            WITNESS_QUOTE,
+            RefusalCode.CITATION_NOT_DELIVERED,
+            marker=2,
+        ),
+    )
+    # Billed, one attempt each, no retry spent on the citation.
     assert _counts(harness) == (2, [REPORTED, REPORTED], 1, 2, 2)
 
 
 def test_a_demand_the_host_half_reads_is_refused_before_any_attempt(
-    harness: _Harness,
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _gate(harness, {"CP-L10": f"{REPORT}; a prepared artifact"})
+    """The backstop (F497): a gate record accepted before its acceptance
+    checked the demand still refuses its consumer before any attempt."""
+    with monkeypatch.context() as before:
+        before.setattr(canonical, "_demand_faults", lambda *_args: [])
+        _gate(harness, {"CP-L10": f"{REPORT}; a prepared artifact"})
     node = _node(harness, "CP-L10")
     with pytest.raises(Refusal) as refused:
         check_context(
@@ -478,10 +578,10 @@ def test_the_gate_bound_counts_every_host_byte_of_the_evidence_section(
 
 
 def test_each_lines_size_is_its_share_of_the_evidence_section() -> None:
-    """`evidence_sizes` is the section, and 2 bytes a run and 3 more: never
-    fewer bytes than the host renders. A line's size depends only on the one
-    before it, so the sizes of a pin are the sizes of any leading lines of its
-    pages, which is what the gate's page map is cut by."""
+    """`evidence_sizes` is the section, and 2 bytes a header and 3 more: never
+    fewer bytes than the host renders. A line's size depends only on its
+    position in its run, so the sizes of a pin are the sizes of any leading
+    lines of its pages, which is what the gate's page map is cut by."""
     source = uuid4()
     lines = [
         Delivery(source, "b000000", 1, BoundaryText.of("Seen")),
@@ -502,6 +602,53 @@ def test_each_lines_size_is_its_share_of_the_evidence_section() -> None:
     )
 
 
+def test_the_header_is_repeated_every_eight_lines_of_a_run() -> None:
+    """D81: a 60-line page printed its header once, kilobytes above most of
+    its lines, and the model cited the page before. The run's header is
+    printed again, unchanged, before every eighth line counted from the run's
+    first; the sizes still count every host byte, and the sizes of any leading
+    lines of each page are the pin's own, so `gate_view` cuts by exact sizes."""
+    source = uuid4()
+    lines = [
+        Delivery(source, f"b{n:06d}", 1 + n // 20, BoundaryText.of(f"Line {n}."))
+        for n in range(40)
+    ] + [
+        Delivery(source, f"b{n:06d}", 2, BoundaryText.of(f"Unseen {n}."), "ocr")
+        for n in range(40, 50)
+    ]
+    header = f"source_id: {source}\npage: 1\n\n"
+    marked = (
+        f"source_id: {source}\npage: 2\nhidden: the lines under this header are"
+        " not visible on the rendered page (ocr)\n\n"
+    )
+
+    section = _evidence_section(lines)
+    sizes = evidence_sizes(lines)
+
+    blocks = section.split("\n\n\n")
+    # Page 1's 20 lines, page 2's 20 seen and its 10 marked, each from its start.
+    counts = [8, 8, 4, 8, 8, 4, 8, 2]
+    assert [len(block.split("\n\n")) - 1 for block in blocks] == counts
+    assert blocks[0] == header + "\n\n".join(f"Line {n}." for n in range(8))
+    assert blocks[1] == header + "\n\n".join(f"Line {n}." for n in range(8, 16))
+    assert blocks[2].startswith(header + "Line 16.")
+    assert blocks[6].startswith(marked + "Unseen 40.")
+    assert blocks[7] == marked + "Unseen 48.\n\nUnseen 49."
+    assert sum(sizes) == len(section.encode()) + 2 * len(blocks) + 3
+    for k in (1, 7, 8, 9, 17, 25):
+        position: dict[int, int] = {}
+        kept = []
+        for item, size in zip(lines, sizes, strict=True):
+            position[item.page] = position.get(item.page, 0) + 1
+            if position[item.page] <= k:
+                kept.append((item, size))
+        assert evidence_sizes([item for item, _ in kept]) == [s for _, s in kept]
+    shown, maps = gate_view(lines, budget=sum(sizes) // 2)
+    assert maps[source]["leading_lines_per_page"] > 8
+    assert sum(evidence_sizes(shown)) <= sum(sizes) // 2
+    assert len(_evidence_section(shown).encode()) < sum(evidence_sizes(shown))
+
+
 def test_the_gate_bound_leaves_two_mapped_sources_and_the_authority_room() -> None:
     """Derived, not chosen: two sources at the bound beside CP-0's measured
     delivered authority stay under the whole request ceiling."""
@@ -509,18 +656,49 @@ def test_the_gate_bound_leaves_two_mapped_sources_and_the_authority_room() -> No
     assert 2 * GATE_SOURCE_BYTES + MEASURED["CP-0"] < MAX_REQUEST_BYTES
 
 
-def test_a_space_padded_or_overlong_item_names_nothing_and_answers_at_once() -> None:
+def test_a_space_padded_or_overlong_item_names_nothing_and_answers_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A cell of a name, thousands of spaces and a word once cost cubic time in
     the page expression, inside an open transaction (F32); it now names nothing
-    the pin carries and is answered as such before any clock notices."""
-    import time
+    the pin carries and is answered as such, and neither page expression is
+    ever handed an item past `_MAX_ITEM_CHARS` (their inputs counted)."""
+    from collections.abc import Iterator
+    from re import Match, Pattern
 
+    from caos.methodology import selection
+
+    read: list[int] = []
+
+    class Counted:
+        """A page expression that records the length of each text it reads and
+        answers by the real one."""
+
+        def __init__(self, real: Pattern[str]) -> None:
+            self.real = real
+
+        def fullmatch(self, text: str) -> Match[str] | None:
+            read.append(len(text))
+            return self.real.fullmatch(text)
+
+        def finditer(self, text: str) -> Iterator[Match[str]]:
+            read.append(len(text))
+            return self.real.finditer(text)
+
+    monkeypatch.setattr(selection, "_PAGES", Counted(selection._PAGES))
+    monkeypatch.setattr(selection, "_PAGE_WORD", Counted(selection._PAGE_WORD))
     a, b = _member("BA_FY2025_10K.txt"), _member("other.txt")
     last = {a.source_id: 108, b.source_id: 3}
     padded = "BA_FY2025_10K.txt" + " " * 20_000 + "pages 1-2"
-    started = time.perf_counter()
     found = select_sources((a, b), padded, last_pages=last)
-    assert time.perf_counter() - started < 2.0
+    unread = read[:]
+    assert unread == []
     assert found.basis is Basis.WHOLE_UNMAPPED
+    # Beside a mapped item it is the fault, told as UNKNOWN: `_unmapped_fault`
+    # holds the same bound.
+    beside = demand_fault((a, b), "other.txt; " + padded, last_pages=last)
+    unread = read[:]
+    assert unread == []
+    assert beside == DemandFault(padded, Fault.UNKNOWN)
     short = select_sources((a, b), "BA_FY2025_10K.txt   pages  1-2", last_pages=last)
     assert short.pages == {a.source_id: frozenset({1, 2})}

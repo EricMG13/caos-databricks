@@ -5,7 +5,7 @@
 // Colour comes from a `chart-tone-*` class (styles/charts.css), so every hue
 // is a token and nothing here writes a style string (the CSP's style-src).
 import { TICK_SIZE } from "./scale";
-import type { Box, Hatch, Origin, Tone } from "./types";
+import type { Box, Hatch, LegendEntry, Origin, Tone } from "./types";
 
 /** A bar: solid for the host, outlined and hatched for the model and the
     residual. An outlined bar is inset by half its stroke, so it never spills into
@@ -48,6 +48,49 @@ export function BarShape({
       width={box.width - 2 * inset}
       height={box.height - 2 * inset}
       fill={hatch(tone)}
+    />
+  );
+}
+
+/** A dot's radius: 8px across, as a line chart's point. */
+export const DOT = 4;
+
+/** A value marked across its row rather than as a bar from zero: a `rule`, a
+    line perpendicular to the value axis, solid for the host and dashed for
+    the model; or a `dot`, filled for the host and hollow for the model. */
+export function MarkerShape({
+  shape,
+  line,
+  tone,
+  origin,
+  mark,
+}: {
+  shape: "rule" | "dot";
+  /** The rule's two ends; a dot sits at their midpoint. */
+  line: { x1: number; y1: number; x2: number; y2: number };
+  tone: Tone;
+  origin: Origin;
+  mark: string;
+}) {
+  const model = origin === "model";
+  if (shape === "dot") {
+    return (
+      <circle
+        className={`chart-point chart-tone-${tone}${model ? " chart-hollow" : ""}`}
+        data-mark={mark}
+        data-origin={origin}
+        cx={(line.x1 + line.x2) / 2}
+        cy={(line.y1 + line.y2) / 2}
+        r={DOT}
+      />
+    );
+  }
+  return (
+    <line
+      className={`chart-line chart-rule chart-tone-${tone}${model ? " chart-dashed" : ""}`}
+      data-mark={mark}
+      data-origin={origin}
+      {...line}
     />
   );
 }
@@ -118,14 +161,15 @@ export function HatchPatterns({
 }
 
 /** A legend key in the mark's own form: a swatch for a bar, a stroke with its
-    point for a line; outlined and hatched, or dashed and hollow, for the model. */
+    point for a line, a short rule or a dot for a marker; outlined and hatched,
+    dashed, or hollow for the model. */
 export function Swatch({
   tone,
   shape,
   origin,
 }: {
   tone: Tone;
-  shape: "fill" | "line";
+  shape: LegendEntry["shape"];
   origin: Origin | null;
 }) {
   const outlined = origin !== "host";
@@ -137,7 +181,22 @@ export function Swatch({
       aria-hidden="true"
       focusable="false"
     >
-      {shape === "line" ? (
+      {shape === "rule" ? (
+        <line
+          className={outlined ? "chart-line chart-rule chart-dashed" : "chart-line chart-rule"}
+          x1={8}
+          y1={0}
+          x2={8}
+          y2={10}
+        />
+      ) : shape === "dot" ? (
+        <circle
+          className={outlined ? "chart-point chart-hollow" : "chart-point"}
+          cx={8}
+          cy={5}
+          r={3}
+        />
+      ) : shape === "line" ? (
         <>
           <line
             className={outlined ? "chart-line chart-dashed" : "chart-line"}

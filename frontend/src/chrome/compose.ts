@@ -261,6 +261,20 @@ function run(document: RunSectionDocument): Facts {
   };
 }
 
+/** The run's citations in one line: located ones across their documents,
+    and, where there are any, those the host could not anchor (D106). */
+function evidenceLine(
+  verified: number,
+  unverified: number,
+  documents: number,
+  withdrawn: number,
+): string {
+  const counted = unverified
+    ? `${verified} verified, ${unverified} unverified ${verified + unverified === 1 ? "citation" : "citations"}`
+    : plural(verified, "citation");
+  return `${counted} across ${plural(documents, "document")}${withdrawn ? `, ${withdrawn} withdrawn` : ""}.`;
+}
+
 function analysis(document: AnalysisDocument): Facts {
   const { handoffs, pending, displayed_run_status: status, blocked_by: blocked } = document.body;
   const conclusion = conclusionOf(handoffs);
@@ -268,6 +282,7 @@ function analysis(document: AnalysisDocument): Facts {
   const citations = handoffs.flatMap((handoff) => handoff.source_facts);
   const documents = new Set(citations.map((fact) => fact.document_sha256)).size;
   const withdrawn = citations.filter((fact) => fact.withdrawn_at !== null).length;
+  const unverified = handoffs.reduce((sum, handoff) => sum + handoff.unverified_facts.length, 0);
   const ready = conclusion
     ? `${conclusion.committee_status} · ${scopeOf(conclusion.decision_scope)}`
     : null;
@@ -315,9 +330,10 @@ function analysis(document: AnalysisDocument): Facts {
           : conclusion
             ? "Open Report to save a revision."
             : null,
-      evidence: citations.length
-        ? `${plural(citations.length, "citation")} across ${plural(documents, "document")}${withdrawn ? `, ${withdrawn} withdrawn` : ""}.`
-        : null,
+      evidence:
+        citations.length + unverified
+          ? evidenceLine(citations.length, unverified, documents, withdrawn)
+          : null,
       headline: `${handoffs.length}/${handoffs.length + pending.length}`,
       headline_label: "modules accepted",
     },

@@ -14,6 +14,7 @@ import runpy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from uuid import UUID
 
 import pytest
 from canonical_fixtures import (
@@ -28,8 +29,11 @@ from canonical_fixtures import (
     skill,
 )
 
+from caos.icm import prompt_block
 from caos.methodology.bundle import verified_bytes, verified_root_bytes
+from caos.methodology.invocation import _source_preparation_section
 from caos.methodology.tables import figure_value
+from caos.store.source_sets import SourceSet
 
 CHECK = CONTRACT.completeness_check
 
@@ -184,6 +188,30 @@ def test_a_heading_binds_its_table_before_a_prose_mention() -> None:
         "| Line Item | FY2025 |\n|---|---|\n| CFO | 6,218 |\n"
     )
     assert set(CHECK.find_registers(text, ["T4.4", "T4.5"])) == {"T4.5"}
+
+
+def test_a_register_heading_beats_an_earlier_prose_bound_summary() -> None:
+    """Fork r12 (D103): R4's CP-1 attempt 1 put a summary table under a
+    paragraph naming T4.4, which bound T4.4 before the real `#### T4.4` table
+    ("T4.4: missing column(s) ['Line Item']"). The check and the host's key
+    scorer, which locates registers with the same function, now read the
+    register."""
+    from caos.qualification.matrix import module_registers
+
+    summary = "| Metric | Q2 2026 |\n|---|---|\n| Revenue | 2,912 |\n\n"
+    register = "| Line Item | Q2 2026 |\n|---|---|\n| Revenue | 2,912 |\n"
+    text = (
+        "### Analytical read-through\n\nQ2 figures are in T4.4.\n\n"
+        + summary
+        + "#### T4.4 — Income statement\n\n"
+        + register
+    )
+    assert _about(_violations("CP-1", text), "T4.4") == []
+    found = module_registers(CONTRACT, BUNDLE, "CP-1", text)
+    assert found["T4.4"][0] == ["Line Item", "Q2 2026"]
+    # With no heading for T4.4, the prose line still binds the summary.
+    alone = text.replace("#### T4.4 — Income statement", "#### Statements")
+    assert module_registers(CONTRACT, BUNDLE, "CP-1", alone)["T4.4"][0][0] == "Metric"
 
 
 def test_a_contract_column_inside_one_longer_header_cell_is_found() -> None:
@@ -847,3 +875,369 @@ def test_the_cp_dr_fixture_reports_its_status_by_the_canon_map() -> None:
         qa = re.search(r'^qa_status: "([^"]+)"$', front, re.MULTILINE)
         assert research is not None and qa is not None
         assert status[research.group(1)] == qa.group(1)
+
+
+# Fork r5 (D85): CP-1's interface registers and the tagged table each one is.
+_INTERFACE_REGISTERS = {
+    "T4.14": "cp1.model_period_register",
+    "T4.15": "cp1.model_account_register",
+    "T4.16": "cp1.segment_revenue_schedule",
+    "T4.17": "cp1.adjusted_ebitda_bridge",
+    "T4.18": "cp1.debt_facility_register",
+    "T4.19": "cp1.model_reconciliation_register",
+}
+
+
+def _with_nulls(block: str) -> str:
+    """`block`'s empty table cells written `null`, the spelling fork r5 gives."""
+    lines = []
+    for line in block.splitlines():
+        if line.startswith("| "):
+            cells = line[1:-1].split("|")
+            line = "|" + "|".join(c if c.strip() else " null " for c in cells) + "|"
+        lines.append(line + "\n")
+    return "".join(lines)
+
+
+def _single_table(markdown: str) -> str:
+    """A two-copy CP-1 re-rendered in fork r5's form: each tagged copy moved
+    under its T4.x heading in place of the untagged register."""
+    for register, table_id in _INTERFACE_REGISTERS.items():
+        tagged = re.search(
+            rf"<!-- table-id: {re.escape(table_id)} -->\n(?:\|.*\n)+\n", markdown
+        )
+        assert tagged is not None, table_id
+        markdown = markdown[: tagged.start()] + markdown[tagged.end() :]
+        under = re.search(rf"(#### {re.escape(register)}\n\n)(?:\|.*\n)+\n", markdown)
+        assert under is not None, register
+        markdown = (
+            markdown[: under.end(1)]
+            + _with_nulls(tagged.group(0))
+            + "\n"
+            + markdown[under.end() :]
+        )
+    return markdown
+
+
+def test_cp1_writes_each_interface_register_once_as_one_tagged_table(
+    tmp_path: Path,
+) -> None:
+    """D85: a CP-1 that wrote T4.14-T4.19 untagged and again as tagged copies
+    ran to 84 KB on 2 October and its copies drifted from its registers. One
+    tagged table, absent values `null`, passes the validator, the register
+    check, the host's table reader and CP-MODEL's own input validator, as the
+    two-copy form still does."""
+    import subprocess
+    import sys
+
+    from cp1b_route_fixtures import cp1b_identity, cp1b_markdown
+
+    from caos.methodology.tables import handoff_tables
+
+    reference = verified_bytes(BUNDLE, "CP-1", "references/REF_CP-1_STEPS.md").decode()
+    assert (
+        "never write the register untagged and repeat it as a tagged copy" in reference
+    )
+    assert "in these CP-1 tables write `null`, which\nthe register check" in reference
+    # D95: only a value-bearing null is a gap; a reference column's null is not.
+    assert (
+        "Every `null` in a value-bearing column is also listed in `## Gaps & Conflicts`"
+        in reference
+    )
+    assert "reference column means none applies: it is not a gap" in reference
+    assert "is also listed in `## Gaps & Conflicts`" in skill("CP-1").decode()
+    two_copy = cp1b_markdown(cp1b_identity("CP-1")).decode()
+    single = _single_table(two_copy)
+    assert single.count("<!-- table-id: ") == two_copy.count("<!-- table-id: ")
+    assert len(single.encode()) < 0.7 * len(two_copy.encode())
+    cp1b = tmp_path / "cp1b.md"
+    cp1b.write_bytes(cp1b_markdown(cp1b_identity("CP-1B")))
+    validator = BUNDLE.root / "skills/cp-model/scripts/validate_cp_model_inputs.py"
+    served: dict[str, list[tuple[str, tuple[str, ...], list[list[str | None]]]]] = {}
+    for form, text in (("two-copy", two_copy), ("single", single)):
+        assert CONTRACT.validate_handoff.validate_text(text).exit_code == 0, form
+        assert _violations("CP-1", text) == [], form
+        tables = handoff_tables(CONTRACT, text)
+        assert tables.unavailable_reason is None, form
+        served[form] = [
+            (t.table_id, t.columns, [[cell.value for cell in row] for row in t.rows])
+            for t in tables.tables
+        ]
+        cp1 = tmp_path / f"{form}.md"
+        cp1.write_text(text, encoding="utf-8")
+        checked = subprocess.run(
+            [sys.executable, "-B", str(validator), str(cp1), str(cp1b)],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert served["single"] == served["two-copy"]
+
+
+# Fork r6 (D88, D89): the readers tolerate what the 2 and 3 October answers
+# wrote, and still refuse a malformed table or a tag with no table of its own.
+def _cp1_single() -> str:
+    from cp1b_route_fixtures import cp1b_identity, cp1b_markdown
+
+    return _single_table(cp1b_markdown(cp1b_identity("CP-1")).decode())
+
+
+def _cp_model_reads(tmp_path: Path, cp1: str) -> int:
+    """The exit code of CP-MODEL's own input validator over `cp1`."""
+    import subprocess
+    import sys
+
+    from cp1b_route_fixtures import cp1b_identity, cp1b_markdown
+
+    validator = BUNDLE.root / "skills/cp-model/scripts/validate_cp_model_inputs.py"
+    (tmp_path / "cp1.md").write_text(cp1, encoding="utf-8")
+    (tmp_path / "cp1b.md").write_bytes(cp1b_markdown(cp1b_identity("CP-1B")))
+    return subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(validator),
+            *(str(tmp_path / n) for n in ("cp1.md", "cp1b.md")),
+        ],
+        capture_output=True,
+        check=False,
+    ).returncode
+
+
+def test_a_tag_above_a_heading_naming_no_register_binds_for_every_reader(
+    tmp_path: Path,
+) -> None:
+    """P1 CP-1 #3 wrote the readiness tag above `#### CP-MODEL Readiness`,
+    which broke the bind: every reader now crosses a heading naming no
+    register to the next table, and reads it as the table written under the
+    tag. A heading naming a register is never crossed (fix round 1, C1)."""
+    from caos.methodology.tables import handoff_tables
+
+    single = _cp1_single()
+    crossed = single
+    for table_id in _INTERFACE_REGISTERS.values():
+        tag = f"<!-- table-id: {table_id} -->\n"
+        assert crossed.count(tag) == 1, table_id
+        crossed = re.sub(
+            rf"({re.escape(tag)}\n?)",
+            r"\1\n##### CP-MODEL interface table\n\n",
+            crossed,
+        )
+    assert crossed != single
+    assert _violations("CP-1", crossed) == []
+    assert handoff_tables(CONTRACT, crossed) == handoff_tables(CONTRACT, single)
+    assert _cp_model_reads(tmp_path, crossed) == 0
+    # Prose between a tag and its table still breaks the bind: the table is missing.
+    tag = "<!-- table-id: cp1.model_period_register -->\n"
+    for name, moved in (
+        ("prose", crossed.replace(tag, tag + "A note.\n")),
+        ("above its register heading", _tag_above_heading(single, "T4.14", tag)),
+    ):
+        missing = "cp1.model_period_register: CP-MODEL interface table missing"
+        assert missing in " ".join(_violations("CP-1", moved)), name
+    # Directly below an untagged table, with no heading between, a tag may be
+    # that table's: it crosses nothing.
+    readiness = "<!-- table-id: cp1.downstream_readiness -->\n"
+    below = single.replace(readiness, readiness + "\n##### CP-MODEL Readiness\n\n")
+    assert "cp1.downstream_readiness: CP-MODEL interface table missing" in " ".join(
+        _violations("CP-1", below)
+    )
+
+
+def _tag_above_heading(markdown: str, register: str, tag: str) -> str:
+    heading = re.search(rf"#### {re.escape(register)}\b[^\n]*\n\n", markdown)
+    assert heading is not None and tag in markdown
+    markdown = markdown.replace(tag, "", 1)
+    return markdown[: heading.start()] + tag + "\n" + markdown[heading.start() :]
+
+
+def test_a_tag_below_its_table_binds_no_other_table(tmp_path: Path) -> None:
+    """Fix round 1 (C1): with each T4.14-T4.19 tag written below its table,
+    each tag crossed the next register's heading and bound that register's
+    table. Each interface table is missing, as before the tolerance, and no
+    reader serves a table under another's id."""
+    from caos.methodology.tables import handoff_tables
+
+    below = _cp1_single()
+    for table_id in _INTERFACE_REGISTERS.values():
+        found = re.search(
+            rf"<!-- table-id: {re.escape(table_id)} -->\n\n?((?:\|.*\n)+)", below
+        )
+        assert found is not None, table_id
+        below = (
+            below[: found.start()]
+            + found.group(1)
+            + f"\n<!-- table-id: {table_id} -->\n"
+            + below[found.end() :]
+        )
+    violations = _violations("CP-1", below)
+    assert sorted(v.split(":")[0] for v in violations) == sorted(
+        _INTERFACE_REGISTERS.values()
+    ), violations
+    assert all("interface table missing" in v for v in violations)
+    served = {t.table_id for t in handoff_tables(CONTRACT, below).tables}
+    assert not served & set(_INTERFACE_REGISTERS.values())
+    assert _cp_model_reads(tmp_path, below) != 0
+
+
+def test_a_second_tag_of_a_crossed_id_unbinds_it(tmp_path: Path) -> None:
+    """Fix round 1 (I1): a crossed tag stayed bound when its id was tagged
+    again before a malformed copy or prose, and CP-MODEL refused the
+    duplicate; a crossed tag now binds only an id tagged once."""
+    single = _cp1_single()
+    tag = "<!-- table-id: cp1.model_period_register -->\n"
+    crossed = single.replace(tag, tag + "\n##### CP-MODEL interface table\n", 1)
+    assert _violations("CP-1", crossed) == []
+    anchor = re.search(r"#### T4\.15\b", crossed)
+    assert anchor is not None
+    for name, again in (
+        ("malformed", "#### Restated\n\n| period_id |\n| --- |\n| a | b |\n\n"),
+        ("prose", "#### Restated\n\nRestated below.\n\n"),
+    ):
+        text = (
+            crossed[: anchor.start()] + tag + "\n" + again + crossed[anchor.start() :]
+        )
+        missing = "cp1.model_period_register: CP-MODEL interface table missing"
+        assert missing in " ".join(_violations("CP-1", text)), name
+        assert _cp_model_reads(tmp_path, text) != 0, name
+
+
+@pytest.mark.parametrize(
+    ("table_id", "register", "column", "value"),
+    [
+        ("cp1.model_account_register", "T4.15", "limitation_refs", ""),
+        ("cp1.model_account_register", "T4.15", "limitation_refs", "n/a"),
+        ("cp1.model_period_register", "T4.14", "component_period_ids", "TBD"),
+    ],
+)
+def test_an_escaped_pipe_never_hides_a_critical_placeholder(
+    table_id: str, register: str, column: str, value: str
+) -> None:
+    """Fix round 1 (C2): the interface reader read `\\|` in a source locator
+    as text while the register check split at it, so a blank, `n/a` or `TBD`
+    in the row's last critical column slid out of the header's width."""
+    from caos.methodology.tables import handoff_tables
+
+    single = _cp1_single()
+    found = re.search(
+        rf"<!-- table-id: {re.escape(table_id)} -->\n\n?(\|.*\n)(?:\|.*\n)(\|.*\n)",
+        single,
+    )
+    assert found is not None
+    header = [c.strip() for c in found.group(1).strip().strip("|").split("|")]
+    cells = [c.strip() for c in found.group(2).strip().strip("|").split("|")]
+    cells[header.index("source_locator")] += " \\| note 4"
+    cells[header.index(column)] = value
+    text = single.replace(found.group(2), "| " + " | ".join(cells) + " |\n", 1)
+    assert f"{register} row 1: critical column {column!r} holds a disqualifying" in (
+        " ".join(_violations("CP-1", text))
+    )
+    [served] = [
+        t for t in handoff_tables(CONTRACT, text).tables if t.table_id == table_id
+    ]
+    assert served.rows[0][header.index("source_locator")].text.endswith(" | note 4")
+
+
+def test_a_short_interface_row_names_only_its_table(tmp_path: Path) -> None:
+    """P1 CP-1 #1 and N3 CP-1 #2 each lost one cell of one period-register row,
+    and the check reported all seven interface tables missing. The short row
+    is still refused -- by the check, the host's table reader and CP-MODEL --
+    and the check names that table alone."""
+    from caos.methodology.tables import handoff_tables
+
+    single = _cp1_single()
+    period = re.search(
+        r"<!-- table-id: cp1\.model_period_register -->\n\n?(?:\|.*\n){2}(\|.*)\|\n",
+        single,
+    )
+    assert period is not None
+    short = single.replace(
+        period.group(0),
+        period.group(0).replace(
+            period.group(1) + "|", period.group(1).rsplit("|", 1)[0] + "|", 1
+        ),
+        1,
+    )
+    assert short != single
+    violations = _violations("CP-1", short)
+    interface = [v for v in violations if v.startswith("cp1.")]
+    assert len(interface) == 1, violations
+    assert re.fullmatch(
+        r"cp1\.model_period_register: row 1 \(first cell `[^`]*`\) has (\d+) cells, "
+        r"header has (\d+) -- table row width differs from its header",
+        interface[0],
+    ), interface
+    assert handoff_tables(CONTRACT, short).unavailable_reason == "TABLES_MALFORMED"
+    assert _cp_model_reads(tmp_path, short) != 0
+
+
+def test_cp0_writes_only_the_preparation_registers_that_hold_its_findings() -> None:
+    """D97 (V10): on 90 stored CP-0 answers, P3 held each source's identity,
+    period and version (110 dates found nowhere else, in 46) and P5 its
+    fidelity findings (64 cells in 35); P1, P2, P4, P6, P7 and P8 restated
+    the host's preparation record or said NA about a workspace or ZIP this
+    host never makes. Those six are retired, so an older answer's tables keep
+    their headings and no T register reads one; the host says the same."""
+    text = skill("CP-0").decode()
+    contract = CHECK.load_contract(text, "CP-0")
+    assert sorted(contract["registers"]) == ["P3", "P5"] + [
+        f"T{n}" for n in range(1, 9)
+    ]
+    assert contract["retired_registers"] == ["P1", "P2", "P4", "P6", "P7", "P8"]
+    [cp0] = [m for m in CATALOG["modules"] if m["module_id"] == "CP-0"]
+    assert set(cp0["artifact_contract"]["required_table_ids"]) == set(
+        contract["registers"]
+    )
+    assert "P1-P8" not in text
+    final_check = prompt_block("cp0_final_check")
+    assert "include P3, P5 and T1-T8" in final_check
+    assert "P1-P8" not in final_check
+    section = _source_preparation_section(
+        SourceSet(case_id=UUID(int=1), version=1, fingerprint="0" * 64, members=()), ""
+    )
+    assert "P1, P2, P4, P6, P7 and P8 are retired" in section
+    assert "identity, period and version in P3" in section
+    assert "host extraction in P5" in section
+    # An answer written to the old contract reads the same, its T registers
+    # bound as before and its six retired tables no fault.
+    fresh = handoff_markdown(identity("CP-0")).decode()
+    old = fresh
+    for retired in ("P1", "P2", "P4", "P6", "P7", "P8"):
+        old = old.replace(
+            "#### T1",
+            f"#### {retired} — Retired\n\nIt feeds T2.\n\n"
+            + _table(["x_id", "value"], [["x", "y"]])
+            + "\n#### T1",
+            1,
+        )
+    assert old != fresh
+    assert _violations("CP-0", old) == []
+
+
+def test_cp_l10_writes_a_gap_once_and_keeps_every_screen_s_rows() -> None:
+    """D96 (V8): on the six stored CP-L10 answers no absorbed screen's
+    source-and-scope table repeated another's (0 of 60 pairs shared a row) and
+    every evidence-less topic row held a materiality and rank no other register
+    holds, so all twenty registers, each screen's scope rows and its six topic
+    rows stay required; only the restated gap and prohibitions are dropped."""
+    lite = skill("CP-L10").decode()
+    assert lite.count("## Written once — binding on all five screens") == 1
+    assert "not again in the summary" in lite
+    assert "no cell or line repeats that no conclusion" in lite
+    # The 5d-3 review (M3): the one-sentence limit and the safety clause.
+    assert "`summary` names the missing evidence in one sentence" in lite
+    assert "A sourced figure or finding is never dropped to save space" in lite
+    # M1: the OVERALL row holds the posture; status and outcome are the Audit
+    # Summary's; step 7's LITE_COMPLETE gaps row is the one restatement.
+    assert "posture is the `assessment` of its decision-screen `OVERALL` row" in lite
+    assert "except the one row Workflow step 7 requires in a `LITE_COMPLETE`" in lite
+    assert "posture, status and outcome are its decision-screen" not in lite
+    contract = CHECK.load_contract(lite, "CP-L10")
+    assert contract["retired_registers"] == []
+    registers = contract["registers"]
+    for phase in ("10", "20", "23", "30", "40"):
+        assert registers[f"TL{phase}.1"]["minimum_body_rows"] == 1, phase
+        assert registers[f"TL{phase}.2"]["minimum_body_rows"] == 6, phase
+    rules = {rule["rule_id"] for rule in contract["semantic_rules"]}
+    assert "cp_l10.topic_ids_complete" in rules

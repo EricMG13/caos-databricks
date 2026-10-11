@@ -36,12 +36,22 @@ export interface Citation {
   page: number;
   bboxes: BBox[];
   matched_text: string;
+  /** The line `matched_text` is an excerpt of, split around it (D105), where
+      the record holds one; absent where this shape carries none, and the quote
+      is then shown as a quote, not as a source line. */
+  line?: { before: string; excerpt: string; after: string; recorded: boolean };
   observed_at: string;
   /** The host's render of that page, or null when none is served. */
   render_url: string | null;
   /** When the cited source was withdrawn, if it has been (invariant 1: checked
       live). The citation stays so the conclusion is explicable; the chip says so. */
   withdrawn_at?: string | null;
+  /** The page the module cited when the host anchored the quote at its true
+      page instead (D94); absent or null otherwise. */
+  cited_page?: number | null;
+  /** False for a quote the answer's body does not carry (D106): still
+      host-verified, but not linked to a statement in the answer. */
+  linked?: boolean;
 }
 
 /** A typed refusal and what would clear it. Never an exception. */

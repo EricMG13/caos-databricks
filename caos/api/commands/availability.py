@@ -39,6 +39,8 @@ class RunFacts:
     adapter_route: bool
     work_state: str | None
     cancel_requested: bool
+    # The code a parked run stopped with; one is terminal for its pin (R2.6).
+    stop_code: RefusalCode | None = None
 
 
 def directory_actions(role: GlobalRole) -> list[ActionView]:
@@ -261,7 +263,12 @@ def _run_checks(
         ],
         _A.RETRY_RUN: [
             *queue,
-            # `requeue_run`: a stopped row with no cancel requested.
+            # `requeue_run`: never a run parked over its reservation (R2.6),
+            # then a stopped row with no cancel requested.
+            (
+                run.stop_code is _C.BUDGET_CHARGE_OVER_RESERVATION,
+                _C.BUDGET_CHARGE_OVER_RESERVATION,
+            ),
             (
                 run.work_state != "STOPPED" or run.cancel_requested,
                 _C.RUN_NOT_STOPPED,

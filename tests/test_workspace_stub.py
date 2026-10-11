@@ -131,6 +131,8 @@ def test_preflight_names_each_resource_and_the_fix_for_a_missing_one(
     flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
     assert preflight.main([*flags, "--lakebase-project", LAKEBASE_PROJECT]) == 0
     lines = capsys.readouterr().out.splitlines()
+    # The default endpoint declares its context (D119): no warning.
+    assert not any(line.startswith("WARNING") for line in lines)
     assert len(lines) == 8 and all(line.startswith("ok") for line in lines)
     assert f"ok      lakebase endpoint {LAKEBASE_ENDPOINT}" in lines
     assert f"ok      lakebase database {LAKEBASE_DATABASE}" in lines

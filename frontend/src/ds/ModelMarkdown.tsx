@@ -7,6 +7,7 @@ import { plainHead } from "./format";
 import {
   readInline,
   readMarkdown,
+  readMarkers,
   readRefs,
   tableTag,
   FORMATTED_MAX,
@@ -28,6 +29,12 @@ function WithRefs({ text }: { text: string }) {
   return readRefs(text).map((piece, index) =>
     typeof piece === "string" ? (
       piece
+    ) : "qualified" in piece ? (
+      // Another module's citation, named as the prompt named it (D107): a
+      // label, not a way anywhere.
+      <span key={index} className="qmark" data-qualified-marker={piece.text}>
+        {piece.qualified}
+      </span>
     ) : (
       <span key={index} className="md-refs" data-refs={piece.text}>
         {piece.refs.map((ref, at) => (
@@ -38,11 +45,35 @@ function WithRefs({ text }: { text: string }) {
   );
 }
 
+/** How a page draws a citation marker (D107): the chip for the citation at
+    place `n` of the module's list, or null where none is known -- a record
+    from before markers, or a number no citation holds -- and the bracket
+    stays as written. Without one (filed output) every bracket stays. */
+export const CitationMarkerLink = createContext<((n: number) => ReactNode) | null>(null);
+
+function WithMarkers({ text }: { text: string }) {
+  const chip = useContext(CitationMarkerLink);
+  if (chip === null) return <WithRefs text={text} />;
+  return readMarkers(text).map((piece, index) => {
+    if (typeof piece === "string") return <WithRefs key={index} text={piece} />;
+    const chips = piece.numbers.map((n) => chip(n));
+    if (chips.some((drawn) => drawn === null)) return <WithRefs key={index} text={piece.text} />;
+    if (chips.length === 1) return <React.Fragment key={index}>{chips[0]}</React.Fragment>;
+    return (
+      <span key={index} className="md-cites" data-markers={piece.text}>
+        {chips.map((drawn, at) => (
+          <React.Fragment key={at}>{drawn}</React.Fragment>
+        ))}
+      </span>
+    );
+  });
+}
+
 function InlineNodes({ nodes }: { nodes: readonly Inline[] }) {
   return (
     <>
       {nodes.map((node, index) => {
-        if (typeof node === "string") return <WithRefs key={index} text={node} />;
+        if (typeof node === "string") return <WithMarkers key={index} text={node} />;
         const children = <InlineNodes nodes={node.children} />;
         if (node.mark === "strong") return <strong key={index}>{children}</strong>;
         if (node.mark === "em") return <em key={index}>{children}</em>;

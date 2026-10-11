@@ -13,6 +13,7 @@ from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
 import pytest
+from pg_reaper import database_name, reap_session
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -189,6 +190,12 @@ def _development_edge() -> Iterator[None]:
             os.environ[name] = value
 
 
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Reap leaked databases once: the controller under xdist, never a worker."""
+    if POSTGRES_URL and not hasattr(session.config, "workerinput"):
+        reap_session(POSTGRES_URL)
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--live-provider", action="store_true", help="run live provider tests"
@@ -341,7 +348,7 @@ def _migrated_template() -> Iterator[str]:
     from caos.store import apply_schema, connect
 
     assert POSTGRES_URL is not None
-    name = f"caos_test_template_{uuid4().hex}"
+    name = database_name("caos_test_template_")
     with psycopg.connect(POSTGRES_URL, autocommit=True) as admin:
         admin.execute(f'CREATE DATABASE "{name}"')
     try:
@@ -378,7 +385,7 @@ def empty_database(request: pytest.FixtureRequest) -> Iterator[str]:
         if "case" in request.fixturenames
         else None
     )
-    name = f"caos_test_{uuid4().hex}"
+    name = database_name("caos_test_")
     with psycopg.connect(POSTGRES_URL, autocommit=True) as admin:
         # Both names are uuid4 hex this module minted, never caller input.
         suffix = f' TEMPLATE "{template}"' if template else ""
@@ -386,7 +393,11 @@ def empty_database(request: pytest.FixtureRequest) -> Iterator[str]:
     try:
         yield _url_for(name)
     finally:
-        with psycopg.connect(POSTGRES_URL, autocommit=True) as admin:
+        # A test may leave PGOPTIONS holding a statement timeout; a connection
+        # option outranks it, so the teardown is not cut short and leaked.
+        with psycopg.connect(
+            POSTGRES_URL, autocommit=True, options="-c statement_timeout=0"
+        ) as admin:
             admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 

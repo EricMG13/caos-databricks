@@ -36,6 +36,7 @@ import psycopg
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, QUOTE, CanonicalCompletions
 
+from caos.models import identity_of
 from caos.pricing import ModelPrice, price_from_environment
 from caos.provider import Completion, encode_request
 from caos.qualification.on_disk import MANIFEST
@@ -671,3 +672,18 @@ def test_a_refusal_after_the_database_exists_names_the_database(
     err = capsys.readouterr().err
     assert "AUTHORITY_BYTES_MISMATCH" in err and created and created[0] in err
     assert "nothing was spent" not in err
+
+
+def test_each_docstring_example_expects_the_identity_its_endpoint_resolves_to() -> None:
+    """The examples an operator copies name the identity `identity_of` gives
+    their endpoint (D8; D77 for a Copilot model), or the copy refuses."""
+    doc = qualify.__doc__ or ""
+    endpoints = re.findall(r"CAOS_MODEL_ENDPOINT=(\S+)", doc)
+    expected = re.findall(r"--expect-identity (\S+)", doc)
+    assert endpoints == ["copilot:gpt-6-luna@high"]
+    assert expected == [
+        "databricks/claude-opus-5-5/none/65536",
+        "copilot/gpt-6-luna/high/65536",
+    ]
+    assert identity_of("claude-opus-5-5") == expected[0]
+    assert identity_of(endpoints[0]) == expected[1]

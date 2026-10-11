@@ -49,7 +49,7 @@ export function SiteHeader({
 }) {
   const actions = ribbon.actions.slice(0, 3);
   return (
-    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 md:px-4 md:first:rounded-t-xl">
+    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-header shadow-header px-3 md:px-4 md:first:rounded-t-xl">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mx-1 my-4" />
       <BreadcrumbList className="min-w-0 flex-nowrap">

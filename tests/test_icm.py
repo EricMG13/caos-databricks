@@ -11,7 +11,9 @@ import pytest
 from caos import icm
 from caos.icm import (
     BUNDLE,
+    COMMAND_BLOCK,
     CONDITIONS,
+    REPAIR_BLOCK,
     RETRY_BLOCK,
     Contract,
     InputRow,
@@ -68,14 +70,23 @@ def test_a_contract_names_the_delivered_authority_skill_first(bundle: Bundle) ->
 def test_the_gate_and_forecast_owners_declare_their_extra_blocks() -> None:
     always, conditional = expected_blocks("CP-0")
     assert always[:2] == ("instruction", "gate_instruction")
-    # Every node may take its one second attempt (D30); only that is conditional.
-    assert always[-1] == "cp0_final_check" and conditional == (RETRY_BLOCK,)
+    # Every node may take its guided retries (D30, D82), each in one of two
+    # blocks (D104); only those are conditional.
+    retry = (RETRY_BLOCK, REPAIR_BLOCK)
+    # D109: CP-0 and CP-2G take the run's pinned command, when it names them.
+    assert always[-1] == "cp0_final_check"
+    assert conditional == (COMMAND_BLOCK, *retry)
+    assert expected_blocks("CP-2G")[1] == (
+        COMMAND_BLOCK,
+        "forecast_extension",
+        *retry,
+    )
     assert expected_blocks("CP-1") == (
         ("instruction", "tagged", "host_steps", "final_check"),
-        ("forecast_extension", RETRY_BLOCK),
+        ("forecast_extension", *retry),
     )
-    assert expected_blocks("CP-5")[1] == (RETRY_BLOCK,)
-    assert set(CONDITIONS) == {"forecast_extension", RETRY_BLOCK}
+    assert expected_blocks("CP-5")[1] == retry
+    assert set(CONDITIONS) == {"forecast_extension", COMMAND_BLOCK, *retry}
 
 
 def test_prompt_blocks_are_read_byte_for_byte_and_names_are_closed() -> None:

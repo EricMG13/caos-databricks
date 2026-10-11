@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import traceback
 from pathlib import Path
 from typing import cast
@@ -19,7 +20,7 @@ from test_source_sets import _admit
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.evidence import read
+from caos.evidence import ingest, read
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import resolve_route
 from caos.methodology.bundle import Bundle
@@ -134,7 +135,7 @@ def test_run_read_compares_each_captured_current_identity(
     conn, run, sources, _, _ = pinned
     source = sources.members[0].source_id
     database = urlsplit(empty_database).path.removeprefix("/")
-    assert database == "caos_test_" + UUID(database.removeprefix("caos_test_")).hex
+    assert re.fullmatch(r"caos_test_(\d{10}_)?[0-9a-f]{32}", database)
     assert conn.execute("SELECT current_database()").fetchone() == (database,)
     table = "sources" if field == "document_sha256" else "source_extractions"
     with conn.transaction():
@@ -242,14 +243,15 @@ def test_delivered_blocks_cost_one_query_per_run(delivered: Delivered) -> None:
     conn, run, first, second = delivered
     counter = _CountingConnection(conn)
     rows = read.read_run_blocks(cast(StoreConnection, counter), run_id=run)
-    expected = sorted(
+    # By filename, `note.txt` before `report.txt` (N158), whatever ids they drew.
+    expected = [
         (source, f"b{index:06d}", 1, word)
         for source, words in (
-            (first, ("one", "two", "three")),
             (second, ("four", "five")),
+            (first, ("one", "two", "three")),
         )
         for index, word in enumerate(words)
-    )
+    ]
     assert [
         (source, block, page, text.value) for source, block, page, text, _mark in rows
     ] == expected
@@ -286,3 +288,89 @@ def test_a_store_fault_in_the_batched_read_is_not_an_evidence_verdict(
         read.read_run_blocks(conn, run_id=run)
     assert caught.value.__cause__ is None
     assert "private evidence" not in "".join(traceback.format_exception(caught.value))
+
+
+# A pack whose filenames, in order, are not its ids' order: one shared filename
+# (told apart by its bytes' digest) and a name that sorts first only by byte
+# value -- `Z` before `a` in the C collation, after it in most locales.
+_PACK = (
+    ("a-report.txt", b"one\ntwo"),
+    ("a-report.txt", b"three"),
+    ("Z-note.txt", b"four"),
+)
+
+
+def _pinned_pack(
+    conn: StoreConnection,
+    tmp_path: Path,
+    ids: list[UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[UUID, dict[UUID, tuple[str, str]]]:
+    """A new case's pinned run over `_PACK`, its sources minted `ids` in pack
+    order; with each source's filename and document digest."""
+    case_id = create_case(conn, BoundaryText.of("ordered pack"))
+    grant(conn, case_id=case_id, user_id=case_id, standing=Standing.WRITER)
+    minted = iter(ids)
+    monkeypatch.setattr(ingest, "uuid4", lambda: next(minted))
+    admit_pack(
+        conn,
+        BlobStore(tmp_path),
+        case_id=case_id,
+        documents=[Document(BoundaryText.of(name), data) for name, data in _PACK],
+    )
+    monkeypatch.undo()
+    conn.commit()
+    sources = snapshot_source_set(conn, case_id)
+    run = start_run(conn, case_id)
+    route = resolve_route(
+        json.loads(CATALOG_PATH.read_text()), PROFILE, "MARKET_DISLOCATION"
+    )
+    pin_route(conn, run, route)
+    pin_run_input(
+        conn, run, sources.version, Bundle(CATALOG_PATH.parents[3]), subject=SUBJECT
+    )
+    return run, {m.source_id: (m.filename, m.document_sha256) for m in sources.members}
+
+
+def test_evidence_is_ordered_by_filename_and_digest_not_by_minted_id(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N158: the order a run's evidence is laid out in is the pack's own --
+    filename by byte value, then the document's digest, then block -- never
+    the random `source_id` minted at admission."""
+    conn, _ = case
+    ids = [UUID(int=3), UUID(int=2), UUID(int=1)]
+    run, members = _pinned_pack(conn, tmp_path, ids, monkeypatch)
+    rows = read.read_run_blocks(conn, run_id=run)
+    keys = [(*members[source], block) for source, block, *_ in rows]
+    assert keys == sorted(keys)
+    assert [members[source][0] for source, *_ in rows] == [
+        "Z-note.txt",
+        "a-report.txt",
+        "a-report.txt",
+        "a-report.txt",
+    ]
+
+
+def test_the_same_pack_lays_out_alike_in_every_run(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N158: two runs over the same documents, admitted under ids drawn in
+    opposite orders, deliver the same lines in the same order."""
+    conn, _ = case
+    layouts = []
+    for ids in (
+        [UUID(int=1), UUID(int=2), UUID(int=3)],
+        [UUID(int=6), UUID(int=5), UUID(int=4)],
+    ):
+        run, members = _pinned_pack(conn, tmp_path, ids, monkeypatch)
+        layouts.append(
+            [
+                (*members[source], block, page, text.value)
+                for source, block, page, text, _ in read.read_run_blocks(
+                    conn, run_id=run
+                )
+            ]
+        )
+    assert layouts[0] == layouts[1]
+    assert len(layouts[0]) == 4

@@ -43,10 +43,18 @@ _BLOCK_QUERY = (
 # a delivery (invariant 2). The totals row is what carries the captured count
 # when nothing survived, since LEFT JOIN keeps one row whose block columns are
 # NULL rather than returning nothing to read.
+#
+# The order is the pack's own, never the `source_id` minted at random on
+# admission (N158, F538): filename by byte value (`COLLATE "C"`, so no
+# server's locale reorders it), then the document's digest for two members
+# that share a filename, then block. The same documents therefore lay out
+# alike in every run and every case, and a run's calls share the evidence as
+# one prefix (D113). `source_id` last only makes the order total.
 _RUN_BLOCKS_QUERY = (
     "WITH captured AS ("
     "SELECT inputs.case_id, inputs.source_version, inputs.source_fingerprint,"
     " members.source_id, members.document_sha256, members.extractor_identity,"
+    " members.filename,"
     " members.output_sha256, members.extraction_sha256,"
     " blocks.block_id, blocks.page, blocks.text, blocks.hidden"
     " FROM runs AS run"
@@ -58,7 +66,7 @@ _RUN_BLOCKS_QUERY = (
     " WHERE run.run_id = %s"
     "), live AS ("
     "SELECT captured.source_id, captured.block_id, captured.page, captured.text,"
-    " captured.hidden FROM captured"
+    " captured.hidden, captured.filename, captured.document_sha256 FROM captured"
     " JOIN source_set_versions AS versions"
     " ON (versions.case_id,versions.version,versions.fingerprint)"
     " = (captured.case_id,captured.source_version,captured.source_fingerprint)"
@@ -74,7 +82,8 @@ _RUN_BLOCKS_QUERY = (
     " SELECT live.source_id, live.block_id, live.page, live.text, totals.captured,"
     " live.hidden FROM (SELECT count(*) AS captured FROM captured) AS totals"
     " LEFT JOIN live ON true"
-    " ORDER BY live.source_id, live.block_id"
+    ' ORDER BY live.filename COLLATE "C", live.document_sha256,'
+    " live.source_id, live.block_id"
 )
 
 
@@ -108,9 +117,10 @@ def read_block(conn: StoreConnection, *, source_id: UUID, block_id: str) -> Bloc
 def read_run_blocks(
     conn: StoreConnection, *, run_id: UUID
 ) -> list[tuple[UUID, str, int, BoundaryText, str]]:
-    """Every block the run's pin captured, in `(source_id, block_id)` order,
-    each with why a reader of the rendered page may not see its line (N27) --
-    empty when nothing is noted.
+    """Every block the run's pin captured, in the pack's own order -- each
+    source by filename, then document digest, then block (N158) -- each with
+    why a reader of the rendered page may not see its line (N27) -- empty when
+    nothing is noted.
 
     One statement where the per-block reader was one statement per block: a pack
     of twenty thousand lines cost twenty thousand round trips under the case

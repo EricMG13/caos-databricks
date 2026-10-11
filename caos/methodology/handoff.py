@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import asdict, dataclass, fields
@@ -33,13 +34,18 @@ from caos.digest import canonical_json
 from caos.evidence.citations import (
     ANY_RUN,
     CITATION_RULES,
+    EXCERPT,
+    MIN_EXCERPT_WORDS,
+    REANCHORING_RULES,
     AnchoredCitation,
     Citation,
     CitationRule,
     Rect,
-    occurrences,
+    within_line,
 )
+from caos.evidence.ingest import GROUP_WIDTH
 from caos.graph.route import MODEL_MODULE
+from caos.methodology.citation_markers import MARKER, body
 from caos.methodology.vendor import VendorContract
 from caos.provider import MAX_RESPONSE_BYTES
 from caos.refusals import Refusal, RefusalCode
@@ -210,6 +216,11 @@ class HostIdentity:
     # digest -- as canonical JSON. None for every other module, and absent from
     # a serialised record when None, so no record written before it moved.
     research_brief: str | None = None
+    # D109: this module's part of the run's pinned command -- qualifier name
+    # to its `value` and `basis` -- as canonical JSON, rendered as the
+    # host-owned current-command section. None for a module the command does
+    # not name, and absent from a serialised record when None, as above.
+    current_command: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -373,7 +384,7 @@ def _text(markdown: bytes) -> str:
     lines, the invisible separators, text no reader can see, and the whitespace
     run the vendor's own expressions cannot read in linear time. It runs before
     any vendor call and on stored bytes as well as model output. Which bound
-    refused is named to a node's one second attempt (`_text_bound`), never the
+    refused is named to a node's guided retry (`_text_bound`), never the
     text.
     """
     text, _bound = _text_bound(markdown)
@@ -430,10 +441,7 @@ def _broken_bound(text: str) -> str:
             " spaces, tabs or # characters"
         )
     if not _clean(text):
-        return (
-            "the Markdown carries a control character other than a line feed or"
-            " tab, or text that is not in Unicode NFC form"
-        )
+        return _unclean_bound(text)
     lines = text.split("\n")
     if any(len(line.encode()) > MAX_LINE_BYTES for line in lines):
         return f"a line is longer than {MAX_LINE_BYTES} bytes"
@@ -452,6 +460,98 @@ def _clean(text: str) -> bool:
         return BoundaryText.of(text, limit=len(text)).value == text
     except Refusal:
         return False
+
+
+_UNCLEAN = (
+    "the Markdown carries a control character other than a line feed or"
+    " tab, or text that is not in Unicode NFC form"
+)
+
+# The C0 controls and DEL by their ISO 6429 names, which `unicodedata.name`
+# does not give: a retry is told what it wrote, not only where (F499).
+_C0_NAMES = (
+    *"NULL|START OF HEADING|START OF TEXT|END OF TEXT|END OF TRANSMISSION"
+    "|ENQUIRY|ACKNOWLEDGE|BELL|BACKSPACE|CHARACTER TABULATION|LINE FEED"
+    "|LINE TABULATION|FORM FEED|CARRIAGE RETURN|SHIFT OUT|SHIFT IN"
+    "|DATA LINK ESCAPE|DEVICE CONTROL ONE|DEVICE CONTROL TWO"
+    "|DEVICE CONTROL THREE|DEVICE CONTROL FOUR|NEGATIVE ACKNOWLEDGE"
+    "|SYNCHRONOUS IDLE|END OF TRANSMISSION BLOCK|CANCEL|END OF MEDIUM"
+    "|SUBSTITUTE|ESCAPE|INFORMATION SEPARATOR FOUR|INFORMATION SEPARATOR THREE"
+    "|INFORMATION SEPARATOR TWO|INFORMATION SEPARATOR ONE".split("|"),
+)
+
+
+def _unclean_bound(text: str) -> str:
+    """`_clean`'s refusal, located (F499): the first line, 1-based, holding a
+    character `BoundaryText` refuses, that character by code point and name,
+    and how many lines hold one; else the first line NFC changes and the code
+    points it changes there. Code points and line numbers only, never the
+    text; across `BoundaryText` like every feedback line, and the unlocated
+    words when it will not cross or nothing is found."""
+    unclean = [
+        (number, line)
+        for number, line in enumerate(text.split("\n"), 1)
+        if not _clean(line)
+    ]
+    refused = [(number, ch) for number, line in unclean if (ch := _first_refused(line))]
+    if refused:
+        number, ch = refused[0]
+        # `hides_text` has already refused every bidirectional control, and
+        # UTF-8 decodes no lone surrogate: what is left is a control.
+        said = (
+            f"line {number} of the Markdown carries {_code_point_named(ch)}, a"
+            " control character other than a line feed or tab"
+            f" ({_line_count(len(refused))} in all); remove it"
+        )
+    elif unclean:
+        number, line = unclean[0]
+        said = (
+            f"line {number} of the Markdown is not in Unicode NFC form (first at"
+            f" {_decomposed(line)}; {_line_count(len(unclean))} in all); write it"
+            " in composed form"
+        )
+    else:
+        return _UNCLEAN
+    with suppress(Refusal):
+        return BoundaryText.of(said, limit=MAX_FEEDBACK_CHARS).value
+    return _UNCLEAN
+
+
+def _first_refused(line: str) -> str:
+    """The first character of `line` that `BoundaryText` refuses, or `""`."""
+    for ch in line:
+        try:
+            BoundaryText.of(ch, limit=len(ch) * 3)
+        except Refusal:
+            return ch
+    return ""
+
+
+def _code_point_named(ch: str) -> str:
+    """`U+XXXX (NAME)`, or `U+XXXX` alone for a code point with no name."""
+    code = ord(ch)
+    name = unicodedata.name(ch, "") or (
+        _C0_NAMES[code] if code < len(_C0_NAMES) else "DELETE" if code == 0x7F else ""
+    )
+    return f"U+{code:04X} ({name})" if name else f"U+{code:04X}"
+
+
+def _decomposed(line: str) -> str:
+    """The code points from where NFC first changes `line`: the first that
+    differs and the combining marks after it, at most four."""
+    composed = unicodedata.normalize("NFC", line)
+    at = next(
+        (i for i, (a, b) in enumerate(zip(line, composed, strict=False)) if a != b),
+        min(len(line), len(composed)),
+    )
+    end = at + 1
+    while end < len(line) and end - at < 4 and unicodedata.combining(line[end]):
+        end += 1
+    return " ".join(f"U+{ord(ch):04X}" for ch in line[at:end])
+
+
+def _line_count(count: int) -> str:
+    return f"{count} line" if count == 1 else f"{count} lines"
 
 
 def _heading_backtracks(text: str, spaced: str) -> bool:
@@ -665,6 +765,15 @@ def validate_markdown(  # noqa: PLR0913 -- the brief's pure signature
 WIRE_KEYS = frozenset({"canonical_markdown", "citations"})
 WIRE_CITATION_KEYS = frozenset({"source_id", "page", "matched_text"})
 RECORD_FORMAT = "caos-canonical-record-v2"
+# What the record codec reads and writes (`record_bytes`, `_decoded_record`),
+# raised whenever a record this build writes is one an older build would
+# refuse: 1 since D106 (`unverified`, `linked`), 2 since D107 (`marker`), 3
+# since D109 (the identity's `current_command`). A
+# build with another value, or none, cannot read this build's records, so
+# `scripts/rollback_check.py` refuses a rollback across a change of it.
+RECORD_CODEC_VERSION = 3
+# A validated Blocked answer's citations, judged as any answer's (D106).
+BLOCKED_FORMAT = "caos-blocked-citations-v1"
 # A body may carry the largest Markdown the host accepts plus its citations
 # and the JSON wrapper. Sized from `MAX_RESPONSE_BYTES` (D45's handoff bound)
 # rather than from the vendor's file-read ceiling, `MAX_FILE_BYTES` (nothing
@@ -681,6 +790,68 @@ MAX_PAGE = 2**31 - 1  # the store's integer page
 # spent about a minute of worker time each time, which is what makes health
 # report `WORKERS_STALE` (AI-5). A real handoff's Evidence Trace carries tens.
 MAX_CITATIONS = 512
+# The anchoring refusals that leave a citation unverified rather than refuse
+# its answer (D106): a quote on no line of its cited page, on it more than
+# once, or on evidence the node was not given.
+UNVERIFIED_CODES = frozenset(
+    {
+        RefusalCode.CITATION_NOT_LOCATED,
+        RefusalCode.CITATION_AMBIGUOUS,
+        RefusalCode.CITATION_NOT_DELIVERED,
+    }
+)
+_UNVERIFIED_KEYS = WIRE_CITATION_KEYS | {"code"}
+
+
+@dataclass(frozen=True, slots=True)
+class UnverifiedCitation:
+    """A citation of an accepted answer that did not anchor (D106): the
+    module's own locator and quote, never host-verified and never
+    re-anchored by any reader, and the anchoring refusal that made it
+    unverified (`UNVERIFIED_CODES`). Its quote has crossed `BoundaryText`
+    and hides no text (`unverified_citation`). The claim it supports is
+    Deploy V's lineage class "Untraced". `linked` and `marker` are as for an
+    anchored citation (`AnchoredCitation`): `linked` written only when
+    false, `marker` on every citation accepted since D107."""
+
+    source_id: UUID
+    page: int
+    matched_text: str
+    code: RefusalCode
+    linked: bool = True
+    marker: int | None = None
+
+
+def unverified_citation(
+    citation: Citation,
+    code: RefusalCode,
+    *,
+    linked: bool = True,
+    marker: int | None = None,
+) -> UnverifiedCitation:
+    """`citation` kept as unverified for `code` (D106), its quote as it
+    crosses `BoundaryText`, whether a marker names it (`linked`) and its
+    place in the answer's list (`marker`, D107).
+    `HANDOFF_MALFORMED` for a quote that will not cross or hides text: a
+    host text check, never a citation fault, so the answer is refused
+    rather than the quote stored or dropped."""
+    quote = _crossed(citation.matched_text)
+    if code not in UNVERIFIED_CODES or quote is None:
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    return UnverifiedCitation(
+        citation.source_id, citation.page, quote, code, linked, marker
+    )
+
+
+def _crossed(text: str) -> str | None:
+    """`text` as it crosses `BoundaryText` (NFC), or None when it will not,
+    hides text (AI-2), or is longer than any evidence line can be
+    (`GROUP_WIDTH`, a shown block's bound), so no excerpt of one."""
+    if hides_text(text):
+        return None
+    with suppress(Refusal):
+        return BoundaryText.of(text, limit=GROUP_WIDTH).value
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -697,7 +868,19 @@ class CanonicalRecord:
     accepted (N28), and so how a reader re-anchors them: `ANY_RUN` for every
     record written before the whole-line rule, which carries no such field,
     `WHOLE_LINE_AS_STORED` for one accepted under that rule's first reading,
-    and `WHOLE_LINE` for one accepted since (W6, N13).
+    `WHOLE_LINE` for one accepted under its second (W6, N13), and `EXCERPT`
+    for one accepted since D105, whose citations each keep the line they
+    anchored in (`AnchoredCitation.line_text`).
+
+    `citations` holds anchored citations only, each host-verified, and
+    `unverified` the answer's citations that did not anchor (D106), apart
+    and never mixed in: `_lines_held` holds `citations` alone, and no
+    reader re-anchors `unverified`. Since D106 either list may be empty but
+    not both; only an `EXCERPT` record holds an unverified citation or an
+    anchored one not linked to a statement (`AnchoredCitation.linked`).
+    Since D107 every citation of either list holds its `marker`, together
+    the places 1 to n of the answer's list, so a marker in the body names
+    exactly one of them; a record from before holds none (`_markers_held`).
     """
 
     artifact_sha256: str
@@ -712,6 +895,7 @@ class CanonicalRecord:
     projections: Projections
     citations: tuple[AnchoredCitation, ...]
     citation_rule: CitationRule = ANY_RUN
+    unverified: tuple[UnverifiedCitation, ...] = ()
 
 
 def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -766,150 +950,74 @@ def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
     return text.encode("utf-8"), text, requested
 
 
-# CommonMark's backslash escape: a backslash before ASCII punctuation is how
-# Markdown writes that mark, so `\"` reads `"` (F149).
-# ponytail: code spans keep their backslashes literally; unescaped here too.
-_MARKDOWN_ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
+# D107: the body names a citation by its 1-based place in the list, `[C3]`,
+# or several in one bracket, `[C3, C4]` (`citation_markers.MARKER`), read
+# anywhere after the front matter, fenced code included. Anything else is
+# text -- `[c3]`, `[C 3]`, `[C3-C5]`, `[C3,4]`, `[C1,  C2]` -- and only told
+# as a hint (`_NEAR_MARKER`, `_unmarked_line`), never refused.
+_MARKER_NUMBER = re.compile(r"[0-9]+")
+# The most digits a marker that names a citation can have: more names none.
+MARKER_DIGITS = 9
+# A bracket that reads like a marker and is not one: a `c` of either case and
+# a digit, spaces allowed between them, then anything short up to its close.
+_NEAR_MARKER = re.compile(r"\[ *[Cc] *[0-9][^\[\]\n]{0,24}\]")
 
 
-def _body_words(text: str) -> list[str]:
-    """The Markdown after its front matter, as whitespace tokens, with its
-    backslash escapes read as the marks they write.
-
-    The front matter is host identity, not analysis, so no quote may rest on it;
-    and a quote matches whole tokens, as anchoring in the evidence does.
-    """
-    lines = text.split("\n")
-    has_front = lines[:1] == ["---"] and "---" in lines[1:]
-    closing = lines.index("---", 1) if has_front else 0
-    return _MARKDOWN_ESCAPE.sub(r"\1", "\n".join(lines[closing + 1 :])).split()
-
-
-# Marks a body may put around a quotation without making it a different quote.
-# The backtick is Markdown's code span, which a module uses the same way.
-_QUOTATION = "\"'`\u2018\u2019\u201c\u201d\u201e\u201f\u00ab\u00bb"
-# And what prose puts before and after one: an opening bracket; a closing
-# bracket or the sentence's own punctuation (F148).
-_OPENING = _QUOTATION + "([{"
-_CLOSING = _QUOTATION + ".,;:!?)]}"
-
-
-def _wears(token: str, word: str, before: str, after: str) -> bool:
-    """Whether `token` is `word` with only `before` marks ahead of it and only
-    `after` marks behind it: typography, never another word."""
-    at = token.find(word)
-    while at != -1:
-        ahead, behind = token[:at], token[at + len(word) :]
-        if all(mark in before for mark in ahead) and all(
-            mark in after for mark in behind
-        ):
-            return True
-        at = token.find(word, at + 1)
-    return False
-
-
-def _openings(words: list[str]) -> dict[str, tuple[int, ...]]:
-    """Where in the body a quote's first word could begin.
-
-    Both the body's and the quote's first token drop only their edge
-    typography for the lookup. It is a superset of every match `_carried`
-    permits, including a quote that itself begins with a bracket. `_carried`
-    still judges the exact words; this index only avoids scanning the body
-    once per citation (AI-5).
-    """
-    found: dict[str, list[int]] = {}
-    for position, word in enumerate(words):
-        key = word.lstrip(_OPENING).rstrip(_CLOSING)
-        found.setdefault(key, []).append(position)
-    return {key: tuple(positions) for key, positions in found.items()}
-
-
-def _quoted(words: list[str], openings: dict[str, tuple[int, ...]], quote: str) -> bool:
-    """Whether the body quotes this text as whole tokens, typography aside.
-
-    A module writes its Evidence Trace as prose, and prose puts quotation marks
-    around a quotation: the body's tokens are then `\u201cRecorded` and `p1\u201d`
-    where the quote's are `Recorded` and `p1`. Refusing that is a host defect
-    recorded as the model's answer, which is what the CP-L10 attempt of the
-    second paid Terra run died of.
-
-    Only the two outer tokens may wear anything, and only typography --
-    quotation marks, an opening bracket, a closing bracket or the sentence's
-    punctuation (F148) -- so the quote's own words and its internal
-    punctuation still have to match exactly.
-    Nothing here widens what may be *cited*: `verify_citations` anchors against
-    the document's own tokens and is untouched. This decides only whether the
-    module quoted, in its own narrative, what it says it quoted.
-
-    The work is the body's and the quote's, never their product (R24-09).
-    Each start is compared a quote's length at a time while that costs no
-    more than the body; past that -- a word the body repeats and a quote that
-    near-matches at each -- the inner words' runs are found in one pass
-    instead (`occurrences`), and a start is then judged by its edges alone.
-    """
-    wanted = quote.split()
-    if not wanted:
-        return False
-    span = len(wanted)
-    starts = [
-        start
-        for start in openings.get(wanted[0].lstrip(_OPENING).rstrip(_CLOSING), ())
-        if start + span <= len(words)
+def _written(text: str) -> list[str]:
+    """Every marker's number as the body writes it, in order: `[C03]` is
+    `03`, `[C3, C4]` is `3` and `4`."""
+    return [
+        number
+        for found in MARKER.finditer(body(text))
+        for number in _MARKER_NUMBER.findall(found.group(1))
     ]
-    if span <= 2 or len(starts) * span <= len(words):
-        return any(_carried(words[start : start + span], wanted) for start in starts)
-    inner = {at - 1 for at in occurrences(words, wanted[1:-1])}
-    edges = [wanted[0], wanted[-1]]
-    # With the inner words matched, the edge words are the window left.
-    return any(
-        _carried([words[start], words[start + span - 1]], edges)
-        for start in starts
-        if start in inner
-    )
 
 
-def _carried(window: list[str], wanted: list[str]) -> bool:
-    """One run of the body carries the quote: its inner words exactly, and its
-    edge words wearing only typography -- quotation marks, an opening bracket
-    before, a closing bracket or the sentence's punctuation after (F148)."""
-    if window == wanted:
-        return True
-    if window[1:-1] != wanted[1:-1]:
-        return False
-    if len(wanted) == 1:
-        return _wears(window[0], wanted[0], _OPENING, _CLOSING)
-    return _wears(window[0], wanted[0], _OPENING, "") and _wears(
-        window[-1], wanted[-1], "", _CLOSING
-    )
+def _place(written: str) -> int:
+    """The citation a marker's number names: its value (`[C03]` is 3), or 0,
+    which names none, past `MARKER_DIGITS` digits."""
+    return int(written) if len(written) <= MARKER_DIGITS else 0
+
+
+def markers(text: str) -> tuple[int, ...]:
+    """Every citation number the Markdown body names (D107), in order, a
+    repeat included: `[C3]` is 3, `[C3, C4]` is 3 and 4; a number of more
+    than `MARKER_DIGITS` digits is 0, a marker that names no citation."""
+    return tuple(_place(number) for number in _written(text))
+
+
+def _dangling(text: str, count: int) -> list[str]:
+    """The markers that name no citation of `count`, as written, each once,
+    in the body's order: structural, refusing the answer (D107)."""
+    return list(dict.fromkeys(n for n in _written(text) if not 1 <= _place(n) <= count))
 
 
 def parse_response(
-    body: str, *, delivered: frozenset[UUID]
-) -> tuple[bytes, tuple[Citation, ...]]:
-    """The exact Markdown bytes and the citation requests beside them, or a refusal.
+    body: str,
+) -> tuple[bytes, tuple[Citation, ...], tuple[bool, ...]]:
+    """The exact Markdown bytes, the citation requests beside them, and
+    whether a marker in the body names each (D107), or a refusal.
 
     The transport is `{"canonical_markdown", "citations"}` and nothing else, at
     either level, with duplicate keys refused, and at most `MAX_CITATIONS` of
-    them. A citation must name delivered evidence and quote the Markdown
-    verbatim; one that does not refuses the whole handoff, because the Markdown
-    cannot be edited to drop what rests on it.
+    them; a transport that is not this refuses `HANDOFF_MALFORMED`, and so
+    does a body whose marker names no citation (`[C9]` beside 8): which one
+    it meant is undecidable. A citation naming evidence the node was not
+    given is kept as unverified (D106), and one no marker names is flagged
+    not linked to a statement (`AnchoredCitation.linked`) -- the citation's
+    fault, never the answer's.
     Anchoring in the token index needs the store and is the executor's step.
     """
     markdown, text, citations = _or_refuse(
         RefusalCode.HANDOFF_MALFORMED, lambda: _transport(body)
     )
-    if any(citation.source_id not in delivered for citation in citations):
-        raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-    words = _body_words(text)
-    openings = _openings(words)
-    if any(
-        not _quoted(words, openings, citation.matched_text) for citation in citations
-    ):
+    if _dangling(text, len(citations)):
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
-    return markdown, citations
+    held = frozenset(markers(text))
+    return markdown, citations, tuple(n in held for n in range(1, len(citations) + 1))
 
 
-# What a node's one second attempt may carry (D30): at most this many checks,
+# What a node's guided retry may carry (D30, D82): at most this many checks,
 # each cut to this many characters before it crosses the boundary, naming at
 # most this many failed citations by their place in the list (N51).
 MAX_FEEDBACK_MESSAGES = 16
@@ -931,7 +1039,7 @@ def retry_feedback(
     *,
     skill: bytes = b"",
 ) -> tuple[str, ...]:
-    """The checks a refused answer failed, for the node's one second attempt (D30).
+    """The checks a refused answer failed, for the node's guided retry (D30, D82).
 
     Three sources, none of them the host restating a vendor rule (invariant
     4): why the answer is not the transport, in the JSON parser's fixed words
@@ -948,6 +1056,20 @@ def retry_feedback(
     return capped(feedback_lines(contract, catalog, identity, body, skill=skill))
 
 
+def carried_answer(body: str) -> str | None:
+    """The refused answer a guided retry carries back to be corrected (D104):
+    the stored body as it crosses `BoundaryText`, or None when it is not the
+    transport (N50), holds text no reader can see, or will not cross -- then
+    the retry asks for the whole answer again, as before. Like the checks'
+    lines it goes into that one request only, never a log, refusal or row."""
+    parsed, _reason = _transport_or_reason(body)
+    if parsed is None or hides_text(body):
+        return None
+    with suppress(Refusal):
+        return BoundaryText.of(body, limit=MAX_TRANSPORT_CHARS).value
+    return None
+
+
 def feedback_lines(
     contract: VendorContract,
     catalog: Mapping[str, Any],
@@ -959,7 +1081,8 @@ def feedback_lines(
     """`retry_feedback`'s lines before the cap, most telling first: the
     transport, the host's own bounds on the text, the quotes, the front
     matter's host-owned and undeclared fields, the missing IDs, CP-0's blocker
-    cells, then the vendor's own messages."""
+    cells, the register rows a cell short or long, then the vendor's own
+    messages."""
     parsed, reason = _transport_or_reason(body)
     if parsed is None:
         return (reason,)
@@ -967,12 +1090,15 @@ def feedback_lines(
     checked = _checked(contract, catalog, identity, markdown)
     host = (
         _text_line(markdown),
-        _quote_line(text, citations),
+        _uncrossed_line(citations),
+        _dangling_line(text, len(citations)),
+        _unmarked_line(text, len(citations)),
         *_front_matter_lines(contract, identity, getattr(checked, "fields", None)),
         _absent_ids_line(contract, identity.module_id, text, skill),
         _blocker_line(contract, catalog, text)
         if identity.module_id == GATE_MODULE
         else None,
+        *_width_lines(contract, identity.module_id, text, skill),
     )
     lines = [line for line in host if line]
     lines += _vendor_lines(contract, catalog, identity, (text, checked), skill)
@@ -1170,7 +1296,9 @@ def _absent_ids_line(
         registers = contract.completeness_check.load_contract(
             skill.decode("utf-8"), module_id
         )["registers"]
-        absent = sorted(register for register in registers if register not in text)
+        absent = sorted(
+            register for register in registers if not _writes_id(text, register)
+        )
         if absent:
             shown = absent[:MAX_FEEDBACK_CITATIONS]
             rest = len(absent) - len(shown)
@@ -1182,6 +1310,236 @@ def _absent_ids_line(
                 f"host register check: the {subject} {named} {verb} nowhere"
                 " in the answer"
             )
+    return None
+
+
+def _writes_id(text: str, register: str) -> bool:
+    """Whether `text` writes `register` whole, as the vendor's locator reads an
+    ID (the `id_re` of vendor `tests/test_regressions.py:607`): not inside a
+    longer ID (`T4.1` in `T4.10`), a sentence's full stop after it ending it
+    (F520)."""
+    whole = rf"(?<![A-Za-z0-9_.]){re.escape(register)}(?![A-Za-z0-9_]|\.[A-Za-z0-9])"
+    return re.search(whole, text) is not None
+
+
+# How many register rows of another width than their header a retry is told
+# of (F509); the rest are counted on one more line.
+MAX_WIDTH_ROWS = 5
+_WIDTH_FAULT = "differs from its header"  # the vendor's own tagged-table line
+# How a width line shows the row (F522): its first cell and its last
+# `_READ_COLUMNS` columns as the vendor binds them, each cell cut at a word to
+# at most `_QUOTE_CHARS` characters.
+_READ_COLUMNS = 3
+_QUOTE_CHARS = 40
+
+
+@dataclass(frozen=True, slots=True)
+class _PipeTable:
+    """One pipe table as `find_registers` walks it: its header line's index,
+    its header, its rows as the vendor binds them, each row's own cells as
+    `_row_cells` reads them, and the table-id tag right above it, if any."""
+
+    start: int
+    header: list[str]
+    rows: list[dict[str, str]]
+    cells: tuple[tuple[str, ...], ...]
+    tag: str | None
+
+
+def _width_lines(
+    contract: VendorContract, module_id: str, text: str, skill: bytes
+) -> list[str]:
+    """Every register row whose cell count is not its header's (F509), an
+    advisory line: the vendor pads a short row with empty cells and drops a
+    long row's extra ones. Its own message names the critical cell left
+    empty and, since fork r13 (D111), the row's cell count against the
+    header's, but not the row's first cell or where its columns shift, and
+    nothing at all for a short row that empties no critical cell or for a
+    long row (LCR4 CP-3C was refused four times on it). The registers are
+    the ones `check()` binds, the cells counted by the vendor's `_row_cells`;
+    a tagged table the vendor already reports as of another width keeps its
+    own line alone. At most `MAX_WIDTH_ROWS` rows, the rest counted."""
+    if not skill or module_id == MODEL_MODULE:
+        return []
+    with suppress(Exception):  # a contract it cannot read is nothing to report
+        faults = _width_faults(contract, module_id, text, skill)
+        shown = faults[:MAX_WIDTH_ROWS]
+        lines = [
+            line
+            for fault in shown
+            if (line := _bounded("host table check", _width_message(*fault)))
+        ]
+        if rest := len(faults) - len(shown):
+            rows = "row differs" if rest == 1 else "rows differ"
+            lines.append(
+                f"host table check: {rest} more register {rows} in width from"
+                " the header"
+            )
+        return lines
+    return []
+
+
+def _width_faults(
+    contract: VendorContract, module_id: str, text: str, skill: bytes
+) -> list[tuple[str, int, tuple[str, ...], list[str]]]:
+    """(register ID, row number, cells, header) for each register row of
+    another width than its header, in the answer's order."""
+    checker = contract.completeness_check
+    loaded = checker.load_contract(skill.decode("utf-8"), module_id)
+    found = checker.find_registers(
+        text, loaded["registers"], loaded.get("retired_registers", ())
+    )
+    errors = contract.cp_tables.read_tables(text)[1]
+    tables = _pipe_tables(contract, text)
+    faults = []
+    for reg_id, (header, rows) in found.items():
+        table = next((t for t in tables if (t.header, t.rows) == (header, rows)), None)
+        if table is None or _WIDTH_FAULT in str(errors.get(table.tag, "")):
+            continue
+        faults += [
+            (table.start, n, reg_id, cells, header)
+            for n, cells in enumerate(table.cells, 1)
+            if len(cells) != len(header)
+        ]
+    return [
+        (reg_id, n, cells, header)
+        for _, n, reg_id, cells, header in sorted(faults, key=lambda f: f[:2])
+    ]
+
+
+def _pipe_tables(contract: VendorContract, text: str) -> list[_PipeTable]:
+    """Every pipe table of the answer, walked as `find_registers` walks them."""
+    tables = contract.cp_tables
+    lines = tables.unfenced_markdown(text).splitlines()
+    found: list[_PipeTable] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if (
+            not line.startswith("|")
+            or line.count("|") < 2
+            or tables.SEPARATOR_RE.match(line)
+        ):
+            i += 1
+            continue
+        header = tables._split_row(line)
+        j = i + 1
+        if (
+            j < len(lines)
+            and tables.SEPARATOR_RE.match(lines[j].strip())
+            and "|" in lines[j]
+        ):
+            j += 1
+        cells = []
+        while j < len(lines) and lines[j].strip().startswith("|"):
+            cells.append(tables._row_cells(lines[j].strip(), len(header)))
+            j += 1
+        pad = [""] * len(header)
+        rows = [
+            dict(zip(header, [*row, *pad][: len(header)], strict=False))
+            for row in cells
+        ]
+        found.append(
+            _PipeTable(
+                i,
+                header,
+                rows,
+                tuple(map(tuple, cells)),
+                _tag_above(tables.TABLE_ID_RE, lines, i),
+            )
+        )
+        i = j
+    return found
+
+
+def _tag_above(pattern: re.Pattern[str], lines: list[str], start: int) -> str | None:
+    """The table-id a tag binds to the table at `start` with nothing but
+    blank and comment lines between, as the vendor's `read_tables` binds it."""
+    for line in map(str.strip, reversed(lines[:start])):
+        if tag := pattern.fullmatch(line):
+            return tag.group(1)
+        if line and not line.startswith("<!--"):
+            return None
+    return None
+
+
+def _width_message(
+    reg_id: str, n: int, cells: tuple[str, ...], header: list[str]
+) -> str:
+    """The width line (F509), naming the row by its first cell and showing how
+    its last columns read (F522): told only "row 7 has 11 cells", LCR6's
+    CP-3C rewrote that row three times and kept it 11 wide. The quotes are the
+    model's own cells, into its retry request only, like the vendor's lines;
+    a cell that will not cross `BoundaryText` drops the quotes, never the line."""
+    size, width = len(header), len(cells)
+    first = _quoted(cells[0]) if cells else None
+    read = _read_as(cells, header) if first else None
+    row = f"{reg_id} row {n}" + (f" ({first})" if read else "")
+    last = _column(header[-1])
+    if width < size:
+        short = size - width
+        shift = (
+            f"the last column, {last}, reads empty"
+            if short == 1
+            else f"the last {short} columns, from {_column(header[-short])}, read empty"
+        )
+    else:
+        extra = width - size
+        shift = (
+            f"the cell past the last column, {last}, is dropped"
+            if extra == 1
+            else f"the {extra} cells past the last column, {last}, are dropped"
+        )
+    plain = (
+        f"{reg_id} row {n} has {width} cells under a {size}-cell header; a cell"
+        f" is missing or extra, so its later columns shift ({shift})"
+    )
+    if not read:
+        return plain
+    shown = (
+        f"{row} has {width} cells under a {size}-cell header; a cell is"
+        f" missing or extra, so its later columns shift ({shift}); as read, {read}"
+    )
+    # Past the bound `_bounded` would cut mid-quote: keep the whole sentence.
+    return shown if len(shown) <= MAX_FEEDBACK_CHARS else plain
+
+
+def _column(name: str) -> str:
+    """A header cell as a line names it: quoted, at most 64 characters."""
+    return f"'{name[:64]}'"
+
+
+def _read_as(cells: tuple[str, ...], header: list[str]) -> str | None:
+    """What the row's last `_READ_COLUMNS` columns hold as the vendor binds
+    it, and a long row's first dropped cell; None when any of those cells
+    will not cross the boundary."""
+    parts = []
+    for i in range(max(len(header) - _READ_COLUMNS, 0), len(header)):
+        quote = _quoted(cells[i]) if i < len(cells) else "nothing"
+        if quote is None:
+            return None
+        parts.append(f"{_column(header[i])} holds {quote}")
+    if len(cells) > len(header):
+        quote = _quoted(cells[len(header)])
+        if quote is None:
+            return None
+        parts.append(f"past it {quote} is dropped")
+    return ", ".join(parts[:-1]) + " and " + parts[-1] if len(parts) > 1 else parts[0]
+
+
+def _quoted(cell: str) -> str | None:
+    """One cell as a width line quotes it: whitespace collapsed, cut at a
+    word to at most `_QUOTE_CHARS` characters, or None when it hides text or
+    will not cross `BoundaryText`."""
+    text = " ".join(cell.split())
+    if len(text) > _QUOTE_CHARS:
+        head = text[: _QUOTE_CHARS + 1]
+        head = head.rsplit(" ", 1)[0] if " " in head else head
+        text = head[:_QUOTE_CHARS].rstrip(" ,;") + "…"
+    if hides_text(text):
+        return None
+    with suppress(Refusal):
+        return f"«{BoundaryText.of(text, limit=_QUOTE_CHARS + 1).value}»"
     return None
 
 
@@ -1201,23 +1559,82 @@ def _transport_or_reason(
     return None, _TRANSPORT_SHAPE
 
 
-def _quote_line(text: str, citations: Sequence[Citation]) -> str | None:
-    """Which citations the body does not quote verbatim, by number (N51)."""
-    words = _body_words(text)
-    openings = _openings(words)
-    failed = [
-        number
-        for number, citation in enumerate(citations, 1)
-        if not _quoted(words, openings, citation.matched_text)
-    ]
+def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
+    """Which citations' quotes the host could not keep as unverified
+    (`unverified_citation`), by number and never quoted: a host text check
+    that refuses the answer (D106)."""
+    failed = [n for n, c in enumerate(citations, 1) if _crossed(c.matched_text) is None]
     if not failed:
         return None
-    verb = "quotes" if len(failed) == 1 else "quote"
+    verb = "carries" if len(failed) == 1 else "carry"
     return (
-        f"host citation check: {_numbered(failed)} of {len(citations)} {verb} text"
-        " that does not appear verbatim in the Markdown body (numbered from 1 in"
-        " the order given)"
+        f"host citation check: {_numbered(failed)} of {len(citations)} {verb} a"
+        " control, bidirectional, surrogate or invisible character, or runs"
+        f" past {GROUP_WIDTH:,} characters, longer than any evidence line; copy"
+        " each excerpt as the evidence shows it (numbered from 1 in the order"
+        " given)"
     )
+
+
+def _dangling_line(text: str, count: int) -> str | None:
+    """The markers that name no citation (D107), each as `[C<n>]` as written
+    -- the model's own number, cut past 12 digits, never its text -- and the
+    count they must stay within: the check that refused the answer
+    (`parse_response`)."""
+    dangling = _dangling(text, count)
+    if not dangling:
+        return None
+    shown = [
+        f"[C{n if len(n) <= 12 else n[:12] + '...'}]"
+        for n in dangling[:MAX_FEEDBACK_CITATIONS]
+    ]
+    rest = len(dangling) - len(shown)
+    more = f" and {rest} more" if rest else ""
+    names = "it names" if len(dangling) == 1 else "they name"
+    cited = "citation" if count == 1 else "citations"
+    return (
+        f"host marker check: the Markdown body writes {', '.join(shown)}{more},"
+        f" but the answer has {count} {cited}, so"
+        f" {names} none; a marker [C<n>] names the citation at place n of the"
+        f" list, from [C1] to [C{count}]"
+    )
+
+
+def _unmarked_line(text: str, count: int) -> str | None:
+    """Which citations no marker names, by number (D107), and how many
+    bracketed forms the body writes that read like a marker and are not one
+    (`_NEAR_MARKER`). Advisory: such a citation is kept, not linked to a
+    statement, and never refuses an answer, so the line rides only along a
+    retry some other check earned (`ADVISORY`)."""
+    named = frozenset(markers(text))
+    failed = [n for n in range(1, count + 1) if n not in named]
+    if not failed:
+        return None
+    near = sum(
+        MARKER.fullmatch(found.group()) is None
+        for found in _NEAR_MARKER.finditer(body(text))
+    )
+    one = len(failed) == 1
+    hint = (
+        f"; the body writes {near} bracketed {'form' if near == 1 else 'forms'}"
+        " the host does not read as a marker: write each exactly as [C3], or"
+        " [C3, C4] for several, an upper-case C and no space or range"
+        if near
+        else ""
+    )
+    return (
+        f"host marker check: {_numbered(failed)} of {count} {'is' if one else 'are'}"
+        " named by no [C<n>] marker in the Markdown body (numbered from 1 in the"
+        f" order given){hint}{ADVISORY}"
+    )
+
+
+# What closes each citation line a retry carries (D106): advisory, never the
+# reason the answer was refused.
+ADVISORY = (
+    "; advisory only: the host keeps such a citation, marked unverified or not"
+    " linked to a statement, and does not refuse an answer for it"
+)
 
 
 def _numbered(failed: Sequence[int]) -> str:
@@ -1231,17 +1648,21 @@ def _numbered(failed: Sequence[int]) -> str:
     return f"citation {named}" if len(failed) == 1 else f"citations {named}"
 
 
-# What anchoring found for a citation, singular and plural (N52).
+# What anchoring found for a citation, singular and plural (N52). A citation
+# refused `CITATION_NOT_LOCATED` that the host's search places (`LineHint`)
+# is told where instead (D82); this wording is for the rest.
 _ANCHORING = (
     (
         RefusalCode.CITATION_NOT_LOCATED,
-        "is not one evidence line of its cited page",
-        "are not each one evidence line of their cited pages",
+        "is not an exact excerpt of one evidence line of its cited page",
+        "are not each an exact excerpt of one evidence line of their cited pages",
     ),
     (
         RefusalCode.CITATION_AMBIGUOUS,
-        "is on its cited page more than once",
-        "are on their cited pages more than once",
+        "occurs more than once on its cited page; quote a longer excerpt that"
+        " occurs once",
+        "occur more than once on their cited pages; quote longer excerpts that"
+        " each occur once",
     ),
     (
         RefusalCode.CITATION_NOT_DELIVERED,
@@ -1249,23 +1670,305 @@ _ANCHORING = (
         "name a page or line this node was not given",
     ),
 )
+_ABSENT = (
+    "is in no evidence line of its source this node was given",
+    "are in no evidence line of their sources this node was given",
+)
+# How many words of the line a near miss or a dropped-cells row begins with
+# are shown (D82, F493, F495).
+HINT_WORDS = 12
+# How many of its last words show the line a quote runs past the end of (F496).
+END_WORDS = 8
+# The most the anchoring line may hold once it places citations (D82): the
+# room of four vendor check lines, so a retry's prompt grows by a bounded
+# amount however many or long the placed lines are.
+MAX_ANCHORING_CHARS = 4 * MAX_FEEDBACK_CHARS
 
 
-def anchoring_line(verdicts: Sequence[RefusalCode | None]) -> str | None:
+@dataclass(frozen=True, slots=True)
+class LineHint:
+    """Where the host's own search placed a citation refused
+    `CITATION_NOT_LOCATED` (D82, `caos.evidence.citations.find_line`): that
+    it holds fewer than `MIN_EXCERPT_WORDS` words of a longer line (`short`,
+    D105), the other delivered pages it is an excerpt of a line of
+    (`pages`), that no delivered line holds it (`absent`), or that it runs
+    from one delivered line onto the next (`across`). Nothing set: found,
+    but not as one excerpt, so nothing is said beyond the rule. `repeated`:
+    a citation refused `CITATION_AMBIGUOUS` is a whole delivered line of its
+    cited page. `near`: the page of the one delivered line of its
+    source the quote nearly matches (F493, `near_line`), `begins` then that
+    line's first words, and `moved` whether that page is not the cited
+    one; with `cells`, that line is a table row the quote left cells out of
+    (F495, `cells_line`); with `ends` set, the quote runs past the end of
+    that line, whose last `END_WORDS` words `ends` holds (F496,
+    `overrun_line`), and with `short` fewer than `MIN_EXCERPT_WORDS` of its
+    words lie within it. `unknown_source`: a citation refused
+    `CITATION_NOT_DELIVERED` names this source_id, not one of the request's
+    own (F495), and `held_by` the one delivered source holding its quote as
+    a whole line of its cited page, if exactly one does."""
+
+    begins: str = ""
+    pages: tuple[int, ...] = ()
+    absent: bool = False
+    short: bool = False
+    repeated: bool = False
+    across: bool = False
+    near: int | None = None
+    moved: bool = False
+    cells: bool = False
+    ends: str = ""
+    unknown_source: str = ""
+    held_by: str = ""
+
+
+def anchoring_line(
+    verdicts: Sequence[RefusalCode | None], hints: Sequence[LineHint | None] = ()
+) -> str | None:
     """Which citations did not anchor in the delivered evidence, by number and
-    reason, never by text (N52): `verdicts` holds each citation's own
-    anchoring refusal, `None` for one that anchored."""
+    reason: `verdicts` holds each citation's own anchoring refusal, `None`
+    for one that anchored, and `hints` what the host's search found of each
+    refused `CITATION_NOT_LOCATED`, in the same order.
+
+    N52 said "never by text"; the owner amended it on 2 October 2026 (D82):
+    a quote of fewer than `MIN_EXCERPT_WORDS` words of a longer line is told
+    to quote at least that many, or the whole line if shorter (D105), and
+    one that is an excerpt of a line of another delivered page is told that
+    page; one
+    that nearly matches exactly one delivered line of its source is shown
+    that line's page and first words and told to copy it exactly, and to
+    cite that page when it is not the cited one (F493); one that left cells
+    out of exactly one delivered row is shown that row and told to quote
+    every cell (F495); one that runs past the end of exactly one delivered
+    line is shown that line's last words and told to stop where it ends
+    (F496). At
+    most `MAX_FEEDBACK_CITATIONS` citations are placed; the rest, and any the
+    search could not place, keep the rule's wording. A citation refused
+    `CITATION_NOT_DELIVERED` whose hint names an `unknown_source` is told
+    that source_id is not one of the request's, grouped by that id (F495).
+    Past `MAX_ANCHORING_CHARS`, placements, these included, are dropped from
+    the last back, each citation keeping its number under the rule's wording.
+
+    The line ends by naming every citation that anchored, to be kept exactly
+    as it was, and the rule any added or changed citation must meet (F491):
+    a retry that rewrote its whole citation list traded each fixed quote for
+    a new partial one. Past `MAX_ANCHORING_CHARS` the kept list is dropped
+    first, before any placement; the rule stays.
+
+    Advisory since D106: a citation that does not anchor is kept as
+    unverified and never refuses an answer, so the retry that carries this
+    line was earned by another check, and says so (`canonical._anchoring_line`
+    adds `ADVISORY`).
+    """
+    kept = [n for n, found in enumerate(verdicts, 1) if found is None]
+    lost = [
+        n
+        for n, found in enumerate(verdicts, 1)
+        if found is RefusalCode.CITATION_NOT_LOCATED
+    ]
+    placed = _placements(verdicts, lost, hints)
+    line = _anchoring_text(verdicts, lost, placed, kept)
+    if line is not None and len(line) > MAX_ANCHORING_CHARS:
+        line = _anchoring_text(verdicts, lost, placed, ())
+    while placed and line is not None and len(line) > MAX_ANCHORING_CHARS:
+        del placed[next(reversed(placed))]
+        line = _anchoring_text(verdicts, lost, placed, ())
+    return line
+
+
+def _placements(
+    verdicts: Sequence[RefusalCode | None],
+    lost: Sequence[int],
+    hints: Sequence[LineHint | None],
+) -> dict[int, LineHint]:
+    """The citations `anchoring_line` places, by number in order: the first
+    `MAX_FEEDBACK_CITATIONS` refused `CITATION_NOT_LOCATED` whose hint names
+    something to fix, each refused `CITATION_AMBIGUOUS` that is a whole line
+    (`repeated`), and each refused `CITATION_NOT_DELIVERED` naming a source
+    the request never offered (`unknown_source`)."""
+    told = dict(zip(range(1, len(verdicts) + 1), hints, strict=False))
+    placed = {
+        n: hint
+        for n in lost[:MAX_FEEDBACK_CITATIONS]
+        if (hint := told.get(n)) is not None
+        and (
+            hint.near is not None
+            or hint.pages
+            or hint.absent
+            or hint.short
+            or hint.across
+        )
+    }
+    for n, found in enumerate(verdicts, 1):
+        hint = told.get(n)
+        if hint is not None and (
+            (found is RefusalCode.CITATION_AMBIGUOUS and hint.repeated)
+            or (found is RefusalCode.CITATION_NOT_DELIVERED and hint.unknown_source)
+        ):
+            placed[n] = hint
+    return dict(sorted(placed.items()))
+
+
+def _anchoring_text(
+    verdicts: Sequence[RefusalCode | None],
+    lost: Sequence[int],
+    placed: Mapping[int, LineHint],
+    kept: Sequence[int],
+) -> str | None:
+    """`anchoring_line` with exactly the citations in `placed` placed and
+    those in `kept` named to keep."""
+    total = len(verdicts)
     parts = [
-        f"{_numbered(failed)} of {len(verdicts)} {one if len(failed) == 1 else many}"
-        for code, one, many in _ANCHORING
-        if (failed := [n for n, found in enumerate(verdicts, 1) if found is code])
+        _placed(n, total, hint)
+        for n, hint in placed.items()
+        if not (hint.absent or hint.unknown_source)
+    ]
+    absent = [n for n, hint in placed.items() if hint.absent]
+    if absent:
+        parts.append(_counted(absent, total, *_ABSENT))
+    parts += _unknown_sources(placed, total)
+    groups = [([n for n in lost if n not in placed], *_ANCHORING[0][1:])] + [
+        (
+            [
+                n
+                for n, found in enumerate(verdicts, 1)
+                if found is code and n not in placed
+            ],
+            one,
+            many,
+        )
+        for code, one, many in _ANCHORING[1:]
+    ]
+    parts += [
+        _counted(failed, total, one, many) for failed, one, many in groups if failed
     ]
     if not parts:
         return None
+    if kept:
+        parts.append(f"keep {_listed(kept)} exactly as {_KEEP[len(kept) > 1]}")
+    parts.append(_RULE)
     return (
         "host anchoring check: "
         + "; ".join(parts)
         + " (numbered from 1 in the order given)"
+    )
+
+
+# The rule a retry's added or changed citation must meet, ending every
+# anchoring line (F491), and how a kept citation is told to stay.
+_RULE = (
+    "any citation you add or change must be an exact excerpt of one evidence"
+    f" line of its cited page, at least {MIN_EXCERPT_WORDS} consecutive words or"
+    " the whole line if shorter"
+)
+_KEEP = ("it was", "they were")
+
+
+def _listed(numbers: Sequence[int]) -> str:
+    """`citation 2`, `citations 2 and 5`, `citations 1, 2 and 3`: every
+    number, none counted, since a kept citation must be named to be kept;
+    `MAX_ANCHORING_CHARS` bounds the list instead (F491)."""
+    shown = [str(number) for number in numbers]
+    if len(shown) == 1:
+        return f"citation {shown[0]}"
+    return f"citations {', '.join(shown[:-1])} and {shown[-1]}"
+
+
+def _counted(failed: Sequence[int], total: int, one: str, many: str) -> str:
+    """`citation 2 of 5 is ...` or `citations 2 and 3 of 5 are ...`."""
+    return f"{_numbered(failed)} of {total} {one if len(failed) == 1 else many}"
+
+
+def _unknown_sources(placed: Mapping[int, LineHint], total: int) -> list[str]:
+    """One clause per source_id the request never offered (F495), its
+    citations grouped, and the one delivered source holding their lines
+    when each names the same one."""
+    named: dict[tuple[str, str], list[int]] = {}
+    for n, hint in placed.items():
+        if hint.unknown_source:
+            named.setdefault((hint.unknown_source, hint.held_by), []).append(n)
+    clauses = []
+    for (source, held_by), numbers in named.items():
+        many = len(numbers) > 1
+        clause = (
+            f"{_numbered(numbers)} of {total} {'name' if many else 'names'}"
+            f" source_id {source}, which is not one of this request's sources;"
+            " use one of the source_id values listed in the final check"
+        )
+        if held_by:
+            lines = "the lines are" if many else "the line is"
+            clause += f", and {lines} in source {held_by}"
+        clauses.append(clause)
+    return clauses
+
+
+def _placed(number: int, total: int, hint: LineHint) -> str:
+    """One placed citation's clause (D82): the line it runs past the end of,
+    nearly matches or left cells out of (`_near_clause`), a whole line found
+    more than once on its page, a run onto the next line, too few words of
+    its line (D105, fix round 1), or the other pages it is an excerpt of a
+    line of, at most `MAX_FEEDBACK_CITATIONS` of them named."""
+    cited = f"citation {number} of {total}"
+    if hint.near is not None:
+        return _near_clause(cited, hint)
+    if hint.repeated:
+        return (
+            f"{cited} is a whole evidence line that appears more than once on its"
+            " cited page, so it cannot be cited there; cite another line, or a"
+            " longer excerpt where one exists"
+        )
+    if hint.across:
+        return (
+            f"{cited} runs from one evidence line onto the next; quote within one"
+            f" line: at least {MIN_EXCERPT_WORDS} consecutive words of it, or the"
+            " whole line if shorter"
+        )
+    if hint.short:
+        return (
+            f"{cited} quotes fewer than {MIN_EXCERPT_WORDS} words of its line;"
+            f" quote at least {MIN_EXCERPT_WORDS} consecutive words, or the whole"
+            " line if shorter"
+        )
+    shown = [str(page) for page in hint.pages[:MAX_FEEDBACK_CITATIONS]]
+    rest = len(hint.pages) - len(shown)
+    named = ", ".join(shown) + (f" and {rest} more" if rest else "")
+    if not rest and len(shown) > 1:
+        named = ", ".join(shown[:-1]) + f" and {shown[-1]}"
+    return (
+        f"{cited} is an excerpt of an evidence line of"
+        f" {'page' if len(hint.pages) == 1 else 'pages'} {named}, not of its"
+        " cited page"
+    )
+
+
+def _near_clause(cited: str, hint: LineHint) -> str:
+    """The clause of a citation placed by one delivered line (`near`): the
+    line it runs past the end of (F496) -- told to keep at least
+    `MIN_EXCERPT_WORDS` of it when fewer lie within it (`short`) -- the row
+    it left cells out of (F495), or the line it nearly matches (F493)."""
+    moved = f", and cite page {hint.near}" if hint.moved else ""
+    if hint.ends:
+        where = f"page {hint.near}," + (" not its cited page," if hint.moved else "")
+        keep = (
+            f", keeping at least {MIN_EXCERPT_WORDS} words of it, or quote the"
+            " whole line"
+            if hint.short
+            else ""
+        )
+        return (
+            f"{cited} runs past the end of the evidence line of {where} which"
+            f' ends "{hint.ends}"; stop where the line ends{keep}{moved}'
+            " (text after it is a separate evidence line)"
+        )
+    where = f"page {hint.near}" + (", not its cited page," if hint.moved else "")
+    if hint.cells:
+        return (
+            f"{cited} leaves out cells of the evidence line of {where} that"
+            f' begins "{hint.begins}"; quote the whole row, every cell{moved}'
+        )
+    return (
+        f"{cited} nearly matches the evidence line of {where} that begins"
+        f' "{hint.begins}" but differs in wording; copy that line exactly,'
+        f" character for character{moved}"
     )
 
 
@@ -1313,12 +2016,18 @@ def _vendor_lines(
     return [line for label, message in found if (line := _bounded(label, message))]
 
 
+# The vendor's two messages for an interface table no tag binds: missing, or
+# (fork r11, D100) written under its register heading without its
+# `<!-- table-id: -->` comment.
+_UNBOUND_INTERFACE = ("interface table missing", "comment not found above the")
+
+
 def _consequence(message: str) -> int:
     """A table that does not parse first, the registers it then voids last:
     one malformed interface table makes every one of them "missing"."""
     if "differs from its header" in message or "separator" in message:
         return 0
-    return 2 if "interface table missing" in message else 1
+    return 2 if any(text in message for text in _UNBOUND_INTERFACE) else 1
 
 
 def _research_messages(
@@ -1399,19 +2108,111 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     `_decoded_record` reads it back as the empty tuple, so `record_bytes` of a
     decoded record is the bytes it was decoded from. `citation_rule` is kept
     the same way (N28): written only when it is not `ANY_RUN`, the rule every
-    record stored before the field existed was anchored by.
+    record stored before the field existed was anchored by. A citation's
+    `cited_page` likewise: written only where the host re-anchored the quote
+    at its true page (D94). And its `line_text` (D105): held, and written,
+    for every citation of an `EXCERPT` record and for no other
+    (`_lines_held`), so every record stored before it is the same bytes; a
+    record `_lines_held` refuses raises `ValueError` rather than being
+    written without its lines. D106's two fields likewise (`_held`): a
+    citation's `linked` is written only when false, and `unverified` only
+    when it has entries, so every record stored before them is the same
+    bytes. D107's `marker` is written where it is set, which is on every
+    citation accepted since D107 and on none before (`_markers_held`).
     """
+    _held(record.citations, record.unverified, record.citation_rule)
     document: dict[str, Any] = {"format": RECORD_FORMAT, **asdict(record)}
     if not document["projections"]["blockers"]:
         del document["projections"]["blockers"]
     if document["citation_rule"] == ANY_RUN:
         del document["citation_rule"]
-    if document["identity"]["research_brief"] is None:
-        del document["identity"]["research_brief"]
+    for optional in ("research_brief", "current_command"):
+        if document["identity"][optional] is None:
+            del document["identity"][optional]
     for citation in document["citations"]:
-        for box in citation["bboxes"]:
-            box.update({key: float(box[key]) for key in ("x0", "y0", "x1", "y1")})
+        _written_citation(citation, record.citation_rule)
+    document["unverified"] = [_unverified_document(e) for e in record.unverified]
+    if not document["unverified"]:
+        del document["unverified"]
     return canonical_json(document).encode("utf-8")
+
+
+def _unverified_document(entry: UnverifiedCitation) -> dict[str, Any]:
+    """One unverified citation as written: `linked` only when false (D106),
+    `marker` only when set (D107)."""
+    document: dict[str, Any] = {
+        "source_id": str(entry.source_id),
+        "page": entry.page,
+        "matched_text": entry.matched_text,
+        "code": entry.code.value,
+    }
+    if not entry.linked:
+        document["linked"] = False
+    if entry.marker is not None:
+        document["marker"] = entry.marker
+    return document
+
+
+def blocked_citations_bytes(
+    citations: tuple[AnchoredCitation, ...], unverified: tuple[UnverifiedCitation, ...]
+) -> bytes:
+    """A validated Blocked answer's citations as the host judged them (D106):
+    its anchored ones, each with its line and `linked` as a record writes
+    them, and its unverified ones, both lists always written. A Blocked
+    answer writes no record, so this is what the blocked view reads to show
+    each quote verified or unverified (`read_blocked_citations`)."""
+    _held(citations, unverified, EXCERPT)
+    anchored = [asdict(citation) for citation in citations]
+    for citation in anchored:
+        _written_citation(citation, EXCERPT)
+    return canonical_json(
+        {
+            "format": BLOCKED_FORMAT,
+            "citation_rule": EXCERPT,
+            "citations": anchored,
+            "unverified": [_unverified_document(e) for e in unverified],
+        }
+    ).encode("utf-8")
+
+
+def read_blocked_citations(
+    blobs: BlobStore, citations_sha256: str
+) -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
+    """The citations `blocked_citations_bytes` stored, or
+    `ARTIFACT_RECORD_MISMATCH` for bytes that are not its canonical form."""
+
+    def read() -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
+        data = blobs.get(citations_sha256)
+        document = _closed(
+            strict_json(data.decode("utf-8")),
+            frozenset({"format", "citation_rule", "citations", "unverified"}),
+        )
+        if (document["format"], document["citation_rule"]) != (BLOCKED_FORMAT, EXCERPT):
+            raise ValueError
+        citations = _each(_anchored)(document["citations"])
+        unverified = _each(_unverified)(document["unverified"])
+        if blocked_citations_bytes(citations, unverified) != data:
+            raise ValueError
+        return citations, unverified
+
+    return _or_refuse(RefusalCode.ARTIFACT_RECORD_MISMATCH, read)
+
+
+def _written_citation(citation: dict[str, Any], rule: CitationRule) -> None:
+    """One anchored citation as `record_bytes` writes it: `cited_page` only
+    when set (D94), `line_text` only under `EXCERPT` (D105), `linked` only
+    when false (D106), `marker` only when set (D107), and every coordinate a
+    float."""
+    if citation["cited_page"] is None:
+        del citation["cited_page"]
+    if citation["marker"] is None:
+        del citation["marker"]
+    if rule != EXCERPT:
+        del citation["line_text"]
+    if citation["linked"]:
+        del citation["linked"]
+    for box in citation["bboxes"]:
+        box.update({key: float(box[key]) for key in ("x0", "y0", "x1", "y1")})
 
 
 def _exact[T](kind: type[T]) -> Callable[[object], T]:
@@ -1456,10 +2257,12 @@ def _with_blockers(value: object) -> dict[str, Any]:
 
 def _with_research(value: object) -> dict[str, Any]:
     """Supply the absent `research_brief` an identity omits (every module but
-    CP-DR, and every record written before §96), read back as None."""
-    if not isinstance(value, dict) or "research_brief" in value:
-        return value if isinstance(value, dict) else {}
-    return {**value, "research_brief": None}
+    CP-DR, and every record written before §96), and the absent
+    `current_command` (every module the run's command does not name, and every
+    record written before D109), each read back as None."""
+    if not isinstance(value, dict):
+        return {}
+    return {"research_brief": None, "current_command": None, **value}
 
 
 def _with_rule(value: dict[str, Any]) -> dict[str, Any]:
@@ -1491,18 +2294,164 @@ _rect = _each(
 )
 
 
+def _anchored(item: object) -> AnchoredCitation:
+    """A stored citation. An absent `cited_page` is None (every citation found
+    where it was cited, D94); a present one is another page than `page`. An
+    absent `line_text` is None; a present one is the line an excerpt
+    anchored in (D105), which only an `EXCERPT` record holds
+    (`_lines_held`)."""
+    if not isinstance(item, dict):
+        raise TypeError
+    cited = item.get("cited_page")
+    if "cited_page" in item and (
+        type(cited) is not int
+        or not 1 <= cited <= MAX_PAGE
+        or cited == item.get("page")
+    ):
+        raise ValueError
+    line = item.get("line_text")
+    if "line_text" in item and (type(line) is not str or not line):
+        raise ValueError
+    # Written only when false (D106): a present `true` is not this host's.
+    if "linked" in item and item["linked"] is not False:
+        raise ValueError
+    return _typed(
+        AnchoredCitation,
+        {
+            **item,
+            "cited_page": cited,
+            "line_text": line,
+            "linked": "linked" not in item,
+            "marker": _marker(item),
+        },
+        page=_int,
+        bboxes=_rect,
+        cited_page=lambda value: value,
+        line_text=lambda value: value,
+        linked=lambda value: value,
+        marker=lambda value: value,
+    )
+
+
+def _marker(item: dict[str, Any]) -> int | None:
+    """A stored citation's `marker` (D107): absent is None, a citation
+    accepted before markers; a present one is a place in a list."""
+    if "marker" not in item:
+        return None
+    if type(item["marker"]) is not int or not 1 <= item["marker"] <= MAX_CITATIONS:
+        raise ValueError
+    return item["marker"]
+
+
+def _unverified(item: object) -> UnverifiedCitation:
+    """A stored unverified citation (D106): the wire's own checks on its
+    locator and quote (`_requested`), a quote already as it crosses
+    `BoundaryText`, one of `UNVERIFIED_CODES`, and `linked` only as false
+    (absent, linked)."""
+    if not isinstance(item, dict) or item.get("linked", False) is not False:
+        raise ValueError  # written only when false: a present `true` is not ours
+    optional = {"linked", "marker"}
+    entry = _closed(
+        {k: v for k, v in item.items() if k not in optional}, _UNVERIFIED_KEYS
+    )
+    citation = _requested({key: entry[key] for key in WIRE_CITATION_KEYS})
+    code = next((c for c in UNVERIFIED_CODES if entry["code"] == c.value), None)
+    if code is None or type(entry["code"]) is not str:
+        raise ValueError
+    if _crossed(citation.matched_text) != citation.matched_text:
+        raise ValueError
+    return UnverifiedCitation(
+        citation.source_id,
+        citation.page,
+        citation.matched_text,
+        code,
+        "linked" not in item,
+        _marker(item),
+    )
+
+
+def _held(
+    citations: tuple[AnchoredCitation, ...],
+    unverified: tuple[UnverifiedCitation, ...],
+    rule: CitationRule,
+) -> None:
+    """`_lines_held` on the anchored citations alone, and D106's shape:
+    `ValueError` for a record with no citation of either kind or more than
+    `MAX_CITATIONS` of both, or one not under `EXCERPT` that holds an
+    unverified citation or an anchored one not linked to a statement --
+    only an answer accepted since D106 can, and it is under `EXCERPT`."""
+    _lines_held(citations, rule)
+    if not 1 <= len(citations) + len(unverified) <= MAX_CITATIONS:
+        raise ValueError
+    unlinked = any(not citation.linked for citation in citations)
+    if rule != EXCERPT and (unverified or unlinked):
+        raise ValueError
+    _markers_held(citations, unverified, rule)
+
+
+def _markers_held(
+    citations: tuple[AnchoredCitation, ...],
+    unverified: tuple[UnverifiedCitation, ...],
+    rule: CitationRule,
+) -> None:
+    """`ValueError` unless no citation holds a `marker` -- a record from
+    before D107 -- or every one does under `EXCERPT`, each list in its
+    answer order and the two together exactly the places 1 to n: so each
+    marker the body writes names one citation, anchored or not (D107)."""
+    places = [c.marker for c in citations] + [e.marker for e in unverified]
+    numbers = [place for place in places if place is not None]
+    if not numbers:
+        return
+    anchored, kept = numbers[: len(citations)], numbers[len(citations) :]
+    if (
+        rule != EXCERPT
+        or len(numbers) != len(places)
+        or sorted(numbers) != list(range(1, len(numbers) + 1))
+        or anchored != sorted(anchored)
+        or kept != sorted(kept)
+    ):
+        raise ValueError
+
+
+def _lines_held(citations: tuple[AnchoredCitation, ...], rule: CitationRule) -> None:
+    """`ValueError` unless every citation holds its line under `EXCERPT` and
+    none does under any other rule (D105), and each held line could hold its
+    quote (`within_line`): a line missing from an excerpt, held beside a
+    quote that is its own line or no line, or one the quote cannot come
+    from, is not one this host wrote -- refused when a record is read, and
+    when one is written (fix round 1), never silently dropped. That the
+    line is the one the quote anchors in is the proof's to re-derive."""
+    held = [citation.line_text is not None for citation in citations]
+    if (rule == EXCERPT and not all(held)) or (rule != EXCERPT and any(held)):
+        raise ValueError
+    for citation in citations:
+        if citation.line_text and not within_line(
+            citation.matched_text, citation.line_text
+        ):
+            raise ValueError
+
+
 def _decoded_record(data: bytes) -> CanonicalRecord:
     document = strict_json(data.decode("utf-8"))
     if not isinstance(document, dict) or document.pop("format", None) != RECORD_FORMAT:
         raise ValueError
-    citations = _each(
-        lambda item: _typed(AnchoredCitation, item, page=_int, bboxes=_rect)
-    )(document.get("citations"))
-    if not citations:
+    citations = _each(_anchored)(document.get("citations"))
+    # Written only when it has entries (D106): a present empty list is not
+    # this host's.
+    if document.get("unverified", None) == []:
         raise ValueError
+    unverified = _each(_unverified)(document.setdefault("unverified", []))
+    # Only `REANCHORING_RULES` re-anchor (D94): a `cited_page` under any
+    # other rule is not one this host wrote.
+    rule = _citation_rule(_with_rule(document)["citation_rule"])
+    reanchored = any(citation.cited_page is not None for citation in citations)
+    if reanchored and rule not in REANCHORING_RULES:
+        raise ValueError
+    _held(citations, unverified, rule)
     return _typed(
         CanonicalRecord,
         _with_rule(document),
+        unverified=lambda _: unverified,
         citation_rule=_citation_rule,
         identity=lambda item: _typed(
             HostIdentity,
@@ -1510,6 +2459,7 @@ def _decoded_record(data: bytes) -> CanonicalRecord:
             ordinal=_int,
             upstream=_each(lambda ref: _typed(UpstreamRef, ref)),
             research_brief=_optional_str,
+            current_command=_optional_str,
         ),
         lineage=_each(lambda ref: _typed(LineageRef, ref)),
         projections=lambda item: _typed(

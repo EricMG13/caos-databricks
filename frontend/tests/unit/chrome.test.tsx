@@ -407,8 +407,9 @@ describe("the section's views", () => {
     expect(tab).toHaveAttribute("id", "tab-route");
     expect(tab).toHaveAttribute("aria-selected", "true");
     // The active pill has an edge as well as a fill, which alone all but
-    // vanished on the dark page (brief 6.12).
-    expect(tab.className).toContain("data-active:border-border!");
+    // vanished on the dark page (brief 6.12): the selected pair (D122).
+    expect(tab.className).toContain("data-active:border-selected-border!");
+    expect(tab.className).toContain("data-active:bg-selected!");
     render(
       <SectionPanel tab="route">
         <p>panel body</p>

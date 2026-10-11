@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from pathlib import Path
 
 import ormsgpack
@@ -14,6 +15,8 @@ import psycopg
 import pytest
 from conftest import login_role
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from psycopg import sql
+from psycopg.conninfo import conninfo_to_dict
 from psycopg_pool import ConnectionPool, PoolTimeout
 
 from caos.graph import checkpoint
@@ -389,3 +392,40 @@ def test_a_pooled_checkpoint_connection_carries_socket_and_statement_bounds(
     }
     assert checkpoint.STATEMENT_TIMEOUT_MS == 30_000
     assert bound == {"statement_timeout": "30s"}
+
+
+def test_a_pooled_checkpoint_session_is_never_ended_for_being_idle(
+    empty_database: str,
+) -> None:
+    """D117 round 2: the pool opens its own connections and so never took
+    `caos.store.IDLE_SESSION_SET`; with the database ending idle sessions
+    every pooled one was ended between checkpoint writes and the pool timed
+    out handing one out. Its sessions turn the bound off as the store's do."""
+    db = conninfo_to_dict(empty_database)["dbname"]
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("ALTER DATABASE {} SET idle_session_timeout = 300").format(
+                sql.Identifier(str(db))
+            )
+        )
+    saver = checkpointer(empty_database)
+    try:
+        pool = getattr(saver, "conn", None)
+        assert isinstance(pool, ConnectionPool)
+        with pool.connection() as pooled:
+            shown = pooled.execute("SHOW idle_session_timeout").fetchone()
+            first = pooled.info.backend_pid
+        time.sleep(1.0)
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            alive = {
+                pid
+                for (pid,) in admin.execute(
+                    "SELECT pid FROM pg_stat_activity WHERE datname = %s", (db,)
+                ).fetchall()
+            }
+        with pool.connection(timeout=5.0) as pooled:
+            assert pooled.execute("SELECT 1").fetchone() == {"?column?": 1}
+    finally:
+        close_checkpointer(saver)
+    assert shown == {"idle_session_timeout": "0"}
+    assert first in alive, "the server ended an idle pooled session"

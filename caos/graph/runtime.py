@@ -19,8 +19,9 @@ lived to record it (`caos/store/budget.py`).
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -43,11 +44,12 @@ from caos.graph.route import (
 )
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import (
+    GUIDED_RETRIES,
     SECOND_ATTEMPT_CODES,
     Replayed,
     Verdict,
     accepted_projections,
-    blocked_verdict,
+    drop_reattempt_due,
     replay_billed,
     second_attempt_due,
     unexplained_charge,
@@ -55,6 +57,7 @@ from caos.methodology.canonical import (
 from caos.methodology.invocation import named_objects
 from caos.methodology.verification import AcceptedRow
 from caos.pricing import ModelPrice, bills_at, priced_request, worst_case
+from caos.provider import context_notice
 from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import StoreConnection
 from caos.store.budget import ceiling_of, reserve
@@ -62,6 +65,7 @@ from caos.store.gates import execution_input
 
 # `artifact_digests` is re-exported: it now lives in the store (no import cycle).
 from caos.store.outcomes import (
+    DROP_REATTEMPTS,
     accepted_rows,
     execution_reads,
     record_refusal,
@@ -70,6 +74,7 @@ from caos.store.outcomes import (
 from caos.store.outcomes import artifact_digests as artifact_digests
 from caos.store.runs import (
     Accepted,
+    BlockingVerdict,
     accept_attempt,
     block_run,
     complete_run,
@@ -179,6 +184,12 @@ def run_route(
     if not bills_at(execution.provider, execution.price):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     _affordable(conn, run_id, execution.price)
+    # D116: a model with no declared context runs under the transport
+    # ceiling alone, and the run says so once, by the endpoint's name. One
+    # write; a stderr that cannot take it is passed over (F513's fail-open).
+    if (notice := context_notice(execution.provider.model)) is not None:
+        with suppress(Exception):  # fail-open, as F513's line (D116)
+            sys.stderr.write(notice + "\n")
     route = _execution_route(conn, run_id, route, execution.bundle)
     # Read once from verified bundle bytes, handed to the pure engine (§46.1).
     named = named_objects(execution.bundle, route)
@@ -377,37 +388,63 @@ def _with_second_attempt(
     run_id: UUID,
     route_node_id: str,
 ) -> str:
-    """One node's pass, and its one second attempt when the ledger gives it.
+    """One node's pass, and its guided retries while the ledger gives them.
 
-    An answer refused with one of `SECOND_ATTEMPT_CODES` earns the node one
-    second attempt (D30, the owner's choice under N32; N52): the node's pass
-    runs once more, and the ledger, not this frame, says the attempt it makes
-    is that one -- reserved and priced like any other, carrying what the checks
-    reported. A second refusal, or any other code, is raised; a second attempt
-    the ceiling cannot pay for leaves the first refusal standing, since that is
-    what the answer was.
+    An answer refused with one of `SECOND_ATTEMPT_CODES` earns the node a
+    guided retry (D30, the owner's choice under N32; N52), at most
+    `GUIDED_RETRIES` of them (D82): the node's pass runs once more, and the
+    ledger, not this frame, says the attempt it makes is one -- reserved and
+    priced like any other, carrying what the checks reported on the attempt
+    before it. A call the provider declared failed before it answered
+    (`PROVIDER_UNAVAILABLE`, a declared drop) earns the node one automatic
+    re-attempt in all (D110), gated the same way: a fresh attempt and a
+    fresh reservation beside the dropped one's, which is never released.
+    A refusal the ledger gives nothing, or any other code, is raised; a
+    retry the ceiling cannot pay for leaves the refusal before it standing,
+    since that is what the call was. The passes are bounded here too, so a
+    refusal that wrote no attempt cannot loop.
     """
-    try:
-        return one_pass(route_node_id)
-    except Refusal as refused:
-        if refused.code not in SECOND_ATTEMPT_CODES or not _second_due(
-            conn, run_id, route_node_id
-        ):
-            raise
-        first = refused.code
-    try:
-        return one_pass(route_node_id)
-    except Refusal as again:
-        if again.code is not RefusalCode.BUDGET_CEILING_REACHED:
-            raise
-    raise Refusal(first)
+    standing: list[RefusalCode] = []
+    for _pass in range(1 + GUIDED_RETRIES + DROP_REATTEMPTS):
+        try:
+            return one_pass(route_node_id)
+        except Refusal as refused:
+            unpaid = refused.code is RefusalCode.BUDGET_CEILING_REACHED
+            if standing and unpaid:
+                break
+            if not _again(conn, run_id, route_node_id, refused.code):
+                raise
+            standing.append(refused.code)
+    raise Refusal(standing[-1])
+
+
+def _again(
+    conn: StoreConnection, run_id: UUID, route_node_id: str, code: RefusalCode
+) -> bool:
+    """Whether the ledger runs this node's pass once more after `code`: a
+    guided retry (D30, D82) or the re-attempt of a declared drop (D110)."""
+    if code in SECOND_ATTEMPT_CODES:
+        return _second_due(conn, run_id, route_node_id)
+    if code is RefusalCode.PROVIDER_UNAVAILABLE:
+        return _drop_due(conn, run_id, route_node_id)
+    return False
 
 
 def _second_due(conn: StoreConnection, run_id: UUID, route_node_id: str) -> bool:
-    """Whether the ledger gives this node its one second attempt now (D30). A
+    """Whether the ledger gives this node a guided retry now (D30, D82). A
     store that cannot say leaves the original refusal standing."""
     try:
         return second_attempt_due(conn, run_id=run_id, route_node_id=route_node_id)
+    except Refusal:
+        return False
+
+
+def _drop_due(conn: StoreConnection, run_id: UUID, route_node_id: str) -> bool:
+    """Whether the ledger owes this node its re-attempt of a declared drop
+    (D110). A store that cannot say leaves the drop standing: no call is
+    made that the ledger did not give."""
+    try:
+        return drop_reattempt_due(conn, run_id=run_id, route_node_id=route_node_id)
     except Refusal:
         return False
 
@@ -486,7 +523,7 @@ def _settle(
     caller stops and a retry makes one new attempt instead of replaying it.
     """
     if replayed.verdict is Verdict.BLOCKED:
-        block_run(conn, run_id, lease=lease, verdict=replayed.attempt_id)
+        _block_on(conn, blobs, run_id, replayed, lease)
         return False
     outcome = replayed.outcome
     if replayed.verdict is Verdict.REFUSED or outcome is None:
@@ -706,7 +743,7 @@ def _end_blocked(  # noqa: PLR0913 -- one node of one run, keyword-only
     replay once the run is no longer RUNNING.
     """
     with execution_reads(conn):
-        blocked = blocked_verdict(
+        replayed = replay_billed(
             conn,
             blobs,
             execution.bundle,
@@ -714,9 +751,35 @@ def _end_blocked(  # noqa: PLR0913 -- one node of one run, keyword-only
             route=route,
             route_node_ids=(node,),
         )
-    if blocked is None:
+    if replayed is None or replayed.verdict is not Verdict.BLOCKED:
         raise Refusal(RefusalCode.HANDOFF_BLOCKED)
-    block_run(conn, run_id, lease=execution.lease, verdict=blocked)
+    _block_on(conn, blobs, run_id, replayed, execution.lease)
+
+
+def _block_on(
+    conn: StoreConnection,
+    blobs: BlobStore,
+    run_id: UUID,
+    replayed: Replayed,
+    lease: Lease | None,
+) -> None:
+    """End the run BLOCKED on `replayed`'s verdict, its citations as judged
+    stored first and named beside it (D106): a blob that will not write is
+    a store fault and nothing moves, so the next pass re-derives both."""
+    citations: str | None = None
+    if replayed.citations is not None:
+        try:
+            citations = blobs.put(replayed.citations)
+        except (OSError, Refusal):
+            citations = None
+        if citations is None:
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+    block_run(
+        conn,
+        run_id,
+        lease=lease,
+        verdict=BlockingVerdict(replayed.attempt_id, citations),
+    )
 
 
 def _execution_route(

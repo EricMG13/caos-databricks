@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
@@ -36,7 +36,7 @@ from caos.evidence.citations import (
     AnchoredCitation,
     Citation,
     TokenIndex,
-    verify_citations,
+    verify_stored_citations,
 )
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import Bundle, verified_bytes
@@ -129,15 +129,32 @@ class VendorAuthority:
 CREDIT_SCREEN_SELECTION: tuple[str, str] = ("LITE_CREDIT_22", "LITE_FULL_CREDIT_SCREEN")
 
 
-def verify_owner_restrictions(
+# The front matter lists a direct owner's restrictions travel in (F510).
+OWNER_KEYS = ("limitation_flags", "validation_warnings")
+
+
+@dataclass(frozen=True, slots=True)
+class OwnerGap:
+    """One restriction a direct owner carries that the artifact drops: its
+    `qa_status` of Restricted (`key` "qa_status"), or one item of its
+    limitation_flags or validation_warnings, as the owner wrote it."""
+
+    owner: str
+    key: str
+    item: str
+
+
+def owner_restriction_gaps(
     contract: VendorContract,
     markdown: bytes,
     owners: Iterable[bytes],
     *,
-    refuse: RefusalCode,
     selection: tuple[str, str] | None,
-) -> None:
-    """Refuse an artifact that drops a direct owner's restrictions."""
+) -> list[OwnerGap]:
+    """Every direct owner's restriction the artifact drops, in owner order:
+    the one comparison `verify_owner_restrictions` refuses on and a guided
+    retry is told of (F510), so the two cannot drift. Empty for an artifact
+    outside `selection`."""
     parse = contract.validate_handoff.validate_text
     fields = parse(markdown.decode()).fields
     if (
@@ -148,16 +165,36 @@ def verify_owner_restrictions(
         )
         != selection
     ):
-        return
+        return []
+    gaps: list[OwnerGap] = []
     for data in owners:
         owner = parse(data.decode()).fields
-        if (
-            owner["qa_status"] == "Restricted" and fields["qa_status"] != "Restricted"
-        ) or any(
-            not set(owner[key]) <= set(fields[key])
-            for key in ("limitation_flags", "validation_warnings")
-        ):
-            raise Refusal(refuse)
+        name = str(owner.get("module_id"))
+        if owner["qa_status"] == "Restricted" and fields["qa_status"] != "Restricted":
+            gaps.append(OwnerGap(name, "qa_status", "Restricted"))
+        for key in OWNER_KEYS:
+            held = set(fields[key])
+            gaps += [
+                OwnerGap(name, key, str(item))
+                for item in owner[key]
+                if item not in held
+            ]
+    return gaps
+
+
+def verify_owner_restrictions(
+    contract: VendorContract,
+    markdown: bytes,
+    owners: Iterable[bytes],
+    *,
+    refuse: RefusalCode,
+    selection: tuple[str, str] | None,
+) -> None:
+    """Refuse an artifact that drops a direct owner's restrictions: an owner
+    Restricted and it not, or any of an owner's limitation_flags and
+    validation_warnings not among its own (`owner_restriction_gaps`)."""
+    if owner_restriction_gaps(contract, markdown, owners, selection=selection):
+        raise Refusal(refuse)
 
 
 def verify_owner_chain(
@@ -336,11 +373,16 @@ def _reanchored(
                 Step.SOURCE_NOT_PINNED,
                 RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED,
             )
-        requests.append(Citation(source_id, citation.page, citation.matched_text))
+        requests.append(
+            (
+                Citation(source_id, citation.page, citation.matched_text),
+                citation.cited_page,
+            )
+        )
     anchored = _step(
         refuse,
         Step.CITATION_ANCHOR,
-        lambda: verify_citations(
+        lambda: verify_stored_citations(
             conn,
             delivered=evidence.delivered,
             citations=requests,
@@ -348,11 +390,23 @@ def _reanchored(
             rule=record.citation_rule,
         ),
     )
-    # Same quotes, same rectangles, inside the captured blocks -- located by
-    # the rule the record was accepted under (N28), so a record accepted
-    # before the whole-line rule re-anchors as it always has.
-    if tuple(anchored) != record.citations:
+    # Same quotes, same rectangles, same lines (D105), inside the captured
+    # blocks -- located by the rule the record was accepted under (N28), so
+    # a record accepted before the whole-line rule re-anchors as it always
+    # has; each at the page the record stores, never searched for, and a
+    # re-anchoring kept only where its cited page holds no such line (D94).
+    # Whether a marker names a citation is the answer's, not anchoring's
+    # (D106, D107): the recorded `linked` and `marker` are carried, never
+    # re-derived here.
+    again = tuple(
+        replace(found, linked=stored.linked, marker=stored.marker)
+        for found, stored in zip(anchored, record.citations, strict=False)
+    )
+    if len(anchored) != len(record.citations) or again != record.citations:
         raise _refusal(refuse, Step.CITATION_MOVED, _MISMATCH)
+    # Only the anchored list: `record.unverified` is the module's own
+    # locators (D106), carried as recorded and never located, so no reader
+    # turns one into a verified citation.
     return record.citations
 
 

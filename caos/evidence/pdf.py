@@ -44,6 +44,7 @@ import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, astuple, dataclass
 from importlib.metadata import version
+from importlib.util import find_spec
 from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
@@ -322,6 +323,7 @@ def _in_child(
         # Before `Popen`: an interpreter started only to be killed unanswered is
         # a tenth of a second spent on a deadline that has already passed.
         raise Refusal(RefusalCode.SOURCE_EXTRACTION_TIMEOUT)
+    address_space_cap_available()  # the host is told when only the deadline binds
     # ponytail: one interpreter per PDF; a pool if admission volume makes the
     # start-up cost show.
     # Fixed argv, no shell, an empty environment.
@@ -774,8 +776,29 @@ def _budgeted(
     return bounded
 
 
-def _limit_address_space(inflater: _Inflater) -> None:
-    """Cap the child's address space where the platform has one to cap.
+UNCAPPED_NOTE = (
+    "pdf: this platform has no address-space cap (no `resource` module); the "
+    "extraction child is bounded by its deadline, which kills it, and by the "
+    "decoded-bytes budget"
+)
+_UNCAPPED_SAID = [False]  # said once per process
+
+
+def address_space_cap_available() -> bool:
+    """Whether the child can be capped by address space here. Where it cannot
+    (Windows, D79) the other two bounds stand and the host is told so, once."""
+    if find_spec("resource") is not None:
+        return True
+    if not _UNCAPPED_SAID[0]:
+        _UNCAPPED_SAID[0] = True
+        logging.getLogger(__name__).warning(UNCAPPED_NOTE)
+    return False
+
+
+def _limit_address_space(inflater: _Inflater) -> bool:
+    """Cap the child's address space where the platform has one to cap, and say
+    whether that was possible: `False` where there is no `resource` module
+    (Windows), the deadline and the decoded-bytes budget binding as before.
 
     Linux is where the App runs and where `RLIMIT_AS` binds. macOS reserves a
     very large address space for the shared cache before any of our code runs,
@@ -783,8 +806,10 @@ def _limit_address_space(inflater: _Inflater) -> None:
     not decoration, and the child is still bounded by its deadline and by the
     decoded-bytes budget wherever the limit does not apply.
     """
-    import resource
-
+    try:
+        import resource
+    except ImportError:
+        return False
     ceiling = inflater.left + ADDRESS_SPACE_HEADROOM
     try:
         (_soft, hard) = resource.getrlimit(resource.RLIMIT_AS)
@@ -792,7 +817,8 @@ def _limit_address_space(inflater: _Inflater) -> None:
             ceiling = min(ceiling, hard)
         resource.setrlimit(resource.RLIMIT_AS, (ceiling, hard))
     except (OSError, ValueError, AttributeError):
-        return
+        return False
+    return True
 
 
 def child_main() -> None:

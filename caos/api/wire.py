@@ -33,6 +33,8 @@ from pydantic import (
 from pydantic.json_schema import models_json_schema
 
 from caos.api.identity import GlobalRole
+from caos.deliverable.render import traced_line
+from caos.evidence.citations import WHOLE_LINE, WHOLE_LINE_AS_STORED, CitationRule
 from caos.graph.route import EdgeType, NodeState
 from caos.methodology.handoff import (
     MAX_BLOCKER_CHARS,
@@ -102,6 +104,10 @@ BRIEF_QUESTIONS_MAX = 32  # `CP_DR_RESEARCH_BRIEF_V1.md`'s bounded batch
 # the brief (`RESEARCH_BRIEF_INVALID`), and the pin's body is sized to carry
 # any brief under it (`caos.api.commands.runs.PIN_INPUT_BODY_BYTES`, N1).
 BRIEF_BYTES = 65_536
+# D109: a pin's command. CP-2G takes three qualifiers and CP-0 one objective,
+# each one line the store bounds at 1 KiB (`caos.methodology.qualifiers`).
+QUALIFIERS_MAX = 4
+QUALIFIER_CHARS = 1024
 
 Id = Annotated[str, Field(max_length=ID_CHARS)]
 Text = Annotated[str, Field(max_length=TEXT_CHARS)]
@@ -197,6 +203,9 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.RESERVATION_BELOW_REQUEST: (
         "Retry the attempt; a new one reserves for the request it sends. "
         "An operator must investigate if it recurs."
+    ),
+    _C.BUDGET_CHARGE_OVER_RESERVATION: (
+        "An operator must re-price the model, then start a successor run."
     ),
     _C.PROVIDER_UNAVAILABLE: "Retry when the provider answers.",
     _C.PROVIDER_OUTPUT_TRUNCATED: "Retry the attempt.",
@@ -296,6 +305,10 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.ROUTE_PIN_TOO_LATE: "Start a new run.",
     _C.RUN_INPUT_INVALID: "An operator must verify the run input.",
     _C.RESEARCH_BRIEF_INVALID: "Correct the research brief for the run's route.",
+    _C.RUN_QUALIFIER_INVALID: "Name only qualifiers the route's modules take.",
+    _C.REPORTING_PERIOD_UNREADABLE: (
+        "State the reporting period as FY2025 or Q2 2026, or pin the forecast scope."
+    ),
     _C.RUN_INPUT_ALREADY_PINNED: "Nothing; the input is already pinned.",
     _C.RUN_INPUT_TOO_LATE: "Start a new run.",
     _C.GATE_APPROVAL_MISMATCH: "Approve the content currently shown.",
@@ -620,6 +633,18 @@ class BlockedByView(BaseModel):
     route_node_id: Id
     module_id: Id
     attempt_id: UUID
+    # The Blocked answer's quotes as the host judged them (D106; owner: "Show
+    # its quotes (Recommended)"), so a reader can check the block against the
+    # sources: each located one with its line, each unverified one labelled.
+    # A verdict recorded before they were kept (migration 0044) has none, and
+    # says so (`quotes_recorded` false).
+    quotes_recorded: StrictBool
+    # Kept but unreadable -- a blob missing, or bytes not this host's
+    # (`ARTIFACT_RECORD_MISMATCH`): the refusal, contained here, so the run
+    # page still serves; the two lists are then empty.
+    quotes_refusal: RefusalBody | None
+    verified: Annotated[list[BlockedQuoteView], Field(max_length=CITATIONS_MAX)]
+    unverified: Annotated[list[UnverifiedCitationView], Field(max_length=CITATIONS_MAX)]
 
 
 class RunView(BaseModel):
@@ -688,9 +713,80 @@ class RectView(BaseModel):
     y1: float
 
 
+# A stored quote past the wire's bound is served cut, and says so, rather than
+# failing the whole read (NB2 review, Important 1): no producer writes one
+# (an unverified quote is capped at `GROUP_WIDTH`, an excerpt's line is one
+# evidence block), but an `ANY_RUN` quote is any run of its page, and a read
+# must not answer INTERNAL_FAULT for the record a store holds.
+TRUNCATED = "\u2026(truncated)"
+
+
+def bounded(text: str) -> str:
+    """`text`, or as much of it as `QUOTE_CHARS` holds with `TRUNCATED` after
+    it, so a reader sees the quote was cut."""
+    if len(text) <= QUOTE_CHARS:
+        return text
+    return text[: QUOTE_CHARS - len(TRUNCATED)] + TRUNCATED
+
+
+# A citation's place in its answer's list, the `[C<n>]` the module's body
+# cites it by (D107); null on a citation accepted before markers, which no
+# marker names.
+Marker = Annotated[int, Field(ge=1)] | None
+
+
+class LineView(BaseModel):
+    """The evidence line a citation anchored in, split around its excerpt
+    (D105), and whether the record holds that line at all (`recorded`).
+
+    Recorded, `before + excerpt + after` is the line: an `EXCERPT` record's
+    `line_text`, or, under either whole-line rule, the quote, which is its
+    line (`before` and `after` empty). An excerpt is never shown without its
+    line, so a qualifier just outside it ("not", "provided that", a row's
+    label) is the reader's to see (AI-4). `excerpt` is the line's own text of
+    the quote, empty where the host cannot place it (the line is then shown
+    whole and unmarked). Not recorded -- an `ANY_RUN` record, whose quote is
+    any unique run of its page -- `excerpt` is the quote alone, which is no
+    source line and is shown as a quote, never as one."""
+
+    model_config = _CLOSED
+
+    before: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    excerpt: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    after: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    recorded: StrictBool
+
+    @classmethod
+    def of(
+        cls, line_text: str | None, matched_text: str, rule: CitationRule
+    ) -> LineView:
+        """The record's `line_text`, split as the deliverable splits it
+        (`render.traced_line`); the quote as its line under a whole-line
+        rule; the quote alone, not recorded, under `ANY_RUN`."""
+        if line_text is None:
+            whole = rule in (WHOLE_LINE, WHOLE_LINE_AS_STORED)
+            return cls(
+                before="", excerpt=bounded(matched_text), after="", recorded=whole
+            )
+        before, excerpt, after = traced_line(line_text, matched_text)
+        return cls(
+            before=bounded(before),
+            excerpt=bounded(excerpt),
+            after=bounded(after),
+            recorded=True,
+        )
+
+
 class CitationView(BaseModel):
     """A host-verified citation; withdrawal is read live. `source_id` is the
-    pinned source the document resolves to, which addresses its page (4.4)."""
+    pinned source the document resolves to, which addresses its page (4.4).
+    `page` is where the quote is; `cited_page` is the other page the module
+    named when the host re-anchored the quote there (D94), else null. `line`
+    is the evidence line the quote is an excerpt of (D105), where the record
+    holds it. `linked` is false for a quote the answer's body does not carry
+    (D106): still host-verified, but "not linked to a statement in the
+    answer". `marker` is the `[C<n>]` the body cites it by (D107), which the
+    workspace draws as a chip opening this citation."""
 
     model_config = _CLOSED
 
@@ -699,8 +795,60 @@ class CitationView(BaseModel):
     filename: Text
     page: int
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    line: LineView
     rects: Annotated[list[RectView], Field(max_length=RECTS_MAX)]
     withdrawn_at: AwareDatetime | None
+    cited_page: Annotated[int, Field(ge=1)] | None
+    linked: StrictBool
+    marker: Marker
+
+
+# Why a citation is unverified (D106): the anchoring refusal that left it so
+# (`handoff.UNVERIFIED_CODES`), which every display words plainly.
+UnverifiedCode = Literal[
+    "CITATION_NOT_LOCATED", "CITATION_AMBIGUOUS", "CITATION_NOT_DELIVERED"
+]
+
+
+class UnverifiedCitationView(BaseModel):
+    """A citation of an accepted answer that did not anchor (D106): the
+    model's own `source_id`, page and quote, as recorded, and the code that
+    left it unverified. Never host-verified and never re-anchored: it has no
+    line, no rectangle and no document the host located, and its claim is
+    Deploy V's lineage class "Untraced". `source_id` is the model's, which
+    may name no source this run was given (`CITATION_NOT_DELIVERED`)."""
+
+    model_config = _CLOSED
+
+    source_id: UUID
+    page: Annotated[int, Field(ge=1)]
+    matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    code: UnverifiedCode
+    # False for a quote the answer's body does not carry either: "not in the
+    # answer body", beside its reason.
+    linked: StrictBool
+    # The `[C<n>]` the body cites it by (D107): its chip opens nothing.
+    marker: Marker
+
+
+class BlockedQuoteView(BaseModel):
+    """One quote of a Blocked answer the host located (D106): the document,
+    page and quote, compact in the view, and the line it is an excerpt of,
+    which the source drawer shows with the excerpt marked (D105, D107). No
+    rectangle is served: a Blocked answer is no accepted record."""
+
+    model_config = _CLOSED
+
+    document_sha256: Sha256
+    # The run's pinned source the document resolves to, live preferred, and
+    # its withdrawal, so the quote opens its page in the source drawer.
+    source_id: UUID
+    withdrawn_at: AwareDatetime | None
+    page: Annotated[int, Field(ge=1)]
+    matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    line: LineView
+    linked: StrictBool
+    marker: Marker
 
 
 # A handoff's tagged tables (`caos.methodology.tables`), whose bounds these are.
@@ -734,6 +882,25 @@ class TableView(BaseModel):
     ]
 
 
+class RegisterView(BaseModel):
+    """One register the module's output profile declares, located by the
+    bundle's own `_locate_registers` (`find_registers`' body): the header
+    exactly as written, `declared` the profile column the bundle binds to each
+    header cell (`None` where it binds none), then every row in header order."""
+
+    model_config = _CLOSED
+
+    register_id: Annotated[
+        str, Field(max_length=TABLE_ID_CHARS, pattern=r"^[A-Za-z0-9_.]+$")
+    ]
+    columns: Annotated[list[CellText], Field(max_length=TABLE_COLUMNS_MAX)]
+    declared: Annotated[list[CellText | None], Field(max_length=TABLE_COLUMNS_MAX)]
+    rows: Annotated[
+        list[Annotated[list[CellView], Field(max_length=TABLE_COLUMNS_MAX)]],
+        Field(max_length=TABLE_ROWS_MAX),
+    ]
+
+
 class HandoffView(BaseModel):
     """One accepted handoff, labelled per §46.3."""
 
@@ -756,6 +923,11 @@ class HandoffView(BaseModel):
     decision_scope: Id
     screening_only: bool
     source_facts: Annotated[list[CitationView], Field(max_length=CITATIONS_MAX)]
+    # The answer's citations that did not anchor (D106), apart from the source
+    # facts and never shown as one.
+    unverified_facts: Annotated[
+        list[UnverifiedCitationView], Field(max_length=CITATIONS_MAX)
+    ]
     model_analysis: Annotated[str, Field(max_length=MARKDOWN_CHARS)]
     host_calculation: Literal["NONE", "CP_CF_FORECAST"]
     # The tagged tables `model_analysis` carries, derived from it at read time;
@@ -763,6 +935,11 @@ class HandoffView(BaseModel):
     # when the bundle's reader refused them or they are past a bound.
     tables: Annotated[list[TableView], Field(max_length=TABLES_MAX)]
     tables_unavailable_reason: TablesUnavailable | None
+    # The registers the module's output profile declares (N94), derived the
+    # same way and with the same standing: model-authored, empty with a reason
+    # when the bundle's reader refused them or they are past a bound.
+    registers: Annotated[list[RegisterView], Field(max_length=TABLES_MAX)]
+    registers_unavailable_reason: TablesUnavailable | None
 
 
 class PendingNode(BaseModel):
@@ -996,21 +1173,52 @@ class NarrativeFigure(BaseModel):
     model_config = _CLOSED
 
     route_node_id: Id
+    # The module the record is of, which names its citation beside its
+    # marker, "CP-1 C3", as the deliverable's appendix does (D107).
+    module_id: Id
     record_sha256: Sha256
     citation_index: Annotated[int, Field(ge=0)]
     document_sha256: Sha256
     source_id: UUID
     page: Annotated[int, Field(ge=1)]
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    line: LineView
     rects: Annotated[list[RectView], Field(max_length=RECTS_MAX)]
     withdrawn_at: AwareDatetime | None
+    # The record citation's own `linked` (D106): false where no marker in the
+    # module's answer names it; and its `marker` (D107).
+    linked: StrictBool
+    marker: Marker
+
+
+class NarrativeUnverified(BaseModel):
+    """A narrative figure that names an unverified citation (D106, owner:
+    "Labelled unverified too"): the model's locator, quote and code as the
+    record holds them, shown labelled unverified with the model's page, and
+    never opened as a host-verified source."""
+
+    model_config = _CLOSED
+
+    route_node_id: Id
+    module_id: Id
+    record_sha256: Sha256
+    unverified_index: Annotated[int, Field(ge=0)]
+    source_id: UUID
+    page: Annotated[int, Field(ge=1)]
+    matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    code: UnverifiedCode
+    linked: StrictBool
+    marker: Marker
 
 
 class NarrativeSpan(BaseModel):
+    """Exactly one of prose, a figure or an unverified figure."""
+
     model_config = _CLOSED
 
     text: Annotated[str, Field(max_length=NARRATIVE_CHARS)] | None
     figure: NarrativeFigure | None
+    unverified: NarrativeUnverified | None
 
 
 class NarrativeFigureRef(BaseModel):
@@ -1021,6 +1229,16 @@ class NarrativeFigureRef(BaseModel):
 
     route_node_id: Id
     citation_index: Annotated[int, Field(ge=0)]
+
+
+class NarrativeUnverifiedRef(BaseModel):
+    """A draft's figure naming one of a node's unverified citations (D106):
+    which one, by its place in the record's `unverified` list."""
+
+    model_config = _CLOSED
+
+    route_node_id: Id
+    unverified_index: Annotated[int, Field(ge=0)]
 
 
 class ReportArtifact(BaseModel):
@@ -1036,6 +1254,12 @@ class ReportArtifact(BaseModel):
     decision_scope: Id
     limitation_flags: Annotated[list[Text], Field(max_length=FLAGS_MAX)]
     validation_warnings: Annotated[list[Text], Field(max_length=FLAGS_MAX)]
+    # What the markdown's markers name (D107): each record citation a marker
+    # can name, as a narrative figure carries it, so a chip opens its source
+    # drawer, and each unverified one, whose chip opens nothing. A record
+    # from before markers has none.
+    figures: Annotated[list[NarrativeFigure], Field(max_length=CITATIONS_MAX)]
+    unverified: Annotated[list[NarrativeUnverified], Field(max_length=CITATIONS_MAX)]
 
 
 class RevisionSummary(BaseModel):
@@ -1376,6 +1600,20 @@ class ResearchBrief(BaseModel):
     ]
 
 
+class RunQualifier(BaseModel):
+    """One command qualifier a pin states for one module (D109): CP-2G's
+    `forecast_horizon`, `base_period` or `cases`, as its `SKILL.md` card
+    spells them, or CP-0's `objective` (which `PinRunInput.objective` also
+    carries; stated both ways it is refused). Any other module or name
+    refuses `RUN_QUALIFIER_INVALID`."""
+
+    model_config = _CLOSED
+
+    module_id: Id
+    name: Id
+    value: Annotated[str, Field(max_length=QUALIFIER_CHARS)]
+
+
 class PinRunInput(BaseModel):
     model_config = _CLOSED
 
@@ -1384,6 +1622,13 @@ class PinRunInput(BaseModel):
     # `LITE_DEEP_RESEARCH`); null elsewhere. Stated on every request, as every
     # request field is: an absent key is a malformed body, not a default.
     research: ResearchBrief | None
+    # D109: the run's command qualifiers, each module's names once; empty for
+    # none. CP-2G's forecast horizon and base period the pin does not state
+    # are derived from the subject's reporting period by the owner's rule.
+    qualifiers: Annotated[list[RunQualifier], Field(max_length=QUALIFIERS_MAX)]
+    # D109: the objective CP-0 assesses readiness against (its hard rule 6),
+    # or null for the pathway's own use case.
+    objective: Annotated[str, Field(max_length=QUALIFIER_CHARS)] | None
 
 
 class RunInputPinned(BaseModel):
@@ -1534,13 +1779,15 @@ class SourceWithdrawn(BaseModel):
 
 class NarrativeDraft(BaseModel):
     """One span a draft offers: prose, or a reference to a citation the host
-    resolves. Exactly one of the two, and a figure names only which citation --
-    the document, page and quote are the host's to fill from the record."""
+    resolves -- an anchored one (`figure`) or an unverified one
+    (`unverified`, D106). Exactly one of the three, and a reference names
+    only which citation: the rest is the host's to fill from the record."""
 
     model_config = _CLOSED
 
     text: Annotated[str, Field(max_length=NARRATIVE_CHARS)] | None
     figure: NarrativeFigureRef | None
+    unverified: NarrativeUnverifiedRef | None
 
 
 class SaveRevision(BaseModel):

@@ -106,7 +106,7 @@ export function SectionSummary({
     <section
       ref={self}
       aria-label="Summary"
-      className="overflow-hidden rounded-xl bg-card text-card-foreground ring-1 ring-foreground/10"
+      className="overflow-hidden rounded-xl bg-card text-card-foreground shadow-card ring-1 ring-card-border"
       data-summary
       data-compact={compact || undefined}
     >
@@ -201,7 +201,7 @@ export function SectionSummary({
       {briefShown ? (
         <dl
           id={briefId}
-          className="grid gap-x-8 gap-y-3 border-t bg-muted/40 px-4 py-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,17.5rem))]"
+          className="grid gap-x-8 gap-y-3 border-t bg-card-footer px-4 py-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,17.5rem))]"
           data-brief
         >
           {cells.map((cell) => (

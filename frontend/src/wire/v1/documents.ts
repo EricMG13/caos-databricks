@@ -118,6 +118,7 @@ const RefusalCode = enumOf([
   "CONTEXT_OVER_CEILING",
   "UPSTREAM_SECTION_OVER_CEILING",
   "RESERVATION_BELOW_REQUEST",
+  "BUDGET_CHARGE_OVER_RESERVATION",
   "PROVIDER_UNAVAILABLE",
   "PROVIDER_OUTPUT_TRUNCATED",
   "PROVIDER_REFUSED",
@@ -190,6 +191,8 @@ const RefusalCode = enumOf([
   "ROUTE_PIN_TOO_LATE",
   "RUN_INPUT_INVALID",
   "RESEARCH_BRIEF_INVALID",
+  "RUN_QUALIFIER_INVALID",
+  "REPORTING_PERIOD_UNREADABLE",
   "RUN_INPUT_ALREADY_PINNED",
   "RUN_INPUT_TOO_LATE",
   "GATE_APPROVAL_MISMATCH",
@@ -291,6 +294,13 @@ const ResearchBrief = object({
   exclusions: text,
   questions: array(ResearchBriefQuestion, 32),
 });
+// One command qualifier a pin states for one module (D109,
+// `PinRunInput.qualifiers`).
+const RunQualifier = object({
+  module_id: short,
+  name: short,
+  value: string({ max: 1024 }),
+});
 const GateView = object({ gate: Gate, state: GateState });
 const EdgeView = object({ source: short, type: EdgeType });
 // One edge of the pinned route, both ends by module, met or not (D73): the
@@ -345,7 +355,62 @@ const ModelChoice = object({
 // The node whose validated Blocked verdict ended the run, as the transition
 // recorded it (§68). Nullable on `RunView`: a run the frontier emptied is
 // BLOCKED with no node to name, and the wire never claims one.
-const BlockedByView = object({ route_node_id: short, module_id: short, attempt_id: uuid });
+// The evidence line a citation anchored in, split by the server around its
+// excerpt (D105): recorded, `before + excerpt + after` is the line, never
+// sliced here, and an empty `excerpt` is a line the server could not place the
+// quote in. Not recorded (a record from before whole-line citations), the
+// quote is `excerpt` alone and is no source line.
+const LineView = object({
+  before: string({ max: 65536 }),
+  excerpt: string({ max: 65536 }),
+  after: string({ max: 65536 }),
+  recorded: bool,
+});
+// Why a citation is unverified (D106): the anchoring fault that left it so.
+// A citation's place in its answer's list: the `[C<n>]` its module's body cites
+// it by (D107). Null on a citation accepted before markers.
+const Marker = nullable(int({ min: 1 }));
+const UnverifiedCode = enumOf([
+  "CITATION_NOT_LOCATED",
+  "CITATION_AMBIGUOUS",
+  "CITATION_NOT_DELIVERED",
+]);
+// A citation of an accepted answer that did not anchor (D106): the model's own
+// locator and quote. No line, no rectangle, no located document: nothing on it
+// may be shown as host-verified, and its claim is "Untraced".
+const UnverifiedCitationView = object({
+  source_id: uuid,
+  page: int({ min: 1 }),
+  matched_text: string({ max: 65536 }),
+  code: UnverifiedCode,
+  // False where the answer's body does not carry the quote either.
+  linked: bool,
+  marker: Marker,
+});
+const RefusalBody = object({ code: RefusalCode, clears: text });
+// A located quote of a Blocked answer (D106): its line, as a source fact's.
+const BlockedQuoteView = object({
+  document_sha256: hash,
+  source_id: uuid,
+  withdrawn_at: nullable(datetime),
+  page: int({ min: 1 }),
+  matched_text: string({ max: 65536 }),
+  line: LineView,
+  linked: bool,
+  marker: Marker,
+});
+// The verdict that ended a run, and the Blocked answer's quotes as the host
+// judged them (owner: "Show its quotes"); none recorded before migration 0044.
+const BlockedByView = object({
+  route_node_id: short,
+  module_id: short,
+  attempt_id: uuid,
+  quotes_recorded: bool,
+  // Kept but unreadable: the typed refusal, contained here.
+  quotes_refusal: nullable(RefusalBody),
+  verified: array(BlockedQuoteView, 1024),
+  unverified: array(UnverifiedCitationView, 1024),
+});
 const RunView = object({
   run_id: uuid,
   status: enumOf(RUN_STATUSES),
@@ -386,8 +451,14 @@ const CitationView = object({
   filename: text,
   page: int(),
   matched_text: string({ max: 65536 }),
+  line: LineView,
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
+  cited_page: nullable(int({ min: 1 })),
+  // False for a quote no marker in the answer's body names (D106, D107):
+  // still host-verified, but "not linked to a statement in the answer".
+  linked: bool,
+  marker: Marker,
 });
 // A handoff's tagged tables, read by the server from its Markdown with the
 // bundle's own reader (`caos/methodology/tables.py`); the browser never parses
@@ -400,6 +471,15 @@ const CellView = object({
 const TableView = object({
   table_id: string({ max: SHORT, pattern: "^[A-Za-z0-9_.]+$" }),
   columns: array(text, 32),
+  rows: array(array(CellView, 32), 2000),
+});
+// A register the module's output profile declares (N94), located by the
+// bundle's own reader: `declared` is the profile column the bundle binds to
+// each header cell, null where it binds none.
+const RegisterView = object({
+  register_id: string({ max: SHORT, pattern: "^[A-Za-z0-9_.]+$" }),
+  columns: array(text, 32),
+  declared: array(nullable(text), 32),
   rows: array(array(CellView, 32), 2000),
 });
 const HandoffView = object({
@@ -418,10 +498,13 @@ const HandoffView = object({
   decision_scope: short,
   screening_only: bool,
   source_facts: array(CitationView, 1024),
+  unverified_facts: array(UnverifiedCitationView, 1024),
   model_analysis: string({ max: 4194304 }),
   host_calculation: enumOf(["NONE", "CP_CF_FORECAST"]),
   tables: array(TableView, 64),
   tables_unavailable_reason: nullable(enumOf(["TABLES_MALFORMED", "TABLES_TOO_LARGE"])),
+  registers: array(RegisterView, 64),
+  registers_unavailable_reason: nullable(enumOf(["TABLES_MALFORMED", "TABLES_TOO_LARGE"])),
 });
 const PendingNode = object({
   route_node_id: short,
@@ -554,18 +637,40 @@ const BookDocument = sectionDocument(BookBody);
 // cross-referencing `ReportBody.artifacts` or the run's pinned members.
 const NarrativeFigure = object({
   route_node_id: short,
+  // The record's module: a citation is named "CP-1 C3" (D107).
+  module_id: short,
   record_sha256: hash,
   citation_index: int({ min: 0 }),
   document_sha256: hash,
   source_id: uuid,
   page: int({ min: 1 }),
   matched_text: string({ max: 65536 }),
+  line: LineView,
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
+  // The record citation's own `linked` (D106) and `marker` (D107).
+  linked: bool,
+  marker: Marker,
+});
+// A figure naming an unverified citation (D106): the model's locator as the
+// record holds it, shown labelled and never opened as a host-verified source.
+const NarrativeUnverified = object({
+  route_node_id: short,
+  // The record's module: a citation is named "CP-1 C3" (D107).
+  module_id: short,
+  record_sha256: hash,
+  unverified_index: int({ min: 0 }),
+  source_id: uuid,
+  page: int({ min: 1 }),
+  matched_text: string({ max: 65536 }),
+  code: UnverifiedCode,
+  linked: bool,
+  marker: Marker,
 });
 const NarrativeSpan = object({
   text: nullable(string({ max: 2000 })),
   figure: nullable(NarrativeFigure),
+  unverified: nullable(NarrativeUnverified),
 });
 const ReportArtifact = object({
   route_node_id: short,
@@ -578,6 +683,10 @@ const ReportArtifact = object({
   decision_scope: short,
   limitation_flags: array(text, 256),
   validation_warnings: array(text, 256),
+  // What the markdown's markers name (D107): each marked record citation as a
+  // figure the source drawer opens, and each marked unverified one.
+  figures: array(NarrativeFigure, 1024),
+  unverified: array(NarrativeUnverified, 1024),
 });
 // One revision of the displayed run and how far it has gone: what Report lists
 // and Committee's front door links to. It proves nothing; opening one does.
@@ -679,7 +788,6 @@ const PageDocument = object({
   notes: array(SectionNote, 3),
 });
 
-const RefusalBody = object({ code: RefusalCode, clears: text });
 const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
 const QualificationRead = object({
   evidence_sha256: hash,
@@ -699,6 +807,7 @@ const QualificationRead = object({
 /** Every model `schema.json` declares, under its backend name. */
 export const V1_SHAPES = {
   NarrativeFigure,
+  NarrativeUnverified,
   NarrativeSpan,
   ReportArtifact,
   RevisionSummary,
@@ -733,6 +842,9 @@ export const V1_SHAPES = {
   CellView,
   Chrome,
   CitationView,
+  UnverifiedCitationView,
+  BlockedQuoteView,
+  LineView,
   DirectoryBody,
   DirectoryDocument,
   EdgeType,
@@ -757,6 +869,7 @@ export const V1_SHAPES = {
   QualificationState,
   ResearchBrief,
   ResearchBriefQuestion,
+  RunQualifier,
   RouteChoice,
   ModelChoice,
   RouteEdgeView,
@@ -771,6 +884,7 @@ export const V1_SHAPES = {
   SourceRow,
   Standing,
   Subject,
+  RegisterView,
   TableView,
   UploadBody,
   UploadDocument,
@@ -791,6 +905,7 @@ export type BookPeriod = Infer<typeof BookPeriod>;
 export type ReportDocument = Infer<typeof ReportDocument>;
 export type CommitteeDocument = Infer<typeof CommitteeDocument>;
 export type RevisionSummary = Infer<typeof RevisionSummary>;
+export type ReportArtifact = Infer<typeof ReportArtifact>;
 export type RefusalBody = Infer<typeof RefusalBody>;
 export type RefusalCode = Infer<typeof RefusalCode>;
 export type QualificationRead = Infer<typeof QualificationRead>;
@@ -802,9 +917,14 @@ export type SourceRow = Infer<typeof SourceRow>;
 export type RunView = Infer<typeof RunView>;
 export type NodeView = Infer<typeof NodeView>;
 export type HandoffView = Infer<typeof HandoffView>;
+export type RegisterView = Infer<typeof RegisterView>;
 export type TableView = Infer<typeof TableView>;
 export type CellView = Infer<typeof CellView>;
 export type CitationView = Infer<typeof CitationView>;
+export type UnverifiedCitationView = Infer<typeof UnverifiedCitationView>;
+export type BlockedByView = Infer<typeof BlockedByView>;
+export type NarrativeUnverified = Infer<typeof NarrativeUnverified>;
+export type LineView = Infer<typeof LineView>;
 export type PendingNode = Infer<typeof PendingNode>;
 export type EventName = Infer<typeof EventName>;
 export type FrameView = Infer<typeof FrameView>;

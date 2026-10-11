@@ -11,18 +11,17 @@ Bundle folder `vendor/deploy-v/skills/cp-model/`, read through the verified `Bun
 | bundle | vendor/deploy-v/skills/cp-model/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-model/agents/openai.yaml | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_CP_WORKBOOK_EXPORT_HARD_GATE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_CP_WORKBOOK_EXPORT_PAYLOAD_BASE.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_CP_WORKBOOK_EXPORT_SPEC.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL__CreditSnapshotModelWorkbook__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/REF_CP-MODEL_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |
 | prompt | icm/shared/prompt/tagged.md | whole | prompt block |
 | prompt | icm/shared/prompt/host_steps.md | whole | prompt block |
 | prompt | icm/shared/prompt/final_check.md | whole | prompt block |
-| prompt | icm/shared/prompt/validator_feedback.md | whole | prompt block, on a node's one second attempt after a refused answer (D30) |
+| prompt | icm/shared/prompt/validator_feedback.md | whole | prompt block, on a node's guided retry after a refused answer (D30, D82), when that answer is not carried (D104) |
+| prompt | icm/shared/prompt/validator_repair.md | whole | prompt block, on a node's guided retry that carries its refused answer to be corrected (D104) |
 | store | accepted upstream handoffs | whole | context labelled by `allowed_use`; never citable |
 | store | delivered evidence blocks | CP-0's T8 selection for this module | the only citable text |
 

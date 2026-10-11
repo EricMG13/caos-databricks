@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from html import escape
 from typing import Any
@@ -34,6 +35,10 @@ from typing import Any
 PENDING = "PENDING APPROVAL"
 # A pathway scope that is a screen, never committee clearance (`handoff.py`).
 SCREENING_ONLY = "SCREENING_ONLY"
+# The rule every record written before one was recorded was accepted under,
+# and the two under which a quote is its own whole line (`citations.py`).
+ANY_RUN = "any-run"
+_WHOLE_LINE_RULES = frozenset({"whole-line", "whole-line-as-shown"})
 
 
 class RenderRefused(ValueError):
@@ -60,7 +65,13 @@ def render(payload: Mapping[str, Any]) -> bytes:
     # A canonical artifact's page facts come from its record (§41).
     views = [_canonical(artifact) for artifact in artifacts]
     body = "\n".join(_handoff(view) for view in views)
-    narrative = _narrative(payload.get("narrative"))
+    # A narrative figure is one of these citations (`verify_package` holds it
+    # to the record's copy), so the line it anchored in is read from there.
+    cited = {
+        str(artifact.get("route_node_id")): view
+        for artifact, view in zip(artifacts, views, strict=True)
+    }
+    narrative = _narrative(payload.get("narrative"), cited)
     provenance = _provenance([view.provenance for view in views])
 
     return (
@@ -94,18 +105,37 @@ def render(payload: Mapping[str, Any]) -> bytes:
 
 
 class _Handoff:
-    """One canonical artifact as the page shows it, read from its record."""
+    """One canonical artifact as the page shows it, read from its record:
+    its anchored `citations`, its `unverified` ones (D106; absent is none)
+    and the rule its quotes were accepted under (absent is `ANY_RUN`, every
+    record written before the rule was recorded)."""
 
-    __slots__ = ("citations", "markdown", "projections", "provenance")
+    __slots__ = (
+        "citations",
+        "markdown",
+        "projections",
+        "provenance",
+        "rule",
+        "unverified",
+    )
 
     def __init__(self, markdown: str, record: Mapping[str, Any]) -> None:
         self.markdown = markdown
         projections = record.get("projections")
         citations = record.get("citations")
-        if not isinstance(projections, Mapping) or not isinstance(citations, list):
+        unverified = record.get("unverified", [])
+        rule = record.get("citation_rule", ANY_RUN)
+        if (
+            not isinstance(projections, Mapping)
+            or not isinstance(citations, list)
+            or not isinstance(unverified, list)
+            or not isinstance(rule, str)
+        ):
             raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
         self.projections = projections
         self.citations = citations
+        self.unverified = unverified
+        self.rule = rule
         self.provenance = {
             "module_id": _text(projections, "module_id"),
             "build_id": _text(record, "build_id"),
@@ -156,7 +186,9 @@ def _handoff(view: _Handoff) -> str:
     flags = facts.get("limitation_flags")
     if not isinstance(flags, list) or not all(isinstance(f, str) for f in flags):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
-    if not view.citations:
+    # A module whose every citation is unverified still renders, each one
+    # labelled (D106); one that cites nothing at all does not.
+    if not view.citations and not view.unverified:
         raise RenderRefused("DELIVERABLE_UNCITED_FIGURE")
     screen = (
         '<p class="status">SCREENING ONLY: a screen, not committee clearance</p>\n'
@@ -176,14 +208,14 @@ def _handoff(view: _Handoff) -> str:
         f"<p>Committee status as written: {committee} · "
         f"decision scope {escape(scope)}</p>\n"
         f"{screen}{limitations}"
-        # §45.6: what the host verified, what the model wrote, what the host
-        # computed -- in that order, never mixed.
-        "<h3>Source facts (host-verified citations)</h3>\n"
-        + "\n".join(_citation(citation) for citation in view.citations)
-        + "\n<h3>Analysis (model-authored, not host-verified)</h3>\n"
+        # §45.6: what the model wrote, what the host computed, and what the
+        # host located, never mixed -- the last as a compact appendix (D107),
+        # so no source text sits among the analysis.
+        "<h3>Analysis (model-authored, not host-verified)</h3>\n"
         # The elements of `ELEMENTS`, every authored character escaped inside
         # them: committee layout, with nothing the model wrote reaching the
-        # page as markup this file did not write.
+        # page as markup this file did not write. Its `[C<n>]` markers are
+        # text, which the appendix below resolves.
         f"{_markdown(view.markdown)}"
         "<h3>Deterministic calculations</h3>\n"
         + (
@@ -191,6 +223,7 @@ def _handoff(view: _Handoff) -> str:
             if _text(facts, "module_id") == "CP-CF"
             else "<p>None performed by the host on this route.</p>\n"
         )
+        + _appendix(view)
     )
 
 
@@ -542,16 +575,227 @@ def _delimiter(piece: str, pieces: list[str], position: int, marks: list[str]) -
     return escape(piece)
 
 
-def _citation(citation: object) -> str:
+def _appendix(view: _Handoff) -> str:
+    """The module's citations appendix (D107; owner: "The deliverable lists
+    citations compactly in an appendix rather than inline full lines"): one
+    line each, anchored and unverified alike, in the answer's list order
+    where the record keeps each citation's marker (an older record: the
+    anchored ones, then the unverified). The analysis above cites them by
+    the same `[C<n>]`."""
+    rows = sorted(
+        [
+            (_marker(entry), 0, index, located(entry, _line_of(entry), view.rule))
+            for index, entry in enumerate(view.citations)
+        ]
+        + [
+            (_marker(entry), 1, index, unverified(entry))
+            for index, entry in enumerate(view.unverified)
+        ],
+        key=lambda row: (row[0] or 0, row[1], row[2]),
+    )
+    return (
+        '<h3>Citations</h3>\n<ul class="cite">\n'
+        + "\n".join(f"<li>{text}</li>" for *_, text in rows)
+        + "\n</ul>\n"
+    )
+
+
+def _marker(entry: object) -> int | None:
+    """A citation's place in its answer's list, the `[C<n>]` its module's
+    body cites it by (D107); none on a record from before markers."""
+    if not isinstance(entry, Mapping):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    value = entry.get("marker")
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    return value
+
+
+def _tag(entry: object) -> str:
+    marker = _marker(entry)
+    return "" if marker is None else f"[C{marker}] · "
+
+
+# The longest excerpt the page shows (D107): about one line, as the workspace
+# clamps it (`frontend/src/evidence/compact.ts`).
+EXCERPT_CHARS = 120
+# What the workspace's `\s` is, so both clamp a quote to the same text.
+_SPACE = re.compile(
+    "[\t\n\x0b\x0c\r \xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+"
+)
+
+
+def clamped(quote: str) -> str:
+    """`quote` as the page shows it (D107): its whitespace runs single, and
+    past `EXCERPT_CHARS` code points cut with an ellipsis. The whole line is
+    the source's to show, at the page the citation names."""
+    flat = " ".join(word for word in _SPACE.split(quote) if word)
+    if len(flat) <= EXCERPT_CHARS:
+        return flat
+    return flat[: EXCERPT_CHARS - 1].rstrip(" ") + "\u2026"
+
+
+def _quoted(quote: str) -> str:
+    return f"\u201c{escape(clamped(quote))}\u201d"
+
+
+def _notes(citation: Mapping[str, Any], line: object, rule: str) -> str:
+    """What a host-verified citation's compact line adds after it: that its
+    source line was never recorded (an `ANY_RUN` quote, F504), and that no
+    statement of the answer cites it (`linked` false, D106, D107)."""
+    if line is not None and (not isinstance(line, str) or not line):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    if citation.get("linked", True) not in (True, False):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    recorded = line is not None or rule in _WHOLE_LINE_RULES
+    return ("" if recorded else " · quote (source line not recorded)") + (
+        " · not linked to a statement in the answer"
+        if citation.get("linked", True) is False
+        else ""
+    )
+
+
+def located(citation: object, line: object = None, rule: str = ANY_RUN) -> str:
+    """One host-verified citation, compact (D107): its marker, document,
+    page and excerpt, every character escaped. Its whole line is not on the
+    page: an excerpt is eight words of one line, and a qualifier just
+    outside them ("not", "provided that") is the reader's to see at the
+    source, on the page given (AI-4's guard, one look away). `line` is the
+    record's `line_text`, checked, never shown."""
     if not isinstance(citation, Mapping):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
-    quote = escape(_text(citation, "matched_text"))
+    quote = _text(citation, "matched_text")
     document = escape(_text(citation, "document_sha256")[:12])  # cut, then escape
     page = _page(citation)
+    notes = _notes(citation, line, rule)
     return (
-        f"<blockquote>{quote}</blockquote>\n"
-        f'<p class="cite">{document} · page {page}</p>'
+        f"{_tag(citation)}{document} · page {page} · {_quoted(quote)} · verified{notes}"
     )
+
+
+# Why a citation is unverified (D106), in the reader's words: the anchoring
+# refusal that left it so (`handoff.UNVERIFIED_CODES`).
+UNVERIFIED_REASONS = {
+    "CITATION_NOT_LOCATED": "not located",
+    "CITATION_AMBIGUOUS": "ambiguous",
+    "CITATION_NOT_DELIVERED": "not in the delivered evidence",
+}
+
+
+def unverified(entry: object, tag: str | None = None) -> str:
+    """One unverified citation (D106), compact (D107): labelled before its
+    text, as the model's quote, never placed or worded as a located one. Its
+    claim is Deploy V's lineage class "Untraced". Every character is
+    escaped: the quote is the model's, which the host could not find. One
+    no statement of the answer cites (`linked` false) says so beside its
+    reason. `tag` names it where its marker alone would not (a narrative)."""
+    if not isinstance(entry, Mapping):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    quote = _text(entry, "matched_text")
+    source = escape(_text(entry, "source_id"))
+    page = _page(entry)
+    reason = UNVERIFIED_REASONS.get(_text(entry, "code"))
+    if reason is None or entry.get("linked", True) not in (True, False):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    if entry.get("linked", True) is False:
+        reason += " · not linked to a statement in the answer"
+    return (
+        f"{_tag(entry) if tag is None else tag}unverified \u2013 page {page}"
+        f" · source {source} · the model's quote {_quoted(quote)}"
+        f" · claim lineage: Untraced · {reason}"
+    )
+
+
+# The edge punctuation a quote's first and last word may differ from its line
+# by, and what a word with a figure keeps (`caos.evidence.citations`'
+# `EDGE_PUNCTUATION`, `_FIGURE_LEFT`, `_FIGURE_RIGHT`; restated, because this
+# file is the standard library alone, and held equal by a test).
+EDGE_PUNCTUATION = "\"'\u201c\u201d\u2018\u2019()[]{}.,;:!?"
+_FIGURE_LEFT = EDGE_PUNCTUATION.replace("(", "").replace(".", "")
+_FIGURE_RIGHT = EDGE_PUNCTUATION.replace(")", "")
+
+
+def traced_line(line: str, quote: str) -> tuple[str, str, str]:
+    """`line` split around the one place `quote` is in it: the text before,
+    the line's own text of the excerpt, and the text after.
+
+    Found as the host anchored it (D105), within this one line: the quote's
+    words NFC against the line's, every one equal; then the first and last
+    forgiven their edge punctuation, a figure keeping its parentheses and
+    leading point; then with runs of single letters joined, as a tracked
+    heading is. A pass that finds two places marks none, and so does finding
+    none: the line is `(line, "", "")`, shown whole and unmarked rather than
+    marked where the host did not anchor. The page shows no line since D107;
+    the wire's `LineView` splits one with this for the source drawer, which
+    alone shows it.
+    """
+    words = [unicodedata.normalize("NFC", word) for word in quote.split()]
+    spans = [(found.start(), found.end()) for found in re.finditer(r"\S+", line)]
+    for joined, edges in ((False, False), (False, True), (True, True)):
+        units = _units(line, spans, joined=joined)
+        places = _places([key for _, _, key in units], words, edges=edges)
+        if len(places) > 1:
+            break
+        if places:
+            first, last = units[places[0]][0], units[places[0] + len(words) - 1][1]
+            return line[:first], line[first:last], line[last:]
+    return line, "", ""
+
+
+def _units(
+    line: str, spans: list[tuple[int, int]], *, joined: bool
+) -> list[tuple[int, int, str]]:
+    """The line's words as `(start, end, NFC text)`; joined, each run of
+    single-character words that are not digits made one, as
+    `citations._joined_tracking` joins a tracked heading's letters."""
+    units: list[tuple[int, int, str, bool]] = []
+    for start, end in spans:
+        word = unicodedata.normalize("NFC", line[start:end])
+        single = len(word) == 1 and not word.isdigit()
+        last = units[-1] if units else None
+        if joined and single and last is not None and last[3]:
+            units[-1] = (last[0], end, last[2] + word, True)
+        else:
+            units.append((start, end, word, single))
+    return [(start, end, key) for start, end, key, _single in units]
+
+
+def _places(keys: list[str], words: list[str], *, edges: bool) -> list[int]:
+    """Every index at which `words` run as consecutive `keys`: all equal, or
+    with `edges` the interior equal and the first and last edge-forgiven."""
+    width = len(words)
+    if not width:
+        return []
+    inner = slice(1, width - 1) if edges else slice(0, width)
+    return [
+        at
+        for at in range(len(keys) - width + 1)
+        if keys[at : at + width][inner] == words[inner]
+        and (
+            not edges
+            or (_edge(keys[at], words[0]) and _edge(keys[at + width - 1], words[-1]))
+        )
+    ]
+
+
+def _edge(key: str, word: str) -> bool:
+    stripped = _stripped(word)
+    return key == word or (bool(stripped) and _stripped(key) == stripped)
+
+
+def _stripped(word: str) -> str:
+    """A word less the punctuation a sentence puts around it; a word with a
+    digit in it keeps what would change its figure (EV-4)."""
+    core = word.strip(EDGE_PUNCTUATION)
+    if not any(character.isdigit() for character in core):
+        return core
+    return word.lstrip(_FIGURE_LEFT).rstrip(_FIGURE_RIGHT)
+
+
+def _line_of(citation: object) -> object:
+    return citation.get("line_text") if isinstance(citation, Mapping) else None
 
 
 def _page(citation: Mapping[str, Any]) -> str:
@@ -564,7 +808,7 @@ def _page(citation: Mapping[str, Any]) -> str:
     return str(value)
 
 
-def _narrative(narrative: object) -> str:
+def _narrative(narrative: object, cited: Mapping[str, _Handoff]) -> str:
     if narrative is None or narrative == []:
         return ""
     # Historical payloads remain renderable; the save boundary accepts only spans.
@@ -577,18 +821,97 @@ def _narrative(narrative: object) -> str:
         if not isinstance(paragraph, list) or not 1 <= len(paragraph) <= 64:
             raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
         paragraphs.append(
-            "<div>" + "".join(_span(span) for span in paragraph) + "</div>\n"
+            "<div>" + "".join(_span(span, cited) for span in paragraph) + "</div>\n"
         )
     return "<h2>Analyst narrative</h2>\n" + "".join(paragraphs)
 
 
-def _span(span: object) -> str:
+def _span(span: object, cited: Mapping[str, _Handoff]) -> str:
+    """Prose, a figure (an anchored citation), or an unverified figure (D106,
+    owner: "Labelled unverified too"), which is shown labelled as one."""
     if isinstance(span, Mapping):
         if set(span) == {"text"} and isinstance(span["text"], str):
             return escape(span["text"])
         if set(span) == {"figure"}:
-            return _citation(span["figure"])
+            return _figure(span["figure"], cited)
+        if set(span) == {"unverified"}:
+            entry = span["unverified"]
+            if not isinstance(entry, Mapping):
+                raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+            view = cited.get(str(entry.get("route_node_id")))
+            named = _named(entry, view, "unverified_index", _UNVERIFIED_KEYS)
+            text = unverified(
+                {**entry, "linked": named.get("linked", True)},
+                f"[{_reference(entry, view, named)}] · ",
+            )
+            return f'<span class="cite">{text}</span>'
     raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+
+
+def _figure(figure: object, cited: Mapping[str, _Handoff]) -> str:
+    """A narrative figure, compact (D107): its excerpt, then a reference to
+    its module's citation (`[CP-1 C3]`, which that module's appendix lists),
+    its document and page; whether a statement of the answer cites it is
+    read from the record, and its line is checked there, never shown."""
+    if not isinstance(figure, Mapping):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    view = cited.get(str(figure.get("route_node_id")))
+    named = _named(figure, view, "citation_index", _FIGURE_KEYS)
+    quote = _text(figure, "matched_text")
+    document = escape(_text(figure, "document_sha256")[:12])
+    page = _page(figure)
+    notes = _notes(
+        {**figure, "linked": named.get("linked", True)},
+        named.get("line_text"),
+        ANY_RUN if view is None else view.rule,
+    )
+    return (
+        f'{_quoted(quote)} <span class="cite">[{_reference(figure, view, named)}]'
+        f" · {document} · page {page}{notes}</span>"
+    )
+
+
+def _reference(
+    figure: Mapping[str, Any], view: _Handoff | None, named: Mapping[str, Any]
+) -> str:
+    """How a narrative names a module's citation: the module the appendix is
+    headed by, and the citation's marker where its record keeps one."""
+    module = (
+        view.provenance["module_id"]
+        if view is not None
+        else _text(figure, "route_node_id")
+    )
+    marker = _marker(named)
+    return escape(module) + ("" if marker is None else f" C{marker}")
+
+
+# What a narrative figure copies from the record entry it names.
+_FIGURE_KEYS = ("document_sha256", "page", "matched_text")
+_UNVERIFIED_KEYS = ("source_id", "page", "matched_text", "code")
+
+
+def _named(
+    figure: object, view: _Handoff | None, key: str, fields: tuple[str, ...]
+) -> Mapping[str, Any]:
+    """The record entry a narrative figure names -- an anchored citation
+    (`citation_index`) or an unverified one (`unverified_index`) -- or an
+    empty mapping where the figure names none this payload carries with its
+    own copy (a payload `verify_package` reports). What the figure shows of
+    the record beyond its copy -- the line an excerpt anchored in (D105), and
+    whether the answer's body carries the quote (`linked`, D106) -- is read
+    from there, never borrowed from another entry."""
+    if not isinstance(figure, Mapping) or view is None:
+        return {}
+    index = figure.get(key)
+    entries = view.citations if key == "citation_index" else view.unverified
+    if type(index) is not int or not 0 <= index < len(entries):
+        return {}
+    entry = entries[index]
+    if not isinstance(entry, Mapping) or any(
+        entry.get(field) != figure.get(field) for field in fields
+    ):
+        return {}
+    return entry
 
 
 def _provenance(artifacts: Sequence[object]) -> str:

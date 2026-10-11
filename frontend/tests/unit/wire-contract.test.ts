@@ -51,7 +51,7 @@ test("Report and Committee bind case/run/revision and exact receipt identity", (
     payload_sha256: SHA,
     case_title: "Issuer",
     artifacts: [],
-    narrative: [[{ text: "<script>plain text</script>", figure: null }]],
+    narrative: [[{ text: "<script>plain text</script>", figure: null, unverified: null }]],
     revisions: [{ revision_id: SOURCE, payload_sha256: SHA, saved_at: AT, state: "filed" }],
   };
   const expected = { caseId: CASE, runId: RUN, revisionId: SOURCE };
@@ -355,7 +355,15 @@ function runSection(): { [key: string]: Json } {
           { attempt_id: RUN, route_node_id: "CP-0", ordinal: 1, started_at: AT, accepted: true },
         ],
         work: { state: "STOPPED", stop_code: "PROVIDER_UNAVAILABLE", cancel_requested: false },
-        blocked_by: { route_node_id: "CP-5", module_id: "CP-5", attempt_id: RUN },
+        blocked_by: {
+          route_node_id: "CP-5",
+          module_id: "CP-5",
+          attempt_id: RUN,
+          quotes_recorded: false,
+          quotes_refusal: null,
+          verified: [],
+          unverified: [],
+        },
         supersedes: null,
         superseded_by: null,
       },
@@ -417,8 +425,27 @@ function analysis(): { [key: string]: Json } {
               filename: "10-K.pdf",
               page: 3,
               matched_text: "net leverage",
+              line: {
+                before: "We expect ",
+                excerpt: "net leverage",
+                after: " to fall.",
+                recorded: true,
+              },
               rects: [{ x0: 1, y0: 2.5, x1: 3, y1: 4 }],
               withdrawn_at: null,
+              cited_page: null,
+              linked: true,
+              marker: 1,
+            },
+          ],
+          unverified_facts: [
+            {
+              source_id: SOURCE,
+              page: 4,
+              matched_text: "the model's own quote",
+              code: "CITATION_NOT_LOCATED",
+              linked: true,
+              marker: 2,
             },
           ],
           model_analysis: "# CP-0",
@@ -436,6 +463,21 @@ function analysis(): { [key: string]: Json } {
             },
           ],
           tables_unavailable_reason: null,
+          registers: [
+            {
+              register_id: "T4C.4",
+              columns: ["Test", "Headroom", "Note"],
+              declared: ["Test", "Headroom", null],
+              rows: [
+                [
+                  { text: "Net leverage", value: null },
+                  { text: "1.5x", value: "1.5" },
+                  { text: "n/a", value: null },
+                ],
+              ],
+            },
+          ],
+          registers_unavailable_reason: null,
         },
       ],
       pending: [],
@@ -541,6 +583,7 @@ describe("the v1 wire contract", () => {
       "WithdrawSource",
       "SourceWithdrawn",
       "NarrativeFigureRef",
+      "NarrativeUnverifiedRef",
       "NarrativeDraft",
       "SaveRevision",
       "RevisionSaved",
@@ -637,6 +680,14 @@ describe("the v1 wire contract", () => {
     fact.body.handoffs[0].source_facts[0].rects[0].bbox = [0, 0, 1, 1];
     refuses(() => parseAnalysisDocument(fact), "$.body.handoffs[0].source_facts[0].rects[0]");
 
+    // D105: a citation's line is closed and required, like the citation.
+    const line = JSON.parse(JSON.stringify(deep));
+    line.body.handoffs[0].source_facts[0].line.offset = 10;
+    refuses(() => parseAnalysisDocument(line), "$.body.handoffs[0].source_facts[0].line");
+    const lineless = JSON.parse(JSON.stringify(deep));
+    delete lineless.body.handoffs[0].source_facts[0].line;
+    refuses(() => parseAnalysisDocument(lineless), "$.body.handoffs[0].source_facts[0]");
+
     const chrome = JSON.parse(JSON.stringify(runSection()));
     chrome.chrome.served_role.enables = ["approve"];
     refuses(() => parseRunSectionDocument(chrome), "$.chrome.served_role");
@@ -718,6 +769,22 @@ describe("the v1 wire contract", () => {
     const reason = JSON.parse(JSON.stringify(analysis()));
     reason.body.handoffs[0].tables_unavailable_reason = "PARSE_ERROR";
     refuses(() => parseAnalysisDocument(reason), "$.body.handoffs[0].tables_unavailable_reason");
+
+    // A register is read as a table is, and `declared` is a header cell's
+    // profile column or null, never a number.
+    const register = "$.body.handoffs[0].registers[0]";
+    const declared = JSON.parse(JSON.stringify(analysis()));
+    declared.body.handoffs[0].registers[0].declared[0] = 7;
+    refuses(() => parseAnalysisDocument(declared), `${register}.declared[0]`);
+    const registerId = JSON.parse(JSON.stringify(analysis()));
+    registerId.body.handoffs[0].registers[0].register_id = "T4C 4";
+    refuses(() => parseAnalysisDocument(registerId), `${register}.register_id`);
+    const registerReason = JSON.parse(JSON.stringify(analysis()));
+    registerReason.body.handoffs[0].registers_unavailable_reason = "PARSE_ERROR";
+    refuses(
+      () => parseAnalysisDocument(registerReason),
+      "$.body.handoffs[0].registers_unavailable_reason",
+    );
 
     refuses(() => parseDirectoryDocument([]), "$");
     refuses(() => parseDirectoryDocument(null), "$");

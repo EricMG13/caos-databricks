@@ -17,11 +17,15 @@ the first one would hand a reviewer less than the host knows, and what the
 remaining cases did is the next thing they would ask.
 
 **What an answer key can express, and what it cannot.** A key names citations —
-which quote, from which document, under which module. That is the strongest key
+which line, from which document, under which module (a citation anchored in
+the line meets it, D105). That is the strongest key
 the canonical handoff's record can be checked against today, because a record
 carries projections and citations and not typed figures. A key saying "net
 leverage is 4.2x" has nothing to compare against until the record carries the
 figure as a number, which is the known-gaps entry this module ships with.
+A figure key may also name the other whole lines that state its figures
+(`AlternativeLine`, D101); a cited alternative meets it, under its own module,
+by the same exact comparison.
 
 Beside the citations a key may also ask what a module *concluded*
 (`ExpectedProjection`, over the eight fields the host projects) and what it
@@ -55,6 +59,7 @@ from caos.graph.route import MODEL_MODULE, READY, ResolvedRoute, readiness_from
 from caos.graph.runtime import accepted_artifacts
 from caos.methodology.bundle import Bundle, verified_bytes
 from caos.methodology.canonical import accepted_handoff, accepted_projections
+from caos.methodology.citation_markers import unmarked
 from caos.methodology.forecast import forecast_projection
 from caos.methodology.handoff import UNCLEARED_READINESS, Projections
 from caos.methodology.vendor import VendorContract, load_vendor_contract
@@ -90,9 +95,11 @@ _LABEL_LIMIT = 128
 #
 # One code, because it is the one a run the host produces can end in. A
 # validated Blocked handoff ends the run BLOCKED and records the verdict that
-# did it (`run_blocking_verdicts`). Every other methodology refusal -- a quote
-# that cannot be anchored, a handoff that will not validate -- is raised by a
-# node, explained against its attempt and leaves the run RUNNING for a retry:
+# did it (`run_blocking_verdicts`). Every other methodology refusal -- a
+# Blocked answer's quote that cannot be anchored, a handoff that will not
+# validate -- is raised by a node, explained against its attempt and leaves the
+# run RUNNING for a retry (since D106 an accepted answer's unanchored quote is
+# no refusal at all, only an unverified citation):
 # nothing in production ends a run on it, so `_refusal_met` could never answer
 # the key, and a set declaring one was prepared and paid for and then stopped
 # with no matrix on every attempt `qualify.py` bought (DQ-2). A node refusal
@@ -109,17 +116,38 @@ SCALAR_PROJECTION_FIELDS = frozenset(
 
 
 @dataclass(frozen=True, slots=True)
+class AlternativeLine:
+    """Another whole evidence line that states a figure key's confirmed figures.
+
+    Named, never inferred: the matrix compares exact strings and does no fuzzy
+    matching, so an equivalent line counts only where the set's author wrote it
+    down beside the key (D101) -- and is held to the key's own rule, one whole
+    evidence line of the document it names (F475).
+    """
+
+    document_sha256: str
+    matched_text: str
+
+
+@dataclass(frozen=True, slots=True)
 class ExpectedCitation:
     """One thing a correct run of this case must have cited.
 
     The document is named by digest rather than by filename, because a
     qualification set outlives any one case's admission of it and a filename is
     not an identity.
+
+    `alternatives` are the other lines that answer the same key (D101, the
+    owner's ruling of 3 October): a figure stated in a release's segment table
+    and in the 10-Q's statement of operations is one figure, and a module
+    citing either has cited it. Each is met only under the key's own module.
+    Prose keys carry none -- a statement is its sentence.
     """
 
     module_id: str
     document_sha256: str
     matched_text: str
+    alternatives: tuple[AlternativeLine, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,6 +299,12 @@ class QualificationCase:
     # (`run_inputs.research_text`). An input like the documents: pinned by the
     # harness, compared at eligibility, and covered by the digest.
     research_brief: str | None = None
+    # D109: the run's command as the case states it -- each (module id, name,
+    # value) qualifier and CP-0's objective. Pinned by the harness, compared
+    # at eligibility, covered by the digest. CP-2G's unstated forecast scope
+    # is derived at the pin from the subject's reporting period, not here.
+    qualifiers: tuple[tuple[str, str, str], ...] = ()
+    objective: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -369,10 +403,7 @@ def _digested(case: QualificationCase) -> list[object]:
             [document.filename.value, sha256(document.data).hexdigest()]
             for document in case.documents
         ),
-        sorted(
-            [expect.module_id, expect.document_sha256, expect.matched_text]
-            for expect in case.expects
-        ),
+        sorted(_digested_key(expect) for expect in case.expects),
     ]
     # N8/FP-25: every optional field below is tagged with its own name before
     # its value, not appended bare. Two of the nine were already tagged
@@ -428,6 +459,7 @@ def _digested(case: QualificationCase) -> list[object]:
         )
     if case.research_brief is not None:
         entry.append(["research_brief", case.research_brief])
+    entry.extend(_digested_command(case))
     if case.expects_register:
         entry.append(
             [
@@ -449,6 +481,48 @@ def _digested(case: QualificationCase) -> list[object]:
             ]
         )
     return entry
+
+
+def _digested_command(case: QualificationCase) -> list[object]:
+    """A case's command (D109), each part tagged as every optional field is,
+    and nothing when it states none, so no earlier set's digest moves."""
+    entry: list[object] = []
+    if case.qualifiers:
+        entry.append(["qualifiers", sorted(list(item) for item in case.qualifiers)])
+    if case.objective is not None:
+        entry.append(["objective", case.objective])
+    return entry
+
+
+def _digested_key(expect: ExpectedCitation) -> list[object]:
+    """One citation key's digested form. Its alternatives are appended, tagged
+    and sorted, only when declared, so a key without any digests exactly as it
+    did before keys could carry them (D101)."""
+    entry: list[object] = [
+        expect.module_id,
+        expect.document_sha256,
+        expect.matched_text,
+    ]
+    if expect.alternatives:
+        entry.append(
+            [
+                "alternatives",
+                sorted(
+                    [line.document_sha256, line.matched_text]
+                    for line in expect.alternatives
+                ),
+            ]
+        )
+    return entry
+
+
+def key_lines(expect: ExpectedCitation) -> tuple[tuple[str, str], ...]:
+    """Every `(document, line)` that answers `expect`: its own line first, then
+    each alternative the set names (D101)."""
+    return (
+        (expect.document_sha256, expect.matched_text),
+        *((line.document_sha256, line.matched_text) for line in expect.alternatives),
+    )
 
 
 def build_matrix(
@@ -829,11 +903,14 @@ def _normalised_cell(value: str) -> str:
     stripped: a Markdown table's cells are padded for alignment and a line may
     be wrapped, neither of which is the module saying anything different.
 
+    A citation marker is not the cell's value (`unmarked`, D107): `(45) [C1]`
+    meets a key expecting `(45)`.
+
     **Case is preserved.** `MATERIAL` and `Material` are different values in
     every vendor vocabulary that has one, and a comparison that folded case
     would let a key pass over a cell the bundle's own validators would refuse.
     """
-    return " ".join(unicodedata.normalize("NFC", value).split())
+    return " ".join(unicodedata.normalize("NFC", unmarked(value)).split())
 
 
 def _cell(
@@ -923,8 +1000,11 @@ def module_registers(
     """
     skill = verified_bytes(bundle, module_id, "SKILL.md").decode("utf-8")
     checker = contract.completeness_check
-    declared = checker.load_contract(skill, module_id)["registers"]
-    found = checker.find_registers(text, declared)
+    loaded = checker.load_contract(skill, module_id)
+    # With the module's retired ids too, as `check()` asks it (fork r7, D95).
+    found = checker.find_registers(
+        text, loaded["registers"], loaded.get("retired_registers", ())
+    )
     return found if isinstance(found, dict) else {}
 
 
@@ -1251,10 +1331,17 @@ def _readiness(
 
 
 def _matches(expect: ExpectedCitation, cited: set[tuple[str, str, str]]) -> bool:
-    """An expectation is met by the same quote, from the same document, under the
-    same module. The right quote under the wrong module answers a different
-    question and is not this key's answer."""
-    return (expect.module_id, expect.document_sha256, expect.matched_text) in cited
+    """An expectation is met by a citation anchored in the same line, of the same
+    document, under the same module -- the key's own line or one of the
+    alternatives the set names for it (D101), each compared as the exact
+    string (F475) with the line the citation anchored in (`proof.cited_line`):
+    since D105 a citation is any excerpt of its line, and a record from before
+    it is scored by its quote. The right line under the wrong module answers a
+    different question and is not this key's answer."""
+    return any(
+        (expect.module_id, document_sha256, matched_text) in cited
+        for document_sha256, matched_text in key_lines(expect)
+    )
 
 
 # A row's own uncertainty, not a reason to end the matrix: a pin that no longer
@@ -1277,7 +1364,7 @@ ROW_REFUSALS = frozenset(
 def _cited(
     conn: StoreConnection, run_id: UUID, *, proof: OrchestrationProof | None
 ) -> set[tuple[str, str, str]]:
-    """Every (module, document, quote) this run's proof re-anchored.
+    """Every (module, document, line) this run's proof re-anchored.
 
     The module is taken from the route pin, as `proof.py` takes it (invariant
     3: the host owns identity). A run with no pin cites nothing, which is a row
@@ -1293,7 +1380,7 @@ def _cited(
 def _proven(
     conn: StoreConnection, run_id: UUID, proof: OrchestrationProof | None
 ) -> set[tuple[str, str, str]]:
-    """A proven canonical run's anchored quotes, each document still live now.
+    """A proven canonical run's anchored lines, each document still live now.
 
     Scoring is a use, so a source withdrawn since the proof refuses the row
     `ORCHESTRATION_SOURCE_NOT_PINNED`, as the proof itself would (invariant 1).
@@ -1301,7 +1388,7 @@ def _proven(
     if proof is None:
         return set()
     live = pinned_live_sources(conn, run_id)
-    if any(document not in live for _module, document, _quote in proof.anchored):
+    if any(document not in live for _module, document, _line in proof.anchored):
         raise Refusal(RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED)
     return set(proof.anchored)
 
@@ -1444,11 +1531,26 @@ def _projections_ambiguous(expects: tuple[ExpectedProjection, ...]) -> bool:
     return False
 
 
+def _citations_ambiguous(expects: tuple[ExpectedCitation, ...]) -> bool:
+    """Whether one cited line could answer two keys, or one key twice.
+
+    A key's alternatives are other lines stating the same figures (D101). If one
+    of them were another key's line, or another key's alternative, under the
+    same module, a single citation would meet two keys and the matrix would
+    count one finding twice.
+    """
+    lines = [
+        (expect.module_id, *line) for expect in expects for line in key_lines(expect)
+    ]
+    return len(set(lines)) != len(lines)
+
+
 def assert_unambiguous(qualification: QualificationSet) -> None:
     """Refuse duplicate case labels or answer keys before either can be scored."""
     labels = [case_label(case) for case in qualification.cases]
     if len(set(labels)) != len(labels) or any(
         len(set(case.expects)) != len(case.expects)
+        or _citations_ambiguous(case.expects)
         or len(set(case.expects_register)) != len(case.expects_register)
         or _registers_ambiguous(case.expects_register)
         or _projections_ambiguous(case.expects_projection)

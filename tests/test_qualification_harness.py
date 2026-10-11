@@ -154,10 +154,14 @@ class _Completions:
         self.prompts.append(prompt)
         if len(self.prompts) == self.refuses_call:
             return Completion(None, None, None, RefusalCode.PROVIDER_UNAVAILABLE)
-        # The evidence section is last, so its source is the last one named,
-        # and the debt line it shows is the whole line the answer cites (N28).
-        source_id = re.findall(r"^source_id: (\S+)$", prompt, re.MULTILINE)[-1]
-        line = re.findall(r"^Total debt at 31 December 2026 .*$", prompt, re.MULTILINE)
+        # The evidence section opens the prompt (D113): its source is the one
+        # named there, and the debt line it shows is the whole line the answer
+        # cites (N28).
+        evidence = prompt[: prompt.index("\n--- END EVIDENCE ")]
+        source_id = re.findall(r"^source_id: (\S+)$", evidence, re.MULTILINE)[-1]
+        line = re.findall(
+            r"^Total debt at 31 December 2026 .*$", evidence, re.MULTILINE
+        )
         return CanonicalCompletions(
             UUID(source_id),
             generation_id="gen-harness-test",
@@ -223,7 +227,7 @@ class _DamagesWhatWasAccepted:
 
 @contextmanager
 def _without_route(conn: StoreConnection, database: str, run: UUID) -> Iterator[None]:
-    assert database == "caos_test_" + UUID(database.removeprefix("caos_test_")).hex
+    assert re.fullmatch(r"caos_test_(\d{10}_)?[0-9a-f]{32}", database)
     assert conn.info.transaction_status.name == "IDLE"
     query = (
         "SELECT t.tgname, t.tgenabled FROM pg_trigger t"
@@ -586,6 +590,51 @@ def test_the_pre_spend_key_check_never_refuses_what_the_answer_rule_anchors(
     )
     qualification = QualificationSet(cases=(_case("acme-2026", data, quote=spelling),))
     if anchors:
+        assert assert_admissible(harness, qualification=qualification)
+    else:
+        with pytest.raises(Refusal, match=r"^QUALIFICATION_KEY_UNANSWERABLE$"):
+            assert_admissible(harness, qualification=qualification)
+
+
+@pytest.mark.parametrize(
+    ("document", "line", "answerable"),
+    [
+        ("report", "Acme Holdings plc annual report 2026", True),
+        ("other", "Acme Holdings plc annual report 2026", False),
+        ("report", "Acme Holdings plc interim report 2026", False),
+    ],
+)
+def test_an_alternative_line_is_held_to_its_keys_pre_spend_check(
+    document: str, line: str, answerable: bool
+) -> None:
+    """D101: an alternative is answerable on the key's own terms -- its document
+    carried by the case, its words on a page -- or the set is refused
+    `QUALIFICATION_KEY_UNANSWERABLE` before any call, as a bad key is."""
+    from hashlib import sha256
+
+    from caos.qualification.harness import assert_admissible
+    from caos.qualification.matrix import AlternativeLine
+
+    case = _case("acme-2026", REPORT)
+    [key] = case.expects
+    data = {"report": REPORT, "other": OTHER}[document]
+    keyed = replace(
+        case,
+        expects=(
+            replace(
+                key, alternatives=(AlternativeLine(sha256(data).hexdigest(), line),)
+            ),
+        ),
+    )
+    harness = Harness(
+        bundle=Bundle(root=VENDORED),
+        catalog=CATALOG,
+        completions=_Completions(),
+        price=priced(ESTIMATE),
+        ceiling=SET_CEILING,
+    )
+    qualification = QualificationSet(cases=(keyed,))
+    if answerable:
         assert assert_admissible(harness, qualification=qualification)
     else:
         with pytest.raises(Refusal, match=r"^QUALIFICATION_KEY_UNANSWERABLE$"):
@@ -1482,14 +1531,16 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
             # FP-26: the grading key's own quote must be one `no_quote` really
             # carries, or `_answerable` refuses before any run starts. The
             # model still cites the module's usual QUOTE regardless of the
-            # key, and this document never carries that one -- which is the
-            # real, run-time CITATION_NOT_LOCATED this test is about.
+            # key. The first call is refused PROVIDER_UNAVAILABLE, a refusal
+            # with no guided retry that stops the run (since D106 the module's
+            # QUOTE, which this document never carries, refuses nothing).
             QualificationSet(
                 cases=(_case("stale", no_quote, quote="Revenue grew in the year"),)
             ),
+            completions=_Completions(refuses_call=1),
         )
         [record] = performed.performed
-        assert record.stopped is RefusalCode.CITATION_NOT_LOCATED
+        assert record.stopped is RefusalCode.PROVIDER_UNAVAILABLE
         row = conn.execute(
             "SELECT route_node_id FROM run_attempts WHERE run_id=%s",
             (record.run_id,),
@@ -1504,7 +1555,7 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
         )
         assert fail_run(conn, record.run_id)
         conn.commit()
-        met = _refusal_met(conn, record.run_id, RefusalCode.CITATION_NOT_LOCATED, None)
+        met = _refusal_met(conn, record.run_id, RefusalCode.PROVIDER_UNAVAILABLE, None)
         assert met is False
 
 

@@ -80,7 +80,7 @@ export function SectionTabs({
               id={`tab-${tab.id}`}
               aria-controls={`tabpanel-${tab.id}`}
               title={dense && tab.cp ? `${tab.cp} · ${tab.label}` : undefined}
-              className={`flex-none after:hidden data-active:border-border! data-active:bg-muted! data-active:shadow-none ${tabText}`}
+              className={`flex-none after:hidden data-active:border-selected-border! data-active:bg-selected! data-active:shadow-none ${tabText}`}
             >
               {tab.severity && <SeverityMark severity={tab.severity} decorative />}
               <span className={tab.cp ? "font-normal" : "font-mono text-[13px]"}>

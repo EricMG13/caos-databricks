@@ -17,6 +17,7 @@ import copy
 import dataclasses
 import hashlib
 import json
+import re
 import shutil
 import types
 from pathlib import Path
@@ -52,7 +53,7 @@ CATALOG = (
 )
 
 # A run pinned to one build never executes under another.
-BUILD_ID = "994a1b3fdb1113e29068c32e07b741615825f0b0454c4cf2945e85908d8adc0f"
+BUILD_ID = "d73f4b91a090baa82e4cf8388ceba7dbb2fdf9741f82571cf94bb0582fdcc8be"
 
 
 def _load(path: Path) -> dict[str, object]:
@@ -511,12 +512,22 @@ def test_the_fixture_markers_are_split_from_the_thin_evidence_marker() -> None:
     assert check(skill, warned, "CP-0")[0] == [
         "validation_warnings declares the fixture marker 'PRESENTATION_FIXTURE'"
     ]
+    # Fork r13 (D111): a marker counts written alone on a line, or in a
+    # front-matter value; a sentence that only names it, a denial included,
+    # does not.
     marked = handoff_markdown(
-        identity("CP-0"), body_note="Built from an Integration Fixture pack."
+        identity("CP-0"), body_note="Integration fixture."
     ).decode()
     assert check(skill, marked, "CP-0")[0] == [
         "document contains the fixture marker text 'integration fixture'"
     ]
+    for note in (
+        "Built from an Integration Fixture pack.",
+        "The pack is issuer filings, not an integration fixture or synthetic"
+        " test input.",
+    ):
+        named = handoff_markdown(identity("CP-0"), body_note=note).decode()
+        assert check(skill, named, "CP-0")[0] == []
 
 
 def test_screening_only_never_permits_committee_ready() -> None:
@@ -621,9 +632,9 @@ def test_the_vendor_enforces_cp_l10s_semantic_rules() -> None:
     skill = (BUNDLE / L10_SKILL).read_text(encoding="utf-8")
     rules = CONTRACT.completeness_check.load_contract(skill, "CP-L10")
     assert [rule["rule_id"] for rule in rules["semantic_rules"]] == [
-        "cp_l10.topic_ids_unique",
-        "cp_l10.topic_ids_complete",
-        "cp_l10.overall_screen_present",
+        f"cp_l{phase}.{rule}"
+        for phase in L10_PHASES
+        for rule in ("topic_ids_unique", "topic_ids_complete", "overall_screen_present")
     ]
     check = CONTRACT.completeness_check.check
     handoff = _l10_handoff()
@@ -639,6 +650,106 @@ def test_the_vendor_enforces_cp_l10s_semantic_rules() -> None:
     assert check(skill, lowered, "CP-L10")[0] == [
         "TL10.3: cp_l10.overall_screen_present -- column 'screen_item' lacks 'OVERALL'"
     ]
+
+
+L10_PHASES = ("10", "20", "23", "30", "40")
+
+
+@pytest.mark.parametrize("phase", L10_PHASES[1:])
+def test_every_absorbed_screen_s_rules_are_enforced(phase: str) -> None:
+    """D98: CP-L20/L23/L30/L40's topic and OVERALL rules sat in four
+    "### CP-Lxx output rules" blocks outside `## Output profile`, which the
+    checker never reads, so only CP-L10's own three were enforced. They are in
+    the profile now, with the values each phase's binding rules state, and the
+    four blocks (16,396 bytes of every CP-L10 request) are gone."""
+    skill = (BUNDLE / L10_SKILL).read_text(encoding="utf-8")
+    assert f"### CP-L{phase} output rules" not in skill
+    rules = {
+        rule["rule_id"]: rule
+        for rule in CONTRACT.completeness_check.load_contract(skill, "CP-L10")[
+            "semantic_rules"
+        ]
+    }
+    unique = rules[f"cp_l{phase}.topic_ids_unique"]
+    assert (unique["rule"], unique["register_id"], unique["columns"]) == (
+        "unique_columns",
+        f"TL{phase}.2",
+        ["topic_id"],
+    )
+    complete = rules[f"cp_l{phase}.topic_ids_complete"]
+    stated = re.search(
+        rf"### CP-L{phase} binding rules\n.*?\*\*canonical_topics\*\*: ([^\n]+)",
+        skill,
+        re.S,
+    )
+    assert stated is not None
+    topics = stated.group(1).split(", ")
+    assert len(topics) == 6
+    assert (complete["rule"], complete["register_id"], complete["column"]) == (
+        "required_values",
+        f"TL{phase}.2",
+        "topic_id",
+    )
+    assert complete["values"] == topics and complete["case_sensitive"] is True
+    overall = rules[f"cp_l{phase}.overall_screen_present"]
+    assert (overall["register_id"], overall["column"], overall["values"]) == (
+        f"TL{phase}.3",
+        "screen_item",
+        ["OVERALL"],
+    )
+    check = CONTRACT.completeness_check.check
+    handoff = _l10_handoff()
+    assert check(skill, handoff, "CP-L10")[0] == []
+    register = f"TL{phase}.2"
+    doubled = _with_register_cell(handoff, register, 2, "topic_id", topics[0])
+    assert check(skill, doubled, "CP-L10")[0] == [
+        f"{register}: cp_l{phase}.topic_ids_unique -- column 'topic_id' repeats "
+        f"{topics[0]!r}",
+        f"{register}: cp_l{phase}.topic_ids_complete -- column 'topic_id' lacks "
+        f"{topics[1]!r}",
+    ]
+    missing = _with_register_cell(handoff, register, 6, "topic_id", "OTHER_TOPIC")
+    assert check(skill, missing, "CP-L10")[0] == [
+        f"{register}: cp_l{phase}.topic_ids_complete -- column 'topic_id' lacks "
+        f"{topics[5]!r}"
+    ]
+    lowered = _with_register_cell(handoff, f"TL{phase}.3", 1, "screen_item", "overall")
+    assert check(skill, lowered, "CP-L10")[0] == [
+        f"TL{phase}.3: cp_l{phase}.overall_screen_present -- column 'screen_item' "
+        "lacks 'OVERALL'"
+    ]
+
+
+def test_cp_l10_keeps_what_the_deleted_rule_blocks_alone_said() -> None:
+    """D98: each deleted block's own lines -- its table inventory, front table,
+    reader question, decision drivers and trigger fields -- moved to that
+    phase's binding rules; everything else in it repeated the profile, the
+    phase's method or the companions list."""
+    skill = (BUNDLE / L10_SKILL).read_text(encoding="utf-8")
+    for phase, front in (
+        ("20", "Credit screen"),
+        ("23", "Liquidity and forward-risk screen"),
+        ("30", "Security opportunity screen"),
+        ("40", "Creditor-document screen"),
+    ):
+        section = skill[skill.index(f"### CP-L{phase} binding rules") :]
+        section = section[: section.index(f"### CP-L{phase} method")]
+        assert (
+            f"- **table_inventory**: TL{phase}.1; TL{phase}.2; TL{phase}.3; TL{phase}.4"
+            in section
+        )
+        assert (
+            f"- **permitted_front_table**: name={front}; optional=True; "
+            "values_must_come_from_appendix_registers=True"
+        ) in section
+        for field in (
+            "reader_question",
+            "required_decision_drivers",
+            "required_risk_catalyst_trigger_fields",
+        ):
+            assert f"- **{field}**: " in section, (phase, field)
+        assert f"./references/CP-L{phase}_SCHEMA_REFERENCE.md" in skill
+    assert len(re.findall(r"^## Output profile", skill, re.M)) == 1
 
 
 def test_the_vendor_checks_a_lite_payloads_required_fields() -> None:

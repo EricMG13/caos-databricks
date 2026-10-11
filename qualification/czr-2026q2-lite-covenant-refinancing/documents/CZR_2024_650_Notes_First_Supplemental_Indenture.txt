@@ -1,0 +1,149 @@
+Exhibit 4.2
+FIRST SUPPLEMENTAL INDENTURE
+THIS FIRST SUPPLEMENTAL INDENTURE (this “Supplemental Indenture”), dated as of March 1, 2024, among CAESARS INTERACTIVE ENTERTAINMENT NEW JERSEY, LLC, a New Jersey limited liability company (“CIENJ”), TROPICANA ATLANTIC CITY CORP., a New Jersey corporation (“Tropicana” and together with CEI NJ, the “New Guarantors”), as subsidiaries of CAESARS ENTERTAINMENT, INC., a Delaware corporation (the “Company”), the other Subsidiary Guarantors (as defined in the Indenture referred to herein), U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION, as trustee (in such capacity, the “Trustee”), and U.S. BANK NATIONAL ASSOCIATION, as collateral agent (in such capacity, the “Collateral Agent”).
+W I T N E S S E T H :
+WHEREAS, the Company has heretofore executed and delivered to the Trustee and the Collateral Agent an indenture, dated as of February 6, 2024, providing for the issuance of 6.500% Senior Secured Notes due 2032 (the “Notes”), initially in the aggregate principal amount of $1,500,000,000, by and among the Company, the Subsidiary Guarantors party thereto, the Trustee and the Collateral Agent (as further amended, supplemented or otherwise modified, the “Indenture”);
+WHEREAS, the Company desires to amend clause (44) of the definition of “Permitted Liens” pursuant to Section 9.01(a)(viii) of the Indenture;
+WHEREAS, the Company desires to amend Section 8.01(b) pursuant to Section 9.01(a)(i) of the Indenture;
+WHEREAS, Section 4.11 of the Indenture provides that under certain circumstances the Company is required to cause each New Guarantor to execute and deliver to the Trustee a supplemental indenture pursuant to which each New Guarantor shall unconditionally guarantee all the Company’s Obligations under the Notes and the Indenture pursuant to a Note Guarantee on the terms and conditions set forth herein; and
+WHEREAS, pursuant to Section 9.01 of the Indenture, the Trustee, the Collateral Agent, the Company and the Subsidiary Guarantors, if any, are authorized to execute and deliver this Supplemental Indenture without the consent of the Holders.
+NOW THEREFORE, in consideration of the foregoing and for other good and valuable consideration, the receipt of which is hereby acknowledged, each New Guarantor, the Company, the Subsidiary Guarantors, the Collateral Agent and the Trustee mutually covenant and agree for the equal and ratable benefit of the holders of the Notes as follows:
+1.Defined Terms.
+As used in this Supplemental Indenture, terms defined in the Indenture or in the preamble or recital hereto are used herein as therein defined, except that the term “holders” in this Supplemental Indenture shall refer to the term “holders” as defined in the Indenture and the Trustee acting on behalf of and for the benefit of such holders.
+The words “herein,” “hereof” and “hereby” and other words of similar import used in this Supplemental Indenture refer to this Supplemental Indenture as a whole and not to any particular section hereof.
+2.Permitted Liens.
+Clause (44) of the definition of “Permitted Liens” in Article I of the Indenture shall be replaced with the following language:
+(44) Liens on goods or inventory the purchase, shipment or storage price of which is financed by a documentary letter of credit, bank guarantee or bankers’ acceptance issued or created for the account of the Company or any Restricted Subsidiary in the ordinary course of business;
+provided that such Lien secures only the Obligations of the Company or such Restricted Subsidiaries in respect of such letter of credit, bank guarantee or banker’s acceptance to the extent permitted under Section 4.03(b);
+3.Discharge of Liability on Notes; Defeasance.
+Section 8.01(b) of the Indenture shall be replaced with the following language:
+(b) Subject to Sections 8.01(c) and 8.02, the Company at any time may terminate (i) all of its obligations under the Notes and this Indenture (with respect to the holders of the Notes) (“legal defeasance option”) or (ii) its obligations under Sections 4.02, 4.03, 4.04, 4.05, 4.06, 4.07, 4.08, 4.09, 4.11, 4.12, 4.16, 4.17, 4.18, and 4.19 and the operation of Section 5.01 for the benefit of the holders of the Notes, and Sections 6.01(c), 6.01(d) and Sections 6.01(e) and 6.01(f) (with respect to Significant Subsidiaries only), 6.01(g), 6.01(h), 6.01(i) and 6.01(j) (“covenant defeasance option”).
+The Company may exercise its legal defeasance option notwithstanding its prior exercise of its covenant defeasance option.
+In the event that the Company terminates all of its obligations under the Notes and this Indenture (with respect to such Notes) by exercising its legal defeasance option or its covenant defeasance option, the obligations of each Subsidiary Guarantor with respect to the Notes and of the Company and each Subsidiary Guarantor with respect to the Security Documents (with respect to the Notes Obligations) shall be terminated simultaneously with the termination of such obligations.
+4.Agreement to Guarantee.
+Each New Guarantor hereby agrees, jointly and severally with all existing guarantors (if any), to unconditionally guarantee the Company’s Obligations under the Notes and the Indenture on the terms and subject to the conditions set forth in Article XIII of the Indenture and to be bound by all other applicable provisions of the Indenture and the Notes and to perform all of the obligations and agreements of a guarantor under the Indenture.
+From and after the date hereof, all references in the Indenture to the “Guarantors” and “Subsidiary Guarantors” shall include the New Guarantors.
+5.Notices.
+All notices or other communications to each New Guarantor shall be given at the following address: Caesars Entertainment, Inc., 100 West Liberty Street, 12th Floor, Reno, Nevada 89501, Facsimile: (775) 337-9218 Attn: Chief Financial Officer.
+6.Execution and Delivery.
+Each New Guarantor agrees that its Note Guarantee shall remain in full force and effect notwithstanding the absence of the endorsement of any notation of such Note Guarantee.
+7.Confirmation of Security Interests.
+Each of the Company, the Subsidiary Guarantors and the New Guarantors hereby confirm that (a) the Notes are entitled to the benefits of the security interests set forth or created in the Collateral Agreement and the other Security Documents and (b) the Collateral Agreement and the other Security Documents are, and shall continue to be, in full force and effect and are hereby ratified and confirmed in all respects after giving effect to this Supplemental Indenture.
+Each of the Company, the Subsidiary Guarantors and the New Guarantors ratify and confirm their prior grant and the validity of all Liens granted, conveyed, or assigned to the Collateral Agent by such Person pursuant to each Security Document to which it is a party with all such Liens continuing in full force and effect after
+giving effect to this Supplemental Indenture, and such Liens are not released or reduced hereby, and secure full payment and performance of the Notes Obligations.
+8.Ratification of Indenture; Supplemental Indentures Part of Indenture.
+Except as expressly amended hereby, the Indenture is in all respects ratified and confirmed and all the terms, conditions and provisions thereof shall remain in full force and effect.
+This Supplemental Indenture shall form a part of the Indenture for all purposes, and every holder of Notes heretofore or hereafter authenticated and delivered shall be bound hereby.
+9.Governing Law.
+THIS SUPPLEMENTAL INDENTURE SHALL BE GOVERNED BY, AND CONSTRUED IN ACCORDANCE WITH, THE LAWS OF THE STATE OF NEW YORK.
+10.No Recourse Against Others.
+No director, officer, employee, manager, incorporator or holder of any Equity Interests in any New Guarantor or any direct or indirect parent corporation, as such, shall have any liability for any obligations of any New Guarantor under the Notes or the Indenture or this Supplemental Indenture or for any claim based on, in respect of, or by reason of, such obligations or their creation.
+Each holder of Notes by accepting a Note waives and releases all such liability.
+The waiver and release are part of the consideration for issuance of the Notes.
+11.Trustee Makes No Representation.
+The Trustee and the Collateral Agent make no representation as to the validity or sufficiency of this Supplemental Indenture.
+12.Counterparts.
+The parties may sign any number of copies of this Supplemental Indenture.
+Each signed copy shall be an original, but all of them together represent the same agreement.
+13.Effect of Headings.
+The Section headings herein are for convenience only and shall not effect the construction thereof.
+IN WITNESS WHEREOF, the parties hereto have caused this Supplemental Indenture to be duly executed as of the date first above written.
+CAESARS ENTERTAINMENT, INC.,
+as Company
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+[Signature Page to Supplemental Indenture – CEI 6.500% Senior Secured Notes 2032]
+AMERICAN WAGERING, INC.
+AWI GAMING, INC.
+AWI MANUFACTURING, INC.
+AZTAR RIVERBOAT HOLDING COMPANY, LLC
+BLACK HAWK HOLDINGS, L.L.C.
+BRANDYWINE BOOKMAKING LLC
+BW SUB CO.
+CAESARS CONVENTION CENTER OWNER, LLC
+CAESARS DUBAI, LLC
+CAESARS GROWTH PARTNERS, LLC
+CAESARS HOLDINGS, INC.
+CAESARS HOSPITALITY, LLC
+CAESARS INTERNATIONAL HOSPITALITY, LLC
+CAESARS PARLAY HOLDING, LLC
+CCR NEWCO, LLC
+CCSC/BLACKHAWK, INC.
+CIE GROWTH, LLC
+CIRCUS AND ELDORADO JOINT VENTURE, LLC
+COMPUTERIZED BOOKMAKING SYSTEMS, INC.
+CRS ANNEX, LLC
+DIGITAL HOLDCO LLC
+EASTSIDE CONVENTION CENTER, LLC
+ELDO FIT, LLC
+ELDORADO HOLDCO LLC
+ELDORADO LIMITED LIABILITY COMPANY
+ELDORADO SHREVEPORT #1, LLC
+ELDORADO SHREVEPORT #2, LLC
+ELGIN HOLDINGS I LLC
+ELGIN HOLDINGS II LLC
+ELGIN RIVERBOAT RESORT–RIVERBOAT CASINO
+GB INVESTOR, LLC,
+as a Subsidiary Guarantor
+By: /s/ Bret Yunker
+Name: Bret Yunker
+Title: Chief Financial Officer
+[Signature Page to Supplemental Indenture – CEI 6.500% Senior Secured Notes 2032]
+IC HOLDINGS COLORADO, INC.
+IOC - BLACK HAWK DISTRIBUTION COMPANY, LLC
+IOC - BOONVILLE, INC.
+IOC - LULA, INC.
+IOC BLACK HAWK COUNTY, INC.
+IOC HOLDINGS, L.L.C.
+IOC-VICKSBURG, INC.
+IOC-VICKSBURG, L.L.C.
+ISLE OF CAPRI BETTENDORF, L.C.
+ISLE OF CAPRI BLACK HAWK, L.L.C.
+ISLE OF CAPRI CASINOS LLC
+LIGHTHOUSE POINT, LLC
+MTR GAMING GROUP, INC.
+NEW JAZZ ENTERPRISES, L.L.C.
+OLD PID, INC.
+POMPANO PARK HOLDINGS, L.L.C.
+PPI DEVELOPMENT HOLDINGS LLC
+PPI DEVELOPMENT LLC
+PPI, INC.
+ROMULUS RISK AND INSURANCE COMPANY, INC.
+SCIOTO DOWNS, INC.
+ST. CHARLES GAMING COMPANY, L.L.C.
+TEI (ES), LLC
+TEI (ST. LOUIS RE), LLC
+TEI (STLH), LLC
+TROPICANA ENTERTAINMENT INC.
+TROPICANA LAUGHLIN, LLC
+TROPICANA ST. LOUIS LLC
+VEGAS DEVELOPMENT LAND OWNER LLC
+WH NV III, LLC
+WILLIAM HILL DFSB, INC.
+WILLIAM HILL NEVADA I
+WILLIAM HILL NEVADA II
+WILLIAM HILL NEW JERSEY, INC.
+WILLIAM HILL U.S. HOLDCO, INC.,
+as a Subsidiary Guarantor
+By: /s/ Bret Yunker
+Name: Bret Yunker
+Title: Chief Financial Officer
+[Signature Page to Supplemental Indenture – CEI 6.500% Senior Secured Notes 2032]
+CAESARS INTERACTIVE ENTERTAINMENT NEW JERSEY, LLC
+TROPICANA ATLANTIC CITY CORP.,
+as a Subsidiary Guarantor
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Secretary
+[Signature Page to Supplemental Indenture – CEI 6.500% Senior Secured Notes 2032]
+U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION,
+as Trustee
+By: /s/ Laurel Casasanta
+Name: Laurel Casasanta
+Title: Vice President
+U.S. BANK NATIONAL ASSOCIATION, as Collateral Agent
+By: /s/ Laurel Casasanta
+Name: Laurel Casasanta
+Title: Vice President
+[Signature Page to Supplemental Indenture – CEI 6.500% Senior Secured Notes 2032]

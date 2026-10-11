@@ -224,6 +224,10 @@ _STATUS = {
     # and the same attempt meets the same reservation later (so not 503). A new
     # attempt, which reserves for what it sends, is the discharge.
     RefusalCode.RESERVATION_BELOW_REQUEST: 500,
+    # A charge the provider settled above the attempt's reservation (R2.6): not
+    # the caller's request, and no later retry on the same pinned price clears
+    # it. Re-pricing the model and a successor run is the discharge.
+    RefusalCode.BUDGET_CHARGE_OVER_RESERVATION: 500,
     # Served only by `_undeclared`, for a path under `/api/` nobody declared;
     # an undeclared method on a declared path is routing's own 405.
     RefusalCode.ENDPOINT_NOT_FOUND: 404,
@@ -301,6 +305,9 @@ _STATUS = {
     # W4: the caller's own brief, judged at the pin exactly as CP-DR will read
     # it. `RUN_INPUT_INVALID` stays 500 for the stored input it names.
     RefusalCode.RESEARCH_BRIEF_INVALID: 400,
+    # D109: the caller's own command, judged at the pin.
+    RefusalCode.RUN_QUALIFIER_INVALID: 400,
+    RefusalCode.REPORTING_PERIOD_UNREADABLE: 400,
     RefusalCode.FORECAST_DRIVER_NOT_READY: 400,
     RefusalCode.DELIVERABLE_PAYLOAD_INVALID: 400,
     RefusalCode.NARRATIVE_FIGURE_UNREFERENCED: 400,

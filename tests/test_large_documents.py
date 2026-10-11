@@ -9,9 +9,9 @@ Each is one source larger than a request can carry whole. Measured through the
 real extractor, the real bundle and the real prompt builder on the LITE
 earnings route: the gate is shown each as its page map and its whole request
 fits the ceiling; a consumer handed the pages the gate named fits it too and
-its answer is accepted; and the same consumer handed the document whole is
-refused `CONTEXT_OVER_CEILING` before any attempt, which is the refusal these
-documents met before §98. The documents are the committed sets' own bytes.
+its answer is accepted; and the same consumer handed the document whole, which
+these documents met as `CONTEXT_OVER_CEILING` before §98, is shown it as its
+own page map since D116. The documents are the committed sets' own bytes.
 """
 
 from __future__ import annotations
@@ -38,10 +38,9 @@ from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import ResolvedRoute
 from caos.methodology.bundle import Bundle
-from caos.methodology.canonical import check_context
+from caos.methodology.canonical import RETRY_RESERVE_BYTES, check_context
 from caos.methodology.selection import GATE_SOURCE_BYTES
 from caos.provider import MAX_REQUEST_BYTES
-from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.runs import start_run
 
@@ -59,7 +58,6 @@ def legacy_ceiling(monkeypatch: pytest.MonkeyPatch) -> int:
         caos.provider,
         caos.pricing,
         caos.models,
-        caos.methodology.invocation,
         caos.methodology.selection,
     ):
         monkeypatch.setattr(module, "MAX_REQUEST_BYTES", LEGACY_CEILING)
@@ -207,14 +205,28 @@ def test_a_10k_runs_by_page_the_gate_on_its_map_the_screen_on_its_pages(
     _accept(filed, attempt, result)
 
 
-def test_a_10k_named_whole_for_a_consumer_is_refused_before_any_attempt(
+def test_a_10k_named_whole_for_a_consumer_is_shown_as_its_page_map(
     legacy_ceiling: int, filed: _Harness, ten_k: TenK
 ) -> None:
-    """What every run of these documents met before §98, and still must."""
+    """What every run of these documents met before §98 was a refusal before
+    any attempt. Since D116 (N157) a consumer handed more than one request to
+    its model can carry is shown the source as its page map, told so in its
+    own section, and its request fits; the gate's quote, on a leading line,
+    is still shown and anchors."""
     _gate(filed, ten_k, ten_k.path.name)
-    with pytest.raises(Refusal) as refused:
-        _request(filed, "CP-L10")
-    assert refused.value.code is RefusalCode.CONTEXT_OVER_CEILING
+    assert _request(filed, "CP-L10") <= legacy_ceiling - RETRY_RESERVE_BYTES
+    screen = CanonicalCompletions(
+        filed.source_id,
+        quotes=(),
+        cited=((filed.source_id, ten_k.gate_quote, ten_k.gate_page),),
+    )
+    attempt, result = _run(filed, "CP-L10", screen)
+    [prompt] = screen.prompts
+    assert "--- HOST EVIDENCE DELIVERY " in prompt
+    assert prompt.count('"evidence_delivery": "PAGE_MAP"') == 1
+    assert f'"pages": {ten_k.page_count}' in prompt
+    assert ten_k.gate_quote in prompt
+    _accept(filed, attempt, result)
 
 
 def test_under_the_d29_ceiling_a_10k_fits_a_consumer_whole(

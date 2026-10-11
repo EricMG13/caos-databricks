@@ -22,6 +22,7 @@ one refusal that is about safety rather than shape.
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
@@ -31,11 +32,12 @@ import pytest
 from canonical_fixtures import BUNDLE, CATALOG, research_brief
 
 from caos.boundary_text import BoundaryText
-from caos.evidence.citations import _match_at, _Token
+from caos.evidence.citations import AnchoredCitation, _Token
 from caos.evidence.extract import DEFAULT_LIMITS, dispatch_by_content
 from caos.evidence.ingest import Document, token_groups
 from caos.graph.route import resolve_route
 from caos.qualification.matrix import (
+    AlternativeLine,
     ExpectedCitation,
     ExpectedForecast,
     ExpectedProjection,
@@ -43,12 +45,15 @@ from caos.qualification.matrix import (
     ForecastValue,
     QualificationCase,
     QualificationSet,
+    _matches,
     assert_measurable,
     assert_unambiguous,
+    key_lines,
     qualification_set_digest,
     unlocatable_register_keys,
 )
 from caos.qualification.on_disk import MANIFEST, load_qualification_set
+from caos.qualification.proof import cited_line
 from caos.refusals import Refusal, RefusalCode
 from caos.store.run_inputs import RunSubject, research_text
 
@@ -286,36 +291,36 @@ COMMITTED_SET_DIGESTS = {
     "ccl-fy2025-market-dislocation": (
         "c01b06c9c09b1ced76c297e0d7bf81ad07ace9e03f3e3322da81b3f85840db35"
     ),
-    "czr-2026q2": ("f32370aa8e4ed3b367073ed11fbf858fae1f13b0069bd8cbfb57617664a04339"),
+    "czr-2026q2": ("575ce0feb1126cd95596b7b473e7cc95caeef24beb260f9f18c3f28316d3662d"),
     "czr-2026q2-earnings-update": (
-        "967b03678141430e263396337f2020fc79655faa4c44c1f99cebe35f10d02c55"
+        "03b43aad16b19c0c3ce2d66b3b949a5b21f2708831b1e293ad0efe94c2677d75"
     ),
     "czr-2026q2-liquidity": (
-        "5856a33c19be398edb84a3106729400fb7b531dcccb95603f96b32cbc714eaf0"
+        "2f274851157840d674ec1308bb9337e1444379175be10bf9564d3a3edb362af0"
     ),
     "czr-2026q2-covenant-refinancing": (
-        "a7b16072cbc8540d14a655b20bfe0c7bd5d84eb3d847c00191ee9c0d05f961c1"
+        "09fdf67a56d02b96cf0883040609dcf0d6fe2d61019c9ae8ecf7b7796a79584a"
     ),
     "czr-2026q2-lite-covenant-refinancing": (
-        "35eb452da5a30ccddc768b707f9c3239526931498d58e0568ded03a09c590fe0"
+        "5ee867579762d61ce42a5665fc7e0d7adb35e42e1fea503a44f932c725c902f1"
     ),
     "czr-2026q2-lite-relative-value": (
-        "ba0182157d2446afaff381bbe777645dfff81fc2fc5a4549d02025df503024c8"
+        "99a498e0085d5cd725547129b2d30bbd808f7c43fec6fb44c1d7ac295b37db78"
     ),
     "czr-2026q2-relative-value": (
-        "c6c886f840b9e63f631700c1cf46c2e27ec06f545cf6cd281a6c04b5d18972de"
+        "a645d01e13330854836b371a4096cf4637b527bf06784151005ef9f5d0745c91"
     ),
     "czr-2026q2-lite-full-credit-screen": (
-        "fa9d786255442e681e13cec6c219990b8de063f8b9f0362ea1881dbb7d4117af"
+        "e63265aaf3004c4bc9ce7b755cda587786240647b50e70a26567beaa3741bb39"
     ),
     "czr-2026q2-lite-portfolio": (
-        "9eb021fef0096c80817a638bf4892ebacfe4bd53f04111b0ed491bec118ab892"
+        "a1b09b156bead903eed0fa30ad2ae4341123f7dd9b407b02b41a9702de19fc12"
     ),
     "czr-2026q2-portfolio": (
-        "b32d4b2b649670e11da2f9b0e805174e74c89bfa355098b27ba0c86e3fef2789"
+        "1ec818789e1b5a50a9ae40038f6084f40af576917cdfa33955586292de4074fe"
     ),
     "czr-2026q2-full-credit-assessment": (
-        "12b202f73b8417e986bdaae8d7be3093cde37f01255359442576e711f241b555"
+        "dd7e23561abb23e220ba1948428b28acd74a9a14a4f0b6bc498c2b694389fecc"
     ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
@@ -372,9 +377,12 @@ def _evidence_lines(tokens: list[_Token]) -> list[str]:
 
 def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
     """No key can name an off-route module or an unreadable source quote, and
-    every key is one whole evidence line (F475): an answer is accepted under
-    `WHOLE_LINE` and scored by exact equality, so a fragment or a quote that
-    runs onto the next line is a key no run can meet."""
+    every key is exactly one whole evidence line of its document (F475), NFC
+    as a shown line is: a citation meets a key by the line it anchored in,
+    compared by exact equality (D105), so a fragment or a quote that runs onto
+    the next line is a key no run can meet. A whole line whose words also run
+    inside a longer line is still one line (K2, F502): the 10-Q's `Adjusted
+    EBITDA` row recurs inside its `Total Adjusted EBITDA` row and is a key."""
     root = Path(__file__).resolve().parents[1] / "qualification"
     extracted: dict[str, dict[int, list[_Token]]] = {}
 
@@ -402,40 +410,48 @@ def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
                 for document in case.documents
             }
             for expected in case.expects:
-                document = documents[expected.document_sha256]
-                if expected.document_sha256 not in extracted:
-                    pages: dict[int, list[_Token]] = {}
-                    for token in dispatch_by_content(document.data).extract(
-                        document.data
-                    ):
-                        pages.setdefault(token.page, []).append(
-                            _Token(
-                                token.text,
-                                token.region_id,
-                                token.line_id,
-                                token.x0,
-                                token.y0,
-                                token.x1,
-                                token.y1,
-                            )
+                # A key's alternatives (D101) are held to its own line's rule.
+                for document_sha256, matched_text in key_lines(expected):
+                    if document_sha256 not in extracted:
+                        extracted[document_sha256] = _pages(
+                            documents[document_sha256].data
                         )
-                    extracted[expected.document_sha256] = pages
-                words = expected.matched_text.split()
-                hits = sum(
-                    bool(_match_at(tokens, start, words, normalised=False))
-                    for tokens in extracted[expected.document_sha256].values()
-                    for start in range(len(tokens))
-                )
-                assert hits == 1, expected
-                whole = sum(
-                    block == expected.matched_text
-                    for tokens in extracted[expected.document_sha256].values()
-                    for block in _evidence_lines(tokens)
-                )
-                assert whole == 1, (
-                    f"{expected.matched_text!r} is not exactly one evidence line"
-                    f" of its document (found {whole}): {expected}"
-                )
+                    whole = _whole_lines(extracted[document_sha256], matched_text)
+                    assert unicodedata.normalize("NFC", matched_text) == matched_text
+                    assert whole == 1, (
+                        f"{matched_text!r} is not exactly one evidence line"
+                        f" of its document (found {whole}): {expected}"
+                    )
+
+
+def _pages(data: bytes) -> dict[int, list[_Token]]:
+    """A document's tokens by page, as admission extracts them."""
+    pages: dict[int, list[_Token]] = {}
+    for token in dispatch_by_content(data).extract(data):
+        pages.setdefault(token.page, []).append(
+            _Token(
+                token.text,
+                token.region_id,
+                token.line_id,
+                token.x0,
+                token.y0,
+                token.x1,
+                token.y1,
+            )
+        )
+    return pages
+
+
+def _whole_lines(pages: dict[int, list[_Token]], matched_text: str) -> int:
+    """How often `matched_text` is one whole evidence line (F475): a key or
+    alternative must be exactly 1. How often its words run inside other lines
+    is no longer asked (K2): a key is met by the line a citation anchored in,
+    never by a run of the page."""
+    return sum(
+        block == matched_text
+        for tokens in pages.values()
+        for block in _evidence_lines(tokens)
+    )
 
 
 def test_ccl_liquidity_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
@@ -1040,6 +1056,45 @@ def test_a_case_carries_its_research_brief_as_the_pins_canonical_text(
         assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
 
 
+def test_a_case_states_its_command_and_an_unknown_qualifier_refuses_the_file(
+    tmp_path: Path,
+) -> None:
+    """D109: a case's `qualifiers` and `objective` are read by the pin's own
+    closed rule, carried as the pin takes them, and covered by the digest."""
+    manifest = _manifest()
+    first = _first(manifest)
+    first["qualifiers"] = {"CP-2G": {"cases": "base/upside/downside"}}
+    first["objective"] = "Refinancing decision"
+    loaded = load_qualification_set(_write(tmp_path, manifest))
+    assert loaded.cases[0].qualifiers == (("CP-2G", "cases", "base/upside/downside"),)
+    assert loaded.cases[0].objective == "Refinancing decision"
+    assert (loaded.cases[1].qualifiers, loaded.cases[1].objective) == ((), None)
+    assert qualification_set_digest(loaded) != qualification_set_digest(_in_memory())
+    first["objective"] = "Another decision"
+    assert qualification_set_digest(
+        load_qualification_set(_write(tmp_path, manifest))
+    ) != qualification_set_digest(loaded)
+    for key, bad in (
+        ("qualifiers", {"CP-2G": {"horizon": "FY27"}}),
+        ("qualifiers", {"CP-9": {"cases": "base"}}),
+        ("qualifiers", ["CP-2G"]),
+        ("objective", 7),
+        ("objective", "two\nlines"),
+    ):
+        amended = _manifest()
+        _first(amended)[key] = bad
+        with pytest.raises(Refusal) as refused:
+            load_qualification_set(_write(tmp_path, amended))
+        assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+    # F526: the objective stated both ways, which no pin takes.
+    both = _manifest()
+    _first(both)["qualifiers"] = {"CP-0": {"objective": "Another decision"}}
+    _first(both)["objective"] = "Refinancing decision"
+    with pytest.raises(Refusal) as refused:
+        load_qualification_set(_write(tmp_path, both))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+
 def _first(manifest: dict[str, object]) -> dict[str, Any]:
     """The manifest's first case, typed, so a test can amend one field of it."""
     cases = manifest["cases"]
@@ -1177,3 +1232,223 @@ def test_a_refusal_no_run_ends_in_is_refused_at_load(tmp_path: Path) -> None:
     with pytest.raises(Refusal) as refused:
         load_qualification_set(_write(tmp_path, manifest))
     assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+
+# D101: a figure key may name the other whole lines that state its figures.
+# REPORT's title line stands in for one: the mechanism is what is tested, not
+# whether the line states the figure (the committed sets are judged by hand).
+_KEY_LINE = "Total debt at 31 December 2026 was USD 1,240.0m"
+_ALTERNATIVE = "Acme Holdings plc annual report 2026"
+
+
+def _keyed(*alternatives: str, module_id: str = "CP-1B") -> ExpectedCitation:
+    return ExpectedCitation(
+        module_id=module_id,
+        document_sha256=sha256(REPORT).hexdigest(),
+        matched_text=_KEY_LINE,
+        alternatives=tuple(
+            AlternativeLine(sha256(REPORT).hexdigest(), text) for text in alternatives
+        ),
+    )
+
+
+def _alternative_manifest(alternatives: object) -> dict[str, object]:
+    """`_manifest()` with its first key's line made whole and `alternatives`
+    set on it."""
+    manifest = _manifest()
+    cases = manifest["cases"]
+    assert isinstance(cases, list)
+    first = dict(cases[0])
+    first["expects"] = [
+        {
+            "module_id": "CP-0",
+            "document_sha256": sha256(REPORT).hexdigest(),
+            "matched_text": _KEY_LINE,
+            "alternatives": alternatives,
+        }
+    ]
+    return {"cases": [first, cases[1]]}
+
+
+def test_an_alternative_line_meets_its_key_under_its_own_module() -> None:
+    """R3's CP-1B cited the 10-Q's net revenues row for the release's: the same
+    figures, another line. Named as an alternative, that citation meets the
+    key, compared as the exact string it is."""
+    expect = _keyed(_ALTERNATIVE)
+    document = sha256(REPORT).hexdigest()
+
+    assert key_lines(expect) == ((document, _KEY_LINE), (document, _ALTERNATIVE))
+    assert _matches(expect, {("CP-1B", document, _ALTERNATIVE)})
+    assert _matches(expect, {("CP-1B", document, _KEY_LINE)})
+    assert not _matches(expect, {("CP-1B", document, _ALTERNATIVE + ".")})
+    assert not _matches(expect, {("CP-1B", "c" * 64, _ALTERNATIVE)})
+
+
+def test_another_modules_citation_of_an_alternative_does_not_meet_the_key() -> None:
+    """Keys stay module-bound: the right line under the wrong module answers a
+    different question, for an alternative as for the key's own line."""
+    document = sha256(REPORT).hexdigest()
+
+    assert not _matches(_keyed(_ALTERNATIVE), {("CP-1", document, _ALTERNATIVE)})
+
+
+def _cited(matched_text: str, line_text: str | None) -> AnchoredCitation:
+    return AnchoredCitation(
+        document_sha256=sha256(REPORT).hexdigest(),
+        page=1,
+        matched_text=matched_text,
+        bboxes=(),
+        line_text=line_text,
+    )
+
+
+def test_an_excerpt_meets_the_key_its_line_is_under_the_keys_module() -> None:
+    """D105: a citation is any excerpt of one line, and a key is met by the
+    line it anchored in (`cited_line`), never by the quote -- for the key's own
+    line and for an alternative. The same line under another module does not
+    meet it, and an excerpt of another line does not either."""
+    document = sha256(REPORT).hexdigest()
+    excerpt = _cited("Total debt at 31 December 2026 was USD", _KEY_LINE)
+    other = _cited("annual report 2026 of Acme Holdings plc here", _ALTERNATIVE)
+    elsewhere = _cited("Total debt at 31 December 2026 was USD", "Total debt at 31")
+
+    assert cited_line(excerpt) == _KEY_LINE
+    assert _matches(_keyed(), {("CP-1B", document, cited_line(excerpt))})
+    assert _matches(_keyed(_ALTERNATIVE), {("CP-1B", document, cited_line(other))})
+    assert not _matches(_keyed(), {("CP-1", document, cited_line(excerpt))})
+    assert not _matches(_keyed(), {("CP-1B", document, cited_line(elsewhere))})
+
+
+def test_a_record_from_before_excerpts_is_scored_by_its_quote() -> None:
+    """A record accepted under an earlier rule keeps no line (EX1), and its
+    quote is what it was scored by: its whole line meets the key, and a run
+    inside the line -- which `ANY_RUN` accepted -- still does not."""
+    document = sha256(REPORT).hexdigest()
+    whole = _cited(_KEY_LINE, None)
+    partial = _cited("Total debt at 31 December 2026 was USD", None)
+
+    assert cited_line(whole) == _KEY_LINE
+    assert _matches(_keyed(), {("CP-1B", document, cited_line(whole))})
+    assert not _matches(_keyed(), {("CP-1B", document, cited_line(partial))})
+
+
+def test_a_key_without_alternatives_is_met_only_by_its_own_line() -> None:
+    """A statement key carries no alternative and is the exact key it was, and
+    a set of such keys binds the digest it bound before D101."""
+    expect = _keyed()
+    document = sha256(REPORT).hexdigest()
+
+    assert expect.alternatives == ()
+    assert key_lines(expect) == ((document, _KEY_LINE),)
+    assert not _matches(expect, {("CP-1B", document, _ALTERNATIVE)})
+    assert qualification_set_digest(_in_memory()) == (
+        "64bc178c0010b0fe104e01f4f7fac2bce35d1dc09f21fea86ff996aa99233373"
+    )
+
+
+def test_a_manifest_without_alternatives_loads_as_before(on_disk: Path) -> None:
+    """Absent is no alternative: every manifest written before D101 loads."""
+    loaded = load_qualification_set(on_disk)
+
+    assert all(
+        expect.alternatives == () for case in loaded.cases for expect in case.expects
+    )
+
+
+def test_a_manifest_alternative_is_read_and_bound_by_the_digest(
+    tmp_path: Path,
+) -> None:
+    """An alternative is part of the answer key, so adding one moves the
+    digest; the order an author lists them in does not."""
+    other = "Borealis Industries plc annual report 2026"
+    document = sha256(REPORT).hexdigest()
+    one = load_qualification_set(
+        _write(
+            tmp_path / "one",
+            _alternative_manifest(
+                [{"document_sha256": document, "matched_text": _ALTERNATIVE}]
+            ),
+        )
+    )
+    both = [
+        {"document_sha256": document, "matched_text": _ALTERNATIVE},
+        {"document_sha256": sha256(OTHER).hexdigest(), "matched_text": other},
+    ]
+    forward = load_qualification_set(
+        _write(tmp_path / "forward", _alternative_manifest(both))
+    )
+    backward = load_qualification_set(
+        _write(tmp_path / "backward", _alternative_manifest(both[::-1]))
+    )
+    bare = load_qualification_set(_write(tmp_path / "bare", _manifest()))
+
+    assert one.cases[0].expects[0].alternatives == (
+        AlternativeLine(document, _ALTERNATIVE),
+    )
+    digests = {qualification_set_digest(item) for item in (one, forward, bare)}
+    assert len(digests) == 3
+    assert qualification_set_digest(forward) == qualification_set_digest(backward)
+
+
+@pytest.mark.parametrize(
+    "alternatives",
+    [
+        [],
+        "not a list",
+        [{"document_sha256": "a" * 64}],
+        [{"document_sha256": "a" * 64, "matched_text": "x", "page": 1}],
+        [{"document_sha256": "a" * 64, "matched_text": " "}],
+        [{"document_sha256": "", "matched_text": _ALTERNATIVE}],
+        [{"document_sha256": "a" * 64, "matched_text": "x\u202ey"}],
+        [
+            {"document_sha256": "a" * 64, "matched_text": _ALTERNATIVE},
+            {"document_sha256": "a" * 64, "matched_text": _ALTERNATIVE},
+        ],
+        [{"document_sha256": sha256(REPORT).hexdigest(), "matched_text": _KEY_LINE}],
+    ],
+)
+def test_a_malformed_alternative_is_refused_at_load(
+    tmp_path: Path, alternatives: object
+) -> None:
+    """Closed when present, as every declared object is: a blank, unbounded or
+    repeated line, or the key's own line restated, is not a second answer."""
+    with pytest.raises(Refusal) as refused:
+        load_qualification_set(_write(tmp_path, _alternative_manifest(alternatives)))
+
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+
+def test_a_partial_alternative_is_not_one_whole_evidence_line() -> None:
+    """The committed-set check holds every alternative to F475, as it holds a
+    key: a run of words inside a line is found once and is no whole line, so a
+    committed set naming it fails as a set naming a partial key does."""
+    pages = _pages(REPORT)
+
+    assert _whole_lines(pages, _KEY_LINE) == 1
+    assert _whole_lines(pages, "Total debt at 31 December 2026") == 0
+
+
+def test_an_alternative_answering_another_key_of_its_module_is_ambiguous() -> None:
+    """One citation must not meet two keys of one module: an alternative that is
+    another key's line there is refused before anything is scored. Under a
+    different module the same line is an ordinary second question."""
+    document = sha256(REPORT).hexdigest()
+    title = ExpectedCitation("CP-1B", document, _ALTERNATIVE)
+
+    def keyed(*expects: ExpectedCitation) -> QualificationSet:
+        case = _in_memory().cases[0]
+        return QualificationSet(cases=(replace(case, expects=expects),))
+
+    with pytest.raises(Refusal) as refused:
+        assert_unambiguous(keyed(_keyed(_ALTERNATIVE), title))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_AMBIGUOUS
+    shared = ExpectedCitation(
+        "CP-1B",
+        document,
+        "Borealis Industries plc annual report 2026",
+        alternatives=(AlternativeLine(document, _ALTERNATIVE),),
+    )
+    with pytest.raises(Refusal) as twice:
+        assert_unambiguous(keyed(_keyed(_ALTERNATIVE), shared))
+    assert twice.value.code is RefusalCode.QUALIFICATION_SET_AMBIGUOUS
+    assert_unambiguous(keyed(_keyed(_ALTERNATIVE), replace(title, module_id="CP-1")))

@@ -160,35 +160,35 @@ _LARGE_FILES_EXCLUDE = (
     r"qualification/save-2024-lite-distressed-restructuring/documents/"
     r"SAVE_2024_RSA_with_Chapter_11_Plan\.txt$|"
     r"qualification/czr-2026q2-liquidity/documents/"
-    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"CZR_2024_Credit_Agreement_Incremental_Assumption_No3\.txt$|"
     r"qualification/czr-2026q2-covenant-refinancing/documents/"
-    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"CZR_2024_Credit_Agreement_Incremental_Assumption_No3\.txt$|"
     r"qualification/czr-2026q2-covenant-refinancing/documents/"
     r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
     r"qualification/czr-2026q2-lite-covenant-refinancing/documents/"
-    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"CZR_2024_Credit_Agreement_Incremental_Assumption_No3\.txt$|"
     r"qualification/czr-2026q2-lite-covenant-refinancing/documents/"
     r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
     r"qualification/czr-2026q2-lite-relative-value/documents/"
-    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"CZR_2024_Credit_Agreement_Incremental_Assumption_No3\.txt$|"
     r"qualification/czr-2026q2-lite-relative-value/documents/"
     r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
     r"qualification/czr-2026q2-relative-value/documents/"
-    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"CZR_2024_Credit_Agreement_Incremental_Assumption_No3\.txt$|"
     r"qualification/czr-2026q2-relative-value/documents/"
     r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
     r"qualification/czr-2026q2-lite-full-credit-screen/documents/"
-    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"CZR_2024_Credit_Agreement_Incremental_Assumption_No3\.txt$|"
     r"qualification/czr-2026q2-lite-full-credit-screen/documents/"
     r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
     r"qualification/czr-2026q2-lite-portfolio/documents/"
     r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
     r"qualification/czr-2026q2-portfolio/documents/"
-    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"CZR_2024_Credit_Agreement_Incremental_Assumption_No3\.txt$|"
     r"qualification/czr-2026q2-portfolio/documents/"
     r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
     r"qualification/czr-2026q2-full-credit-assessment/documents/"
-    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"CZR_2024_Credit_Agreement_Incremental_Assumption_No3\.txt$|"
     r"qualification/czr-2026q2-full-credit-assessment/documents/"
     r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$)"
 )
@@ -1080,14 +1080,14 @@ CI_CONDITIONS: dict[tuple[str, ...], str] = {
 # Each action step exactly, by its SHA and its inputs: a tag, a fork's
 # commit or an input such as `ref:` or a `version:` runs something else.
 _CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
-_SETUP_UV = "astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4"
+_SETUP_UV = "astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7"
 _SETUP_NODE = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
 CI_ACTIONS: tuple[dict[object, object], ...] = (
     {"uses": _CHECKOUT},
     {"uses": _CHECKOUT, "with": {"fetch-depth": 0}},
     {"uses": _SETUP_UV, "with": {"version": "0.12.5", "enable-cache": True}},
     {
-        "uses": "databricks/setup-cli@d76f84cea9893ce68311a1f33fb0c95af6c963b7",
+        "uses": "databricks/setup-cli@9230f12203ef173d0b901846f62a55ce997efef7",
         "with": {"version": "1.17.0"},
     },
     {

@@ -35,7 +35,7 @@ from test_execution_freshness import _Harness
 from caos.api import app as app_module
 from caos.api.identity import TRUST_SWITCH
 from caos.api.reads import run as run_read
-from caos.api.wire import BlockedByView, DirectoryDocument, RunSectionDocument
+from caos.api.wire import DirectoryDocument, RunSectionDocument
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.graph.route import ResolvedRoute, resolve_route, route_digest
@@ -575,11 +575,16 @@ def test_the_run_document_names_the_node_whose_blocked_verdict_ended_it(
     assert view is not None and view.status == "BLOCKED"
     cp5 = next(node for node in view.nodes if node.module_id == "CP-5")
     assert (cp5.state, cp5.gate_verdict) == ("RUNNABLE", "READY")
-    assert view.blocked_by == BlockedByView(
-        route_node_id=cp5.route_node_id,
-        module_id="CP-5",
-        attempt_id=view.blocked_by.attempt_id if view.blocked_by else uuid4(),
-    )
+    assert view.blocked_by is not None
+    assert view.blocked_by.model_dump(
+        include={"route_node_id", "module_id", "quotes_recorded"}
+    ) == {
+        "route_node_id": cp5.route_node_id,
+        "module_id": "CP-5",
+        "quotes_recorded": True,
+    }
+    # D106: the Blocked answer's quotes, as the host judged them.
+    assert view.blocked_by.verified or view.blocked_by.unverified
     mine = [a for a in view.attempts if a.route_node_id == cp5.route_node_id]
     assert [(a.attempt_id, a.accepted) for a in mine] == [
         (view.blocked_by.attempt_id, False)
@@ -591,6 +596,7 @@ def test_the_run_document_names_the_node_whose_blocked_verdict_ended_it(
         run_read.SECTION_READ_IO
         + run_read.CANONICAL_READINESS_IO
         + run_read.BLOCKED_BY_IO
+        + (run_read.BLOCKED_QUOTES_IO if view.blocked_by.verified else 0)
     )
     assert counter.executed <= run_read.IO_BUDGET
 

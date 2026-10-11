@@ -39,12 +39,15 @@ test("Analysis names the conclusion, the module to review and the evidence it re
   // The bundle's committee status as the bundle spells it, and its decision
   // scope in words (D65).
   expect(chrome.brief.impact).toBe("Committee Ready · full scope");
-  expect(chrome.brief.action).toBe("Review CP-1C before committee.");
-  expect(chrome.brief.evidence).toBe("4 citations across 4 documents, 1 withdrawn.");
+  // CP-1B's one unverified citation (D106) is a module to review too.
+  expect(chrome.brief.action).toBe("Review CP-1B, CP-1C before committee.");
+  expect(chrome.brief.evidence).toBe(
+    "4 verified, 1 unverified citations across 4 documents, 1 withdrawn.",
+  );
   expect(chrome.brief.headline).toBe("12/12");
   expect(chrome.verdict).toEqual({
     severity: "WARNING",
-    conclusion: "Committee Ready · full scope, with 1 module to review",
+    conclusion: "Committee Ready · full scope, with 2 modules to review",
     blocked_on: null,
   });
   expect(chrome.ribbon.execution).toBe("COMPLETE");
@@ -164,9 +167,15 @@ test("a limitation carried forward is RESTRICTED's ring, a validation warning a 
   const restricted = composeChrome("analysis", parseAnalysisDocument(analysis));
   expect(restricted.verdict.severity).toBe("RESTRICTED");
   expect(restricted.verdict.conclusion).toBe(
-    "Committee Ready · full scope, with 1 module to review",
+    "Committee Ready · full scope, with 2 modules to review",
   );
   expect(restricted.tabs.find((tab) => tab.label === "CP-1C")?.severity).toBe("RESTRICTED");
+  // D106: a module with an unverified citation never wears SUCCESS's tick.
+  expect(restricted.tabs.find((tab) => tab.label === "CP-1B")?.severity).toBe("RESTRICTED");
+  for (const handoff of analysis.body.handoffs) handoff.unverified_facts = [];
+  const cleared = composeChrome("analysis", parseAnalysisDocument(analysis));
+  expect(cleared.tabs.find((tab) => tab.label === "CP-1B")?.severity).toBe("SUCCESS");
+  expect(cleared.brief.evidence).toBe("4 citations across 4 documents, 1 withdrawn.");
   expect(restricted.tabs.find((tab) => tab.label === "CP-1C")?.note).toBe("Peer set incomplete");
   // Model: an accepted forecast stating a limitation is restricted, not a warning.
   const model = load("model.json");
@@ -261,7 +270,7 @@ test("a partial document with no notes says so in words, never 'Partial: .'", ()
   document.notes = [];
   const chrome = composeChrome("analysis", parseAnalysisDocument(document));
   expect(chrome.brief.evidence).toBe(
-    "4 citations across 4 documents, 1 withdrawn. Some parts of this document could not be read.",
+    "4 verified, 1 unverified citations across 4 documents, 1 withdrawn. Some parts of this document could not be read.",
   );
   expect(chrome.verdict.severity).toBe("WARNING");
   expect(chrome.ribbon.chips[0]).toEqual({ label: "Partial", tone: "warn" });

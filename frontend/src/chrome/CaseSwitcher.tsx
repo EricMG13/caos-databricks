@@ -108,7 +108,12 @@ export function CaseSwitcher({
       <SidebarMenuItem>
         <DropdownMenu onOpenChange={open}>
           <DropdownMenuTrigger
-            render={<SidebarMenuButton size="lg" className="data-popup-open:bg-sidebar-accent" />}
+            render={
+              <SidebarMenuButton
+                size="lg"
+                className="bg-sidebar-accent shadow-raised data-popup-open:bg-sidebar-accent"
+              />
+            }
           >
             <span
               aria-hidden="true"

@@ -129,31 +129,28 @@ Original files, in this bundle: REF_CP-1_01_FileGateSourceValidation.md, REF_CP-
 </step_reference>
 ## REF_CP-1_07_NormalizedFinancialsTable.md
 <!-- REF_CP-1_07_NormalizedFinancialsTable (Tier 2) | 2026-06-02 -->
-<step_reference module="CP-1" step="7" name="Normalized Financials Table">
+<step_reference module="CP-1" step="7" name="Normalized Financials Cross-Check">
 <input>T4.4 IS + T4.5 CFS + T4.6 BS.</input>
 <gate>At least one of Steps 4–6 produced data.</gate>
 
 ## Detailed Instructions
-1. Produce consolidated cross-statement table — IS, CFS, BS across all periods.
-2. All figures on Step 3 normalization basis. No re-extraction from sources.
-3. Consolidation only — no new data, no modifications.
-4. Cross-check internal consistency:
+1. T4.4–T4.6, on the Step 3 basis, are the normalized financials. Write no consolidated copy of them (the T4.7 table is retired). Every line item and every period the answer reports, FY included, is in T4.4, T4.5 or T4.6, so no figure exists only in a consolidated table.
+2. Cross-check internal consistency:
    - Net Income (IS) vs. equity movements (BS)
    - Operating + investing + financing → Net Change in Cash (CFS)
    - Opening vs. closing BS positions vs. period flows
    - Flag material reconciliation differences as gaps
 
-## Output — T4.7 Normalized Financials
-`Line Item` | `Statement Source` (IS/CFS/BS) | `Period 1` … `Period N`
+## Output
+No register of its own: each material reconciliation difference is a T4.12 gap.
 
 ## Warnings
-- Figures must match Steps 4–6 exactly. Discrepancy = normalization error.
 - Cross-statement reconciliation failures → log with materiality assessment.
 </step_reference>
 ## REF_CP-1_08_DerivedPeriodConstruction.md
 <!-- REF_CP-1_08_DerivedPeriodConstruction (Tier 2) | 2026-06-02 -->
 <step_reference module="CP-1" step="8" name="LTM/YTD/Derived Period Construction">
-<input>T4.7 Normalized Financials.</input>
+<input>T4.4–T4.6 normalized financials.</input>
 <gate priority="critical">Sub-period data must exist. Missing component → null. Do NOT estimate.</gate>
 
 ## Detailed Instructions
@@ -173,7 +170,7 @@ Original files, in this bundle: REF_CP-1_01_FileGateSourceValidation.md, REF_CP-
 ## REF_CP-1_09_CalculationRegisterKPIBuild.md
 <!-- REF_CP-1_09_CalculationRegisterKPIBuild (Tier 2) | 2026-06-02 -->
 <step_reference module="CP-1" step="9" name="Calculation Register & KPI Build">
-<input>T4.7 Normalized Financials + T4.8 Constructed Period Register.</input>
+<input>T4.4–T4.6 normalized financials + T4.8 Constructed Period Register.</input>
 <gate>Normalized data available for at least some periods.</gate>
 
 ## Detailed Instructions
@@ -279,7 +276,7 @@ Analytical narrative — part of the canonical `.md` `## Analysis`, structured b
    | CP-MODEL | Workbook extension | T4.14–T4.19 complete; stable IDs; source locators; no BLOCK reconciliation |
 3. Per consumer: Readiness Status (Ready / Ready with Limitations / Not Ready), gaps, actions.
 4. After this step → load SCHEMA_REFERENCE.md and author validated canonical `[IssuerID]_CP-1_[YYYYMMDD].md` per `../../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md` (YAML envelope + canonical H2 headings). `IssuerID` is the exact front-matter `issuer_id`; `YYYYMMDD` is `analysis_date` without hyphens. Do not create alternate analytical exports.
-5. **Audit Appendix contents (relocated from ACTIVE_PROMPT 2026-07-11)** — the single Audit Appendix in Markdown/export holds ALL audit items as sub-sections with tables intact, mapped to CP-1's own output tables: Source Gate / Readiness, Gap Ledger (T4.12), Evidence Trace, Source Registry (T4.1), QA Validation findings (severity-tagged), Definition Conflict Register (T4.11), Limitation Flags, Downstream Consumers (T4.13).
+5. **Audit contents (relocated from ACTIVE_PROMPT 2026-07-11)** — the audit items keep their tables intact, mapped to CP-1's own output tables, but they are never sub-sections of one appendix: `## Evidence Trace`, `## Source Registry`, `## Gaps & Conflicts` and `## QA Validation` (severity-tagged findings) are canonical H2 sections, each written once at H2 in the order `validate_handoff.py` enforces ("H2 headings must be exactly once and in canonical order: Audit Summary -> Analysis -> Evidence Trace -> Source Registry -> Gaps & Conflicts -> QA Validation"); a `###` or `####` Evidence Trace or Source Registry in place of the H2 fails validation. The registers they draw on — Source Register (T4.1), Definition Conflict Register (T4.11), Gap Ledger (T4.12), Downstream Readiness Matrix (T4.13) — stay complete in `### Analytical appendix — complete canonical registers`; limitation flags stay in the front matter's `limitation_flags`.
 
 ## Output — T4.12 Gaps & Validation Warnings
 `Gap Description` | `Affected Line Item or Metric` | `Affected Period(s)` | `Downstream Impact` | `Severity` | `Recommended Action`
@@ -310,6 +307,8 @@ Place each comment immediately before its Markdown table:
 - `<!-- table-id: cp1.cp_model_segment_allocation -->` (required whenever the
   canonical segment schedule is non-empty; CP-MODEL reads it when CP-2G is supplied)
 - `<!-- table-id: cp1.operating_kpi_schedule -->` (optional when applicable)
+- `<!-- table-id: cp1.pro_forma_adjustment_register -->` (optional when
+  applicable)
 - `<!-- table-id: cp1.adjusted_ebitda_bridge -->`
 - `<!-- table-id: cp1.debt_facility_register -->`
 - `<!-- table-id: cp1.model_reconciliation_register -->`
@@ -318,8 +317,47 @@ Place each comment immediately before its Markdown table:
 Registers T4.14–T4.19 are the period, account, segment, adjusted EBITDA,
 debt and reconciliation registers below, in that order: write each under its
 register heading, then its table-id comment, then the one table with exactly
-the columns below. The readiness table is the separate keyed CP-MODEL row;
-T4.13's Downstream Readiness Matrix (Step 12) covers every consumer.
+the columns below, with nothing but blank lines between the comment and the
+table. That one table is both the T4.x register and the CP-MODEL interface
+table: never write the register untagged and repeat it as a tagged copy, and
+never gather tagged copies into a block of their own. A value the sources do
+not supply is `null` in these tables: in these CP-1 tables write `null`, which
+the register check, `cp_tables` and CP-MODEL all read as null, while an empty
+cell or `n/a` fails the register check (CP-MODEL also reads the canon's `—`
+and `–` as null, so a stray dash does not void a table, but write `null`).
+Every `null` in a value-bearing column is also listed in `## Gaps & Conflicts`
+with its table, row, column and the reason the value is absent. A `null` in a
+reference column means none applies: it is not a gap and is not listed. The
+reference columns are `conflict_refs` and `limitation_refs` (T4.15),
+`component_period_ids` on a directly reported period and `fiscal_quarter` on a
+row that is not a QUARTER (T4.14). The readiness table is the separate keyed
+CP-MODEL row; T4.13's Downstream Readiness Matrix (Step 12) covers every
+consumer. The segment allocation, operating KPI schedule, pro forma adjustment
+register and readiness table have no T4 register: each is written once, tagged.
+
+Worked skeleton of one interface register, as the handoff writes it (unfenced
+there; T4.15–T4.19 take the same shape with their own columns):
+
+```markdown
+#### T4.14 — Model Period Register
+
+<!-- table-id: cp1.model_period_register -->
+
+| period_id | fiscal_year | fiscal_quarter | period_type | start_date | end_date | day_count | audit_status | currency | unit | accounting_basis | entity_perimeter | source_id | source_locator | component_period_ids |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| FY2025 | 2025 | null | FY | 2025-01-01 | 2025-12-31 | 365 | AUDITED | USD | MILLIONS | US GAAP | Consolidated | S1 | 10-K p. 53 | null |
+| Q2_2026 | 2026 | 2 | QUARTER | 2026-04-01 | 2026-06-30 | 91 | UNAUDITED | USD | MILLIONS | US GAAP | Consolidated | S2 | 10-Q p. 4 | null |
+
+## Gaps & Conflicts
+
+- T4.15, cash_taxes_paid / Q2_2026, `value`: null — the 10-Q states cash taxes for the half-year only.
+```
+
+The skeleton's own nulls are reference columns (`fiscal_quarter` on the FY row,
+`component_period_ids` on two reported periods), so none has a gap line; the
+line shown is the form for a value-bearing null, here a T4.15 `value`.
+T4.4–T4.6 hold line-item rows only: never a note row inside them (its empty
+cells fail the register check); a note goes to T4.12.
 
 ## Period register
 
@@ -352,13 +390,30 @@ Controlled metric IDs:
 `net_cash_change`, `cash_and_equivalents`, `rcf_commitment`, `rcf_drawn`,
 `senior_secured_debt`, `unsecured_debt`, `total_debt`,
 `net_accounts_receivable`, `inventory`, `accounts_payable`,
-`pretax_income`, `income_tax_expense`, `effective_tax_rate`.
+`pretax_income`, `income_tax_expense`, `effective_tax_rate`,
+`operating_lease_cost`, `lease_payments_in_financing`,
+`interest_paid_in_financing`.
 
 Cash interest and cash tax mean cash paid, not accrued expense. `cfo_ncfo`
 accepts reported CFO, OCF, NCFO or net cash provided by operating activities.
 Use the canonical sign convention: inflows/positive balances positive and
 outflows negative. Do not emit the model's FFO `Other` residual as a sourced
 metric.
+
+Three IDs record where the issuer put lease and interest cash, so a model can
+bridge between accounting bases. Each is emitted where a source states it, with
+the same sign convention (outflows negative):
+
+- `operating_lease_cost`: lease cost recognised inside operating expenses
+  (ASC 842 operating lease cost; under IFRS 16 only short-term and variable
+  lease expense);
+- `lease_payments_in_financing`: lease cash the issuer classified in financing
+  activities (IFRS 16 principal; ASC 842 finance-lease principal);
+- `interest_paid_in_financing`: interest paid that the issuer classified in
+  financing activities (an IFRS option; `0` under US GAAP).
+
+Income taxes paid that the issuer classified outside operating activities have
+no metric ID: record the classification as a limitation in Gaps & Conflicts.
 
 ## Segment, EBITDA and debt registers
 
@@ -426,7 +481,7 @@ Operating KPI columns:
   non-comparable series or manufacture backlog/N/A values as zero.
 
 Debt columns:
-`facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | source_id | source_locator`
+`facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | rate_type | reference_rate | spread_bps | floor_bps | fixed_rate | annual_amortisation | source_id | source_locator`
 
 Model debt totals use carrying values. Principal and commitment are retained
 separately and are not substitutes. When instrument-level carrying values are
@@ -444,6 +499,56 @@ bucket and exclude it from secured or senior subtotals unless that specific
 classification is sourced. Do not infer security or ranking from the
 instrument name merely to make the workbook ready.
 
+Rate and amortisation terms, each sourced like every other column:
+
+- `rate_type`: `FIXED`, `FLOATING` or `NOT_STATED`;
+- `reference_rate`: `SOFR`, `TERM_SOFR`, `EURIBOR`, `SONIA`, `NONE` or
+  `NOT_STATED`. `NONE` is a fixed-rate or no-reference instrument;
+  `NOT_STATED` is a floating instrument whose reference rate is not sourced;
+- `spread_bps`: an integer basis-point spread over the reference rate, or
+  `null`;
+- `floor_bps`: an integer floor on the reference rate, or `null` when no floor
+  is stated;
+- `fixed_rate`: a decimal percent coupon for `FIXED` (`6.500`), otherwise
+  `null`;
+- `annual_amortisation`: scheduled principal amortisation per year in the
+  register's currency and unit; `0` for a bullet or an instrument with no
+  scheduled amortisation, and `null` only when the amortisation is not stated.
+
+A term no source states is `NOT_STATED` or `null` (a `null` listed in Gaps &
+Conflicts like any value-bearing `null`); it is never inferred from the
+instrument name (a "Term Loan B" is not evidence of `FLOATING`, nor "Senior
+Notes" of `FIXED`). A `null` where a term does not apply is not a gap:
+`floor_bps` with no floor stated, `fixed_rate` on a `FLOATING` row,
+`spread_bps` on a `FIXED` row. An `annual_amortisation` of `null` is always a
+gap: a bullet is `0`.
+
+A lease liability is a debt-register row whose `lease_classification` is
+`FINANCE_LEASE` or `OPERATING_LEASE`. The account metric `total_debt` excludes
+lease liabilities. Reconcile it with a `DEBT_TOTAL_EX_LEASES` check for each
+period: the sum of the carrying values of the `NOT_LEASE` and `NOT_STATED`
+rows, plus any `DEBT ADJUSTMENT` row, equals `total_debt`.
+
+## Pro forma adjustment register
+
+Columns:
+`adjustment_id | label | period_id | effective_date | classification | metric_id | value | source_id | source_locator`
+
+This optional tagged table, `<!-- table-id: cp1.pro_forma_adjustment_register -->`,
+records adjustments a source states for activity outside the reported LTM: a
+lender presentation for a primary transaction, or a post-period acquisition,
+disposal or refinancing. When no source states one, the table is empty; never
+construct an adjustment the source does not state.
+
+- `classification` is one of `ACQUISITION`, `DISPOSAL`, `REFINANCING`,
+  `SUBSEQUENT_EVENT`, `LENDER_UPDATE`, `OTHER_EXPLICIT`;
+- `period_id` names the LTM period the adjustment applies to;
+- `metric_id` is one of `revenue`, `ebitda`, `adjusted_ebitda`,
+  `cash_interest_paid`, `cash_and_equivalents`, `total_debt`, or a facility's
+  `facility_id` prefixed `facility:`;
+- `value` follows the account register's sign convention; a post-period event
+  stays in this table and is never blended into the reported period's figures.
+
 ## Reconciliation and readiness
 
 Reconciliation columns:
@@ -451,7 +556,7 @@ Reconciliation columns:
 
 Required checks include segment revenue to reported revenue, EBITDA bridge,
 adjusted EBITDA bridge at exact `addback_id` granularity, CFO identity, debt
-totals, NCF to cash movement and
+totals (`DEBT_TOTAL_EX_LEASES`), NCF to cash movement and
 reported FY to quarterly sum. A reported-FY difference can be `WARN` when
 audited and unaudited bases differ and the explanation is explicit. It is not
 silently forced to zero.
@@ -563,7 +668,7 @@ Full step table relocated from ACTIVE_PROMPT; the compact step list + REF pointe
 | 4 | Income Statement | REF_CP-1_04_IncomeStatementCoverage | Always (gaps logged) | T4.4 IS + FS Coverage |
 | 5 | Cash Flow Statement | REF_CP-1_05_CashFlowStatementCoverage | Always (gaps logged) | T4.5 CFS |
 | 6 | Balance Sheet | REF_CP-1_06_BalanceSheetCoverage | Always (gaps logged) | T4.6 BS |
-| 7 | Normalized Financials | REF_CP-1_07_NormalizedFinancialsTable | ≥1 of Steps 4-6 produced data | T4.7 Consolidated |
+| 7 | Normalized Financials | REF_CP-1_07_NormalizedFinancialsTable | ≥1 of Steps 4-6 produced data | Cross-check (gaps to T4.12) |
 | 8 | LTM/YTD/Derived Periods | REF_CP-1_08_DerivedPeriodConstruction | Sub-period data; missing → null | T4.8 Constructed Period Reg |
 | 9 | Calculation & KPI Build | REF_CP-1_09_CalculationRegisterKPIBuild | Normalized data available | T4.9 Calc Reg + T4.10 KPI |
 | 10 | Definition Conflicts | REF_CP-1_10_DefinitionConflictRegister | Always (confirm or log) | T4.11 Def Conflict Reg |

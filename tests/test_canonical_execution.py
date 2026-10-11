@@ -13,6 +13,8 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
+from datetime import date
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -37,20 +39,41 @@ from test_execution_freshness import (
 from test_loop_charges import ESTIMATE, REPORT, REPORTED
 
 from caos.blobs import BlobStore
+from caos.copilot import CREDIT_PRICE_ENV
 from caos.evidence import read as evidence_read
 from caos.graph.route import ResolvedRoute, RouteNode, resolve_route
 from caos.graph.runtime import ProviderResult
-from caos.methodology import executor, runner
+from caos.methodology import canonical, executor, runner
 from caos.methodology.bundle import Bundle
-from caos.methodology.canonical import HandoffOutcome, execute_handoff
+from caos.methodology.canonical import (
+    HandoffOutcome,
+    Replayed,
+    Verdict,
+    execute_handoff,
+    replay_billed,
+)
+from caos.methodology.citation_markers import qualified
 from caos.methodology.executor import Assignment, captured_blocks
-from caos.methodology.handoff import read_record, validate_markdown
+from caos.methodology.handoff import (
+    CanonicalRecord,
+    UnverifiedCitation,
+    _decoded_record,
+    read_record,
+    record_bytes,
+    validate_markdown,
+)
 from caos.methodology.invocation import host_identity
 from caos.methodology.runner import ModuleProvider
-from caos.pricing import ModelPrice
-from caos.provider import Completion, CompletionProvider, encode_request
+from caos.pricing import ModelPrice, worst_case
+from caos.provider import (
+    Completion,
+    CompletionProvider,
+    encode_request,
+    reserved_amount,
+    reserved_credit,
+)
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection
+from caos.store import StoreConnection, budget
 from caos.store.run_inputs import load_run_input
 from caos.store.runs import Accepted, accept_attempt, start_attempt
 from caos.store.source_sets import load_source_set
@@ -100,6 +123,15 @@ def _refused(
         _run(harness, module_id, completions)
     assert refused.value.__context__ is None and refused.value.__cause__ is None
     return refused.value.code
+
+
+def _record(harness: _Harness, result: ProviderResult) -> CanonicalRecord:
+    """The stored record of an accepted answer, which must round-trip."""
+    assert result.record_sha256 is not None
+    data = harness.blobs.get(result.record_sha256)
+    record = _decoded_record(data)
+    assert record_bytes(record) == data
+    return record
 
 
 def _body(body: str) -> str:
@@ -204,7 +236,7 @@ def test_the_executor_produces_a_validated_handoff_and_its_record(
     _accept(harness, gate_attempt, gate)
 
     screen_attempt, screen = _run(harness, "CP-L10", completions)
-    assert gate_markdown.decode() in completions.prompts[1]
+    assert qualified(gate_markdown.decode(), "CP-0") in completions.prompts[1]
     _verified(harness, "CP-L10", screen_attempt, screen)
     _accept(harness, screen_attempt, screen)
     assert _counts(harness) == (2, [REPORTED, REPORTED], 2, 2, 2)
@@ -323,22 +355,46 @@ def test_a_wrong_adapter_cannot_become_authority(harness: _Harness) -> None:
 
 def test_an_upstream_statement_is_not_citable_evidence(harness: _Harness) -> None:
     """Invariant 11 does not soften for the chain (on the canonical adapter
-    since f-1c): CP-L10 quoting a sentence that only
-    CP-0's accepted handoff carries is refused, although that handoff reached
-    its prompt verbatim."""
+    since f-1c): CP-L10 quoting a sentence that only CP-0's accepted handoff
+    carries is never anchored, although that handoff reached its prompt
+    verbatim. Since D106 the answer is accepted with that citation
+    unverified, and no anchored citation at all."""
     attempt, gate = _run(harness, "CP-0", CanonicalCompletions(harness.source_id))
     _accept(harness, attempt, gate)
     upstream = harness.blobs.get(gate.artifact_sha256).decode("utf-8")
     assert UNANCHORED in upstream
     quoting = CanonicalCompletions(harness.source_id, quotes=(UNANCHORED,))
-    assert _refused(harness, "CP-L10", quoting) is RefusalCode.CITATION_NOT_LOCATED
+    _attempt, screen = _run(harness, "CP-L10", quoting)
     [prompt] = quoting.prompts
-    assert upstream in prompt
+    assert qualified(upstream, "CP-0") in prompt
+    record = _record(harness, screen)
+    assert record.citations == ()
+    assert record.unverified == (
+        UnverifiedCitation(
+            harness.source_id, 1, UNANCHORED, RefusalCode.CITATION_NOT_LOCATED, marker=1
+        ),
+    )
 
 
-def test_one_unanchorable_quote_refuses_the_whole_handoff(harness: _Harness) -> None:
+def test_one_unanchorable_quote_is_kept_unverified_beside_the_anchored_one(
+    harness: _Harness,
+) -> None:
+    """D106: a citation fault refuses the citation, never the answer. The
+    anchored quote is host-verified in `citations`; the other is the
+    module's own locator in `unverified`, never mixed in. Each keeps its
+    place in the answer's list, which its marker names (D107)."""
     both = CanonicalCompletions(harness.source_id, quotes=(QUOTE, UNANCHORED))
-    assert _refused(harness, "CP-0", both) is RefusalCode.CITATION_NOT_LOCATED
+    _attempt, gate = _run(harness, "CP-0", both)
+    record = _record(harness, gate)
+    [anchored] = record.citations
+    assert (anchored.matched_text, anchored.page, anchored.linked) == (QUOTE, 1, True)
+    assert anchored.marker == 1
+    assert anchored.document_sha256 == hashlib.sha256(REPORT).hexdigest()
+    assert record.unverified == (
+        UnverifiedCitation(
+            harness.source_id, 1, UNANCHORED, RefusalCode.CITATION_NOT_LOCATED, marker=2
+        ),
+    )
     assert _counts(harness) == (1, [REPORTED], 0, 1, 1)
 
 
@@ -371,7 +427,8 @@ def test_a_late_authority_change_refuses_before_analysis(harness: _Harness) -> N
             "HANDOFF_IDENTITY_MISMATCH",
         ),
         ({"content": "not json"}, "HANDOFF_MALFORMED"),
-        ({"quotes": (UNANCHORED,)}, "CITATION_NOT_LOCATED"),
+        # D106: a Blocked answer stands as Blocked, its quote unverified.
+        ({"quotes": (UNANCHORED,), "qa_status": "Blocked"}, "HANDOFF_BLOCKED"),
         ({"readiness": {"CP-5": "NOT-A-STATUS"}}, "HANDOFF_INCOMPLETE"),
         ({"qa_status": "Blocked"}, "HANDOFF_BLOCKED"),
     ],
@@ -385,7 +442,7 @@ def test_billing_survives_every_analytical_refusal(
     assert _diagnostic(harness) == _body(completions.bodies[0])
 
 
-def test_a_quote_outside_the_captured_blocks_refuses_the_handoff(
+def test_a_quote_outside_the_captured_blocks_is_kept_unverified(
     harness: _Harness,
 ) -> None:
     """Wiring for the page grain: the executor anchors on the blocks it
@@ -413,7 +470,229 @@ def test_a_quote_outside_the_captured_blocks_refuses_the_handoff(
     assert narrowed == {**whole, source: frozenset({"b000000"})}
     conn.rollback()
 
+    # D106: kept as unverified, never anchored on a block it was not given.
     quoting = CanonicalCompletions(source)
-    assert _refused(harness, "CP-0", quoting) is RefusalCode.CITATION_NOT_DELIVERED
+    _attempt, gate = _run(harness, "CP-0", quoting)
     [prompt] = quoting.prompts
     assert QUOTE not in prompt
+    record = _record(harness, gate)
+    assert record.citations == ()
+    assert record.unverified == (
+        UnverifiedCitation(
+            source, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED, marker=1
+        ),
+    )
+
+
+# -- The reservation in scope around the call (Task 3; R2.2, R2.7) -----------
+
+COPILOT = "copilot:claude-opus-5.5@high"
+# Small enough that its worst case fits the default run ceiling.
+COPILOT_PRICE = ModelPrice(
+    COPILOT, Decimal("0.000000001"), Decimal("0.00000001"), date(2026, 10, 1)
+)
+
+
+def _scope() -> tuple[Decimal | None, Decimal | None]:
+    return reserved_amount.get(), reserved_credit.get()
+
+
+def test_the_call_runs_inside_its_reservation_scope(harness: _Harness) -> None:
+    scopes: list[tuple[Decimal | None, Decimal | None]] = []
+    completions = CanonicalCompletions(
+        harness.source_id, during=lambda: scopes.append(_scope())
+    )
+    _run(harness, "CP-0", completions)
+    assert scopes == [(ESTIMATE, None)]
+    assert _scope() == (None, None)
+
+
+def test_a_copilot_call_runs_at_its_reservations_credit_price(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scopes: list[tuple[Decimal | None, Decimal | None]] = []
+    completions = CanonicalCompletions(
+        harness.source_id,
+        model=COPILOT,
+        price=COPILOT_PRICE,
+        charge=Decimal("0.0001"),
+        during=lambda: scopes.append(_scope()),
+    )
+    node = _node(harness, "CP-0")
+    attempt = start_attempt(harness.conn, harness.run_id, node.route_node_id)
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
+    budget.reserve(
+        harness.conn, attempt, worst_case(COPILOT_PRICE), price=COPILOT_PRICE
+    )
+    # A pin that moved after the reservation is not the call's (R2.2).
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.05,2026-10-02")
+    provider = ModuleProvider(
+        harness.conn,
+        harness.bundle,
+        harness.blobs,
+        completions,
+        harness.route,
+        harness.run_id,
+    )
+    provider.execute(node.route_node_id, "CP-0", attempt_id=attempt)
+    assert scopes == [(worst_case(COPILOT_PRICE), Decimal("0.01"))]
+    assert _scope() == (None, None)
+
+
+# -- A charge above the reservation (R2.6) -------------------------------------
+
+
+def _ledger(harness: _Harness) -> list[tuple[object, ...]]:
+    rows = harness.conn.execute(
+        "SELECT l.amount, o.charged_attempt_id IS NOT NULL, o.drop_kind"
+        " FROM budget_ledger l JOIN call_outcomes o USING (attempt_id)"
+    ).fetchall()
+    harness.conn.rollback()
+    return [tuple(row) for row in rows]
+
+
+def _copilot_attempt(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch, charge: Decimal
+) -> tuple[UUID, str, ModuleProvider]:
+    """A CP-0 attempt reserved at `COPILOT_PRICE`'s worst case under a pinned
+    credit price, and the provider whose call is charged `charge`."""
+    completions = CanonicalCompletions(
+        harness.source_id, model=COPILOT, price=COPILOT_PRICE, charge=charge
+    )
+    node = _node(harness, "CP-0")
+    attempt = start_attempt(harness.conn, harness.run_id, node.route_node_id)
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
+    budget.reserve(
+        harness.conn, attempt, worst_case(COPILOT_PRICE), price=COPILOT_PRICE
+    )
+    provider = ModuleProvider(
+        harness.conn,
+        harness.bundle,
+        harness.blobs,
+        completions,
+        harness.route,
+        harness.run_id,
+    )
+    return attempt, node.route_node_id, provider
+
+
+# 502,328,000 nano-AIU at $0.01 a credit: above `COPILOT_PRICE`'s worst case.
+OVER = Decimal("0.00502328")
+
+
+def test_a_charge_above_the_reservation_is_recorded_in_full_and_refused_typed(
+    harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reserved = worst_case(COPILOT_PRICE)
+    assert OVER > reserved
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, OVER)
+    with pytest.raises(Refusal) as refused:
+        provider.execute(node, "CP-0", attempt_id=attempt)
+    assert refused.value.code is RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    assert refused.value.__context__ is None and refused.value.__cause__ is None
+    # The money was spent: the ledger holds all of it, never the reservation.
+    assert _ledger(harness) == [(OVER, True, None)]
+    _out, err = capsys.readouterr()
+    assert err.splitlines()[-1] == (
+        f"BUDGET_CHARGE_OVER_RESERVATION reserved={reserved} charged={OVER}"
+        " nano_aiu=502328000"
+    )
+    accepted = harness.conn.execute("SELECT count(*) FROM artifacts").fetchone()
+    harness.conn.rollback()
+    assert accepted == (0,)
+
+
+def test_an_overrun_whose_body_was_not_stored_is_billed_before_it_parks(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LOW-1: a body the blob store refused leaves the bill to commit without
+    its address (F42), and the overrun is then refused as one: the ledger
+    holds the whole charge before the park, so `overspent` sees it and no
+    later claim reserves again on that pin."""
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, OVER)
+
+    def refused_put(_store: BlobStore, _data: bytes) -> str:
+        raise OSError
+
+    monkeypatch.setattr(BlobStore, "put", refused_put)
+    with pytest.raises(Refusal) as refused:
+        provider.execute(node, "CP-0", attempt_id=attempt)
+    assert refused.value.code is RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    assert _ledger(harness) == [(OVER, True, None)]
+    assert _diagnostic(harness) is None
+    assert budget.overspent(harness.conn, harness.run_id) is True
+    harness.conn.rollback()
+
+
+def test_an_overrun_whose_bill_was_not_written_is_a_store_fault_never_a_park(
+    harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """LOW-1: a bill that no retry could write raises `STORE_UNAVAILABLE`
+    before the overrun is judged, so no run parks on a charge the ledger does
+    not hold; the next claim meets the attempt unsettled (`_UNSETTLED`)."""
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, OVER)
+
+    def store_down(*_args: object, **_kwargs: object) -> None:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(canonical, "record_outcome", store_down)
+    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    with pytest.raises(Refusal) as refused:
+        provider.execute(node, "CP-0", attempt_id=attempt)
+    assert refused.value.code is RefusalCode.STORE_UNAVAILABLE
+    assert "BUDGET_CHARGE_OVER_RESERVATION" not in capsys.readouterr().err
+    assert _ledger(harness) == []
+
+
+def test_a_copilot_charge_equal_to_its_reservation_is_accepted(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reserved = worst_case(COPILOT_PRICE)
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, reserved)
+    result = provider.execute(node, "CP-0", attempt_id=attempt)
+    assert result.charge == reserved
+
+
+def test_a_gateway_charge_above_its_reservation_is_accepted_and_spends_capacity(
+    harness: _Harness, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A token-priced call keeps the Phase 2 budget exit: its overrun is
+    accepted and consumes the run's capacity (`tests/test_pricing.py`). Only
+    an AI-unit bill, which the pinned per-token price no longer bounds, is
+    refused above its reservation (R2.6)."""
+    completions = CanonicalCompletions(harness.source_id, charge=Decimal("0.75"))
+    _attempt, result = _run(harness, "CP-0", completions)
+    assert result.charge == Decimal("0.75")
+    assert "BUDGET_CHARGE_OVER_RESERVATION" not in capsys.readouterr().err
+
+
+def test_a_billed_answer_above_its_reservation_is_never_accepted_on_replay(
+    harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A crash after the bill and before the refusal was explained leaves the
+    answer owed a verdict: the replay refuses it as the live call did, never
+    accepts it (R2.6)."""
+    attempt, node, provider = _copilot_attempt(harness, monkeypatch, OVER)
+    with pytest.raises(Refusal):
+        provider.execute(node, "CP-0", attempt_id=attempt)
+    capsys.readouterr()
+    replayed = replay_billed(
+        harness.conn,
+        harness.blobs,
+        harness.bundle,
+        run_id=harness.run_id,
+        route=harness.route,
+        route_node_ids=(node,),
+    )
+    harness.conn.rollback()
+    assert replayed == Replayed(
+        attempt, Verdict.REFUSED, code=RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    )
+    _out, err = capsys.readouterr()
+    assert err.splitlines()[-1].startswith("BUDGET_CHARGE_OVER_RESERVATION ")

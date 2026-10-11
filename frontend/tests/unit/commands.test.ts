@@ -127,7 +127,9 @@ describe("the command transport", () => {
     await pinRunInput(CASE, RUN, subject, null);
     expect(fetchSpy.mock.calls[2]![0]).toBe(`/api/v1/cases/${CASE}/runs/${RUN}/input`);
     expect(fetchSpy.mock.calls[2]![1].method).toBe("POST");
-    expect(fetchSpy.mock.calls[2]![1].body).toBe(JSON.stringify({ subject, research: null }));
+    expect(fetchSpy.mock.calls[2]![1].body).toBe(
+      JSON.stringify({ subject, research: null, qualifiers: [], objective: null }),
+    );
 
     await fetchGatePreview(CASE, RUN, "SOURCE_SET");
     expect(fetchSpy.mock.calls[3]![0]).toBe(

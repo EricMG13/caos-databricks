@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
 
+import bundle_defaults
 import platform_app as platform_app_module
 import pytest
 from canonical_fixtures import CATALOG, LITE_PROFILE, LITE_SELECTION
@@ -72,6 +73,8 @@ def test_the_boot_environment_is_the_bundle_s_and_what_the_deploy_sent(
     database = "postgresql://u:p@127.0.0.1:5432/db"
     env = platform_environment(stub, database, 8000, tmp_path)
     assert {name for name in env if name.startswith("CAOS_")} >= APP_ENVIRONMENT
+    # The ceiling is the bundle's default, read back, never a hand-kept copy.
+    assert env["CAOS_RUN_CEILING"] == bundle_defaults.defaults()["run_ceiling"]
     # Exactly one Lakebase, the default kind's unless another is asked for.
     assert env[lakebase.LAKEBASE_ENDPOINT] == LAKEBASE_ENDPOINT
     assert lakebase.LAKEBASE_INSTANCE not in env

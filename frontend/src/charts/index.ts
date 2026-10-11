@@ -2,24 +2,34 @@
 // ticks by this module's own maths. Every value is the API's exact decimal string, printed as served
 // and converted to a number only to place a mark.
 export { BarChart } from "./BarChart";
+export { BulletChart } from "./BulletChart";
 export { ProvenanceKeyed } from "./ChartFrame";
 export { Swatch } from "./marks";
 export { DivergingBarChart } from "./DivergingBarChart";
+export { DumbbellChart } from "./DumbbellChart";
 export { LineChart } from "./LineChart";
+export { RangeStripChart } from "./RangeStripChart";
+export { RiskMatrix, idList, riskLevel } from "./RiskMatrix";
+export { ScatterChart } from "./ScatterChart";
 export { StackedBarChart } from "./StackedBarChart";
 export { WaterfallChart } from "./WaterfallChart";
 export { bridgeOf } from "./bridge";
 export { formatDecimal, isDecimal } from "./decimal";
 export type {
+  BulletRow,
   ChartColor,
   ChartProps,
   ChartSelection,
   ChartSeries,
   Datum,
   Decimal,
+  DumbbellRow,
   OnSelect,
   Orientation,
   Origin,
+  RangeRow,
+  RiskEvent,
+  ScatterPoint,
   SeriesChartProps,
   WaterfallStep,
 } from "./types";

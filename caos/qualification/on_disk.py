@@ -51,10 +51,12 @@ from typing import Any
 from caos.boundary_text import DEFAULT_LIMIT, BoundaryText
 from caos.evidence.extract import DEFAULT_LIMITS
 from caos.evidence.ingest import Document
+from caos.methodology.qualifiers import stated_command
 from caos.qualification.matrix import (
     _LABEL_LIMIT,
     DECLARABLE_REFUSALS,
     PROJECTION_FIELDS,
+    AlternativeLine,
     ExpectedCitation,
     ExpectedForecast,
     ExpectedProjection,
@@ -106,9 +108,16 @@ _OPTIONAL_CASE_KEYS = frozenset(
         "expects_register",
         "model_extension",
         "research_brief",
+        "qualifiers",
+        "objective",
     }
 )
 _EXPECT_KEYS = frozenset({"module_id", "document_sha256", "matched_text"})
+# Optional on a key, closed when present (D101): the other whole lines that
+# state a figure key's confirmed figures. Absent is no alternative, so every
+# manifest written before them loads, and digests, as it did.
+_ALTERNATIVES_KEY = "alternatives"
+_ALTERNATIVE_KEYS = frozenset({"document_sha256", "matched_text"})
 _FORECAST_KEYS = frozenset(
     {
         "scenario",
@@ -235,6 +244,7 @@ def _case(root: Path, entry: object, held: _Materialised) -> QualificationCase:
         expects_register=_registers(fields.get("expects_register")),
         model_extension=_extension(fields.get("model_extension")),
         research_brief=_brief(fields.get("research_brief")),
+        **_command(fields),
     )
 
 
@@ -291,12 +301,49 @@ def _document(root: Path, declared: object, held: _Materialised) -> Document:
 
 def _expect(item: object) -> ExpectedCitation:
     """One expected citation from the answer key."""
-    fields = _closed(item, _EXPECT_KEYS)
-    return ExpectedCitation(
-        module_id=_bounded(fields.get("module_id")),
+    declared = isinstance(item, dict) and _ALTERNATIVES_KEY in item
+    fields = _closed(
+        item, _EXPECT_KEYS | {_ALTERNATIVES_KEY} if declared else _EXPECT_KEYS
+    )
+    own = AlternativeLine(
         document_sha256=_bounded(fields.get("document_sha256")),
         matched_text=_quote(fields.get("matched_text")),
     )
+    return ExpectedCitation(
+        module_id=_bounded(fields.get("module_id")),
+        document_sha256=own.document_sha256,
+        matched_text=own.matched_text,
+        alternatives=(
+            _alternatives(fields[_ALTERNATIVES_KEY], own) if declared else ()
+        ),
+    )
+
+
+def _alternatives(item: object, own: AlternativeLine) -> tuple[AlternativeLine, ...]:
+    """A key's alternative lines (D101), each bounded as the key's own quote is.
+
+    Declared means at least one: an empty list says nothing an absent one does
+    not, and a repeated line, or the key's own line restated, is the author
+    believing they named a second answer when they did not. The document is
+    checked where the key's line is: before a set is spent on,
+    `harness._answerable` refuses a line whose document the case does not carry
+    or whose words no page holds, and the committed-set test holds every set in
+    the repository to one whole evidence line per line (F475).
+    """
+    if not isinstance(item, list) or not item:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
+    lines = []
+    for value in item:
+        fields = _closed(value, _ALTERNATIVE_KEYS)
+        lines.append(
+            AlternativeLine(
+                document_sha256=_bounded(fields.get("document_sha256")),
+                matched_text=_quote(fields.get("matched_text")),
+            )
+        )
+    if len(set(lines)) != len(lines) or own in lines:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
+    return tuple(lines)
 
 
 def _quote(value: object) -> str:
@@ -514,6 +561,55 @@ def _brief(item: object) -> str | None:
         return research_text(item)
     except Refusal:
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+
+
+def _command(fields: Mapping[str, Any]) -> dict[str, Any]:
+    """A case's `qualifiers` and `objective`, each read on its own and then
+    together by the pin's rule, which refuses the objective stated both ways
+    (F526)."""
+    qualifiers = _qualifiers(fields.get("qualifiers"))
+    objective = _objective(fields.get("objective"))
+    stated: dict[str, dict[str, str]] = {}
+    for module_id, name, value in qualifiers:
+        stated.setdefault(module_id, {})[name] = value
+    try:
+        stated_command(stated, objective)
+    except Refusal:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    return {"qualifiers": qualifiers, "objective": objective}
+
+
+def _qualifiers(item: object) -> tuple[tuple[str, str, str], ...]:
+    """A case's command qualifiers (D109): module id to name to value, judged
+    by the pin's own closed rule (`stated_command`) so a manifest cannot
+    digest a qualifier no pin takes. Whether the route carries the module is
+    the pin's question, asked by `prepare` before anything is spent."""
+    if item is None:
+        return ()
+    if not isinstance(item, dict):
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
+    try:
+        stated = stated_command(item, None)
+    except Refusal:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    return tuple(
+        sorted(
+            (module_id, name, value)
+            for module_id, names in stated.items()
+            for name, value in names.items()
+        )
+    )
+
+
+def _objective(item: object) -> str | None:
+    """A case's CP-0 objective (D109), judged as the pin judges one."""
+    if item is None:
+        return None
+    try:
+        stated_command(None, item if isinstance(item, str) else "")
+    except Refusal:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    return str(item)
 
 
 def _closed(entry: object, keys: frozenset[str]) -> Mapping[str, Any]:

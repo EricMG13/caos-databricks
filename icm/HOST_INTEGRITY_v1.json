@@ -1,16 +1,20 @@
 {
   "host_prompt_hashes": {
     "cp0_final_check.md": {
-      "bytes": 983,
-      "sha256": "825c576bdaae19f2558111699da0a143092fb156f1b282d993dd6838eccbe88e"
+      "bytes": 1103,
+      "sha256": "a0fa1a673230e24f29bde743b3bd9ea866aa39a3380878cb91926db929401451"
+    },
+    "current_command.md": {
+      "bytes": 325,
+      "sha256": "3584effed3240f54f203d8a9db9bc7203657be0f0f6126695f885ea159c16185"
     },
     "final_check.md": {
-      "bytes": 1144,
-      "sha256": "0052a571fcd948cab0e5e0bf533e3b009e5e3077632e32f43bcd8eaf353d2c60"
+      "bytes": 2720,
+      "sha256": "dfd5f9b5ab971963479fc75b050061d8f11b9fdf5dcb77377c81cc1a84a8ba1d"
     },
     "forecast_extension.md": {
-      "bytes": 1029,
-      "sha256": "93abcf60a7156014c691f3f51bf9ba81e3978726797eaea357a5af1ac08489c6"
+      "bytes": 1089,
+      "sha256": "9791a212a9833bcc7beb4ba63e83063a422437e71553dbed358beb6f826378b7"
     },
     "gate_instruction.md": {
       "bytes": 122,
@@ -21,23 +25,27 @@
       "sha256": "bccd22678bc3dba3122637926a3a89c5435e7bb729102e111a6b664cce92729f"
     },
     "instruction.md": {
-      "bytes": 1375,
-      "sha256": "b15755aab983ec2b03feb32fcf5ba819e271033d736f11086b14c545d08b1913"
+      "bytes": 1585,
+      "sha256": "30301934b5c317a9d7f7d52115cb21503291f5852f902c37d803944f2dea3b97"
     },
     "tagged.md": {
-      "bytes": 554,
-      "sha256": "dc43f730c947a4887a1be250ff30adc04402325df2b11da0e0f8afdd1bd48f43"
+      "bytes": 689,
+      "sha256": "589d7bf640a9a84006087fe416545702f3c3770882b8c5ace070cde1630bab9a"
     },
     "validator_feedback.md": {
-      "bytes": 272,
-      "sha256": "8c15841836a49185037cdcf3eb9c064aa96ec99d041401b361cb54357ea0653a"
+      "bytes": 260,
+      "sha256": "26f320929bb8ff4de2d6786cf6e936ffa5add4c33f329189460fe8b01323c16e"
+    },
+    "validator_repair.md": {
+      "bytes": 908,
+      "sha256": "0f007a0dc592741b502ffb76c75e7faaf86417e636f28331dd8b4aa421ee14e6"
     }
   },
   "module_id": "CP-CF",
   "relative_file_hashes": {
     "SKILL.md": {
-      "bytes": 3109,
-      "sha256": "6955060d87418ebbfcc3ea88431c94ade97d2555e1c53c505a3a0125dd355545"
+      "bytes": 3319,
+      "sha256": "ec83216d4a7abe16569bf65e6e40a4d3ed8a3ff4734f1cb60fbf4741e48bbbe8"
     },
     "scripts/cash_flow.py": {
       "bytes": 16704,

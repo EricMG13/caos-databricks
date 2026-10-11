@@ -38,6 +38,9 @@ ENFORCED = frozenset(
         "ready_set",
         "benchmark",
         "golden_set",
+        "obligor",
+        "dry_run",
+        "rate_sheet",
     }
 )
 
@@ -46,6 +49,9 @@ ENFORCED = frozenset(
 # `users` table, so each is exempt for a stated reason instead of silently.
 NOT_ENFORCED = {
     "project": "Python packaging metadata is a [project] table",
+    "company": "company_description is the bundle's own field name",
+    "preflight": "the enterprise deploy preflight checks a workspace, not sources",
+    "listing": "CaseListing and RunListing are store rows a directory lists",
     "file": "a filesystem file is a file",
     "upload": "an HTTP multipart upload is an upload",
     "attachment": "email and docx attachments are attachments",
