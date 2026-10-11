@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
@@ -148,6 +149,115 @@ _RCF_BALANCES = frozenset({"rcf_drawn", "rcf_commitment"})
 _CASES: dict[str, Case] = {"BASE": "BASE", "DOWNSIDE": "DOWNSIDE"}
 
 _Row = Mapping[str, TableCell]
+
+
+@dataclass(frozen=True, slots=True)
+class PeriodRow:
+    period_id: str
+    fiscal_year: str
+    fiscal_quarter: str | None
+    period_type: str  # QUARTER|YTD|FY|LTM|PERIOD_END
+    start_date: str | None
+    end_date: str | None
+    day_count: int | None
+    currency: str
+    unit: str
+    component_period_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AccountRow:
+    metric_id: str
+    period_id: str
+    value: Decimal | None
+    calculation_status: str
+    source: SourceRef | None
+
+
+@dataclass(frozen=True, slots=True)
+class AddbackRow:
+    addback_id: str
+    label: str
+    classification: str
+    realization_status: str
+    display_priority: int
+    period_id: str
+    value: Decimal | None
+    source: SourceRef | None
+
+
+@dataclass(frozen=True, slots=True)
+class SegmentRow:
+    segment_id: str
+    segment_name: str
+    segment_type: str
+    display_priority: int
+    period_id: str
+    revenue: Decimal | None
+    source: SourceRef | None
+
+
+@dataclass(frozen=True, slots=True)
+class KpiRow:
+    kpi_id: str
+    kpi_label: str
+    display_priority: int
+    period_id: str
+    value: Decimal | None
+    unit: str
+    value_type: str  # PERIOD_END|PERIOD_FLOW|RATE
+    source: SourceRef | None
+
+
+@dataclass(frozen=True, slots=True)
+class FacilityRow:
+    facility_id: str
+    facility_name: str
+    period_id: str
+    facility_type: str
+    currency: str
+    carrying_value: Decimal | None
+    commitment: Decimal | None
+    drawn_amount: Decimal | None
+    secured_status: str
+    seniority: str
+    lease_classification: str
+    maturity_date: str | None
+    margin_or_coupon: str
+    rate_type: str
+    reference_rate: str
+    spread_bps: Decimal | None
+    floor_bps: Decimal | None
+    fixed_rate: Decimal | None
+    annual_amortisation: Decimal | None
+    source: SourceRef | None
+    # A spread or floor written with `%` or not whole basis points, or a
+    # fixed coupon outside 0.5-30 percent: the terms are not priced.
+    terms_out_of_range: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class PfAdjustmentRow:
+    adjustment_id: str
+    label: str
+    period_id: str
+    classification: str
+    metric_id: str
+    value: Decimal
+    source: SourceRef | None
+
+
+@dataclass(frozen=True, slots=True)
+class Cp1Registers:
+    periods: tuple[PeriodRow, ...]
+    accounts: tuple[AccountRow, ...]
+    addbacks: tuple[AddbackRow, ...]
+    segments: tuple[SegmentRow, ...]
+    kpis: tuple[KpiRow, ...]
+    facilities: tuple[FacilityRow, ...]
+    pro_forma: tuple[PfAdjustmentRow, ...]
+    currency: str
+    unit: str
 
 
 def _malformed() -> Refusal:
@@ -371,3 +481,357 @@ def _fiscal_year(row: _Row, end: date | None) -> str:
     if end is not None and abs(year - end.year) > 1:
         raise _malformed()
     return text
+
+
+def _period(row: _Row) -> PeriodRow:
+    start, end, days = _span(row)
+    return PeriodRow(
+        period_id=_text(row, "period_id"),
+        fiscal_year=_fiscal_year(row, end),
+        fiscal_quarter=_optional(row, "fiscal_quarter"),
+        period_type=_enum(row, "period_type", _PERIOD_TYPES),
+        start_date=None if start is None else start.isoformat(),
+        end_date=None if end is None else end.isoformat(),
+        day_count=days,
+        currency=_enum(row, "currency"),
+        unit=_enum(row, "unit", _PERIOD_UNITS),
+        component_period_ids=_components(row),
+    )
+
+
+_ACCOUNT_COLUMNS = frozenset(
+    {
+        "metric_id",
+        "period_id",
+        "value",
+        "calculation_status",
+        "source_id",
+        "source_locator",
+    }
+)
+
+
+def _account(row: _Row) -> AccountRow:
+    """An account row; a negative RCF commitment or drawing (a balance, never
+    an outflow) is refused."""
+    metric_id = _text(row, "metric_id")
+    value = _figure(row, "value")
+    if metric_id in _RCF_BALANCES and value is not None and value < 0:
+        raise _malformed()
+    return AccountRow(
+        metric_id=metric_id,
+        period_id=_text(row, "period_id"),
+        value=value,
+        calculation_status=_enum(row, "calculation_status", _CALCULATION_STATUSES),
+        source=_source(row, "value"),
+    )
+
+
+_ADDBACK_COLUMNS = frozenset(
+    {
+        "addback_id",
+        "addback_label",
+        "addback_classification",
+        "realization_status",
+        "display_priority",
+        "period_id",
+        "value",
+        "source_id",
+        "source_locator",
+    }
+)
+
+
+def _addback(row: _Row) -> AddbackRow:
+    return AddbackRow(
+        addback_id=_text(row, "addback_id"),
+        label=_text(row, "addback_label"),
+        classification=_enum(row, "addback_classification", _ADDBACK_CLASSIFICATIONS),
+        realization_status=_enum(row, "realization_status", _REALIZATION_STATUSES),
+        display_priority=_priority(row),
+        period_id=_text(row, "period_id"),
+        value=_figure(row, "value"),
+        source=_source(row, "value"),
+    )
+
+
+_SEGMENT_COLUMNS = frozenset(
+    {
+        "segment_id",
+        "segment_name",
+        "segment_type",
+        "display_priority",
+        "period_id",
+        "revenue",
+        "source_id",
+        "source_locator",
+    }
+)
+
+
+def _segment(row: _Row) -> SegmentRow:
+    return SegmentRow(
+        segment_id=_text(row, "segment_id"),
+        segment_name=_text(row, "segment_name"),
+        segment_type=_enum(row, "segment_type", _SEGMENT_TYPES),
+        display_priority=_priority(row),
+        period_id=_text(row, "period_id"),
+        revenue=_figure(row, "revenue"),
+        source=_source(row, "revenue"),
+    )
+
+
+_KPI_COLUMNS = frozenset(
+    {
+        "kpi_id",
+        "kpi_label",
+        "display_priority",
+        "period_id",
+        "value",
+        "unit",
+        "value_type",
+        "source_id",
+        "source_locator",
+    }
+)
+
+
+def _kpi(row: _Row) -> KpiRow:
+    return KpiRow(
+        kpi_id=_text(row, "kpi_id"),
+        kpi_label=_text(row, "kpi_label"),
+        display_priority=_priority(row),
+        period_id=_text(row, "period_id"),
+        value=_figure(row, "value"),
+        unit=_enum(row, "unit"),
+        value_type=_enum(row, "value_type", _KPI_VALUE_TYPES),
+        source=_source(row, "value"),
+    )
+
+
+# Not the rate and amortisation columns: an older run's register has none.
+_FACILITY_COLUMNS = frozenset(
+    {
+        "facility_id",
+        "facility_name",
+        "period_id",
+        "facility_type",
+        "currency",
+        "carrying_value",
+        "drawn_amount",
+        "commitment",
+        "secured_status",
+        "seniority",
+        "margin_or_coupon",
+        "maturity_date",
+        "lease_classification",
+        "source_id",
+        "source_locator",
+    }
+)
+
+
+def _non_negative(row: _Row, column: str) -> Decimal | None:
+    """The column's figure, refused when negative."""
+    value = _figure(row, column)
+    if value is not None and value < 0:
+        raise _malformed()
+    return value
+
+
+def _out_of_range(row: _Row) -> bool:
+    """Whether a rate term is written in the wrong unit: a spread or floor
+    with `%` in its text or not whole basis points, or a fixed coupon outside
+    0.5-30 percent (a decimal read as a percent)."""
+    for column in _BPS_TERMS:
+        value = _figure(row, column)
+        if value is None:
+            continue
+        if "%" in _text(row, column) or value != value.to_integral_value():
+            return True
+    coupon = _figure(row, "fixed_rate")
+    low, high = _COUPON_RANGE
+    return coupon is not None and not low <= coupon <= high
+
+
+def _facility(row: _Row) -> FacilityRow:
+    """A debt row; a negative carrying value is refused except on a
+    `DEBT ADJUSTMENT` row (CP-MODEL's validator's own rule), a negative
+    commitment or drawing on any row."""
+    facility_type = _enum(row, "facility_type", _FACILITY_TYPES)
+    carrying = _figure(row, "carrying_value")
+    if carrying is not None and carrying < 0 and facility_type != _DEBT_ADJUSTMENT:
+        raise _malformed()
+    return FacilityRow(
+        facility_id=_text(row, "facility_id"),
+        facility_name=_text(row, "facility_name"),
+        period_id=_text(row, "period_id"),
+        facility_type=facility_type,
+        currency=_enum(row, "currency"),
+        carrying_value=carrying,
+        commitment=_non_negative(row, "commitment"),
+        drawn_amount=_non_negative(row, "drawn_amount"),
+        secured_status=_enum(row, "secured_status", _SECURED_STATUSES),
+        seniority=_enum(row, "seniority", _SENIORITIES),
+        lease_classification=_enum(row, "lease_classification", _LEASE_CLASSIFICATIONS),
+        maturity_date=_optional(row, "maturity_date"),
+        margin_or_coupon=_text(row, "margin_or_coupon"),
+        rate_type=_rate_term(row, "rate_type", _RATE_TYPES),
+        reference_rate=_rate_term(row, "reference_rate", _REFERENCE_RATES),
+        spread_bps=_figure(row, "spread_bps"),
+        floor_bps=_figure(row, "floor_bps"),
+        fixed_rate=_figure(row, "fixed_rate"),
+        annual_amortisation=_figure(row, "annual_amortisation"),
+        source=_source(row, "carrying_value"),
+        terms_out_of_range=_out_of_range(row),
+    )
+
+
+_PRO_FORMA_COLUMNS = frozenset(
+    {
+        "adjustment_id",
+        "label",
+        "period_id",
+        "effective_date",
+        "classification",
+        "metric_id",
+        "value",
+        "source_id",
+        "source_locator",
+    }
+)
+
+
+def _pro_forma(row: _Row) -> PfAdjustmentRow:
+    """A stated adjustment; one with no figure is no adjustment, and refused."""
+    value = _figure(row, "value")
+    if value is None:
+        raise _malformed()
+    return PfAdjustmentRow(
+        adjustment_id=_text(row, "adjustment_id"),
+        label=_text(row, "label"),
+        period_id=_text(row, "period_id"),
+        classification=_enum(row, "classification", _PF_CLASSIFICATIONS),
+        metric_id=_text(row, "metric_id"),
+        value=value,
+        source=_source(row, "value"),
+    )
+
+
+def _one(values: set[str]) -> str:
+    """The one value every period row states, or refused."""
+    if len(values) != 1:
+        raise _malformed()
+    return next(iter(values))
+
+
+def _distinct[T](
+    rows: tuple[T, ...], key: Callable[[T], tuple[str, ...]]
+) -> tuple[T, ...]:
+    """`rows`, refused when two share a key: one register id in one period is
+    one figure, never two for the model to choose between."""
+    keys = [key(row) for row in rows]
+    if len(set(keys)) != len(keys):
+        raise _malformed()
+    return rows
+
+
+def _fiscal_period(period: PeriodRow) -> tuple[str, int | None, str] | None:
+    """The fiscal period a quarter, YTD or FY covers: its type, year and
+    quarter (`2` and `Q2` alike); None for any other period, or a quarter or
+    YTD without a fiscal quarter."""
+    year = fiscal_year_number(period.fiscal_year)
+    if period.period_type == "FY":
+        return "FY", year, ""
+    if period.period_type in {"QUARTER", "YTD"} and period.fiscal_quarter:
+        return period.period_type, year, period.fiscal_quarter.upper().removeprefix("Q")
+    return None
+
+
+def _one_each(periods: tuple[PeriodRow, ...]) -> tuple[PeriodRow, ...]:
+    """`periods`, refused when two cover one fiscal quarter, YTD or year:
+    the model would have to choose between them."""
+    covered = [key for p in periods if (key := _fiscal_period(p)) is not None]
+    if len(set(covered)) != len(covered):
+        raise _malformed()
+    return periods
+
+
+def _depth(
+    period_id: str,
+    components: Mapping[str, tuple[str, ...]],
+    depths: dict[str, int],
+    open_ids: frozenset[str],
+) -> int:
+    """How deep the period's components nest (none: 0); refused past
+    `MAX_NESTING` or in a cycle. `depths` keeps each period's, so a period
+    named by many is walked once."""
+    if period_id in depths:
+        return depths[period_id]
+    if period_id in open_ids:
+        raise _malformed()
+    inner = open_ids | {period_id}
+    parts = components.get(period_id, ())
+    depth = max((_depth(p, components, depths, inner) + 1 for p in parts), default=0)
+    if depth > MAX_NESTING:
+        raise _malformed()
+    depths[period_id] = depth
+    return depth
+
+
+def _bounded(periods: tuple[PeriodRow, ...]) -> tuple[PeriodRow, ...]:
+    """`periods`, refused past `MAX_PERIODS` or nested past `MAX_NESTING`:
+    the model's work grows with both."""
+    if len(periods) > MAX_PERIODS:
+        raise _malformed()
+    components = {p.period_id: p.component_period_ids for p in periods}
+    depths: dict[str, int] = {}
+    for period in periods:
+        _depth(period.period_id, components, depths, frozenset())
+    return periods
+
+
+def cp1_registers(tables: Sequence[HandoffTable]) -> Cp1Registers:
+    """CP-1's period, account, add-back, segment, KPI, debt and pro forma
+    registers as typed rows, in the currency and unit of the period register.
+    A period id written twice, a register id written twice for one period, two
+    periods for one fiscal quarter, YTD or year, a fiscal year without a
+    four-digit year, or more periods or deeper components than the model
+    reads, is refused."""
+    periods = _bounded(
+        _distinct(
+            _one_each(_read(tables, _PERIODS, _PERIOD_COLUMNS, _period)),
+            lambda p: (p.period_id,),
+        )
+    )
+    if not periods:
+        raise _malformed()
+    return Cp1Registers(
+        periods=periods,
+        accounts=_distinct(
+            _read(tables, _ACCOUNTS, _ACCOUNT_COLUMNS, _account),
+            lambda a: (a.metric_id, a.period_id),
+        ),
+        addbacks=_distinct(
+            _read(tables, _ADDBACKS, _ADDBACK_COLUMNS, _addback),
+            lambda b: (b.addback_id, b.period_id),
+        ),
+        segments=_distinct(
+            _read(tables, _SEGMENTS, _SEGMENT_COLUMNS, _segment),
+            lambda g: (g.segment_id, g.period_id),
+        ),
+        kpis=_distinct(
+            _read(tables, _KPIS, _KPI_COLUMNS, _kpi),
+            lambda k: (k.kpi_id, k.period_id),
+        ),
+        facilities=_distinct(
+            _read(tables, _FACILITIES, _FACILITY_COLUMNS, _facility),
+            lambda f: (f.facility_id, f.period_id),
+        ),
+        pro_forma=_distinct(
+            _read(tables, _PRO_FORMA, _PRO_FORMA_COLUMNS, _pro_forma),
+            lambda a: (a.adjustment_id, a.period_id),
+        ),
+        currency=_one({p.currency for p in periods}),
+        unit=_one({p.unit for p in periods}),
+    )
