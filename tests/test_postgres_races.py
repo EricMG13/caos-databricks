@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
@@ -31,8 +32,10 @@ from fake_chat import ScriptedChat, StatusError, fake_completions
 from run_terminals import fail_run
 from test_run_events import RECORD, accept_nodes, approved_nodes
 
+from caos.api.commands import rate_decks as rate_decks_command
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.calculators.credit_model.projection import RateDeckYear
 from caos.graph import runtime
 from caos.graph.route import NodeState, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
@@ -41,7 +44,14 @@ from caos.methodology.bundle import Bundle
 from caos.pricing import ModelPrice
 from caos.provider import Completion, CutAfterContentError, DropKind
 from caos.refusals import Refusal, RefusalCode
-from caos.store import RunStatus, StoreConnection, apply_schema, connect, runs
+from caos.store import (
+    RunStatus,
+    StoreConnection,
+    apply_schema,
+    connect,
+    runs,
+)
+from caos.store.commands import NIL_SCOPE, record_receipt, request_digest
 from caos.store.events import RunEvent, events_of
 from caos.store.outcomes import (
     CallOutcome,
@@ -52,6 +62,7 @@ from caos.store.outcomes import (
     record_outcome,
     record_refusal,
 )
+from caos.store.rate_decks import save_deck
 from caos.store.runs import (
     Accepted,
     accept_attempt,
@@ -1932,3 +1943,56 @@ def test_a_re_attempts_drop_billed_after_another_workers_read_makes_no_third_cal
         "SELECT state, stop_code FROM run_work WHERE run_id = %s", (run.run_id,)
     ).fetchone() == ("STOPPED", "PROVIDER_UNAVAILABLE")
     assert _events(run.conn, run.run_id, RunEvent.RUN_PARKED) == 1
+
+
+def _deck_rows(rate: str) -> tuple[RateDeckYear, ...]:
+    return (RateDeckYear("SOFR", 1, Decimal(rate), Decimal("0.0450")),)
+
+
+def test_twin_deck_saves_under_one_key_keep_one_deck(empty_database: str) -> None:
+    """One deck per key, whatever the interleaving.
+
+    A has saved its deck and receipt and not committed. B, the same request
+    under the same key, misses the receipt lookup and waits at the save lock;
+    once A commits, B's receipt insert finds the key taken, B's whole unit
+    (its deck included) is rolled back, and B replays A's receipt."""
+    actor, key = uuid4(), uuid4()
+    rows = _deck_rows("0.0380")
+    digest = request_digest(
+        rate_decks_command.SAVE_RATE_DECK,
+        case_id=None,
+        run_id=None,
+        gate=None,
+        body={"as_of": "2026-10-01"},
+    )
+    request = rate_decks_command.DeckRequest(
+        actor, key, digest, date(2026, 10, 1), rows
+    )
+    with connect(empty_database) as first, connect(empty_database) as second:
+        apply_schema(first)
+        first.commit()
+        deck = save_deck(first, actor, date(2026, 10, 1), rows)
+        receipt = {"deck_id": str(deck)}
+        assert record_receipt(
+            first,
+            actor_id=actor,
+            scope=NIL_SCOPE,
+            key=key,
+            command=rate_decks_command.SAVE_RATE_DECK,
+            request_sha256=digest,
+            status=201,
+            receipt=receipt,
+        )
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            twin = pool.submit(rate_decks_command.saved_deck, second, request)
+            with pytest.raises(TimeoutError):
+                twin.result(1)
+            first.commit()
+            replayed = twin.result(30)
+
+        assert (replayed.status, replayed.receipt, replayed.replayed) == (
+            201,
+            receipt,
+            True,
+        )
+        assert first.execute("SELECT deck_id FROM rate_decks").fetchall() == [(deck,)]

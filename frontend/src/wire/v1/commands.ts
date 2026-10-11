@@ -147,6 +147,15 @@ const DeliverableFiled = object({
   filed_by: uuid,
 });
 
+// Plan 2 Task 1: a global ADMIN saves a rate deck; the saver is the actor,
+// never a field. The server refuses an empty deck, a repeated rate and year
+// and a rate outside (-1, 1).
+const SaveRateDeck = object({
+  as_of: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+  rates: array(V1_SHAPES.RateDeckRateView, 20),
+});
+const RateDeckSaved = object({ deck_id: uuid });
+
 /** Every command model `schema.json` declares, under its backend name. */
 export const V1_COMMAND_SHAPES = {
   ApproveGate,
@@ -174,10 +183,12 @@ export const V1_COMMAND_SHAPES = {
   GateApproved,
   GatePreviewDocument,
   PinRunInput,
+  RateDeckSaved,
   RetryRun,
   RunCreated,
   RunInputPinned,
   RunWork,
+  SaveRateDeck,
   SignVerdict,
   SourcesAdmitted,
   StartRun,
@@ -217,6 +228,8 @@ export type FreezeDeliverable = Infer<typeof FreezeDeliverable>;
 export type DeliverableFrozen = Infer<typeof DeliverableFrozen>;
 export type FileDeliverable = Infer<typeof FileDeliverable>;
 export type DeliverableFiled = Infer<typeof DeliverableFiled>;
+export type SaveRateDeck = Infer<typeof SaveRateDeck>;
+export type RateDeckSaved = Infer<typeof RateDeckSaved>;
 
 export const parseCaseCreated = (value: unknown): CaseCreated => parse(CaseCreated, value);
 export const parseSourcesAdmitted = (value: unknown): SourcesAdmitted =>

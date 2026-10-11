@@ -18,11 +18,13 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Mapping
+from datetime import date
 from enum import StrEnum
 from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import (
+    AfterValidator,
     AwareDatetime,
     BaseModel,
     ConfigDict,
@@ -108,6 +110,9 @@ BRIEF_BYTES = 65_536
 # each one line the store bounds at 1 KiB (`caos.methodology.qualifiers`).
 QUALIFIERS_MAX = 4
 QUALIFIER_CHARS = 1024
+# A rate deck's rows: four reference rates over five years
+# (`caos.store.rate_decks.DECK_ROWS_MAX`, restated where the wire refuses it).
+RATE_DECK_ROWS_MAX = 20
 
 Id = Annotated[str, Field(max_length=ID_CHARS)]
 Text = Annotated[str, Field(max_length=TEXT_CHARS)]
@@ -1868,6 +1873,66 @@ class DeliverableFiled(BaseModel):
     filed_by: UUID
 
 
+def _calendar_date(text: str) -> str:
+    """`text`, if it names a real day: `2026-02-30` matches the pattern and
+    is still refused. Not a schema keyword, so the browser checks the shape
+    and the server the calendar."""
+    date.fromisoformat(text)
+    return text
+
+
+# A calendar date in ISO form, as `ModelChoice.as_of` carries one.
+CalendarDate = Annotated[
+    str,
+    Field(max_length=10, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    AfterValidator(_calendar_date),
+]
+
+
+class RateDeckRateView(BaseModel):
+    """One row of a rate deck: a reference rate's Base and Downside rate for
+    one fiscal year after the last reported (FY+1 is 1). Rates are decimals
+    in plain notation (0.0380 is 3.80%); the store refuses one outside
+    (-1, 1) and a second row for the same rate and year."""
+
+    model_config = _CLOSED
+
+    reference_rate: Literal["SOFR", "TERM_SOFR", "EURIBOR", "SONIA"]
+    year_offset: Annotated[int, Field(ge=1, le=5)]
+    base_rate: DecimalText
+    downside_rate: DecimalText
+
+
+class SaveRateDeck(BaseModel):
+    """A global ADMIN's new rate deck. The saver is the actor, never a field;
+    the store refuses an empty deck (the browser's schema has no minimum)."""
+
+    model_config = _CLOSED
+
+    as_of: CalendarDate
+    rates: Annotated[list[RateDeckRateView], Field(max_length=RATE_DECK_ROWS_MAX)]
+
+
+class RateDeckSaved(BaseModel):
+    """The receipt for a saved deck."""
+
+    model_config = _CLOSED
+
+    deck_id: UUID
+
+
+class RateDeckView(BaseModel):
+    """The latest rate deck, as any signed-in user reads it; the route
+    answers `null` when none was ever saved."""
+
+    model_config = _CLOSED
+
+    deck_id: UUID
+    as_of: CalendarDate
+    saved_at: AwareDatetime
+    rates: Annotated[list[RateDeckRateView], Field(max_length=RATE_DECK_ROWS_MAX)]
+
+
 V1_COMMANDS: tuple[type[BaseModel], ...] = (
     CreateCase,
     CaseCreated,
@@ -1899,6 +1964,8 @@ V1_COMMANDS: tuple[type[BaseModel], ...] = (
     DeliverableFrozen,
     FileDeliverable,
     DeliverableFiled,
+    SaveRateDeck,
+    RateDeckSaved,
 )
 
 
@@ -1911,6 +1978,7 @@ def wire_schema() -> str:
         *V1_DOCUMENTS,
         PageDocument,
         QualificationRead,
+        RateDeckView,
         *V1_COMMANDS,
         RefusalBody,
     )

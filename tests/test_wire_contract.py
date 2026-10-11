@@ -487,6 +487,14 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     DeliverableFiled: frozenset(
         {"case_id", "run_id", "revision_id", "payload_sha256", "filed_by"}
     ),
+    # Plan 2 Task 1: a global ADMIN's rate deck, its receipt, and the latest
+    # deck any signed-in user reads.
+    wire.RateDeckRateView: frozenset(
+        {"reference_rate", "year_offset", "base_rate", "downside_rate"}
+    ),
+    wire.SaveRateDeck: frozenset({"as_of", "rates"}),
+    wire.RateDeckSaved: frozenset({"deck_id"}),
+    wire.RateDeckView: frozenset({"deck_id", "as_of", "saved_at", "rates"}),
 }
 
 REQUESTS: tuple[type[BaseModel], ...] = (
@@ -505,6 +513,7 @@ REQUESTS: tuple[type[BaseModel], ...] = (
     SignOpinion,
     FreezeDeliverable,
     FileDeliverable,
+    wire.SaveRateDeck,
 )
 
 # What `frontend/src/wire/v1/shape.ts` can express. `title` and `description`
@@ -843,7 +852,7 @@ def test_every_section_router_declares_its_store_budget() -> None:
 
 def test_v1_command_models_are_closed_bounded_and_in_the_committed_schema() -> None:
     assert set(REQUESTS) <= set(V1_COMMANDS)
-    assert len(V1_COMMANDS) == len(set(V1_COMMANDS)) == 30
+    assert len(V1_COMMANDS) == len(set(V1_COMMANDS)) == 32
     defs = json.loads(COMMITTED.read_text(encoding="utf-8"))["$defs"]
     for model in V1_COMMANDS:
         assert model.__name__ in defs, model.__name__

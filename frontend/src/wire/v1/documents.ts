@@ -804,6 +804,23 @@ const QualificationRead = object({
   expires_at: nullable(datetime),
 });
 
+// Plan 2 Task 1: one row of a rate deck, and the latest deck any signed-in
+// user reads (the route answers null when none was ever saved). Rates are
+// plain decimal text, never a number.
+const rate = string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" });
+const RateDeckRateView = object({
+  reference_rate: enumOf(["SOFR", "TERM_SOFR", "EURIBOR", "SONIA"]),
+  year_offset: int({ min: 1, max: 5 }),
+  base_rate: rate,
+  downside_rate: rate,
+});
+const RateDeckView = object({
+  deck_id: uuid,
+  as_of: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+  saved_at: datetime,
+  rates: array(RateDeckRateView, 20),
+});
+
 /** Every model `schema.json` declares, under its backend name. */
 export const V1_SHAPES = {
   NarrativeFigure,
@@ -867,6 +884,8 @@ export const V1_SHAPES = {
   RefusalCode,
   QualificationRead,
   QualificationState,
+  RateDeckRateView,
+  RateDeckView,
   ResearchBrief,
   ResearchBriefQuestion,
   RunQualifier,
@@ -910,6 +929,8 @@ export type RefusalBody = Infer<typeof RefusalBody>;
 export type RefusalCode = Infer<typeof RefusalCode>;
 export type QualificationRead = Infer<typeof QualificationRead>;
 export type QualificationState = Infer<typeof QualificationState>;
+export type RateDeckRateView = Infer<typeof RateDeckRateView>;
+export type RateDeckView = Infer<typeof RateDeckView>;
 export type Chrome = Infer<typeof Chrome>;
 export type CaseRow = Infer<typeof CaseRow>;
 export type MemberRow = Infer<typeof MemberRow>;

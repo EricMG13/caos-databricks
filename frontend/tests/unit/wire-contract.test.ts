@@ -593,6 +593,9 @@ describe("the v1 wire contract", () => {
       "DeliverableFrozen",
       "FileDeliverable",
       "DeliverableFiled",
+      // Plan 2 Task 1: the global rate deck.
+      "SaveRateDeck",
+      "RateDeckSaved",
     ];
     expect(Object.keys(V1_COMMAND_SHAPES).sort()).toEqual([...commands].sort());
     const shapes = new Map(Object.entries(V1_COMMAND_SHAPES));
