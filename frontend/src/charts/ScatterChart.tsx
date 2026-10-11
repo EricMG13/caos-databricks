@@ -87,7 +87,7 @@ function readPoints(points: readonly ScatterPoint[]): Read[] {
   return points.map((point, index) => {
     const read = readDatum(point.value);
     const time = readDate(point.at);
-    const why = [time === null ? UNDATED : "", valueWhy(read.value)];
+    const why = [time === null ? (point.unread ?? UNDATED) : "", valueWhy(read.value)];
     return {
       point,
       index,
