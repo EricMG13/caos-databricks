@@ -19,10 +19,10 @@ import {
   type Placed,
   type Tick,
 } from "./axes";
-import { formatDecimal, toNumber } from "./decimal";
+import { formatDecimal, toNumber, type ReadValue } from "./decimal";
 import { BarShape, DOT, GapMark, HatchPatterns, MarkerShape } from "./marks";
 import { TICK_SIZE, VALUE_SIZE, fitLines, textWidth } from "./scale";
-import { cellName, cellSelection, type Cell } from "./series";
+import { ORIGIN_WORD, cellName, cellSelection, said, type Cell } from "./series";
 import type { Box, ChartSelection, Orientation, Origin, Plot, PlotKit, Tone } from "./types";
 
 /** One bar, in value space. */
@@ -66,6 +66,8 @@ export interface BandMarker {
   /** A line across the band, perpendicular to the value axis; or a point at
       the band's centre. */
   shape: "rule" | "dot";
+  /** Pixels across the band off its centre: two dots at one value set apart. */
+  offset?: number;
   name: string;
   readout?: string;
   selection: ChartSelection;
@@ -126,6 +128,31 @@ export function cellBar(
     name: cellName(cell, unit, "", options.signed),
     label: value === null ? null : formatDecimal(value, options.signed),
     selection: cellSelection(cell),
+  };
+}
+
+/** A row's statistic or end marked across its band: its key and selection
+    series `part`, named "label: word value (origin)". The range strip's and
+    the dumbbell's one builder. */
+export function rowMarker(
+  row: { key: string; label: string; origin: Origin },
+  index: number,
+  part: string,
+  word: string,
+  value: ReadValue,
+  unit: string | undefined,
+  look: { tone: Tone; shape: BandMarker["shape"] },
+): BandMarker {
+  const origin = value.origin ?? row.origin;
+  return {
+    key: `${row.key}:${part}`,
+    category: index,
+    at: value.value === null ? 0 : toNumber(value.value),
+    ...look,
+    origin,
+    gap: value.value === null,
+    name: `${row.label}: ${word} ${said(value, unit)} (${ORIGIN_WORD[origin]})`,
+    selection: { series: part, category: row.label, index, value: value.value, origin },
   };
 }
 
@@ -311,7 +338,7 @@ function ruleSpan(layout: Layout, slots: number): number {
 /** Where a marker is drawn: a rule's two ends (a dot sits at their midpoint),
     its box, and the stretch of the value axis it covers. */
 function markerPlace(marker: BandMarker, layout: Layout, slots: number) {
-  const centre = centreOf(layout, marker.category);
+  const centre = centreOf(layout, marker.category) + (marker.offset ?? 0);
   const at = layout.axis.at(marker.at);
   const dot = marker.shape === "dot";
   const half = dot ? 0 : ruleSpan(layout, slots) / 2; // the rule's half-length
@@ -417,14 +444,15 @@ function gapsOf(spec: BandSpec, layout: Layout) {
       .filter((marker) => marker.gap)
       .map((marker) => ({ mark: marker, slot: null, along: centreOf(layout, marker.category) })),
   ];
-  return unavailable.map((gap, index) => {
-    const earlier = unavailable
-      .slice(0, index)
-      .filter(
-        (other) =>
-          other.mark.category === gap.mark.category &&
-          (gap.slot === null || other.slot === gap.slot),
-      ).length;
+  // Gaps marked so far, per band and per slot of a band.
+  const inBand = new Map<number, number>();
+  const inSlot = new Map<string, number>();
+  return unavailable.map((gap) => {
+    const { category } = gap.mark;
+    const slot = `${category}:${gap.slot}`;
+    const earlier = (gap.slot === null ? inBand.get(category) : inSlot.get(slot)) ?? 0;
+    inBand.set(category, (inBand.get(category) ?? 0) + 1);
+    if (gap.slot !== null) inSlot.set(slot, (inSlot.get(slot) ?? 0) + 1);
     return { mark: gap.mark, point: gapPoint(gap.along, layout, earlier) };
   });
 }
@@ -487,8 +515,12 @@ function Annotations({ spec, layout }: { spec: BandSpec; layout: Layout }) {
   const markers = (spec.markers ?? [])
     .filter((marker) => !marker.gap)
     .map((marker) => ({ marker, place: markerPlace(marker, layout, spec.slots) }));
-  const markedIn = (category: number) =>
-    markers.filter((drawn) => drawn.marker.category === category).map((drawn) => drawn.place.span);
+  const marked = new Map<number, Span[]>();
+  for (const { marker, place } of markers) {
+    const spans = marked.get(marker.category);
+    if (spans) spans.push(place.span);
+    else marked.set(marker.category, [place.span]);
+  }
   const gaps = gapsOf(spec, layout);
   const { area, vertical } = layout;
   const zero = layout.axis.at(0);
@@ -523,7 +555,9 @@ function Annotations({ spec, layout }: { spec: BandSpec; layout: Layout }) {
       ))}
       {spec.bars.map((bar) => {
         const box = boxes.get(bar.key);
-        const placed = box ? labelOf(bar, box, layout, spec.slots, markedIn(bar.category)) : null;
+        const placed = box
+          ? labelOf(bar, box, layout, spec.slots, marked.get(bar.category) ?? [])
+          : null;
         return placed ? (
           <Label
             key={`label-${bar.key}`}

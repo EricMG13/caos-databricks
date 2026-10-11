@@ -66,11 +66,19 @@ export function StackedBarChart({
   const { segments, totals } = stackOf(cells, categories.length, normalised);
   const bars = segments.map((segment) => segmentBar(segment, unit, { unitOne, computed }));
   const bySegment = new Map(segments.map((segment) => [segment.cell, segment]));
-  const twin = seriesTable(categoryLabel, categories, series, cells, unit, (cell) => {
-    const segment = bySegment.get(cell);
-    if (!normalised || cell.value === null) return cellText(cell);
-    return cellText(cell, segment?.share ? ` (${segment.share}%)` : ` (${segment?.gap ?? ""})`);
-  });
+  const twin = seriesTable(
+    categoryLabel,
+    categories,
+    series,
+    cells,
+    unit,
+    (cell) => {
+      const segment = bySegment.get(cell);
+      if (!normalised || cell.value === null) return cellText(cell);
+      return cellText(cell, segment?.share ? ` (${segment.share}%)` : ` (${segment?.gap ?? ""})`);
+    },
+    computed,
+  );
   const table: TableTwin = normalised
     ? twin
     : {

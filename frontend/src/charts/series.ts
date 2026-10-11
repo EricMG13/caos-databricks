@@ -132,7 +132,8 @@ export function cellText(cell: Cell, extra = "", signed = false): string {
 }
 
 /** The table twin of a series chart: a row per category, a column per series
-    headed by its label, unit and origin. `text` prints one cell. */
+    headed by its label, unit and origin, or by what it is where this host
+    computed it (`computed`, as its marks are named). `text` prints one cell. */
 export function seriesTable(
   categoryLabel: string,
   categories: readonly string[],
@@ -140,10 +141,13 @@ export function seriesTable(
   cells: readonly Cell[],
   unit: string | undefined,
   text: (cell: Cell) => string = (cell) => cellText(cell),
+  computed?: string,
 ): TableTwin {
   const head = [
     categoryLabel,
-    ...series.map((one) => `${one.label}${unit ? `, ${unit}` : ""} (${ORIGIN_WORD[one.origin]})`),
+    ...series.map(
+      (one) => `${one.label}${unit ? `, ${unit}` : ""} (${computed ?? ORIGIN_WORD[one.origin]})`,
+    ),
   ];
   const rows = categories.map((category, index) => ({
     key: `${index}`,

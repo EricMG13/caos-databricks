@@ -3,9 +3,10 @@
 // value axis holding zero. A date is read only as `YYYY-MM-DD`, `YYYY-MM` or
 // `YYYY` (a month or a year placed at its first day); any other spelling,
 // `03/04/2031` above all, is never guessed. A point with no readable date or
-// no value is not placed: the table twin lists it with its reason and the
-// caption counts it. Points wear their group's colour, the host's filled and
-// the model's hollow; the arrow keys take them in date order.
+// no value, or a value too large for a float to place, is not placed: the
+// table twin lists it with its reason and the caption counts it. Placed points
+// wear their group's colour, the host's filled and the model's hollow; the
+// arrow keys take them in date order.
 import { CartesianGrid, Scatter, ScatterChart as Chart, XAxis, YAxis } from "recharts";
 import { ChartFrame, Focus, Reported } from "./ChartFrame";
 import { valueTick, valueTicks, type Tick } from "./axes";
@@ -33,6 +34,7 @@ const HEIGHT = 240;
 const YEAR_STEPS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
 const DATE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 const UNDATED = "No readable date (YYYY-MM-DD, YYYY-MM or YYYY)";
+const UNPLACEABLE = "Value too large to place";
 
 /** The first instant of a day, UTC; years below 100 kept as written. */
 function dayStart(year: number, month = 1, day = 1): Date {
@@ -66,21 +68,26 @@ interface Read {
   value: Decimal | null;
   reason: string | null;
   origin: Origin;
-  color: ChartColor;
   unplaced: string;
 }
 
-/** A point that has both: drawn and reached by its date. */
-type Placed = Read & { time: number; value: Decimal };
+/** A point that has both: drawn in its group's colour and reached by its date. */
+type Placed = Read & { time: number; value: Decimal; color: ChartColor };
 
-const isPlaced = (read: Read): read is Placed => !read.unplaced;
+const placeable = (read: Read): read is Omit<Placed, "color"> => !read.unplaced;
+
+/** Why a value is not placed: none, or one a float cannot place (past
+    about 1.8e308, where Recharts would draw no point). */
+function valueWhy(value: Decimal | null): string {
+  if (value === null) return "No value";
+  return Number.isFinite(toNumber(value)) ? "" : UNPLACEABLE;
+}
 
 function readPoints(points: readonly ScatterPoint[]): Read[] {
-  const groups = [...new Set(points.map((point) => point.group))];
   return points.map((point, index) => {
     const read = readDatum(point.value);
     const time = readDate(point.at);
-    const why = [time === null ? UNDATED : "", read.value === null ? "No value" : ""];
+    const why = [time === null ? UNDATED : "", valueWhy(read.value)];
     return {
       point,
       index,
@@ -88,10 +95,19 @@ function readPoints(points: readonly ScatterPoint[]): Read[] {
       value: read.value,
       reason: read.reason,
       origin: read.origin ?? point.origin,
-      color: seriesColor({}, groups.indexOf(point.group)),
       unplaced: why.filter(Boolean).join("; "),
     };
   });
+}
+
+/** The placed points in date order, coloured by group as the groups first
+    appear among them. */
+function placedOf(reads: readonly Read[]): Placed[] {
+  const drawn = reads.filter(placeable);
+  const groups = [...new Set(drawn.map((read) => read.point.group))];
+  return drawn
+    .map((read) => ({ ...read, color: seriesColor({}, groups.indexOf(read.point.group)) }))
+    .sort((a, b) => a.time - b.time || a.index - b.index);
 }
 
 /** Year ticks across `[first, last]`, every year that fits in `width`, else
@@ -230,6 +246,8 @@ function scatterPlot(spec: ScatterSpec, kit: PlotKit): Plot {
         isAnimationActive={false}
         shape={(props: { cx?: number; cy?: number; payload?: { key?: string } }) => {
           const read = byKey.get(props.payload?.key ?? "");
+          // Every point here has a finite time and value (`valueWhy`), so
+          // Recharts gives each its cx and cy; the type still allows none.
           if (!read || props.cx == null || props.cy == null) return <g />;
           return <Point read={read} cx={props.cx} cy={props.cy} spec={spec} />;
         }}
@@ -287,14 +305,14 @@ export function ScatterChart({
   groupLabel?: string;
 }) {
   const reads = readPoints(points);
-  const placed = reads.filter(isPlaced).sort((a, b) => a.time - b.time || a.index - b.index);
+  const placed = placedOf(reads);
   const unplaced = reads.filter((read) => read.unplaced);
   const spec: ScatterSpec = { placed, unit, xLabel };
-  const legend: LegendEntry[] = [...new Map(reads.map((read) => [read.point.group, read]))].map(
+  const legend: LegendEntry[] = [...new Map(placed.map((read) => [read.point.group, read]))].map(
     ([group, read]) => ({ key: group, label: group, tone: read.color, shape: "dot" }),
   );
   const note = unplaced.length
-    ? `${unplaced.length} of ${reads.length} points not placed, without a readable date or a value; the table lists each.`
+    ? `${unplaced.length} of ${reads.length} points not placed; the table lists each with its reason.`
     : null;
   const labels = { point: pointLabel, x: xLabel, value: valueLabel, group: groupLabel };
   return (
