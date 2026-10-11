@@ -13,7 +13,7 @@ rule it was accepted under (`ANY_RUN`), which it names.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from uuid import UUID
 
@@ -835,15 +835,19 @@ def test_placing_a_near_miss_stays_linear_in_the_lines_delivered(
     assert unrelated < 0.5 and alike < 0.5
 
 
-def test_a_near_miss_never_measures_a_long_line() -> None:
+def test_a_near_miss_never_measures_a_long_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """F493 fix round 1: the word ratio is quadratic in words, so neither a
     quote nor a candidate past `NEAR_MEASURED_WORDS` is measured: 64
-    look-alikes of 5,000 words give no hint, fast; a long line is still
-    named when it shares both ends. At the cap, 64 look-alikes of
-    `NEAR_MEASURED_WORDS` words from a small vocabulary are the ceiling."""
+    look-alikes of 5,000 words give no hint and no ratio is measured; a long
+    line is still named when it shares both ends. At the cap, 64 look-alikes
+    of `NEAR_MEASURED_WORDS` words from a small vocabulary are the ceiling."""
+    import difflib
     import random
-    import time
+    from types import SimpleNamespace
 
+    from caos.evidence import citations
     from caos.evidence.citations import (
         NEAR_MEASURED,
         NEAR_MEASURED_WORDS,
@@ -851,6 +855,20 @@ def test_a_near_miss_never_measures_a_long_line() -> None:
         near_line,
     )
 
+    measured: list[tuple[int, int]] = []
+
+    def recording(
+        isjunk: Callable[[str], bool] | None,
+        a: Sequence[str],
+        b: Sequence[str],
+        autojunk: bool = True,
+    ) -> difflib.SequenceMatcher[str]:
+        measured.append((len(a), len(b)))
+        return difflib.SequenceMatcher(isjunk, a, b, autojunk)
+
+    monkeypatch.setattr(
+        citations, "difflib", SimpleNamespace(SequenceMatcher=recording)
+    )
     rows = random.Random(0)
 
     def lookalikes(count: int) -> tuple[list[str], list[str]]:
@@ -868,21 +886,17 @@ def test_a_near_miss_never_measures_a_long_line() -> None:
         ]
         return base, lines
 
-    def timed(quote: str, lines: list[str]) -> tuple[int | None, float]:
-        started = time.perf_counter()
-        found = near_line(quote, lines)
-        return found, time.perf_counter() - started
-
     # Sharing only the last words, each look-alike would need the ratio.
     base, lines = lookalikes(5000)
-    found, long = timed(" ".join(["Opening", *base[1:]]), lines)
-    assert found is None
+    assert near_line(" ".join(["Opening", *base[1:]]), lines) is None
+    assert measured == []
     # Both ends shared: named without a ratio, however long.
     slipped = [*base[:100], "slipped", *base[101:]]
     assert near_line(" ".join(slipped), [" ".join(base)]) == 0
+    assert measured == []
     base, lines = lookalikes(NEAR_MEASURED_WORDS)
-    _found, capped = timed(" ".join(["Opening", *base[1:]]), lines)
-    assert long < 0.5 and capped < 0.5
+    assert near_line(" ".join(["Opening", *base[1:]]), lines) is None
+    assert measured == [(NEAR_MEASURED_WORDS, NEAR_MEASURED_WORDS)] * NEAR_MEASURED
     assert NEAR_MEASURED_WORDS == 300
 
 
