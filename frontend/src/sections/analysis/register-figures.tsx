@@ -8,6 +8,7 @@
 // one, so no axis holds a dollar beside a euro.
 import {
   formatDecimal,
+  type BulletRow,
   type ChartColor,
   type ChartSelection,
   type ChartSeries,
@@ -16,6 +17,7 @@ import {
   type WaterfallStep,
 } from "@/charts";
 import { bridgeOf } from "@/charts/bridge";
+import { toNumber } from "@/charts/decimal";
 import type { HandoffView } from "@/wire/v1";
 import {
   MAX_MARKS,
@@ -99,6 +101,12 @@ const served = (cell: Cell | undefined) =>
 function stated(row: Row, columns: readonly string[]): string | null {
   const parts = columns.filter((column) => text(row, column)).map((c) => `${c}: ${text(row, c)}`);
   return parts.length ? parts.join("; ") : null;
+}
+
+/** The sources `rows` state, each said once; null where none states one. */
+function sourcesOf(rows: readonly Row[], columns: readonly string[]): string | null {
+  const named = unique(rows.flatMap((row) => stated(row, columns) ?? []));
+  return named.length ? named.join("; ") : null;
 }
 
 /** A register row and its place in the register, which keys its marks. */
@@ -216,12 +224,14 @@ function perGroup<G extends string>(
 const pickedRow = (entries: readonly Entry[], selection: ChartSelection) =>
   entries[selection.index]?.row;
 
-// The directions the bundle reads a covenant's test type as: its
-// `TEST_TYPE_ALIASES` in
-// vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/scripts/covenant_headroom.py,
-// looked up as its `normalise_test_type` looks them up (trimmed, casefolded,
-// a space read as a hyphen). Anything else has no direction: one is never
-// inferred from a test's name. A Map, so no inherited key is ever a type.
+// The directions the bundle reads a covenant's test type, and a rating
+// trigger's direction, as: its `TEST_TYPE_ALIASES` in
+// vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/scripts/covenant_headroom.py
+// (CP-2H ships the same file, whose `trigger_headroom` reads T2R.4's
+// `trigger direction`: cp-2h-ratings-migration-trigger/SKILL.md), looked up
+// as its `normalise_test_type` looks them up (trimmed, casefolded, a space
+// read as a hyphen). Anything else has no direction: one is never inferred
+// from a test's name. A Map, so no inherited key is ever a type.
 const TEST_TYPE_ALIASES = new Map<string, "max" | "min">([
   ["max-ratio", "max"],
   ["max_ratio", "max"],
@@ -237,8 +247,8 @@ const TEST_TYPE_ALIASES = new Map<string, "max" | "min">([
   ["incurrence-min", "min"],
 ]);
 
-function directionOf(row: Row): "max" | "min" | null {
-  const key = unmarked(text(row, "Test Type")).trim().toLowerCase().replaceAll(" ", "-");
+function directionOf(row: Row, column = "Test Type"): "max" | "min" | null {
+  const key = unmarked(text(row, column)).trim().toLowerCase().replaceAll(" ", "-");
   return TEST_TYPE_ALIASES.get(key) ?? null;
 }
 
@@ -829,11 +839,13 @@ const columnSeries = (
     data: entries.map(({ row }) => read(row[column])),
   }));
 
+/** A drawn value as a summary says it: as served, else n/a and why. */
+const say = (value: Datum | undefined) =>
+  value?.value != null ? formatDecimal(value.value) : `n/a (${value?.reason ?? "not stated"})`;
+
 /** "Exposure as served, Base / Stress: Senior 100 / n/a (TBD); …": each
     category's values, as drawn. */
 function seriesSummary(noun: string, categories: readonly string[], series: ChartSeries[]) {
-  const say = (value: Datum | undefined) =>
-    value?.value != null ? formatDecimal(value.value) : `n/a (${value?.reason ?? "not stated"})`;
   const rows = categories.map(
     (category, index) => `${category} ${series.map((one) => say(one.data[index])).join(" / ")}`,
   );
@@ -980,16 +992,21 @@ interface CaseLines {
 /** A metric as a figure's key part: "gross/net leverage" is "gross-net-leverage". */
 const slug = (metric: string) => metric.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
-/** The point the rows stating one period and case give a metric: their
-    cell where every row writes it alike, else a gap naming each text. */
-function pointOf(group: readonly Row[], metric: string, unit: Unit | undefined): Datum {
-  const cells = group.map((row) => row[metric]);
+/** The point the rows stating one category give a column: their cell, as
+    `read` draws it, where every row writes it alike, else a gap naming each
+    text. */
+function pointOf(
+  group: readonly Row[],
+  column: string,
+  read: (cell: Cell | undefined) => Datum,
+): Datum {
+  const cells = group.map((row) => row[column]);
   const texts = cells.map((cell) => cell?.text.trim() || "not stated");
   if (new Set(texts).size > 1) {
     const times = texts.length === 2 ? "twice" : `${texts.length} times`;
     return { value: null, reason: `stated ${times}: ${texts.join(", ")}` };
   }
-  return inUnit(cells[0], unit);
+  return read(cells[0]);
 }
 
 /** A CP-2G register's cases as lines over its periods, a figure a metric and
@@ -1037,7 +1054,9 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
         key: kase,
         label: labels.get(kase) || "Case not stated",
         origin: "model" as const,
-        data: periods.map((period) => pointOf(rowsAt(kase, period), metric, head.unit)),
+        data: periods.map((period) =>
+          pointOf(rowsAt(kase, period), metric, (cell) => inUnit(cell, head.unit)),
+        ),
       }));
       return {
         ...head,
@@ -1046,13 +1065,8 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
         summary: seriesSummary(label, periods, series),
         categories: periods,
         series,
-        sourceOf: (selection) => {
-          const sources = rowsAt(selection.series, selection.category).map((row) =>
-            stated(row, [spec.source]),
-          );
-          const named = unique(sources.filter((source): source is string => source !== null));
-          return named.length ? named.join("; ") : null;
-        },
+        sourceOf: (selection) =>
+          sourcesOf(rowsAt(selection.series, selection.category), [spec.source]),
       };
     });
   });
@@ -1080,6 +1094,169 @@ export function creditPath(handoff: HandoffView): Figure[] {
   });
 }
 
+/** A register drawn as tornadoes: a row's category, the value its bar is,
+    and the columns a bar's source states. */
+interface Tornado {
+  category: string;
+  value: string;
+  source: readonly string[];
+}
+
+/** A value's size, which only orders its bar: a gap's is below every figure's. */
+const sizeOf = (point: Datum) => (point.value === null ? -1 : Math.abs(toNumber(point.value)));
+
+/** Tornadoes of `rows`, a figure a unit their values are written in: a bar a
+    category, by the size of its value, largest first, gaps last (a float
+    orders the bars, never states one). A category stated twice is one bar,
+    a gap naming each text where they differ. Past `MAX_MARKS` a figure is
+    stated, not drawn. */
+function tornadoes(
+  rows: readonly Row[],
+  base: { key: string; table: string; title: string },
+  spec: Tornado,
+): Figure[] {
+  const unitOf = (row: Row) => suffixOf(row[spec.value]);
+  const categoryOf = (row: Row) => text(row, spec.category).trim() || `${spec.category} not stated`;
+  return perGroup(rows, base, bySuffix(unitOf), 1, (entries, head) => {
+    const named = groupBy(
+      entries.map(({ row }) => row),
+      categoryOf,
+    );
+    const bars = [...named]
+      .map(([category, group]) => ({ category, point: pointOf(group, spec.value, datum) }))
+      .sort((a, b) => sizeOf(b.point) - sizeOf(a.point));
+    const series: ChartSeries = {
+      key: "value",
+      label: spec.value,
+      origin: "model",
+      data: bars.map(({ point }) => point),
+    };
+    return {
+      ...head,
+      kind: "diverging",
+      summary: `${spec.value} as served, largest first: ${bars
+        .map(({ category, point }) => `${category} ${say(point)}`)
+        .join("; ")}.`,
+      categories: bars.map(({ category }) => category),
+      series: [series],
+      sourceOf: (selection) => {
+        const group = named.get(selection.category);
+        return group ? sourcesOf(group, spec.source) : null;
+      },
+    };
+  });
+}
+
+/** CP-2E's rate and FX sensitivities (`T2F.5`): each one's estimated cash
+    impact, as a tornado. */
+export function rateSensitivities(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-2E", "T2F.5");
+  if (!rows?.length) return [];
+  const base = { key: "rate-sensitivities", table: "T2F.5", title: "Rate and FX sensitivities" };
+  return tornadoes(rows, base, {
+    category: "Sensitivity",
+    value: "Estimated Cash Impact",
+    source: ["Formula", "Status", "Source Trace"],
+  });
+}
+
+/** CP-2A's downside sensitivities (`T2B.6`): each one's result, as a tornado. */
+export function downsideSensitivities(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-2A", "T2B.6");
+  if (!rows?.length) return [];
+  const base = { key: "downside-sensitivities", table: "T2B.6", title: "Downside sensitivities" };
+  return tornadoes(rows, base, {
+    category: "Sensitivity",
+    value: "Result",
+    source: ["Formula / Method", "Status", "Source Trace"],
+  });
+}
+
+/** CP-3D's scenario moves (`T3E.8`): a tornado per scenario, each driver's
+    calculated move. */
+export function scenarioMoves(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-3D", "T3E.8");
+  if (!rows?.length) return [];
+  const scenarios = [...groupBy(rows, (row) => text(row, "scenario").trim())];
+  return scenarios.flatMap(([scenario, group], n) =>
+    tornadoes(
+      group,
+      { key: `scenario-moves-${n}`, table: "T3E.8", title: titled("Scenario moves", scenario) },
+      {
+        category: "driver",
+        value: "calculated move",
+        source: ["spread/yield/price assumption", "convexity/call limitation"],
+      },
+    ),
+  );
+}
+
+/** A trigger's label, which is also its identity: "Leverage (Issuer,
+    downgrade)", its stated direction read trimmed and casefolded past its
+    citation markers, so an upgrade and a downgrade trigger on one metric
+    stay two triggers. A blank rating type or direction is left out; a blank
+    metric is named as not stated. */
+function triggerLabel(row: Row): string {
+  const metric = text(row, "metric").trim() || "metric not stated";
+  const direction = unmarked(text(row, "trigger direction")).trim().toLowerCase();
+  const parts = [text(row, "rating type").trim(), direction].filter(Boolean);
+  return parts.length ? `${metric} (${parts.join(", ")})` : metric;
+}
+
+/** CP-2H's quantitative triggers (`T2R.4`): a bullet figure per agency and
+    unit, each trigger's case/period value against its threshold, the
+    headroom as served. A packed case/period value is a gap carrying its
+    text (N192). A trigger stated twice (one metric, rating type and
+    direction) is one row, each value a gap naming each text where they
+    differ. */
+export function ratingTriggers(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-2H", "T2R.4");
+  if (!rows?.length) return [];
+  const unitOf = (row: Row) => suffixOf(row["case/period value"]) ?? suffixOf(row["threshold"]);
+  const agencies = [...groupBy(rows, (row) => text(row, "agency").trim())];
+  return agencies.flatMap(([agency, group], n) => {
+    const base = {
+      key: `rating-triggers-${n}`,
+      table: "T2R.4",
+      title: titled("Rating triggers", agency),
+    };
+    // A bar and a rule a trigger.
+    return perGroup(group, base, bySuffix(unitOf), 2, (entries, head) => {
+      const tests = [...groupBy(entries, ({ row }) => triggerLabel(row)).values()];
+      const bullets = tests.map((same): BulletRow => {
+        const stating = same.map(({ row }) => row);
+        return {
+          key: `${same[0]!.index}`,
+          label: triggerLabel(stating[0]!),
+          direction: directionOf(stating[0]!, "trigger direction"),
+          threshold: pointOf(stating, "threshold", datum),
+          current: pointOf(stating, "case/period value", datum),
+          headroom: pointOf(stating, "headroom", datum),
+          origin: "model",
+        };
+      });
+      return {
+        ...head,
+        kind: "bullet",
+        summary: `Headroom as served: ${bullets
+          .map(({ label, headroom }) => `${label} ${say(headroom)}`)
+          .join("; ")}.`,
+        bullets,
+        categoryLabel: "Trigger",
+        sourceOf: (selection) => {
+          const same = tests[selection.index];
+          return same
+            ? sourcesOf(
+                same.map(({ row }) => row),
+                ["status"],
+              )
+            : null;
+        },
+      };
+    });
+  });
+}
+
 /** Every figure a handoff's registers support, in reading order. A handoff
     is one module's, so only its own module's figures draw for it. */
 export function registerFigures(handoff: HandoffView): Figure[] {
@@ -1093,11 +1270,15 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...liquiditySources(handoff),
     ...cashUses(handoff),
     ...liquidityBridge(handoff),
+    ...downsideSensitivities(handoff),
     ...forecastCases(handoff),
     ...creditPath(handoff),
+    ...ratingTriggers(handoff),
     ...rateMix(handoff),
+    ...rateSensitivities(handoff),
     ...refinancingWall(handoff),
     ...lmeExposure(handoff),
+    ...scenarioMoves(handoff),
     ...valueAllocation(handoff),
     ...recoveryByClass(handoff),
   ];
