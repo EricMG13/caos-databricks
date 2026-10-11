@@ -7,7 +7,8 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "rea
 import { useLocation } from "react-router";
 import { Clock3 } from "lucide-react";
 import { Digest } from "@/ds/Digest";
-import { keyFigures, type KeyFigure } from "./figures";
+import { FigureCell, keyFigures, type FigurePick, type KeyFigure } from "./figures";
+import { auditCounts } from "./register-figures";
 import {
   APPENDIX_GROUPS,
   AUDIT_SECTIONS,
@@ -794,6 +795,8 @@ export function Depth({
   sourceFacts,
   unverifiedFacts,
   documents,
+  onPick,
+  picked,
 }: {
   handoff: HandoffView;
   read: Read | null;
@@ -806,8 +809,18 @@ export function Depth({
   unverifiedFacts: ReactNode;
   /** What the run rests on, second. */
   documents: ReactNode;
+  /** A pressed count, said as the Figures' marks are. */
+  onPick: (pick: FigurePick, opener: HTMLElement) => void;
+  /** The pressed count's panel, said in the Counts group. */
+  picked: ReactNode;
 }) {
   const parts: ModuleParts | null = read?.parts ?? null;
+  // Counts of the model's rows, the one figure computed here; a refusal
+  // withholds them with the register figures.
+  const counts = useMemo(
+    () => (handoff.registers_unavailable_reason ? [] : auditCounts(handoff)),
+    [handoff],
+  );
   const appendix = (read?.placed ?? [])
     .filter(({ place }) => place === "appendix")
     .map(({ register }) => register);
@@ -958,6 +971,19 @@ export function Depth({
                 Front matter <span className="cp">host-owned, as written</span>
               </h3>
               <pre className="md-front">{parts.front}</pre>
+            </section>
+          ) : null}
+          {counts.length ? (
+            <section className="group" data-audit-part="Counts">
+              <h3>
+                Counts <span className="cp">computed here from the model&apos;s rows</span>
+              </h3>
+              <div className="figgrid">
+                {counts.map((figure) => (
+                  <FigureCell key={figure.key} figure={figure} onPick={onPick} />
+                ))}
+              </div>
+              {picked}
             </section>
           ) : null}
         </TabsContent>

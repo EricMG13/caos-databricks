@@ -8,17 +8,21 @@
 // one, so no axis holds a dollar beside a euro.
 import {
   formatDecimal,
+  idList,
+  riskLevel,
   type BulletRow,
   type ChartColor,
   type ChartSelection,
   type ChartSeries,
   type Datum,
   type RangeRow,
+  type RiskEvent,
   type ScatterPoint,
   type WaterfallStep,
 } from "@/charts";
 import { bridgeOf } from "@/charts/bridge";
-import { toNumber } from "@/charts/decimal";
+import { placesOf, toNumber, toScaled } from "@/charts/decimal";
+import { MARKER } from "@/ds/markdown";
 import type { HandoffView } from "@/wire/v1";
 import {
   MAX_MARKS,
@@ -60,15 +64,39 @@ export function registerRows(
   // A declared column wins over a header cell spelled like it: the cells no
   // column is bound to are keyed first, so a bound one overwrites them.
   const order = [...keys.filter((key) => !key.declared), ...keys.filter((key) => key.declared)];
-  return register.rows.map((row) =>
-    Object.fromEntries(order.map(({ key, index }) => [key, row[index]])),
-  );
+  return register.rows.map((cells, place) => {
+    const row: Row = Object.fromEntries(order.map(({ key, index }) => [key, cells[index]]));
+    PLACES.set(row, place);
+    return row;
+  });
 }
 
-type Unit = "x" | "%";
+/** Each register row's place in its register, set as it is read: a blank
+    is named by its row. */
+const PLACES = new WeakMap<Row, number>();
 
-/** A citation marker as a cell may end in: `[C1]`, `[C1, C2]`, escaped or not. */
-const MARKER = /^\\?\[C[0-9]+(?:\\?, ?C[0-9]+)*\\?\]$/;
+/** A register row's place, counted from 1; a row `registerRows` did not
+    read has none, and naming one by it is a fault, not a guess. */
+function placeOf(row: Row): number {
+  const place = PLACES.get(row);
+  if (place === undefined) throw new Error("A row not read by registerRows has no place to name");
+  return place + 1;
+}
+
+/** What a row's `columns` name, joined, past their citation markers; all
+    blank, its row ("row 3, Factor not stated"), so blanks never merge. */
+export const nameOf = (row: Row, ...columns: string[]) =>
+  columns
+    .map((column) => unmarked(text(row, column)).trim())
+    .filter(Boolean)
+    .join(" ") || `row ${placeOf(row)}, ${columns[0]} not stated`;
+
+/** A figure's unit as written: the currency signs it starts or ends with,
+    then the `x` or `%` it ends in: "$", "%", "€ x". */
+type Unit = string;
+
+/** A citation marker standing alone, as `ds/markdown` reads one in model text. */
+const ALONE = new RegExp(`^(?:${MARKER.source})$`);
 
 /** `written` without the citation markers that trail it: `3.25x [C1]` is
     `3.25x`, as the host reads it for a figure. */
@@ -77,26 +105,41 @@ function unmarked(written: string): string {
   for (;;) {
     const open = rest.lastIndexOf("[");
     const from = open > 0 && rest[open - 1] === "\\" ? open - 1 : open;
-    if (open < 0 || !MARKER.test(rest.slice(from))) return rest;
+    if (open < 0 || !ALONE.test(rest.slice(from))) return rest;
     rest = rest.slice(0, from).trimEnd();
   }
 }
 
-/** The unit a figure cell's text ends in, `x` or `%`, past its citation
-    markers and a negative's brackets, as the host's reader strips them; none
-    for a cell the host read no figure from. */
+const CURRENCY = /^[$€£¥₹]|[$€£¥₹]$/g;
+
+/** The unit a figure cell is written in, past its citation markers, a
+    negative's brackets and digit-group spaces, as the host's reader strips
+    them (caos/methodology/tables.py): a currency sign at either end, then
+    an `x` or `%`; none for a cell the host read no figure from. */
 function suffixOf(cell: Cell | undefined): Unit | undefined {
   if (cell?.value == null) return undefined;
-  const written = unmarked(cell.text);
-  const bare =
-    written.startsWith("(") && written.endsWith(")") ? written.slice(1, -1).trim() : written;
-  if (/[xX]$/.test(bare)) return "x";
-  return bare.endsWith("%") ? "%" : undefined;
+  const written = unmarked(cell.text).trim();
+  const inner = written.startsWith("(") && written.endsWith(")") ? written.slice(1, -1) : written;
+  const bare = inner.replace(/[\u00a0\u2009\u202f ]/g, "");
+  const signs = unique(bare.match(CURRENCY) ?? []).join("");
+  const core = bare.replace(CURRENCY, "");
+  const suffix = /[xX]$/.test(core) ? "x" : core.endsWith("%") ? "%" : "";
+  return [signs, suffix].filter(Boolean).join(" ") || undefined;
+}
+
+/** A cell's `x` or `%` alone, its currency sign dropped: where a register
+    states a currency column, that column names the currency. */
+function suffixAlone(cell: Cell | undefined): Unit | undefined {
+  const unit = suffixOf(cell);
+  return unit && /[x%]$/.test(unit) ? unit.slice(-1) : undefined;
 }
 
 /** A cell as a summary says it: its figure as served, else n/a and its text. */
 const served = (cell: Cell | undefined) =>
   cell?.value != null ? formatDecimal(cell.value) : `n/a (${cell?.text || "not stated"})`;
+
+/** A summary's entries, at most ten, the rest counted. */
+const listed = (parts: readonly string[]) => idList(parts, "; ");
 
 /** The columns a row states, each named: "Formula: …; Status: …". */
 function stated(row: Row, columns: readonly string[]): string | null {
@@ -134,15 +177,19 @@ interface Grouping<G extends string> {
   unit: (group: G) => string | undefined;
 }
 
-const UNIT_KEY: Record<Unit, string> = { x: "x", "%": "percent" };
+// Each sign a unit is written with, and how a figure's key says it.
+const SIGNS = ["$", "€", "£", "¥", "₹", "x", "%"];
+const SIGN_KEYS = ["dollar", "euro", "pound", "yen", "rupee", "x", "percent"];
+const unitKey = (unit: Unit) =>
+  [...unit].flatMap((sign) => SIGN_KEYS[SIGNS.indexOf(sign)] ?? []).join("-");
 
 const BY_UNIT = {
-  key: (unit: Unit) => UNIT_KEY[unit],
+  key: unitKey,
   title: (unit: Unit) => unit,
   unit: (unit: Unit) => unit,
 };
 
-/** Rows grouped by the unit their figure is written in, `x` or `%`. */
+/** Rows grouped by the unit their figure is written in. */
 const bySuffix = (unitOf: (row: Row) => Unit | undefined): Grouping<Unit> => ({
   of: (row) => [unitOf(row)],
   ...BY_UNIT,
@@ -153,18 +200,18 @@ const bySuffix = (unitOf: (row: Row) => Unit | undefined): Grouping<Unit> => ({
     joins each of its units' figures, a cell drawn only in its own unit's and
     a gap naming it in the others (`inUnit`): no unit is invented and no axis
     holds two. A row stating no figure joins the figure of no unit. */
-const byCellUnits = (columns: readonly string[]): Grouping<Unit> => ({
+const byCellUnits = (columns: readonly string[], unitOf = suffixOf): Grouping<Unit> => ({
   of: (row) => {
     const units = columns.filter((column) => row[column]?.value != null);
-    return units.length ? [...new Set(units.map((column) => suffixOf(row[column])))] : [undefined];
+    return units.length ? [...new Set(units.map((column) => unitOf(row[column])))] : [undefined];
   },
   ...BY_UNIT,
 });
 
 /** A cell as the figure of unit `at` draws it: its figure where written in
     `at`, else a gap naming it, drawn in its own unit's figure. */
-function inUnit(cell: Cell | undefined, at: Unit | undefined): Datum {
-  if (cell?.value != null && suffixOf(cell) !== at) {
+function inUnit(cell: Cell | undefined, at: Unit | undefined, unitOf = suffixOf): Datum {
+  if (cell?.value != null && unitOf(cell) !== at) {
     return { value: null, reason: `${cell.text}, drawn in its unit's figure` };
   }
   return datum(cell);
@@ -211,13 +258,13 @@ function perGroup<G extends string>(
   base: { key: string; table: string; title: string },
   grouping: Grouping<G>,
   marksPerRow: number,
-  draw: (entries: readonly Entry[], head: Head) => Figure,
+  draw: (entries: readonly Entry[], head: Head, at: G | undefined) => Figure,
 ): Figure[] {
-  return groupsOf(rows, base, grouping).map(({ entries, head }) => {
+  return groupsOf(rows, base, grouping).map(({ entries, head, at }) => {
     const marks = entries.length * marksPerRow;
     return marks > MAX_MARKS
       ? oversized(head.key, head.table, head.title, marks)
-      : draw(entries, head);
+      : draw(entries, head, at);
   });
 }
 
@@ -264,12 +311,12 @@ export function covenantHeadroom(handoff: HandoffView): Figure[] {
   return perGroup(rows, base, bySuffix(unitOf), 2, (entries, head) => ({
     ...head,
     kind: "bullet",
-    summary: `Headroom as served: ${entries
-      .map(({ row }) => `${text(row, "Test")} ${served(row["Headroom"])}`)
-      .join("; ")}.`,
+    summary: `Headroom as served: ${listed(
+      entries.map(({ row }) => `${nameOf(row, "Test")} ${served(row["Headroom"])}`),
+    )}.${repeated(entries.map(({ row }) => nameOf(row, "Test")))}`,
     bullets: entries.map(({ row, index }) => ({
       key: `${index}`,
-      label: text(row, "Test"),
+      label: nameOf(row, "Test"),
       direction: directionOf(row),
       threshold: datum(row["Threshold"]),
       current: datum(row["Current Basis"]),
@@ -293,7 +340,7 @@ type Statistics = readonly (readonly [Statistic, string])[];
 const rangeOf =
   (statistics: Statistics, label: string) =>
   ({ row, index }: Entry): RangeRow => {
-    const range: RangeRow = { key: `${index}`, label: text(row, label), origin: "model" };
+    const range: RangeRow = { key: `${index}`, label: nameOf(row, label), origin: "model" };
     for (const [statistic, column] of statistics) {
       const cell = row[column];
       if (cell !== undefined) range[statistic] = datum(cell);
@@ -330,12 +377,12 @@ export function peerRanges(handoff: HandoffView): Figure[] {
   return perGroup(rows, base, bySuffix(unitOf), marks, (entries, head) => ({
     ...head,
     kind: "range",
-    summary: `Borrower value as served: ${entries
-      .map(({ row }) => {
+    summary: `Borrower value as served: ${listed(
+      entries.map(({ row }) => {
         const position = text(row, "Borrower Position");
-        return `${text(row, "Metric")} ${served(row["Borrower Value"])}${position ? ` (${position})` : ""}`;
-      })
-      .join("; ")}.`,
+        return `${nameOf(row, "Metric")} ${served(row["Borrower Value"])}${position ? ` (${position})` : ""}`;
+      }),
+    )}.${repeated(entries.map(({ row }) => nameOf(row, "Metric")))}`,
     ranges: entries.map(rangeOf(PEER_STATISTICS, "Metric")),
     markerLabel: "Borrower value",
     categoryLabel: "Metric",
@@ -365,9 +412,9 @@ export function impliedEv(handoff: HandoffView): Figure[] {
   return perGroup(rows, base, bySuffix(unitOf), marks, (entries, head) => ({
     ...head,
     kind: "range",
-    summary: `Implied EV as served: ${entries
-      .map(({ row }) => `${text(row, "Method")} ${served(row["Implied EV"])}`)
-      .join("; ")}.`,
+    summary: `Implied EV as served: ${listed(
+      entries.map(({ row }) => `${nameOf(row, "Method")} ${served(row["Implied EV"])}`),
+    )}.${repeated(entries.map(({ row }) => nameOf(row, "Method")))}`,
     ranges: entries.map(rangeOf(IMPLIED_STATISTICS, "Method")),
     markerLabel: "Implied EV",
     categoryLabel: "Method",
@@ -420,7 +467,7 @@ function bridgeStep(row: Row, index: number, spec: BridgeRegister): WaterfallSte
   const cell = amount?.value != null || level?.value == null ? amount : level;
   const step: WaterfallStep = {
     key: `${index}`,
-    label: text(row, "Step"),
+    label: nameOf(row, "Step"),
     kind: total ? "total" : "delta",
     origin: "model",
     ...datum(cell),
@@ -431,10 +478,12 @@ function bridgeStep(row: Row, index: number, spec: BridgeRegister): WaterfallSte
   return { ...step, ...(color ? { color } : {}), ...(status ? { status } : {}) };
 }
 
-/** A step as a summary says it: its label and its value as served, else
-    n/a and why. */
-const said = (step: WaterfallStep) =>
-  `${step.label} ${step.value === null ? `n/a (${step.reason})` : formatDecimal(step.value)}`;
+/** A step's value as a summary says it: as served, else n/a and why. */
+const valueSaid = (step: WaterfallStep) =>
+  step.value === null ? `n/a (${step.reason})` : formatDecimal(step.value);
+
+/** A step as a summary says it: its label and its value. */
+const said = (step: WaterfallStep) => `${step.label} ${valueSaid(step)}`;
 
 /** A waterfall figure of `steps`; a pressed step's source is the columns
     `rowOf` its key states. Past `MAX_MARKS` it is stated, not drawn. */
@@ -555,7 +604,7 @@ export function liquidityBridge(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2D", "T2E.5");
   if (!rows?.length) return [];
   const steps = rows.map((row, index): WaterfallStep => {
-    const label = text(row, "Bridge Item").trim();
+    const label = nameOf(row, "Bridge Item");
     const item = label.toLowerCase();
     const base = { key: `${index}`, label, origin: "model" as const };
     if (LIQUIDITY_TOTALS.some((total) => item.startsWith(total))) {
@@ -568,10 +617,15 @@ export function liquidityBridge(handoff: HandoffView): Figure[] {
   });
   const total = (which: string) =>
     steps.filter((step) => step.kind === "total" && step.label.toLowerCase().startsWith(which));
-  const begin = total(LIQUIDITY_TOTALS[0])[0];
-  const end = total(LIQUIDITY_TOTALS[1]).at(-1);
-  const summary = `${begin ? said(begin) : "No beginning accessible liquidity stated"} to ${
-    end ? said(end) : "no ending accessible liquidity stated"
+  // A total stated twice is said as served where its statements agree, else each.
+  const once = (found: WaterfallStep[]) => {
+    const values = found.map(valueSaid);
+    if (new Set(values).size < 2) return found[0] && said(found[0]);
+    return `${found[0]!.label} stated ${times(found.length)}: ${values.join(", ")}`;
+  };
+  const [begin, end] = LIQUIDITY_TOTALS.map((which) => once(total(which)));
+  const summary = `${begin ?? "No beginning accessible liquidity stated"} to ${
+    end ?? "no ending accessible liquidity stated"
   }, as served.`;
   const head = { key: "liquidity-bridge", table: "T2E.5", title: "Liquidity bridge, 12 months" };
   return [
@@ -587,15 +641,17 @@ export function liquidityBridge(handoff: HandoffView): Figure[] {
 const titled = (title: string, ...parts: readonly string[]) =>
   [title, ...parts.filter((part) => part.trim())].join(", ");
 
-/** The fulcrum `T4E.6` states for `scenario`: its `fulcrum class/range` on
-    the first row whose `scenario/EV range` starts with the scenario. */
-function fulcrumOf(fulcrums: readonly Row[], scenario: string): string | undefined {
+/** The fulcrum `T4E.6` states for `scenario`: the `fulcrum class/range` of
+    every row whose `scenario/EV range` starts with the scenario, where they
+    agree; where they differ, a restatement naming each. */
+function fulcrumOf(fulcrums: readonly Row[], scenario: string) {
   const key = scenario.trim().toLowerCase();
-  if (!key) return undefined;
-  const row = fulcrums.find((fulcrum) =>
-    text(fulcrum, "scenario/EV range").trim().toLowerCase().startsWith(key),
+  const stating = fulcrums.filter(
+    (fulcrum) => key && text(fulcrum, "scenario/EV range").trim().toLowerCase().startsWith(key),
   );
-  return row ? text(row, "fulcrum class/range").trim() || undefined : undefined;
+  const restated = restatement(stating, "fulcrum class/range");
+  if (restated) return { restated };
+  return { named: stating[0] ? text(stating[0], "fulcrum class/range").trim() : "" };
 }
 
 /** The row whose `priority claim` starts the fulcrum's text; the longest
@@ -626,24 +682,25 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
   const entities = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
   return groups.map((group, n) => {
     const [first, last] = [group[0]!.row, group.at(-1)!.row];
+    const stating = group.map(({ row }) => row);
     const scenario = text(first, "scenario");
     const entity = entities.get(scenario)!.length > 1 ? text(first, "entity") : "";
     const fulcrum = fulcrumOf(fulcrums, scenario);
-    const marked = fulcrum ? fulcrumClaim(group, fulcrum) : undefined;
+    const marked = fulcrum.named ? fulcrumClaim(group, fulcrum.named) : undefined;
     const steps: WaterfallStep[] = [
       {
         key: "opening",
         label: "Available value",
         kind: "total",
         origin: "model",
-        ...datum(first["available value"]),
+        ...pointOf(stating, "available value", datum),
       },
       ...group.map(({ row, index }) =>
         decrease(
           row["allocation"],
           {
             key: `${index}`,
-            label: `${text(row, "priority claim").trim()}${index === marked ? " (fulcrum)" : ""}`,
+            label: `${nameOf(row, "priority claim")}${index === marked ? " (fulcrum)" : ""}`,
             kind: "delta",
             origin: "model",
           },
@@ -658,7 +715,11 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
         ...datum(last["residual"]),
       },
     ];
-    const named = fulcrum ? `fulcrum: ${fulcrum}.` : "T4E.6 names no fulcrum for this scenario.";
+    const named = fulcrum.named
+      ? `fulcrum: ${fulcrum.named}.`
+      : fulcrum.restated
+        ? `fulcrum ${fulcrum.restated}.`
+        : "T4E.6 names no fulcrum for this scenario.";
     const summary = `${said(steps[0]!)} to ${said(steps.at(-1)!)}, as served; ${named}`;
     const head = {
       key: `value-allocation-${n}`,
@@ -686,12 +747,13 @@ interface StackColumns {
 
 /** A stack's readers for `columns`. A segment's source names each row it
     sums with the columns that row states; a segment of several rows says it
-    is their sum, and how many of them state no amount. */
+    is their sum, and how many of them state no amount. A blank category or
+    series is named by its row, so blanks are never summed together. */
 function byColumns(columns: StackColumns): Omit<StackSpec, "head"> {
   const amountOf = (row: Row) => row[columns.amount]?.value;
   return {
-    categoryOf: (row) => text(row, columns.category),
-    seriesOf: (row) => text(row, columns.series),
+    categoryOf: (row) => nameOf(row, columns.category),
+    seriesOf: (row) => nameOf(row, columns.series),
     amountOf,
     sourceOf: (rows) => {
       const lines = rows.map((row) => {
@@ -710,12 +772,14 @@ function byColumns(columns: StackColumns): Omit<StackSpec, "head"> {
 /** A register stack's summary: the exact sum of its `column`, labelled as a
     sum, and how many rows state none. */
 function summed(rows: readonly Row[], column: string, unit: string | undefined): string {
-  const total = sumOf(rows.map((row) => row[column]?.value));
-  if (total.value === null) return `None of ${rows.length} rows states a figure for ${column}.`;
+  const [n, total] = [rows.length, sumOf(rows.map((row) => row[column]?.value))];
+  if (total.value === null) {
+    return `${n === 1 ? "The 1 row states no" : `None of ${n} rows states a`} figure for ${column}.`;
+  }
   const known = rows.filter((row) => row[column]?.value != null).length;
   const over = total.complete
-    ? `${rows.length} rows`
-    : `the ${known} of ${rows.length} rows that state one`;
+    ? `${n} ${n === 1 ? "row" : "rows"}`
+    : `the ${known} of ${n} rows that ${known === 1 ? "states" : "state"} one`;
   return `${column}, summed over ${over}: ${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}.`;
 }
 
@@ -725,12 +789,18 @@ export function liquiditySources(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2D", "T2E.2");
   if (!rows?.length) return [];
   const amount = "Source-Supported Amount";
-  const head = { key: "liquidity-sources", table: "T2E.2", title: "Liquidity by accessibility" };
-  return [
-    stackFigure(rows, {
+  const base = { key: "liquidity-sources", table: "T2E.2", title: "Liquidity by accessibility" };
+  // A figure a unit, so no total adds two currencies.
+  const groups = groupsOf(
+    rows,
+    base,
+    bySuffix((row) => suffixOf(row[amount])),
+  );
+  return groups.map(({ entries, head }) =>
+    stackFigure(rowsOf(entries), {
       head: {
         ...head,
-        summary: summed(rows, amount, undefined),
+        summary: summed(rowsOf(entries), amount, head.unit),
         categoryLabel: "Accessibility Status",
       },
       ...byColumns({
@@ -741,18 +811,30 @@ export function liquiditySources(handoff: HandoffView): Figure[] {
         source: ["Source Trace", "Limitation / Restriction"],
       }),
     }),
-  ];
+  );
 }
+
+/** Entries' rows, in order. */
+const rowsOf = (entries: readonly Entry[]) => entries.map(({ row }) => row);
 
 /** CP-2D's mandatory cash uses (`T2E.3`): each timing's uses, mandatory
     stacked against discretionary. */
 export function cashUses(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2D", "T2E.3");
   if (!rows?.length) return [];
-  const head = { key: "cash-uses", table: "T2E.3", title: "Cash uses by timing" };
-  return [
-    stackFigure(rows, {
-      head: { ...head, summary: summed(rows, "Amount", undefined), categoryLabel: "Timing" },
+  const base = { key: "cash-uses", table: "T2E.3", title: "Cash uses by timing" };
+  const groups = groupsOf(
+    rows,
+    base,
+    bySuffix((row) => suffixOf(row["Amount"])),
+  );
+  return groups.map(({ entries, head }) =>
+    stackFigure(rowsOf(entries), {
+      head: {
+        ...head,
+        summary: summed(rowsOf(entries), "Amount", head.unit),
+        categoryLabel: "Timing",
+      },
       ...byColumns({
         category: "Timing",
         series: "Mandatory / Discretionary",
@@ -761,7 +843,7 @@ export function cashUses(handoff: HandoffView): Figure[] {
         source: ["Source Trace"],
       }),
     }),
-  ];
+  );
 }
 
 /** CP-2E's debt and rate exposure (`T2F.2`): per currency, fixed against
@@ -798,7 +880,7 @@ export function refinancingWall(handoff: HandoffView): Figure[] {
     amountOf: (row) => row["Amount"]?.value,
     dateOf: (row) => text(row, "Maturity Date"),
     nameOf: (row) => text(row, "Instrument"),
-    noun: "instruments",
+    noun: ["instrument", "instruments"],
     word: "amount",
   };
   const base = { key: "refinancing-wall", table: "T3D.2", title: "Maturities by seniority" };
@@ -850,7 +932,7 @@ function seriesSummary(noun: string, categories: readonly string[], series: Char
   const rows = categories.map(
     (category, index) => `${category} ${series.map((one) => say(one.data[index])).join(" / ")}`,
   );
-  return `${noun} as served, ${series.map((one) => one.label).join(" / ")}: ${rows.join("; ")}.`;
+  return `${noun} as served, ${series.map((one) => one.label).join(" / ")}: ${listed(rows)}.`;
 }
 
 /** How a register is drawn a series per column: as grouped bars or a stack,
@@ -874,28 +956,36 @@ function columnFigure(
 ): Figure {
   const marks = entries.length * spec.columns.length;
   if (marks > MAX_MARKS) return oversized(head.key, head.table, head.title, marks);
-  const categories = entries.map(({ row }) => text(row, spec.category));
+  const categories = entries.map(({ row }) => nameOf(row, spec.category));
   const series = columnSeries(entries, spec.columns, read);
   const sourceOf = (selection: ChartSelection) => {
     const row = pickedRow(entries, selection);
     return row ? stated(row, spec.source) : null;
   };
-  const summary = seriesSummary(spec.noun, categories, series);
+  const summary = `${seriesSummary(spec.noun, categories, series)}${repeated(categories)}`;
   const figure = { ...head, categories, series, summary, sourceOf, categoryLabel: spec.category };
   return { ...figure, kind: spec.kind };
 }
 
 /** A register drawn a series per column, a figure per unit its `columns`'
-    cells are written in; the figure of no such unit is in `plain`. */
+    cells are written in; the figure of no such unit is in `plain`. Where
+    `plain` is a currency column's, the column wins over a written sign:
+    only `x` and `%` split. */
 function byUnitFigures(
   rows: readonly Row[],
   base: Omit<Head, "unit">,
   spec: ColumnFigure,
   plain?: string,
 ) {
-  const grouping = byCellUnits(spec.columns.map(({ column }) => column));
+  const unitOf = plain === undefined ? suffixOf : suffixAlone;
+  const grouping = byCellUnits(
+    spec.columns.map(({ column }) => column),
+    unitOf,
+  );
   return groupsOf(rows, base, grouping).map(({ entries, head, at }) =>
-    columnFigure(entries, at ? head : { ...head, unit: plain }, spec, (cell) => inUnit(cell, at)),
+    columnFigure(entries, at ? head : { ...head, unit: plain }, spec, (cell) =>
+      inUnit(cell, at, unitOf),
+    ),
   );
 }
 
@@ -1006,12 +1096,42 @@ function pointOf(
 }
 
 /** "stated twice: 1, 2", where the rows stating one category write `column`
-    differently; null where every row writes it alike. */
+    differently past their citation markers; null where they write it alike. */
 function restatement(group: readonly Row[], column: string): string | null {
-  const texts = group.map((row) => row[column]?.text.trim() || "not stated");
+  const texts = group.map((row) => unmarked(text(row, column)).trim() || "not stated");
   if (new Set(texts).size < 2) return null;
-  const times = texts.length === 2 ? "twice" : `${texts.length} times`;
-  return `stated ${times}: ${texts.join(", ")}`;
+  return `stated ${times(texts.length)}: ${texts.join(", ")}`;
+}
+
+/** "twice", "3 times". */
+const times = (count: number) => (count === 2 ? "twice" : `${count} times`);
+
+/** Entries keyed by `keyOf`, each key once, in the order it first appears:
+    its first entry's place and every row stating it. */
+const keyed = (entries: readonly Entry[], keyOf: (row: Row) => string) =>
+  [...groupBy(entries, ({ row }) => keyOf(row))].map(([label, group]) => ({
+    label,
+    first: group[0]!.index,
+    same: group.map(({ row }) => row),
+  }));
+
+/** " Leverage: Realized stated twice.": each key whose rows write any of
+    `columns` differently, and which, at most ten named; "" where none does. */
+function restated(keys: readonly { label: string; same: readonly Row[] }[], columns: string[]) {
+  const named = keys.flatMap(({ label, same }) => {
+    const differ = columns.filter((column) => restatement(same, column));
+    return differ.length ? [`${label}: ${differ.join(" and ")} stated ${times(same.length)}`] : [];
+  });
+  return named.length ? ` ${idList(named)}.` : "";
+}
+
+/** " Leverage stated twice.": each label a figure of a mark a row draws more
+    than once, at most ten named; "" where none repeats. */
+function repeated(labels: readonly string[]): string {
+  const named = [...groupBy(labels, (label) => label)].flatMap(([label, same]) =>
+    same.length > 1 ? [`${label} stated ${times(same.length)}`] : [],
+  );
+  return named.length ? ` ${idList(named)}.` : "";
 }
 
 /** A CP-2G register's cases as lines over its periods, a figure a metric and
@@ -1025,12 +1145,14 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
   const rows = registerRows(handoff, "CP-2G", spec.register);
   if (!rows?.length) return [];
   // A case is one line however it is spelt, labelled as first written; a
-  // blank case is its own line. Uppercase, a key never meets "not-stated".
-  const caseOf = (row: Row) => text(row, "case").trim().toUpperCase() || "not-stated";
-  const periodOf = (row: Row) => text(row, "period").trim();
+  // blank case or period is its row's own. Uppercase, a case's key never
+  // meets a blank's, which is named in lowercase.
+  const caseOf = (row: Row) =>
+    unmarked(text(row, "case")).trim().toUpperCase() || nameOf(row, "case");
+  const periodOf = (row: Row) => nameOf(row, "period");
   const labels = new Map<string, string>();
   for (const row of rows) {
-    if (!labels.has(caseOf(row))) labels.set(caseOf(row), text(row, "case").trim());
+    if (!labels.has(caseOf(row))) labels.set(caseOf(row), nameOf(row, "case"));
   }
   const periods = unique(rows.map(periodOf));
   const cases = [...labels.keys()].sort((a, b) => caseRank(a) - caseRank(b));
@@ -1048,7 +1170,7 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
     const heads =
       units.length > 1
         ? units.map((unit) => ({
-            key: unit ? `${key}-${UNIT_KEY[unit]}` : key,
+            key: unit ? `${key}-${unitKey(unit)}` : key,
             title: unit ? `${title}, ${unit}` : title,
             unit,
           }))
@@ -1057,7 +1179,7 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
       if (marks > MAX_MARKS) return oversized(head.key, spec.register, head.title, marks);
       const series = cases.map((kase) => ({
         key: kase,
-        label: labels.get(kase) || "Case not stated",
+        label: labels.get(kase)!,
         origin: "model" as const,
         data: periods.map((period) =>
           pointOf(rowsAt(kase, period), metric, (cell) => inUnit(cell, head.unit)),
@@ -1067,7 +1189,15 @@ function caseLines(handoff: HandoffView, spec: CaseLines): Figure[] {
         ...head,
         table: spec.register,
         kind: "line",
-        summary: seriesSummary(label, periods, series),
+        summary: `${seriesSummary(label, periods, series)}${restated(
+          cases.flatMap((kase) =>
+            periods.map((period) => ({
+              label: `${labels.get(kase)!} ${period}`,
+              same: rowsAt(kase, period),
+            })),
+          ),
+          [metric],
+        )}`,
         categories: periods,
         series,
         sourceOf: (selection) =>
@@ -1121,7 +1251,7 @@ function tornadoes(
   spec: Tornado,
 ): Figure[] {
   const unitOf = (row: Row) => suffixOf(row[spec.value]);
-  const categoryOf = (row: Row) => text(row, spec.category).trim() || `${spec.category} not stated`;
+  const categoryOf = (row: Row) => nameOf(row, spec.category);
   return perGroup(rows, base, bySuffix(unitOf), 1, (entries, head) => {
     const named = groupBy(
       entries.map(({ row }) => row),
@@ -1139,9 +1269,12 @@ function tornadoes(
     return {
       ...head,
       kind: "diverging",
-      summary: `${spec.value} as served, largest first: ${bars
-        .map(({ category, point }) => `${category} ${say(point)}`)
-        .join("; ")}.`,
+      summary: `${spec.value} as served, largest first: ${listed(
+        bars.map(({ category, point }) => `${category} ${say(point)}`),
+      )}.${restated(
+        [...named].map(([label, same]) => ({ label, same })),
+        [spec.value],
+      )}`,
       categories: bars.map(({ category }) => category),
       series: [series],
       sourceOf: (selection) => {
@@ -1200,38 +1333,40 @@ export function scenarioMoves(handoff: HandoffView): Figure[] {
     against its `maturity/call date`, coloured by `seniority`, a figure a unit
     its values are written in. The date is passed as written past its
     citation markers: the chart places only the spellings it reads. A
-    security stated twice is one point, each cell a gap (a value) or an
-    unread date naming each text where they differ. */
+    security stated twice is one point, a value a gap naming each text where
+    they differ, a date the reason it is not placed. */
 export function spreadCurve(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-3D", "T3E.3");
   if (!rows?.length) return [];
   const base = { key: "spread-curve", table: "T3E.3", title: "Spread against maturity" };
   const unitOf = (row: Row) => suffixOf(row["spread/yield"]);
-  const securityOf = (row: Row) => text(row, "security_id").trim() || "security_id not stated";
   const written = (same: readonly Row[], column: string) =>
     restatement(same, column) ?? unmarked(text(same[0]!, column)).trim();
+  const dated = (same: readonly Row[]) => {
+    const unread = restatement(same, "maturity/call date");
+    return unread ? { at: "", unread } : { at: written(same, "maturity/call date") };
+  };
   // A point a security, a row at most.
   return perGroup(rows, base, bySuffix(unitOf), 1, (entries, head) => {
-    const securities = [...groupBy(entries, ({ row }) => securityOf(row))].map(([label, same]) => ({
-      label,
-      first: same[0]!.index,
-      same: same.map(({ row }) => row),
-    }));
+    const securities = keyed(entries, (row) => nameOf(row, "security_id"));
     const points = securities.map(({ label, first, same }): ScatterPoint => ({
       key: `${first}`,
       label,
-      at: written(same, "maturity/call date"),
+      ...dated(same),
       value: pointOf(same, "spread/yield", datum),
       group: written(same, "seniority") || "seniority not stated",
       origin: "model",
     }));
     const said = points.map(
-      (point) => `${point.label} ${point.at || "undated"} ${say(point.value)}`,
+      (point) => `${point.label} ${point.unread ?? (point.at || "undated")} ${say(point.value)}`,
     );
     return {
       ...head,
       kind: "scatter",
-      summary: `spread/yield as served, by maturity/call date: ${said.join("; ")}.`,
+      summary: `spread/yield as served, by maturity/call date: ${listed(said)}.${restated(
+        securities,
+        ["maturity/call date", "spread/yield"],
+      )}`,
       points,
       xLabel: "maturity/call date",
       pointLabel: "security_id",
@@ -1245,28 +1380,70 @@ export function spreadCurve(handoff: HandoffView): Figure[] {
   });
 }
 
+/** CP-2A's probability and impact matrix (`T5.4`): an event a row, its
+    `Probability` and `Impact` past their citation markers, which the chart
+    reads as the ordinal labels. The summary counts the rows whose two read
+    High and names at most ten; a cell's value is that count, computed here. T5.4 declares no source column, so a cell states
+    none. */
+export function riskMatrix(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-2A", "T5.4");
+  if (!rows?.length) return [];
+  const events = rows.map((row, index): RiskEvent => ({
+    key: `${index}`,
+    // A blank id told apart by its row, counted from 1.
+    label: nameOf(row, "Event ID"),
+    description: text(row, "Description"),
+    probability: unmarked(text(row, "Probability")),
+    impact: unmarked(text(row, "Impact")),
+    classification: text(row, "P/I Classification"),
+    origin: "model",
+  }));
+  const high = events.filter(
+    (event) => riskLevel(event.probability) === "High" && riskLevel(event.impact) === "High",
+  );
+  const noun = events.length === 1 ? "event" : "events";
+  return [
+    {
+      key: "risk-matrix",
+      table: "T5.4",
+      title: "Probability and impact",
+      kind: "matrix",
+      unit: "events",
+      computed: "a count of the model's rows",
+      unitOne: "event",
+      summary: `High probability and high impact: ${[
+        `${high.length} of ${events.length} ${noun}`,
+        ...(high.length ? [idList(high.map((event) => event.label))] : []),
+      ].join(", ")}.`,
+      events,
+      sourceOf: () => null,
+    },
+  ];
+}
+
 /** A trigger's label, which is also its identity: "Leverage (Issuer,
     downgrade)", its stated direction read trimmed and casefolded past its
     citation markers, so an upgrade and a downgrade trigger on one metric
-    stay two triggers. A blank rating type or direction is left out; a blank
-    metric is named as not stated. */
+    stay two triggers; its metric and rating type too. A blank rating type
+    or direction is left out; a blank metric is named by its row. */
 function triggerLabel(row: Row): string {
-  const metric = text(row, "metric").trim() || "metric not stated";
+  const metric = nameOf(row, "metric");
   const direction = unmarked(text(row, "trigger direction")).trim().toLowerCase();
-  const parts = [text(row, "rating type").trim(), direction].filter(Boolean);
+  const parts = [unmarked(text(row, "rating type")).trim(), direction].filter(Boolean);
   return parts.length ? `${metric} (${parts.join(", ")})` : metric;
 }
 
 /** CP-2H's quantitative triggers (`T2R.4`): a bullet figure per agency and
-    unit, each trigger's case/period value against its threshold, the
+    unit its threshold and case/period value are written in (one in another
+    unit a gap naming it), each trigger's case/period value against its threshold, the
     headroom as served. A packed case/period value is a gap carrying its
     text (N192). A trigger stated twice (one metric, rating type and
     direction) is one row, each value a gap naming each text where they
-    differ. */
+    differ, and the summary names it. */
 export function ratingTriggers(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2H", "T2R.4");
   if (!rows?.length) return [];
-  const unitOf = (row: Row) => suffixOf(row["case/period value"]) ?? suffixOf(row["threshold"]);
+  const values = ["threshold", "case/period value", "headroom"];
   const agencies = [...groupBy(rows, (row) => text(row, "agency").trim())];
   return agencies.flatMap(([agency, group], n) => {
     const base = {
@@ -1275,36 +1452,28 @@ export function ratingTriggers(handoff: HandoffView): Figure[] {
       title: titled("Rating triggers", agency),
     };
     // A bar and a rule a trigger.
-    return perGroup(group, base, bySuffix(unitOf), 2, (entries, head) => {
-      const tests = [...groupBy(entries, ({ row }) => triggerLabel(row)).values()];
-      const bullets = tests.map((same): BulletRow => {
-        const stating = same.map(({ row }) => row);
-        return {
-          key: `${same[0]!.index}`,
-          label: triggerLabel(stating[0]!),
-          direction: directionOf(stating[0]!, "trigger direction"),
-          threshold: pointOf(stating, "threshold", datum),
-          current: pointOf(stating, "case/period value", datum),
-          headroom: pointOf(stating, "headroom", datum),
-          origin: "model",
-        };
-      });
+    return perGroup(group, base, byCellUnits(values.slice(0, 2)), 2, (entries, head, at) => {
+      const tests = keyed(entries, triggerLabel);
+      const read = (cell: Cell | undefined) => inUnit(cell, at);
+      const bullets = tests.map(({ label, first, same }): BulletRow => ({
+        key: `${first}`,
+        label,
+        direction: directionOf(same[0]!, "trigger direction"),
+        threshold: pointOf(same, "threshold", read),
+        current: pointOf(same, "case/period value", read),
+        headroom: pointOf(same, "headroom", datum),
+        origin: "model",
+      }));
+      const said = bullets.map(({ label, headroom }) => `${label} ${say(headroom)}`);
       return {
         ...head,
         kind: "bullet",
-        summary: `Headroom as served: ${bullets
-          .map(({ label, headroom }) => `${label} ${say(headroom)}`)
-          .join("; ")}.`,
+        summary: `Headroom as served: ${listed(said)}.${restated(tests, values)}`,
         bullets,
         categoryLabel: "Trigger",
         sourceOf: (selection) => {
-          const same = tests[selection.index];
-          return same
-            ? sourcesOf(
-                same.map(({ row }) => row),
-                ["status"],
-              )
-            : null;
+          const same = tests[selection.index]?.same;
+          return same ? sourcesOf(same, ["status"]) : null;
         },
       };
     });
@@ -1322,6 +1491,8 @@ interface Scores {
   category: readonly string[];
   value: string;
   source: readonly string[];
+  /** What one bar is called, and several: "factor", "factors". */
+  noun: readonly [string, string];
   /** Orders the rows, where the register states a rank. */
   rank?: string;
 }
@@ -1332,24 +1503,40 @@ const rankOf = (row: Row, column: string) => {
   return value == null ? Number.MAX_VALUE : toNumber(value);
 };
 
-/** A score register as one horizontal bar figure, a bar a category, every
-    score as served; the summary names the highest and the lowest (a float
-    orders them, never states one). A category stated twice is one bar, a gap
-    naming each text where they differ. Past `MAX_MARKS` it is stated, not drawn. */
-function scoreFigure(handoff: HandoffView, spec: Scores): Figure[] {
+/** A score register as horizontal bars, a figure a unit its scores are
+    written in, in rank order where it states one. */
+function scoreFigures(handoff: HandoffView, spec: Scores): Figure[] {
   const rows = registerRows(handoff, spec.module, spec.register);
   if (!rows?.length) return [];
   const { rank } = spec;
   const ordered = rank
     ? [...rows].sort((a, b) => Math.sign(rankOf(a, rank) - rankOf(b, rank)) || 0)
     : rows;
-  const nameOf = (row: Row) =>
-    spec.category
-      .map((column) => text(row, column).trim())
-      .filter(Boolean)
-      .join(" ") || `${spec.category[0]} not stated`;
-  const named = groupBy(ordered, nameOf);
-  const head = { key: spec.key, table: spec.register, title: spec.title };
+  const base = { key: spec.key, table: spec.register, title: spec.title };
+  const unitOf = (row: Row) => suffixOf(row[spec.value]);
+  const groups = groupsOf(ordered, base, bySuffix(unitOf));
+  return groups.flatMap(({ entries, head }) =>
+    scoreFigure(
+      entries.map((e) => e.row),
+      head,
+      spec,
+    ),
+  );
+}
+
+/** Two exact decimals of one value: "4.0" is "4". */
+function equal(a: string, b: string): boolean {
+  const places = Math.max(placesOf(a), placesOf(b));
+  return toScaled(a, places) === toScaled(b, places);
+}
+
+/** One unit's scores as a horizontal bar figure, a bar a category, every
+    score as served; the summary names the highest and the lowest (a float
+    orders them, never states one), or says one bar or every bar scores one
+    value. A category stated twice is one bar, a gap naming each text where
+    they differ, and the summary names it. Past `MAX_MARKS` it is stated. */
+function scoreFigure(ordered: readonly Row[], head: Head, spec: Scores): Figure[] {
+  const named = groupBy(ordered, (row) => nameOf(row, ...spec.category));
   if (named.size > MAX_MARKS) return [oversized(head.key, head.table, head.title, named.size)];
   const bars = [...named].map(([category, group]) => ({
     category,
@@ -1363,11 +1550,24 @@ function scoreFigure(handoff: HandoffView, spec: Scores): Figure[] {
     ([hi, lo], bar) => [!hi || bar.size > hi.size ? bar : hi, !lo || bar.size < lo.size ? bar : lo],
     [],
   );
-  const said = (bar: (typeof drawn)[number]) => `${bar.category} ${formatDecimal(bar.value)}`;
-  const summary =
-    high && low
-      ? `${spec.value} as served. Highest: ${said(high)}. Lowest: ${said(low)}.`
-      : `${spec.value} as served. No row states a score.`;
+  // A score with its unit: "4.0%", "1.5x", "12 $".
+  const unit = head.unit ? `${/^[x%]$/.test(head.unit) ? "" : " "}${head.unit}` : "";
+  const valued = (value: string) => `${formatDecimal(value)}${unit}`;
+  const said = (bar: (typeof drawn)[number]) => `${bar.category} ${valued(bar.value)}`;
+  const [one, many] = spec.noun;
+  const gaps = bars.length - drawn.length;
+  const rest = gaps ? `; ${gaps} ${gaps === 1 ? "is" : "are"} n/a` : "";
+  const scored = !high
+    ? "No row states a score."
+    : drawn.length === 1
+      ? `One ${one} scores: ${said(high)}${rest}.`
+      : !drawn.every((bar) => equal(bar.value, high.value))
+        ? `Highest: ${said(high)}. Lowest: ${said(low!)}.`
+        : gaps
+          ? `${drawn.length} ${many} score ${valued(high.value)} each${rest}.`
+          : `All ${drawn.length} ${many} score ${valued(high.value)}.`;
+  const keys = [...named].map(([label, same]) => ({ label, same }));
+  const summary = `${spec.value} as served. ${scored}${restated(keys, [spec.value])}`;
   return [
     {
       ...head,
@@ -1405,6 +1605,7 @@ export function scoreRegisters(handoff: HandoffView): Figure[] {
       category: ["Factor"],
       value: "Weighted Score",
       source: ["Category", "Weight", "Raw Score 1–5", "Confidence"],
+      noun: ["factor", "factors"],
     },
     {
       module: "CP-3",
@@ -1414,6 +1615,7 @@ export function scoreRegisters(handoff: HandoffView): Figure[] {
       category: ["Issuer", "Security / Tranche"],
       value: "Composite Score /100",
       source: ["Credit Tier", "Final Recommendation"],
+      noun: ["tranche", "tranches"],
       rank: "Rank",
     },
     {
@@ -1424,6 +1626,7 @@ export function scoreRegisters(handoff: HandoffView): Figure[] {
       category: ["Area"],
       value: "Score 1–5",
       source: ["Confidence", "Evidence ID"],
+      noun: ["area", "areas"],
     },
     {
       module: "CP-6",
@@ -1433,9 +1636,10 @@ export function scoreRegisters(handoff: HandoffView): Figure[] {
       category: ["Dimension"],
       value: "Score (1-5)",
       source: ["Chair Assessment"],
+      noun: ["dimension", "dimensions"],
     },
   ];
-  return specs.flatMap((spec) => scoreFigure(handoff, spec));
+  return specs.flatMap((spec) => scoreFigures(handoff, spec));
 }
 
 const VARIANCE = "Variance (direction + magnitude)";
@@ -1444,15 +1648,15 @@ const VARIANCE = "Variance (direction + magnitude)";
     figure a unit its ends are written in, from `Expected` to `Realized`, the
     variance printed as served and never computed from the two. An end in
     another unit is a gap naming it, drawn in its own unit's figure; a metric
-    stated twice is one row, an end a gap naming each text where they differ. */
+    stated twice is one row, an end a gap naming each text where they differ,
+    and the summary names it. */
 export function expectedRealised(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-8", "T7.4");
   if (!rows?.length) return [];
   const base = { key: "expected-realised", table: "T7.4", title: "Expected against realised" };
-  const metricOf = (row: Row) => text(row, "Metric").trim() || "Metric not stated";
-  const grouping = byCellUnits(["Expected", "Realized"]);
-  return groupsOf(rows, base, grouping).map(({ entries, head, at }): Figure => {
-    const metrics = [...groupBy(entries, ({ row }) => metricOf(row))];
+  const ends = ["Expected", "Realized"];
+  return groupsOf(rows, base, byCellUnits(ends)).map(({ entries, head, at }): Figure => {
+    const metrics = [...groupBy(entries, ({ row }) => nameOf(row, "Metric"))];
     // Two dots a metric.
     const marks = metrics.length * 2;
     if (marks > MAX_MARKS) return oversized(head.key, head.table, head.title, marks);
@@ -1467,9 +1671,9 @@ export function expectedRealised(handoff: HandoffView): Figure[] {
     return {
       ...head,
       kind: "dumbbell",
-      summary: `Variance as served: ${stating
-        .map(({ label, same }) => `${label} ${variance(same)}`)
-        .join("; ")}.`,
+      summary: `Variance as served: ${listed(
+        stating.map(({ label, same }) => `${label} ${variance(same)}`),
+      )}.${restated(stating, ends)}`,
       dumbbells: stating.map(({ label, first, same }) => ({
         key: `${first}`,
         label,
@@ -1502,6 +1706,7 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...cashUses(handoff),
     ...liquidityBridge(handoff),
     ...downsideSensitivities(handoff),
+    ...riskMatrix(handoff),
     ...forecastCases(handoff),
     ...creditPath(handoff),
     ...ratingTriggers(handoff),
@@ -1516,4 +1721,107 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...scoreRegisters(handoff),
     ...expectedRealised(handoff),
   ];
+}
+
+/** CP-5's severity scale, in its own order: "All severity values use ONLY:
+    CRITICAL / MATERIAL / MINOR" (CP-5A_SCHEMA_REFERENCE.md, line 27). */
+const SEVERITIES = ["CRITICAL", "MATERIAL", "MINOR"];
+
+/** What a count register is called, the columns it counts by, and what it
+    calls its rows. */
+interface Count {
+  key: string;
+  table: string;
+  title: string;
+  category: string;
+  series: string;
+  noun: [string, string];
+  /** The series' terms, in order, where the reference declares them. */
+  vocabulary?: readonly string[];
+  source: readonly string[];
+}
+
+const COUNTED = "a count of the model's rows";
+
+/** A register's rows counted by category and series, a stack whose every
+    segment is an exact integer of rows: computed here, and said so. A blank
+    cell is named as not stated. */
+function countFigure(rows: readonly Row[], spec: Count): Figure {
+  const [one, many] = spec.noun;
+  const said = (row: Row, column: string) =>
+    unmarked(text(row, column)).trim() || `${column} not stated`;
+  // A series reading as one of the reference's terms, whatever its case, is
+  // keyed by that term; any other text as written.
+  const terms = spec.vocabulary ?? [];
+  const seriesOf = (row: Row) => {
+    const written = said(row, spec.series);
+    return terms.find((term) => term === written.toUpperCase()) ?? written;
+  };
+  const rank = (series: string) => {
+    const at = terms.indexOf(series);
+    return at < 0 ? terms.length : at;
+  };
+  const tally = [...groupBy(rows, seriesOf)].sort(([a], [b]) => rank(a) - rank(b));
+  const figure = stackFigure(rows, {
+    head: {
+      key: spec.key,
+      table: spec.table,
+      title: spec.title,
+      unit: many,
+      unitOne: one,
+      computed: COUNTED,
+      categoryLabel: spec.category,
+      summary: `${rows.length} ${rows.length === 1 ? one : many} counted: ${idList(
+        tally.map(([series, group]) => `${group.length} ${series}`),
+      )}.`,
+    },
+    categoryOf: (row) => said(row, spec.category),
+    seriesOf,
+    amountOf: () => "1",
+    sourceOf: (counted) => sourcesOf(counted, spec.source),
+  });
+  // The series in the summary's order: the reference's, else first appearance.
+  const order = tally.map(([series]) => series);
+  figure.series.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  return figure;
+}
+
+/** The topic registers CP-L10 may write, each counted where written. */
+const TOPIC_REGISTERS = ["TL10.2", "TL20.2", "TL23.2", "TL30.2", "TL40.2"];
+
+/** The Audit tab's counts: CP-5's issue log (`T5.9`, which consolidates
+    T5.2 to T5.8, so those are not counted again) by module and severity,
+    and each CP-L10 topic register by materiality and disposition. */
+export function auditCounts(handoff: HandoffView): Figure[] {
+  const issues = registerRows(handoff, "CP-5", "T5.9");
+  const counts = issues?.length
+    ? [
+        countFigure(issues, {
+          key: "issue-counts",
+          table: "T5.9",
+          title: "Issues by module and severity, count",
+          category: "Module",
+          series: "Severity",
+          noun: ["issue", "issues"],
+          vocabulary: SEVERITIES,
+          source: [],
+        }),
+      ]
+    : [];
+  for (const id of TOPIC_REGISTERS) {
+    const topics = registerRows(handoff, "CP-L10", id);
+    if (!topics?.length) continue;
+    counts.push(
+      countFigure(topics, {
+        key: `topic-counts-${id}`,
+        table: id,
+        title: `Topics by materiality, count (${id})`,
+        category: "materiality",
+        series: "disposition",
+        noun: ["topic", "topics"],
+        source: ["source_refs"],
+      }),
+    );
+  }
+  return counts;
 }

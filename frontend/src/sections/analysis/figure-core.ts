@@ -12,6 +12,7 @@ import type {
   DumbbellRow,
   Orientation,
   RangeRow,
+  RiskEvent,
   ScatterPoint,
   WaterfallStep,
 } from "@/charts";
@@ -104,6 +105,11 @@ interface FigureBase {
   sourceOf: (selection: ChartSelection) => string | null;
   /** Past `MAX_MARKS`: stated, not drawn. */
   oversized?: boolean;
+  /** What a mark's figure is where this host computed it, not served: "a
+      count of the model's rows". Said in place of the mark's origin. */
+  computed?: string;
+  /** The unit said of a value of exactly 1: "issue" beside "issues". */
+  unitOne?: string;
 }
 
 /** Bars stacked by series over categories. */
@@ -189,6 +195,12 @@ export interface ScatterFigure extends FigureBase {
   groupLabel?: string;
 }
 
+/** Events by probability and impact, a cell a pair of labels. */
+export interface MatrixFigure extends FigureBase {
+  kind: "matrix";
+  events: RiskEvent[];
+}
+
 /** One figure: what it shows, drawn by which chart, from which table. Each
     kind carries its own rows, so a figure without them does not build. */
 export type Figure =
@@ -200,7 +212,8 @@ export type Figure =
   | BulletFigure
   | RangeFigure
   | DumbbellFigure
-  | ScatterFigure;
+  | ScatterFigure
+  | MatrixFigure;
 
 /** A figure past this many marks is stated, not drawn, and past this many
     figures a module's are stated too. The tables are model-authored and may
@@ -282,7 +295,8 @@ export interface Wall {
   amountOf: (row: Row) => string | null | undefined;
   dateOf: (row: Row) => string;
   nameOf: (row: Row) => string;
-  noun: string;
+  /** What one row is called, and several: "facility", "facilities". */
+  noun: readonly [string, string];
   /** What the register calls its amount; by default CP-1's "principal". */
   word?: string;
 }
@@ -307,10 +321,11 @@ export function wallSummary(rows: readonly Row[], wall: Wall, unit: string | und
   const values = rows.map(wall.amountOf);
   const total = sumOf(values);
   const unknown = values.filter((value) => value == null).length;
-  const [n, noun, word] = [rows.length, wall.noun, wall.word ?? "principal"];
+  const [n, word] = [rows.length, wall.word ?? "principal"];
+  const noun = wall.noun[n === 1 ? 0 : 1];
   const principal =
     total.value === null
-      ? `${word.charAt(0).toUpperCase()}${word.slice(1)} unstated for all ${n} ${noun}`
+      ? `${word.charAt(0).toUpperCase()}${word.slice(1)} unstated for ${n === 1 ? "the" : "all"} ${n} ${noun}`
       : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}${
           total.complete
             ? ` ${word} in ${n} ${noun}`

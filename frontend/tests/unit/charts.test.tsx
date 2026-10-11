@@ -14,19 +14,23 @@ import {
   LineChart,
   ProvenanceKeyed,
   RangeStripChart,
+  RiskMatrix,
   ScatterChart,
   StackedBarChart,
   Swatch,
   WaterfallChart,
+  idList,
+  riskLevel,
   type BulletRow,
   type ChartSeries,
   type DumbbellRow,
   type RangeRow,
+  type RiskEvent,
   type ScatterPoint,
 } from "@/charts";
 import { readDate } from "@/charts/ScatterChart";
 import { ChartFrame } from "@/charts/ChartFrame";
-import { bandPlot, type BandMarker } from "@/charts/band";
+import { bandPlot, rowMarker, type BandMarker } from "@/charts/band";
 import { DOT } from "@/charts/marks";
 import { fromScaled, placesOf, readDatum, toScaled } from "@/charts/decimal";
 import { cellOf, said } from "@/charts/series";
@@ -420,6 +424,28 @@ describe("a stacked bar chart", () => {
     expect(screen.getByRole("columnheader", { name: "Total, USD m" })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "13.00" })).toBeInTheDocument();
   });
+});
+
+test("a count's table twin heads its columns as computed, as its marks are named", () => {
+  render(
+    <StackedBarChart
+      title="Issues"
+      summary="Counted."
+      unit="issues"
+      unitOne="issue"
+      computed="a count of the model's rows"
+      categories={["CP-5"]}
+      series={[{ key: "high", label: "High", origin: "model", data: [{ value: "2" }] }]}
+    />,
+  );
+  expect(screen.getByRole("button", { name: /High, CP-5: 2 issues/ })).toHaveAccessibleName(
+    "High, CP-5: 2 issues (a count of the model's rows)",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Table" }));
+  expect(
+    screen.getByRole("columnheader", { name: "High, issues (a count of the model's rows)" }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole("columnheader", { name: /model-authored/ })).toBeNull();
 });
 
 test("two unavailable segments of one stack are marked apart, never over each other", () => {
@@ -942,6 +968,48 @@ describe("a bullet chart", () => {
 });
 
 describe("a band chart's markers", () => {
+  test("rowMarker names a row's value for its part and keeps its own origin over its row's", () => {
+    const row = { key: "lev", label: "Net leverage", origin: "model" as const };
+    const value = readDatum({ value: "3.25", origin: "host" });
+    expect(
+      rowMarker(row, 2, "median", "median", value, "x", { tone: "neutral", shape: "rule" }),
+    ).toEqual({
+      key: "lev:median",
+      category: 2,
+      at: 3.25,
+      tone: "neutral",
+      shape: "rule",
+      origin: "host",
+      gap: false,
+      name: "Net leverage: median 3.25 x (host-verified)",
+      selection: {
+        series: "median",
+        category: "Net leverage",
+        index: 2,
+        value: "3.25",
+        origin: "host",
+      },
+    });
+    const gap = rowMarker(
+      row,
+      0,
+      "to",
+      "Realized",
+      readDatum({ value: null, reason: "NOT_REPORTED" }),
+      "%",
+      {
+        tone: "series-1",
+        shape: "dot",
+      },
+    );
+    expect([gap.gap, gap.at, gap.origin, gap.name]).toEqual([
+      true,
+      0,
+      "model",
+      "Net leverage: Realized n/a (NOT_REPORTED) (model-authored)",
+    ]);
+  });
+
   // A dot marker, as the range strip and the dumbbell will draw one.
   const dot = (origin: "host" | "model", at: number, gap = false): BandMarker => ({
     key: `dot-${origin}`,
@@ -1368,6 +1436,9 @@ describe("a dumbbell", () => {
 
   test("has a table twin of both ends as served, and keys its two dots", () => {
     dumbbells({ categoryLabel: "Outcome" });
+    // Its marks are dots: the provenance key names a hollow dot, not a line.
+    expect(screen.getByText("Hollow dot: model-authored, not host-verified")).toBeInTheDocument();
+    expect(screen.queryByText(/^Dashed line/)).toBeNull();
     const legend = screen.getByRole("list", { name: "Legend" });
     for (const [label, tone] of [
       ["Expected", "chart-tone-neutral"],
@@ -1388,6 +1459,45 @@ describe("a dumbbell", () => {
       ["Revenue growth", "4.0", "2.5 (host-verified)", "model-authored"],
       ["EBITDA margin", "18.0", "n/a: NOT_REPORTED", "model-authored"],
     ]);
+  });
+
+  test("sets two equal ends apart across their row, the first above, both seen and reached", () => {
+    const { container } = dumbbells({
+      rows: [
+        ...OUTCOMES,
+        {
+          key: "flat",
+          label: "Net leverage",
+          from: { value: "3.0" },
+          to: { value: "3.00" },
+          origin: "model",
+        },
+      ],
+    });
+    const from = container.querySelector('circle[data-mark="flat:from"]') ?? undefined;
+    const to = container.querySelector('circle[data-mark="flat:to"]') ?? undefined;
+    expect(numberOf(from, "cx")).toBeCloseTo(numberOf(to, "cx"));
+    expect(numberOf(to, "cy") - numberOf(from, "cy")).toBeGreaterThan(2 * DOT);
+    const [high, low] = ["flat:from", "flat:to"].map((key) =>
+      marks(container).find((button) => button.dataset.mark === key),
+    );
+    expect(parseFloat(low!.style.top) - parseFloat(high!.style.top)).toBeGreaterThan(2 * DOT);
+    // A short line across the row joins the two, so they read as one row's.
+    const join = container.querySelector('line[data-span="2"]') ?? undefined;
+    expect([numberOf(join, "x1"), numberOf(join, "x2")]).toEqual([
+      numberOf(from, "cx"),
+      numberOf(to, "cx"),
+    ]);
+    expect([numberOf(join, "y1"), numberOf(join, "y2")]).toEqual([
+      numberOf(from, "cy"),
+      numberOf(to, "cy"),
+    ]);
+    // Ends apart in value keep the row's centre.
+    expect(
+      numberOf(container.querySelector('circle[data-mark="growth:from"]') ?? undefined, "cy"),
+    ).toBeCloseTo(
+      numberOf(container.querySelector('circle[data-mark="growth:to"]') ?? undefined, "cy"),
+    );
   });
 
   test("takes each row's two ends in turn; every target 24px", () => {
@@ -1567,7 +1677,7 @@ describe("a scatter chart", () => {
   test("lists what it could not place with its reason in the table, and counts it in the caption", () => {
     const { container } = scatter();
     expect(container.querySelector("[data-chart-note]")).toHaveTextContent(
-      "3 of 6 points not placed, without a readable date or a value; the table lists each.",
+      "3 of 6 points not placed; the table lists each with its reason.",
     );
     fireEvent.click(screen.getByRole("button", { name: "Table" }));
     const table = screen.getByRole("table", { name: "Spread against maturity" });
@@ -1600,6 +1710,97 @@ describe("a scatter chart", () => {
     ]);
   });
 
+  test("counts a value too large to place as not placed, with its reason", () => {
+    const huge = `1${"0".repeat(400)}`;
+    const { container } = scatter({
+      points: [
+        ...CURVE.slice(0, 3),
+        {
+          key: "g",
+          label: "Note G",
+          at: "2030",
+          value: { value: huge },
+          group: "Sub",
+          origin: "host",
+        },
+      ],
+    });
+    expect(marks(container)).toHaveLength(3);
+    expect(container.querySelector("[data-chart-note]")).toHaveTextContent(
+      /^1 of 4 points not placed/,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const row = screen.getByRole("row", { name: /Note G/ });
+    expect([...(row as HTMLTableRowElement).cells].at(-1)?.textContent).toBe(
+      "Value too large in magnitude to place",
+    );
+  });
+
+  test("a point whose figure says why it has no one date gives that as its reason", () => {
+    scatter({ points: [{ ...CURVE[0]!, at: "", unread: "stated twice: 2031, 2032" }] });
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const row = screen.getByRole("row", { name: /Note A/ }) as HTMLTableRowElement;
+    expect([...row.cells].at(-1)?.textContent).toBe("stated twice: 2031, 2032");
+  });
+
+  test("keys its groups in the order their colours were given, not by date; a hollow dot is the model's", () => {
+    scatter({
+      points: [
+        { key: "p", label: "P", at: "2035", value: { value: "1" }, group: "Late", origin: "model" },
+        { key: "q", label: "Q", at: "2030", value: { value: "2" }, group: "Early", origin: "host" },
+      ],
+    });
+    const legend = screen.getByRole("list", { name: "Legend" });
+    const groups = [...legend.querySelectorAll("li:not(.chart-provenance)")];
+    expect(groups.map((item) => item.textContent)).toEqual(["Late", "Early"]);
+    expect(within(legend).getByText("Hollow dot: model-authored, not host-verified")).toBeTruthy();
+  });
+
+  test("colours and keys only the groups of placed points", () => {
+    const { container } = scatter({
+      points: [
+        {
+          key: "x",
+          label: "X",
+          at: "2030",
+          value: { value: null, reason: "NA" },
+          group: "Ghost",
+          origin: "host",
+        },
+        { key: "y", label: "Y", at: "2031", value: { value: "1" }, group: "Real", origin: "host" },
+        { key: "z", label: "Z", at: "2032", value: { value: "2" }, group: "Also", origin: "host" },
+      ],
+    });
+    expect(pointAt(container, "y")).toHaveClass("chart-tone-series-1");
+    const legend = screen.getByRole("list", { name: "Legend" });
+    expect(within(legend).queryByText("Ghost")).toBeNull();
+    expect(within(legend).getByText("Real")).toBeInTheDocument();
+  });
+
+  test("holds zero on its value axis when every value is negative", () => {
+    const { container } = scatter({
+      points: [
+        { key: "m", label: "M", at: "2030", value: { value: "-5" }, group: "G", origin: "host" },
+        { key: "n", label: "N", at: "2031", value: { value: "-10" }, group: "G", origin: "host" },
+      ],
+    });
+    const zero = numberOf(plotOf(container).querySelector(".chart-zero") ?? undefined, "y1");
+    for (const key of ["m", "n"]) {
+      expect(numberOf(pointAt(container, key)!, "cy")).toBeGreaterThan(zero);
+    }
+    const ticks = [
+      ...plotOf(container).querySelectorAll(".recharts-yAxis-tick-labels .chart-tick"),
+    ];
+    expect(ticks.map((tick) => tick.textContent)).toContain("0");
+  });
+
+  test("one point of one not placed is said in the singular", () => {
+    const { container } = scatter({ points: CURVE.slice(3, 4), title: "One" });
+    expect(container.querySelector("[data-chart-note]")).toHaveTextContent(
+      "1 of 1 point not placed; the table lists each with its reason.",
+    );
+  });
+
   test("with nothing placed, labels no year and reaches no point", () => {
     const { container } = scatter({ points: CURVE.slice(3), title: "None placed" });
     expect(xTicks(container)).toEqual([]);
@@ -1617,6 +1818,163 @@ describe("a scatter chart", () => {
     expect(onSelect).toHaveBeenCalledWith(
       { series: "Senior", category: "Note A", index: 0, value: "412.5", origin: "model" },
       marks(container)[1],
+    );
+    for (const button of marks(container)) {
+      expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(24);
+      expect(parseFloat(button.style.height)).toBeGreaterThanOrEqual(24);
+    }
+  });
+});
+
+// Made-up events: two High/High, one host-verified beside a model's in one
+// cell, and texts the ordinal labels do not read.
+const EVENTS: RiskEvent[] = [
+  ["e1", "E-01", "Refinancing slips", "High", "High", "Critical"],
+  ["e2", "E-02", "Covenant reset", " high ", "HIGH", "Critical"],
+  ["e3", "E-03", "Supplier exit", "Medium", "Low", "Watch"],
+  ["e4", "E-04", "Tariff change", "Likely", "High", "High"],
+  ["e5", "E-05", "Litigation", "Low", "", "Low"],
+  ["e6", "E-06", "Rate reset", "medium", "low", "Watch"],
+].map(([key, label, description, probability, impact, classification]) => ({
+  key: key!,
+  label: label!,
+  description: description!,
+  probability: probability!,
+  impact: impact!,
+  classification: classification!,
+  origin: key === "e3" ? "host" : "model",
+}));
+
+function matrix(extra: Partial<Parameters<typeof RiskMatrix>[0]> = {}) {
+  return render(
+    <RiskMatrix
+      title="Probability and impact"
+      summary="2 events High/High."
+      events={EVENTS}
+      {...extra}
+    />,
+  );
+}
+
+const cellAt = (root: HTMLElement, key: string) =>
+  plotOf(root).querySelector(`[data-cell="${key}"]`);
+
+describe("a risk matrix", () => {
+  test("reads the four ordinal labels trimmed and case-insensitive, nothing else", () => {
+    expect([" high ", "MEDIUM", "Low", "unknown"].map(riskLevel)).toEqual([
+      "High",
+      "Medium",
+      "Low",
+      "Unknown",
+    ]);
+    for (const other of ["Likely", "", "Med", "High/Medium"]) expect(riskLevel(other)).toBeNull();
+  });
+
+  test("a mark a cell holding events, in reading order, named with both labels, its count and ids", () => {
+    const { container } = matrix();
+    expect(container.querySelector("figure")).toHaveAttribute("data-chart", "risk-matrix");
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Probability High, Impact High: 2 events, E-01, E-02 (a count of the model's rows)",
+      "Probability Medium, Impact Low: 2 events, E-03, E-06 (a count of rows: 1 host-verified, 1 model-authored)",
+      "Probability Low, Impact Unknown: 1 event, E-05 (impact not stated) (a count of the model's rows)",
+      "Probability Unknown, Impact High: 1 event, E-04 (probability as written: Likely) (a count of the model's rows)",
+    ]);
+    expect(cellAt(container, "high-high")?.querySelector("[data-count]")).toHaveTextContent("2");
+    expect(cellAt(container, "unknown-high")?.querySelector("[data-count]")).toHaveTextContent("1");
+  });
+
+  test("draws all sixteen cells, an empty one with no mark and no count", () => {
+    const { container } = matrix();
+    const cells = [...plotOf(container).querySelectorAll("[data-cell]")];
+    expect(cells.map((cell) => cell.getAttribute("data-cell"))).toEqual(
+      ["high", "medium", "low", "unknown"].flatMap((p) =>
+        ["low", "medium", "high", "unknown"].map((i) => `${p}-${i}`),
+      ),
+    );
+    expect(cellAt(container, "low-low")?.querySelector("[data-mark], [data-count]")).toBeNull();
+    const ticks = [...plotOf(container).querySelectorAll(".chart-tick")].map((t) => t.textContent);
+    expect(ticks).toEqual([
+      "Probability",
+      "High",
+      "Medium",
+      "Low",
+      "Unknown",
+      "Low",
+      "Medium",
+      "High",
+      "Unknown",
+      "Impact",
+    ]);
+    expect(plotOf(container).querySelectorAll(".chart-grid line")).toHaveLength(10);
+  });
+
+  test("a cell of the model's events is outlined and hatched; of the host's alone, solid", () => {
+    const host = matrix({ events: EVENTS.filter((event) => event.key === "e3") }).container;
+    expect(cellAt(host, "medium-low")?.querySelector("rect[data-mark]")).toHaveClass("chart-host");
+    const { container } = matrix({ title: "Mixed" });
+    const mixed = cellAt(container, "medium-low")?.querySelector("rect[data-mark]");
+    expect(mixed).toHaveClass("chart-outline");
+    expect(mixed?.getAttribute("fill")).toMatch(/^url\(#/);
+  });
+
+  test("its table twin lists each event as given, label texts the ordinal labels do not read included", () => {
+    matrix();
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    const table = screen.getByRole("table", { name: "Probability and impact" });
+    const rows = within(table)
+      .getAllByRole("row")
+      .map((row) => [...(row as HTMLTableRowElement).cells].map((cell) => cell.textContent));
+    expect(rows.slice(0, 3)).toEqual([
+      ["Event ID", "Description", "Probability", "Impact", "P/I Classification"],
+      ["E-01", "Refinancing slips", "High", "High", "Critical"],
+      ["E-02", "Covenant reset", " high ", "HIGH", "Critical"],
+    ]);
+    expect(rows).toHaveLength(7);
+  });
+
+  test("names at most ten ids a cell, the rest counted and left to the table", () => {
+    const twelve = Array.from({ length: 12 }, (_, n) => ({
+      ...EVENTS[0]!,
+      key: `k${n}`,
+      label: `E${n + 1}`,
+    }));
+    const { container } = matrix({ events: twelve });
+    expect(marks(container).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Probability High, Impact High: 12 events, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, …and 2 more (a count of the model's rows)",
+    ]);
+    expect(idList(["A", "B"])).toBe("A, B");
+  });
+
+  test("a cell's hit box is its inner area, so pressing its printed count presses the cell", () => {
+    const { container } = matrix();
+    const across = [...plotOf(container).querySelectorAll(".chart-grid line")].slice(5);
+    const width = numberOf(across[1], "x1") - numberOf(across[0], "x1");
+    const button = marks(container)[0]!;
+    const [left, wide] = [parseFloat(button.style.left), parseFloat(button.style.width)];
+    expect([wide, parseFloat(button.style.height)]).toEqual([Math.max(24, width - 8), 44 - 8]);
+    const count = numberOf(
+      cellAt(container, "high-high")?.querySelector("[data-count]") ?? undefined,
+      "x",
+    );
+    expect(count > left && count + 8 < left + wide).toBe(true);
+  });
+
+  test("takes its cells by the arrow keys; every target 24px; a press hands the cell over", () => {
+    const onSelect = vi.fn();
+    const { container } = matrix({ onSelect });
+    act(() => marks(container)[0]!.focus());
+    fireEvent.keyDown(marks(container)[0]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(marks(container)[1]);
+    fireEvent.click(marks(container)[3]!);
+    expect(onSelect).toHaveBeenCalledWith(
+      {
+        series: "Probability Unknown",
+        category: "Impact High",
+        index: 14,
+        value: "1",
+        origin: "model",
+      },
+      marks(container)[3],
     );
     for (const button of marks(container)) {
       expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(24);
@@ -1669,10 +2027,11 @@ describe("every chart form, audited", () => {
       (violation) => `${violation.id}: ${violation.nodes.length}`,
     );
 
-  test("has no axe violation drawn, or as its table twin", async () => {
-    const { container } = render(
-      <main>
-        <h1>Charts</h1>
+  // One test per form, so no audit nears the 5 s test timeout as forms are added.
+  const FORMS: readonly (readonly [string, () => React.ReactElement])[] = [
+    [
+      "bar chart",
+      () => (
         <BarChart
           title="Bars"
           summary="Grouped."
@@ -1680,12 +2039,22 @@ describe("every chart form, audited", () => {
           categories={PERIODS}
           series={[REVENUE, EBITDA]}
         />
+      ),
+    ],
+    [
+      "line chart",
+      () => (
         <LineChart
           title="Lines"
           summary="Two series."
           categories={PERIODS}
           series={[REVENUE, EBITDA]}
         />
+      ),
+    ],
+    [
+      "stacked bar chart",
+      () => (
         <StackedBarChart
           title="Stack"
           summary="Normalised."
@@ -1693,6 +2062,11 @@ describe("every chart form, audited", () => {
           categories={PERIODS}
           series={[REVENUE, EBITDA]}
         />
+      ),
+    ],
+    [
+      "waterfall chart",
+      () => (
         <WaterfallChart
           title="Bridge"
           summary="Short of its total."
@@ -1702,14 +2076,30 @@ describe("every chart form, audited", () => {
             { label: "Closing", kind: "total", value: "8", origin: "host" },
           ]}
         />
+      ),
+    ],
+    [
+      "diverging bar chart",
+      () => (
         <DivergingBarChart
           title="Variance"
           summary="Signed."
           categories={PERIODS}
           series={EBITDA}
         />
-        <BulletChart title="Headroom" summary="Against thresholds." unit="x" rows={TESTS} />
-        <RangeStripChart title="Ranges" summary="Against peers." unit="x" rows={PEERS} />
+      ),
+    ],
+    [
+      "bullet chart",
+      () => <BulletChart title="Headroom" summary="Against thresholds." unit="x" rows={TESTS} />,
+    ],
+    [
+      "range strip",
+      () => <RangeStripChart title="Ranges" summary="Against peers." unit="x" rows={PEERS} />,
+    ],
+    [
+      "dumbbell",
+      () => (
         <DumbbellChart
           title="Outcomes"
           summary="Expected against realised."
@@ -1718,24 +2108,30 @@ describe("every chart form, audited", () => {
           fromLabel="Expected"
           toLabel="Realized"
         />
-      </main>,
-    );
-    expect(await audit(container)).toEqual([]);
-    for (const toggle of screen.getAllByRole("button", { name: "Table" })) fireEvent.click(toggle);
-    expect(screen.getAllByRole("table")).toHaveLength(8);
-    expect(await audit(container)).toEqual([]);
-  });
+      ),
+    ],
+    [
+      "risk matrix",
+      () => <RiskMatrix title="Matrix" summary="By probability and impact." events={EVENTS} />,
+    ],
+    [
+      "scatter",
+      () => (
+        <ScatterChart title="Curve" summary="Against maturity." points={CURVE} xLabel="Maturity" />
+      ),
+    ],
+  ];
 
-  // Apart from the eight above, so neither audit nears the 5 s test timeout.
-  test("has no axe violation in a scatter, drawn or as its table twin", async () => {
+  test.each(FORMS)("has no axe violation in a %s, drawn or as its table twin", async (_, chart) => {
     const { container } = render(
       <main>
         <h1>Charts</h1>
-        <ScatterChart title="Curve" summary="Against maturity." points={CURVE} xLabel="Maturity" />
+        {chart()}
       </main>,
     );
     expect(await audit(container)).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getAllByRole("table")).toHaveLength(1);
     expect(await audit(container)).toEqual([]);
   });
 });

@@ -167,9 +167,27 @@ export interface ScatterPoint {
   /** A date as served: placed where it reads as `YYYY-MM-DD`, `YYYY-MM` or
       `YYYY`, never guessed from any other spelling. */
   at: string;
+  /** Why no one date is served, where the figure says (a date stated
+      twice): the point's reason for not being placed, in place of an
+      unread spelling's. */
+  unread?: string;
   value: Datum;
   /** What colours the point: the series colours by first appearance. */
   group: string;
+  origin: Origin;
+}
+
+/** One event of a probability and impact matrix, its cells as the figure
+    gives them: a label that is not one of High, Medium, Low or Unknown
+    counts as Unknown. */
+export interface RiskEvent {
+  key: string;
+  /** Its id, naming it in its cell's mark. */
+  label: string;
+  description: string;
+  probability: string;
+  impact: string;
+  classification: string;
   origin: Origin;
 }
 
