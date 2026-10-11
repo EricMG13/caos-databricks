@@ -212,6 +212,20 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "periods",
         }
     ),
+    wire.ModelSourceView: frozenset({"source_id", "source_locator", "citation"}),
+    wire.ModelCellView: frozenset(
+        {"value", "reason", "basis", "stated", "note", "sources"}
+    ),
+    wire.ModelColumnView: frozenset(
+        ("column_id kind label period_id fiscal_year end_date days case").split()
+    ),
+    wire.ModelTermsView: frozenset(
+        {"reference_rate", "spread_or_coupon", "floor", "maturity", "amortisation"}
+    ),
+    wire.ModelLineView: frozenset(
+        "line_id band label kind unit unit_label rank terms cells".split()
+    ),
+    wire.RateDeckRefView: frozenset({"deck_id", "as_of"}),
     wire.ModelBody: frozenset(
         {
             "case_id",
