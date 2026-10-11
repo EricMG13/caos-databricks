@@ -23,6 +23,7 @@ from caos.calculators.credit_model._cells import (
     OTHER_FOOTING,
     SIGN_NORMALISED,
     UNSPANNED,
+    Footing,
     anchor_period,
     off_footing,
     treated_as_zero,
@@ -1753,7 +1754,7 @@ def test_sixteen_nested_ltm_periods_work_out_each_period_once_per_item(
 
     def counted(
         series: history._Series, register: history._Register, period: PeriodRow
-    ) -> tuple[Cell, bool]:
+    ) -> tuple[Cell, bool, Footing]:
         key = (id(series), period.period_id)
         # A period worked out twice for one item fails here, at once, where
         # the walk without the memo would go on for 2^n steps.
@@ -2548,8 +2549,9 @@ def test_a_span_is_whole_months_within_a_week_either_way() -> None:
     may = date(2024, 5, 4).toordinal()
     for off in range(-7, 8):
         assert whole((first, may - 1 + off)) == (first, 3), off
+    # Eight days off on a span of no whole number of weeks (82 days).
     assert whole((first, may - 1 - 8)) is None
-    assert whole((first, may - 1 + 8)) is None
+    assert whole((first, may - 1 + 9)) is None  # nine days off: 99 days
     # A 13-week quarter, a 14-week fourth quarter and a 53-week year.
     assert whole((first, first + 90)) == (first, 3)
     november = date(2024, 11, 3).toordinal()

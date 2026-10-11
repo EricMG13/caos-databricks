@@ -15,10 +15,17 @@ from credit_model_fixture import (
     example_slots,
 )
 
-from caos.calculators.credit_model._cells import CONTEXT, refs
+from caos.calculators.credit_model._cells import (
+    CONTEXT,
+    OTHER_FOOTING,
+    Footings,
+    refs,
+)
+from caos.calculators.credit_model.assemble import ModelInputs, credit_model
 from caos.calculators.credit_model.frame import Cell, Column, Frame, SourceRef
 from caos.calculators.credit_model.history import (
     account_frame,
+    column_footings,
     historical_columns,
     ltm_frames,
 )
@@ -648,3 +655,120 @@ def test_a_metric_carries_what_its_debt_or_interest_leaves_out() -> None:
     assert all(
         cell.note is None for key, cell in clean.items() if key.startswith("metric:")
     )
+
+
+_OTHER = Cell(None, "COMPONENT_MISSING", note=OTHER_FOOTING)
+
+
+def _model_cell(regs: Cp1Registers, line_id: str, column_id: str) -> Cell:
+    model = credit_model(
+        ModelInputs(
+            registers=regs,
+            request=None,
+            growth=example_growth(),
+            slots=example_slots(),
+            deck=example_deck(),
+        )
+    )
+    index = [c.column_id for c in model.columns].index(column_id)
+    return next(line for line in model.lines if line.line_id == line_id).cells[index]
+
+
+def test_growth_reads_each_columns_footing_and_the_anchors() -> None:
+    now = _fy("FY:B", "2025-12-31", "FY2025")
+    prior = _fy("FY:A", "2024-12-31", "FY2024")
+    frame = {
+        "FY:B": _cells(revenue="110", adjusted_ebitda="22"),
+        "FY:A": _cells(revenue="100", adjusted_ebitda="20"),
+    }
+
+    def growth(footings: Footings | None) -> Cell:
+        return metric_frame((now, prior), frame, {}, footings=footings)["FY:B"][
+            "revenue_growth"
+        ]
+
+    grown = Decimal("0.1")
+    assert growth(None).value == grown
+    assert growth(Footings()).value == grown
+    # Two stated bases that differ, the anchor stating none.
+    assert growth(Footings(columns={"FY:B": ("a", None), "FY:A": ("b", None)})) == (
+        _OTHER
+    )
+    assert growth(
+        Footings(columns={"FY:B": ("a", "p"), "FY:A": ("a", None)})
+    ).value == (grown)
+    # A prior off the anchor's footing, the column stating none.
+    assert growth(Footings(anchor=("a", None), columns={"FY:A": ("b", None)})) == _OTHER
+    assert growth(
+        Footings(anchor=("a", None), columns={"FY:B": ("b", None)})
+    ).value == (grown)
+    # A corporate segment is never grown, whatever its footing.
+    frame["FY:B"] = {**frame["FY:B"], **_cells(**{"bu:corp": "5"})}
+    frame["FY:A"] = {**frame["FY:A"], **_cells(**{"bu:corp": "4"})}
+    apart = Footings(columns={"FY:B": ("a", None), "FY:A": ("b", None)})
+    out = metric_frame(
+        (now, prior), frame, {}, corporate=frozenset({"corp"}), footings=apart
+    )
+    assert out["FY:B"]["bu_growth:corp"] == Cell(None, "NOT_APPLICABLE")
+    # A column whose own periods differ already.
+    assert growth(Footings(columns={"FY:A": None})) == _OTHER
+    assert growth(Footings(columns={"FY:B": None})) == _OTHER
+    # An LTM against the twelve months ending a quarter: the window's footing.
+    ltm = replace(_fy("LTM:B", "2025-12-31", "FY2025"), kind="LTM")
+    quarter = replace(_fy("Q:A", "2024-12-31", "FY2024"), kind="QUARTER")
+    frame = {"LTM:B": _cells(revenue="120"), "Q:A": _cells(revenue="30")}
+    ending = {"Q:A": _cells(revenue="100")}
+
+    def ltm_growth(footings: Footings) -> Cell:
+        out = metric_frame((ltm, quarter), frame, ending, footings=footings)
+        return out["LTM:B"]["revenue_growth"]
+
+    assert ltm_growth(Footings(windows={"Q:A": ("b", None)})).value == Decimal("0.2")
+    assert (
+        ltm_growth(
+            Footings(columns={"LTM:B": ("a", None)}, windows={"Q:A": ("b", None)})
+        )
+        == _OTHER
+    )
+    assert ltm_growth(
+        Footings(columns={"LTM:B": ("a", None), "Q:A": ("b", None)})
+    ).value == Decimal("0.2")  # the quarter's own footing is not the window's
+
+
+def test_column_footings_read_every_period_a_column_is_built_on() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(
+                p,
+                accounting_basis={"Q1_2025": "A", "Q2_2025": "B"}.get(p.period_id),
+                entity_perimeter="P" if p.period_id == "LTM_Q2_2026" else None,
+            )
+            for p in regs.periods
+        ),
+    )
+    columns = historical_columns(regs)
+    footings = column_footings(regs, columns)
+    assert footings.anchor == (None, None)  # H1 2026 states neither
+    assert footings.columns["Q:Q1_2025"] == ("a", None)
+    assert footings.columns["FY:FY2025"] == (None, None)
+    # H1 2025 is its quarters' sum; the LTM reads H1 2025 as its PYTD.
+    assert footings.columns["PYTD:H1_2025"] is None
+    assert footings.columns["LTM:LTM_Q2_2026"] is None
+    assert footings.columns["YTD:H1_2026"] == (None, None)
+    # The twelve months ending Q2 2025 read both; ending Q1 2025, only A.
+    assert footings.windows["Q:Q2_2025"] is None
+    assert footings.windows["Q:Q1_2025"] == ("a", None)
+    assert footings.windows["Q:Q2_2026"] == (None, None)
+    assert set(footings.windows) == {
+        c.column_id for c in columns if c.kind == "QUARTER"
+    }
+    anchored = replace(
+        regs,
+        periods=tuple(
+            replace(p, entity_perimeter="Q") if p.period_id == "H1_2026" else p
+            for p in regs.periods
+        ),
+    )
+    assert column_footings(anchored, columns).anchor == (None, "q")

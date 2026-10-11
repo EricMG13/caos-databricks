@@ -14,6 +14,8 @@ from decimal import ROUND_DOWN, Context, Decimal, localcontext
 
 import pytest
 from canonical_fixtures import BUNDLE
+from hypothesis import given
+from hypothesis import strategies as st
 
 from caos.calculators.credit_model.assemble import ModelInputs, credit_model
 from caos.calculators.credit_model.frame import Cell, Column, SourceRef
@@ -31,6 +33,8 @@ from caos.methodology.model_inputs import (
     PfAdjustmentRow,
     SegmentRow,
     SlotAllocation,
+    coupon_in_range,
+    coupon_percent,
     cp1_registers,
     division_growth,
     slot_allocation,
@@ -1430,10 +1434,9 @@ def test_a_rate_term_in_the_wrong_unit_is_flagged_out_of_range(
         ("fixed_rate", figure("6.5% [C8]", "6.5")),
         ("fixed_rate", figure("0.5", "0.5")),
         ("fixed_rate", figure("30", "30")),
-        # MINOR-10: from 0 the coupon is as stated; a zero-coupon
-        # convertible is valid.
+        # MINOR-10: a zero-coupon convertible is valid; a decimal fraction
+        # is read as its percent.
         ("fixed_rate", figure("0", "0")),
-        ("fixed_rate", figure("0.49", "0.49")),
         ("fixed_rate", figure("0.065", "0.065")),
     ],
 )
@@ -1459,6 +1462,70 @@ def test_a_spread_written_as_a_percent_prices_at_the_implied_rate_noted(
 
     assert facility.spread_bps == Decimal(written)  # never read as 2.25 bp priced
     assert rate == (implied, "term out of range")
+
+
+def _fixed(written: str) -> FacilityRow:
+    """The debt register's one facility as a `FIXED` coupon written `written`."""
+    table = debt_table()
+    for column, new in (
+        ("rate_type", cell("fixed")),
+        ("reference_rate", cell("none")),
+        ("spread_bps", NULL),
+        ("floor_bps", NULL),
+        ("fixed_rate", figure(written, written)),
+    ):
+        table = replaced(table, column, new)
+    (facility,) = cp1_registers(with_table(table)).facilities
+    return facility
+
+
+@pytest.mark.parametrize(
+    ("written", "read", "as_fraction", "out_of_range"),
+    [
+        ("0", "0", False, False),  # a zero-coupon convertible, as stated
+        ("0.065", "6.5", True, False),  # CP-1's 6.500 written as a fraction
+        ("0.005", "0.5", True, False),
+        ("0.3", "30", True, False),
+        ("0.3001", "30.01", True, True),
+        ("0.4", "40", True, True),
+        ("0.49", "49", True, True),
+        ("0.001", "0.1", True, True),
+        ("0.5", "0.5", False, False),
+        ("30", "30", False, False),
+        ("30.01", "30.01", False, True),
+        ("-0.01", "-0.01", False, True),
+    ],
+)
+def test_a_fixed_coupon_strictly_between_0_and_half_is_read_as_a_fraction(
+    written: str, read: str, as_fraction: bool, out_of_range: bool
+) -> None:
+    facility = _fixed(written)
+
+    assert facility.fixed_rate == Decimal(read)
+    assert facility.coupon_as_fraction is as_fraction
+    assert facility.terms_out_of_range is out_of_range
+    assert coupon_percent(Decimal(written)) == (Decimal(read), as_fraction)
+
+
+def test_a_coupon_is_read_as_a_fraction_whatever_the_callers_context() -> None:
+    with localcontext(Context(prec=3)):
+        read = coupon_percent(Decimal("0.0654321"))
+
+    assert read == (Decimal("6.54321"), True)
+
+
+@given(
+    st.decimals(min_value=Decimal(-1), max_value=Decimal(40), places=6, allow_nan=False)
+)
+def test_a_coupon_is_converted_only_strictly_between_0_and_half(
+    written: Decimal,
+) -> None:
+    read, as_fraction = coupon_percent(written)
+
+    assert as_fraction is (0 < written < Decimal("0.5"))
+    assert read == (written * 100 if as_fraction else written)
+    low = Decimal("0.5") if as_fraction else Decimal(0)
+    assert coupon_in_range(read, as_fraction=as_fraction) is (low <= read <= 30)
 
 
 def _in_fiscal_year(year: str, end: str) -> tuple[TableCell, ...]:

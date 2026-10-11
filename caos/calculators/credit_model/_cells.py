@@ -7,14 +7,17 @@ FY ending then, else a YTD, else a quarter, first in register order. A period
 whose accounting basis or entity perimeter differs from the anchor's (each
 compared on case and separators; not stated, on either, matches anything) is
 on another footing: it enters no other period's figure (CP-1 and CP-MODEL
-never combine them), and a balance read for it is only its own.
+never combine them), and a balance read for it is only its own. Whatever the
+anchor states, no figure combines two periods that both state a basis, or a
+perimeter, and differ (`combined_footing`, pairwise).
 
 Pure: Decimal only, no I/O, no rounding.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import (
     ROUND_HALF_EVEN,
@@ -48,6 +51,22 @@ TREATED_AS_ZERO = "not stated, treated as zero"
 # perimeter than the anchor's (`off_footing`).
 OTHER_FOOTING = "accounting basis or perimeter differs"
 _RANK = {"FY": 0, "YTD": 1, "QUARTER": 2}  # which period at the anchor date
+# A period's accounting basis and entity perimeter (`_footing_key`), each
+# None where not stated.
+Footing = tuple[str | None, str | None]
+UNSTATED_FOOTING: Footing = (None, None)
+
+
+@dataclass(frozen=True, slots=True)
+class Footings:
+    """What growth reads of footing (`combined_footing`): the anchor's; each
+    column's, of the register periods its figures are read from (None where
+    they differ), by column id; and, by quarter column id, the twelve months
+    ending it's. A column without one is not stated."""
+
+    anchor: Footing = UNSTATED_FOOTING
+    columns: Mapping[str, Footing | None] = field(default_factory=dict)
+    windows: Mapping[str, Footing | None] = field(default_factory=dict)
 
 
 def beyond_rounding(stated: Decimal, host: Decimal) -> bool:
@@ -177,6 +196,48 @@ def _differs(text: str | None, anchor: str | None) -> bool:
     """Whether both are stated and differ (`_footing_key`)."""
     first, second = _footing_key(text), _footing_key(anchor)
     return first is not None and second is not None and first != second
+
+
+def footing_of(period: PeriodRow) -> Footing:
+    """The period's accounting basis and entity perimeter, each compared on
+    case and separators (`_footing_key`); None where not stated."""
+    return _footing_key(period.accounting_basis), _footing_key(period.entity_perimeter)
+
+
+def combined_footing(footings: Iterable[Footing | None]) -> Footing | None:
+    """The footings as one: its basis, and its perimeter, the one any states
+    (None where none does); None where two state different ones, or one is
+    None already: no figure combines them. Not stated matches anything, so
+    this is pairwise, never only against one of them."""
+    merged: list[str | None] = [None, None]
+    for footing in footings:
+        if footing is None:
+            return None
+        for index, key in enumerate(footing):
+            if key is None:
+                continue
+            if merged[index] not in (None, key):
+                return None
+            merged[index] = key
+    return merged[0], merged[1]
+
+
+def uncombined_periods(regs: Cp1Registers) -> frozenset[str]:
+    """The periods some figure may not combine with another: those on
+    another footing than the anchor's (`off_footing`); and, on a basis or a
+    perimeter the anchor does not state (or with no anchor), where two
+    periods state different ones, every period that states one."""
+    anchor = anchor_period(regs)
+    reference = UNSTATED_FOOTING if anchor is None else footing_of(anchor)
+    footings = {p.period_id: footing_of(p) for p in regs.periods}
+    found = set(off_footing(regs))
+    for index, key in enumerate(reference):
+        stated = {footing[index] for footing in footings.values()} - {None}
+        if key is None and len(stated) > 1:
+            found.update(
+                i for i, footing in footings.items() if footing[index] is not None
+            )
+    return frozenset(found)
 
 
 def off_footing(regs: Cp1Registers) -> frozenset[str]:

@@ -28,9 +28,16 @@ driver written twice for a case, year and slot. The rate and amortisation
 columns the CP-1 fork added (owner-authorised 2026-10-10) are absent from an
 older run's debt register: they read as `NOT_STATED` or no value, never as a
 fault. A rate term written in the wrong unit (a spread or floor written with
-`%` or not a whole number of basis points, a fixed coupon below 0 or above
-30 percent) is kept as read, the row flagged `terms_out_of_range`; a coupon
-from 0 (a zero-coupon convertible) to 30 is as stated.
+`%` or not a whole number of basis points, a fixed coupon outside 0-30
+percent) is kept as read, the row flagged `terms_out_of_range`. A fixed
+coupon is CP-1's decimal percent (`6.500`): 0 is a zero-coupon convertible,
+as stated. On a `FIXED` row, a coupon strictly between 0 and 0.5 written
+without `%` is a decimal fraction written in place of the percent, read
+times 100 (`0.065` is 6.5 percent) and flagged `coupon_as_fraction`; the
+figure read is then in range from 0.5 to 30. The cost: a genuine coupon
+below half a percent written without `%` reads 100 times over, flagged. A
+coupon written with `%` is the percent it states, and on any other row the
+coupon is as written.
 An account row whose calculation status is Not Available or Not Calculable
 has no value, whatever figure it carries. A period's accounting basis and
 entity perimeter are read as written, and as not stated where null or where
@@ -153,9 +160,13 @@ MAX_DECIMALS = 10
 _PLACES = Decimal(1).scaleb(-MAX_DECIMALS)
 # Room for any figure's 28 digits, whatever the caller's context.
 _ROUNDING = Context(prec=38, rounding=ROUND_HALF_EVEN)
-# A fixed coupon in percent, as stated from 0 (a zero-coupon convertible) up;
-# above it, a term in the wrong unit.
+# A fixed coupon in percent, from 0 (a zero-coupon convertible); outside it,
+# a term in the wrong unit.
 _COUPON_RANGE = (Decimal(0), Decimal(30))
+# On a `FIXED` row, a coupon above 0 and below this, written without `%`, is
+# a decimal fraction written in place of the percent, read times 100; read
+# so, it is at least this.
+_FRACTION_BELOW = Decimal("0.5")
 _BPS_TERMS = ("spread_bps", "floor_bps")
 MAX_NESTING = 4  # a period's components, theirs, and so on, at most this deep
 _DEBT_ADJUSTMENT = "DEBT ADJUSTMENT"
@@ -250,8 +261,12 @@ class FacilityRow:
     annual_amortisation: Decimal | None
     source: SourceRef | None
     # A spread or floor written with `%` or not whole basis points, or a
-    # fixed coupon outside 0-30 percent: the terms are not priced.
+    # fixed coupon (as read) outside 0-30 percent (0.5-30 read as a
+    # fraction): the terms are not priced.
     terms_out_of_range: bool = False
+    # The fixed coupon was written as a decimal fraction (strictly between 0
+    # and 0.5) and `fixed_rate` is it times 100.
+    coupon_as_fraction: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -675,19 +690,46 @@ def _non_negative(row: _Row, column: str) -> Decimal | None:
     return value
 
 
-def _out_of_range(row: _Row) -> bool:
+def coupon_percent(written: Decimal) -> tuple[Decimal, bool]:
+    """A fixed coupon in CP-1's percent, and whether it was read as a
+    fraction: a figure strictly between 0 and 0.5 is a decimal fraction
+    written in place of the percent, read times 100 (`0.065` is 6.5); any
+    other figure is as written. `_facility` applies it only to a `FIXED`
+    row's coupon written without `%`."""
+    if 0 < written < _FRACTION_BELOW:
+        return written.scaleb(2, _ROUNDING), True
+    return written, False
+
+
+def coupon_in_range(coupon: Decimal, *, as_fraction: bool) -> bool:
+    """Whether a fixed coupon in percent (as read) is priced: 0-30 inclusive
+    (from 0, a zero-coupon convertible); 0.5-30 where it was read as a
+    fraction."""
+    low, high = _COUPON_RANGE
+    return (_FRACTION_BELOW if as_fraction else low) <= coupon <= high
+
+
+def _coupon(row: _Row, rate_type: str) -> tuple[Decimal | None, bool]:
+    """The fixed coupon in percent, and whether it was read as a fraction:
+    only a `FIXED` row's coupon written without `%` is (`coupon_percent`);
+    any other is as written."""
+    written = _figure(row, "fixed_rate")
+    if written is None or rate_type != "FIXED" or "%" in _text(row, "fixed_rate"):
+        return written, False
+    return coupon_percent(written)
+
+
+def _out_of_range(row: _Row, coupon: Decimal | None, as_fraction: bool) -> bool:
     """Whether a rate term is written in the wrong unit: a spread or floor
-    with `%` in its text or not whole basis points, or a fixed coupon outside
-    0-30 percent."""
+    with `%` in its text or not whole basis points, or a fixed coupon (as
+    read) out of its range."""
     for column in _BPS_TERMS:
         value = _figure(row, column)
         if value is None:
             continue
         if "%" in _text(row, column) or value != value.to_integral_value():
             return True
-    coupon = _figure(row, "fixed_rate")
-    low, high = _COUPON_RANGE
-    return coupon is not None and not low <= coupon <= high
+    return coupon is not None and not coupon_in_range(coupon, as_fraction=as_fraction)
 
 
 def _facility(row: _Row) -> FacilityRow:
@@ -698,6 +740,8 @@ def _facility(row: _Row) -> FacilityRow:
     carrying = _figure(row, "carrying_value")
     if carrying is not None and carrying < 0 and facility_type != _DEBT_ADJUSTMENT:
         raise _malformed()
+    rate_type = _rate_term(row, "rate_type", _RATE_TYPES)
+    coupon, as_fraction = _coupon(row, rate_type)
     return FacilityRow(
         facility_id=_text(row, "facility_id"),
         facility_name=_text(row, "facility_name"),
@@ -712,14 +756,15 @@ def _facility(row: _Row) -> FacilityRow:
         lease_classification=_enum(row, "lease_classification", _LEASE_CLASSIFICATIONS),
         maturity_date=_optional(row, "maturity_date"),
         margin_or_coupon=_text(row, "margin_or_coupon"),
-        rate_type=_rate_term(row, "rate_type", _RATE_TYPES),
+        rate_type=rate_type,
         reference_rate=_rate_term(row, "reference_rate", _REFERENCE_RATES),
         spread_bps=_figure(row, "spread_bps"),
         floor_bps=_figure(row, "floor_bps"),
-        fixed_rate=_figure(row, "fixed_rate"),
+        fixed_rate=coupon,
         annual_amortisation=_figure(row, "annual_amortisation"),
         source=_source(row, "carrying_value"),
-        terms_out_of_range=_out_of_range(row),
+        terms_out_of_range=_out_of_range(row, coupon, as_fraction),
+        coupon_as_fraction=as_fraction,
     )
 
 

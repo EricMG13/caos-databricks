@@ -15,9 +15,11 @@ one YTD period of the same whole months starting a year earlier, else
 the prior year's same quarters; and the LTM is FY + YTD - PYTD with the FY of
 the prior year, the PYTD's, so the months always number twelve. A period is
 n whole months when the day after it ends lies within `SLACK_DAYS` (7) days
-of its first day plus n months, and a year earlier is within as many days of
-twelve months earlier, so 52/53-week calendars resolve; periods that follow
-one another meet exactly (end + 1 day = next start). The dates
+of its first day plus n months, `WEEK_SLACK_DAYS` (14) where its length is a
+whole number of weeks (a 14-week quarter), one n at most; a year earlier is
+within `SLACK_DAYS` of twelve months earlier, so 52/53-week calendars
+resolve; periods that follow one another meet exactly (end + 1 day = next
+start). The dates
 leave the PYTD ambiguous where a YTD period ends before the YTD starts, or
 has no dates, but not exactly one dated period is that one (or the YTD is
 not whole months); without the prior year's quarters either, the LTM's flows
@@ -27,10 +29,14 @@ stated figures; one ending later than the anchor keeps its own column,
 its flows `COMPONENT_MISSING` with CP-1's figure as `stated` (spec M4: the
 host recomputes, it never adopts CP-1's arithmetic).
 
-The LTM's FY must end the day before its YTD starts, and its PYTD start
-with that FY; otherwise its flows are `COMPONENT_MISSING`, noted
-`UNSPANNED`. A sparse item's interim without a row counts as nothing in that
-LTM only when the other interim has none either (the LTM is then the FY's);
+The LTM's FY must end the day before its YTD starts, its PYTD start with
+that FY, and its YTD and PYTD be as many days long within `SLACK_DAYS`;
+otherwise its flows are `COMPONENT_MISSING`, noted `UNSPANNED`. The twelve
+months ending a quarter are its four quarters only where they tile and,
+as one span, are twelve whole months: each part's slack never adds up.
+
+A sparse item's interim without a row counts as nothing in that LTM only
+when the other interim has none either (the LTM is then the FY's);
 with some of its FY, YTD and PYTD stated and another without a row, its LTM
 is `COMPONENT_MISSING`, noted `PARTLY_STATED`, never a sum over 18 or 6
 months. (An FY without a row beside a stated PYTD inside it already resolves
@@ -89,6 +95,14 @@ otherwise never raise here: a date that is not one is no date. Fiscal years
 compare as that four-digit year (`FY2025` is `2025`, `FY2024/25` is
 `2025`).
 
+A period on another footing than the anchor's (`_cells.off_footing`)
+enters no other period's figure, and, without its own row of a sparse item,
+has none of it either (never its parts', on the anchor's footing). Whatever
+the anchor states, a figure whose periods (a column's own and its terms'; a
+period and its components; a sparse period and its parts with a figure;
+the four quarters of twelve months) state a basis, or a perimeter, two
+ways is `COMPONENT_MISSING`, noted `OTHER_FOOTING` (`combined_footing`).
+
 Pure: Decimal only, no I/O, no rounding.
 """
 
@@ -109,9 +123,14 @@ from caos.calculators.credit_model._cells import (
     OTHER_FOOTING,
     SIGN_NORMALISED,
     UNSPANNED,
+    UNSTATED_FOOTING,
+    Footing,
+    Footings,
     anchor_period,
     beyond_rounding,
     calc,
+    combined_footing,
+    footing_of,
     join_notes,
     no_negative_zero,
     off_footing,
@@ -195,6 +214,10 @@ _ADDITIVE = frozenset({"YTD", "FY"})
 # days of twelve months earlier: 52/53-week calendars shift by days. Periods
 # that follow one another still meet exactly (end + 1 day = next start).
 SLACK_DAYS = 7
+# A span of whole weeks (a 52/53-week calendar's 14-week quarter is 8 days
+# over January-March) is n whole months within this many days; two n within
+# it are none.
+WEEK_SLACK_DAYS = 14
 
 # "sparse" is a flow CP-1 writes only for the periods it occurred in (an
 # add-back, a lease or interest payment classed in financing): a period
@@ -233,6 +256,9 @@ class _Series:
     # that period's own row.
     resolved: dict[str | None, Cell] = field(default_factory=dict)
     started: set[str | None] = field(default_factory=set)
+    # The footing of each period's figure as worked out, where it has one:
+    # its own row's, else its and its parts' (`combined_footing`).
+    footed: dict[str | None, Footing] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,6 +273,8 @@ class _Register:
     shortest: tuple[tuple[int, int, str], ...] = ()
     # The periods on another footing (`off_footing`): in no other's figure.
     off: frozenset[str | None] = frozenset()
+    # Each period's own footing (`footing_of`).
+    footings: dict[str | None, Footing] = field(default_factory=dict)
 
 
 def _quarter_number(period: PeriodRow) -> int | None:
@@ -480,18 +508,24 @@ def _plus_months(day: date, months: int) -> date | None:
 def _whole_months(dated: tuple[int, int] | None) -> tuple[int, int] | None:
     """A span (ordinals) as its first day and its number of whole months:
     the n (at least 1) where the day after its last lies within `SLACK_DAYS`
-    days of its first day plus n months; None where no n does, or for no
-    span. One n at most: months differ by more than twice the slack."""
+    days of its first day plus n months (`WEEK_SLACK_DAYS` where its length
+    is whole weeks); None where no n does, where two do (months 28 days
+    apart, 14 either side), or for no span. Within 14 days, n is the
+    calendar months from its first day to the day after, give or take one."""
     if dated is None or not 1 <= dated[0] <= dated[1] < date.max.toordinal():
         return None
     first, following = date.fromordinal(dated[0]), dated[1] + 1
     after = date.fromordinal(following)
     guess = after.year * 12 + after.month - first.year * 12 - first.month
-    for months in (guess - 1, guess, guess + 1):
-        moved = _plus_months(first, months) if months >= 1 else None
-        if moved is not None and abs(moved.toordinal() - following) <= SLACK_DAYS:
-            return dated[0], months
-    return None
+    slack = WEEK_SLACK_DAYS if (following - dated[0]) % 7 == 0 else SLACK_DAYS
+    found = [
+        months
+        for months in (guess - 1, guess, guess + 1)
+        if months >= 1
+        and (moved := _plus_months(first, months)) is not None
+        and abs(moved.toordinal() - following) <= slack
+    ]
+    return (dated[0], found[0]) if len(found) == 1 else None
 
 
 def _year_before(prior: tuple[int, int] | None, months: tuple[int, int] | None) -> bool:
@@ -527,16 +561,37 @@ def _tiles(specs: Iterable[_Spec], periods: Mapping[str | None, PeriodRow]) -> b
     """Whether the quarter columns, in time order, each span three whole
     months (`_whole_months`), each starting the day after the one before
     ends."""
-    following = None
+    return _tiled(specs, periods) is not None
+
+
+def _tiled(
+    specs: Iterable[_Spec], periods: Mapping[str | None, PeriodRow]
+) -> tuple[int, int] | None:
+    """The first day of the first quarter column and the last of the last
+    (ordinals) where, in time order, each spans three whole months
+    (`_whole_months`), each starting the day after the one before ends;
+    None where they do not, or for none."""
+    span: tuple[int, int] | None = None
     for spec in specs:
         dated = _spec_dated(spec, periods)
         months = _whole_months(dated)
         if dated is None or months is None or months[1] != 3:
-            return False
-        if following not in (None, dated[0]):
-            return False
-        following = dated[1] + 1
-    return True
+            return None
+        if span is not None and span[1] + 1 != dated[0]:
+            return None
+        span = (dated[0] if span is None else span[0], dated[1])
+    return span
+
+
+def _twelve_months(
+    specs: Iterable[_Spec], periods: Mapping[str | None, PeriodRow]
+) -> bool:
+    """Whether the quarter columns tile (`_tiled`) and, as one span from the
+    first's start to the last's end, are twelve whole months
+    (`_whole_months`, under the same slack): each quarter's slack never adds
+    up past the window's."""
+    months = _whole_months(_tiled(specs, periods))
+    return months is not None and months[1] == 12
 
 
 def _dated_prior(regs: Cp1Registers, ytd: _Spec | None) -> tuple[_Spec | None, bool]:
@@ -685,15 +740,27 @@ def _start(spec: _Spec, periods: Mapping[str | None, PeriodRow]) -> int | None:
 
 
 def _meets(regs: Cp1Registers, fy: _Spec, ytd: _Spec, pytd: _Spec) -> bool:
-    """Whether the FY ends the day before the YTD starts and the PYTD starts
-    with the FY: FY + YTD - PYTD is then the twelve months to the YTD's end."""
+    """Whether the FY ends the day before the YTD starts, the PYTD starts
+    with the FY, and the YTD and PYTD are as long within `SLACK_DAYS`
+    (`_alike`): FY + YTD - PYTD is then the twelve months to the YTD's
+    end."""
     periods: dict[str | None, PeriodRow] = {p.period_id: p for p in regs.periods}
     starts = [_start(s, periods) for s in (fy, ytd, pytd)]
     year_end = iso_date(fy.column.end_date)
     if year_end is None or None in starts:
         return False
     year, current, prior = starts
-    return year_end.toordinal() + 1 == current and prior == year
+    met = year_end.toordinal() + 1 == current and prior == year
+    return met and _alike(_spec_dated(ytd, periods), _spec_dated(pytd, periods))
+
+
+def _alike(current: tuple[int, int] | None, prior: tuple[int, int] | None) -> bool:
+    """Whether two spans (ordinals: first day, last day) have day counts
+    within `SLACK_DAYS` of each other: a YTD and a PYTD each within its
+    slack of the same whole months may still differ by twice it."""
+    if current is None or prior is None:
+        return False
+    return abs((current[1] - current[0]) - (prior[1] - prior[0])) <= SLACK_DAYS
 
 
 def _rolled(
@@ -879,7 +946,10 @@ def _register(regs: Cp1Registers) -> _Register:
         (*span, p.period_id) for p in regs.periods if (span := _dated(p)) is not None
     ]
     shortest = tuple(sorted(spans, key=lambda found: found[1] - found[0]))
-    return _Register(periods, ending, starting, shortest, off_footing(regs))
+    footings: dict[str | None, Footing] = {
+        p.period_id: footing_of(p) for p in regs.periods
+    }
+    return _Register(periods, ending, starting, shortest, off_footing(regs), footings)
 
 
 _MISSING = Cell(None, "COMPONENT_MISSING")  # a part not stated, or no period
@@ -966,9 +1036,29 @@ def _component(series: _Series, register: _Register, period_id: str | None) -> C
         if not _spans(register, period):
             return _UNSPANNED_PARTS
         parts = period.component_period_ids
-        if not register.off.isdisjoint(parts):
+        mixed = _footing(series, register, period_id) is None
+        if mixed or not register.off.isdisjoint(parts):
             return _OFF
     return _sum(series, ((_reported(series, part), 1) for part in parts))
+
+
+def _footing(
+    series: _Series, register: _Register, ref: str | _Spec | None
+) -> Footing | None:
+    """The footing (`combined_footing`) of a term's figure: a column's, of
+    its own period's and its terms'; a sparse period's as worked out
+    (`_Series.footed`) where it has a figure; else a period's own and its
+    named components'; not stated for no period. None where two differ."""
+    if isinstance(ref, _Spec):
+        parts = (ref.own, *(term for term, _ in ref.terms or ()))
+        return combined_footing(_footing(series, register, part) for part in parts)
+    if ref in series.footed:
+        return series.footed[ref]
+    period = register.periods.get(ref)
+    if period is None:
+        return UNSTATED_FOOTING
+    ids = (period.period_id, *period.component_period_ids)
+    return combined_footing(register.footings.get(i, UNSTATED_FOOTING) for i in ids)
 
 
 def _resolved(series: _Series, register: _Register, period_id: str | None) -> Cell:
@@ -986,7 +1076,7 @@ def _resolved(series: _Series, register: _Register, period_id: str | None) -> Ce
         return own
     series.started.add(period_id)
     _resolve_within(series, register, period)
-    parts, tiled = _parts(series, register, period)
+    parts, tiled, footing = _parts(series, register, period)
     if own.value is not None:
         differs = (
             tiled
@@ -996,10 +1086,14 @@ def _resolved(series: _Series, register: _Register, period_id: str | None) -> Ce
         cell = replace(
             own, note=join_notes((own.note, _FROM_PARTS if differs else None))
         )
+        series.footed[period_id] = register.footings[period_id]
     elif own.reason != "NOT_SOURCED":
         cell = own
+    elif period_id in register.off:
+        cell = _OFF  # never its parts' figure, on the anchor's footing
     elif tiled or parts.value is None:
         cell = parts
+        series.footed[period_id] = footing
     else:
         cell = _UNSPANNED_PARTS  # a partial sum is never the period's figure
     series.resolved[period_id] = cell
@@ -1024,15 +1118,17 @@ def _resolve_within(series: _Series, register: _Register, period: PeriodRow) -> 
 
 def _parts(
     series: _Series, register: _Register, period: PeriodRow
-) -> tuple[Cell, bool]:
-    """A sparse item's figure for a period from its parts, and whether they
-    tile it: its components where it names them (`COMPONENT_MISSING`, noted,
-    where they do not span it), else its cover."""
+) -> tuple[Cell, bool, Footing]:
+    """A sparse item's figure for a period from its parts, whether they
+    tile it, and the footing of the period and every part with a figure
+    (`combined_footing`): its components where it names them
+    (`COMPONENT_MISSING`, noted, where they do not span it), else its cover;
+    `COMPONENT_MISSING`, noted `OTHER_FOOTING`, where two footings differ."""
     if period.component_period_ids:
         if not _spans(register, period):
-            return _UNSPANNED_PARTS, False
+            return _UNSPANNED_PARTS, False, UNSTATED_FOOTING
         if not register.off.isdisjoint(period.component_period_ids):
-            return _OFF, False
+            return _OFF, False, UNSTATED_FOOTING
         cells = [
             (part, _resolved(series, register, part))
             for part in period.component_period_ids
@@ -1040,7 +1136,16 @@ def _parts(
         tiled = True
     else:
         cells, tiled = _cover(series, register, period)
-    return _named_sum(series, ((name, cell, 1) for name, cell in cells)), tiled
+    footing = combined_footing(
+        (
+            register.footings[period.period_id],
+            *(_footing(series, register, n) for n, c in cells if c.value is not None),
+        )
+    )
+    if footing is None:
+        return _OFF, False, UNSTATED_FOOTING
+    total = _named_sum(series, ((name, cell, 1) for name, cell in cells))
+    return total, tiled, footing
 
 
 def _cover(
@@ -1165,6 +1270,8 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
     if spec.unbuilt is not None:
         return Cell(None, "COMPONENT_MISSING", stated=stated, note=spec.unbuilt)
     terms = [(_term(series, register, ref), sign) for ref, sign in spec.terms]
+    if _footing(series, register, spec) is None:
+        return Cell(None, "COMPONENT_MISSING", stated=stated, note=OTHER_FOOTING)
     if series.kind == "sparse" and _partly_stated(spec, terms):
         return Cell(None, "COMPONENT_MISSING", stated=stated, note=PARTLY_STATED)
     names = (_term_name(ref) for ref, _ in spec.terms)
@@ -1235,7 +1342,8 @@ def _earlier(spec: _Spec, quarters: dict[tuple[int, int], _Spec]) -> list[_Spec 
 class _Window:
     """The twelve months ending a quarter column: the column, the three
     quarters before it (None where one is not a column), whether the four
-    tile twelve whole months, and the FY period of exactly those months."""
+    tile and span twelve whole months (`_twelve_months`), and the FY period
+    of exactly those months."""
 
     spec: _Spec
     earlier: list[_Spec | None]
@@ -1264,7 +1372,8 @@ def _fiscal_year_of(spec: _Spec, register: _Register) -> str | None:
 
 def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
     """A flow over the quarter and the three before it is their sum,
-    `UNSPANNED` where they do not tile; a balance is the quarter's; a rate
+    `UNSPANNED` where they do not tile, `OTHER_FOOTING` where two of their
+    footings differ (`combined_footing`); a balance is the quarter's; a rate
     has no observation for twelve months. A sparse item over a fiscal year's
     twelve months is that FY's, as its column reads it; over others it is
     `COMPONENT_MISSING`, noted `PARTLY_STATED`, where some quarters have a
@@ -1277,10 +1386,13 @@ def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
         return _component(series, register, window.year)
     if not window.tiled:
         return _UNSPANNED_PARTS
+    four = (window.spec, *window.earlier)
     quarters = [
         (_MISSING if quarter is None else _term(series, register, quarter), 1)
-        for quarter in (window.spec, *window.earlier)
+        for quarter in four
     ]
+    if combined_footing(_footing(series, register, q) for q in four) is None:
+        return _OFF
     if series.kind == "sparse" and _some_unstated(quarters):
         return Cell(None, "COMPONENT_MISSING", note=PARTLY_STATED)
     return _sum(series, quarters)
@@ -1292,6 +1404,34 @@ def _some_unstated(cells: list[tuple[Cell, int]]) -> bool:
     return found and any(cell.reason == "NOT_SOURCED" for cell, _ in cells)
 
 
+def column_footings(regs: Cp1Registers, columns: tuple[Column, ...]) -> Footings:
+    """The footings growth compares (`_cells.Footings`): the anchor's; each
+    of `columns` (from `historical_columns`), of its own period and the
+    periods its terms are built on, with their named components; and the
+    twelve months ending each quarter column, of its four quarters'. None
+    where two state a basis, or a perimeter, differently."""
+    plan = {spec.column.column_id: spec for spec in _plan(regs)}
+    quarters = _quarter_index(plan.values())
+    register = _register(regs)
+    built = _Series("flow", {})  # no sparse figure: the periods as built on
+    specs = [plan[column.column_id] for column in columns]
+    anchor = anchor_period(regs)
+    return Footings(
+        anchor=UNSTATED_FOOTING if anchor is None else footing_of(anchor),
+        columns={
+            spec.column.column_id: _footing(built, register, spec) for spec in specs
+        },
+        windows={
+            spec.column.column_id: combined_footing(
+                _footing(built, register, quarter)
+                for quarter in (spec, *_earlier(spec, quarters))
+            )
+            for spec in specs
+            if spec.column.kind == "QUARTER"
+        },
+    )
+
+
 def ltm_frames(
     regs: Cp1Registers, columns: tuple[Column, ...]
 ) -> dict[str, dict[str, Cell]]:
@@ -1299,8 +1439,9 @@ def ltm_frames(
     ending with it: flows summed over it and the three quarters before it,
     `COMPONENT_MISSING` without all four (an add-back's absent quarter adds
     nothing only where none of the four has a figure: `_ltm_cell`), and noted
-    `UNSPANNED` where the four do not tile twelve whole months by their dates
-    (`_tiles`)."""
+    `UNSPANNED` where the four do not tile, each three whole months starting
+    the day after the one before ends, or their span, from the first's
+    start to the last's end, is not twelve whole months (`_twelve_months`)."""
     with localcontext(CONTEXT):
         plan = {spec.column.column_id: spec for spec in _plan(regs)}
         quarters = _quarter_index(plan.values())
@@ -1314,7 +1455,7 @@ def ltm_frames(
             window = _Window(
                 spec,
                 earlier,
-                tiled=len(found) < 4 or _tiles(found, periods),
+                tiled=len(found) < 4 or _twelve_months(found, periods),
                 year=_fiscal_year_of(spec, register),
             )
             frames[spec.column.column_id] = {
