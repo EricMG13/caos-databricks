@@ -39,11 +39,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Literal
 
 from caos.calculators.credit_model._cells import (
+    CONTEXT,
+    beyond_rounding,
     calc,
+    join_notes,
 )
 from caos.calculators.credit_model.debt import (
     PAYMENT_RANKS,
@@ -150,6 +153,19 @@ class FacilityTerms:
     floor: str  # "0.50%", "none" or "n.a."
     maturity: str  # the ISO date as given
     amortisation: str  # "24 p.a.", "bullet" or "not stated"
+
+
+@dataclass(frozen=True, slots=True)
+class Line:
+    line_id: str
+    band: str
+    label: str
+    kind: LineKind
+    unit: Unit
+    unit_label: str | None
+    rank: str | None
+    terms: FacilityTerms | None
+    cells: tuple[Cell, ...]  # one per column, in column order
 
 
 @dataclass(frozen=True, slots=True)
@@ -619,6 +635,45 @@ def _cell(spec: _Spec, column: Column, cells: Mapping[str, Cell]) -> Cell:
     return cell
 
 
+def _revenue_noted(lines: list[Line], columns: tuple[Column, ...]) -> list[Line]:
+    """The revenue line, its cell noted on each column where the business
+    units (and the revenue PF rows) do not sum to it beyond its rounding."""
+    units = [line for line in lines if line.line_id.startswith("bu:")]
+    if not units:
+        return lines
+    rows = [line for line in lines if line.band == _REVENUE_BAND and line.kind == "PF"]
+    noted: list[Line] = []
+    for line in lines:
+        if line.line_id == "revenue":
+            cells = tuple(
+                _revenue_cell(line.cells[index], units, rows, index)
+                for index in range(len(columns))
+            )
+            line = replace(line, cells=cells)
+        noted.append(line)
+    return noted
+
+
+def _revenue_cell(
+    revenue: Cell, units: list[Line], rows: list[Line], index: int
+) -> Cell:
+    parts = [line.cells[index] for line in units]
+    adjustments = [line.cells[index].value for line in rows]
+    if revenue.value is None or any(cell.value is None for cell in parts):
+        return revenue
+    summed = sum(
+        (
+            value
+            for value in (*(c.value for c in parts), *adjustments)
+            if value is not None
+        ),
+        Decimal(0),
+    )
+    if not beyond_rounding(revenue.value, summed):
+        return revenue
+    return replace(revenue, note=join_notes((revenue.note, BU_NOT_SUMMED)))
+
+
 def _source(
     spec: _Spec, column: Column, frame: Frame, ltm_of: Mapping[str, str]
 ) -> Mapping[str, Cell]:
@@ -627,3 +682,42 @@ def _source(
     if spec.unadjusted and column.column_id in ltm_of:
         return frame[ltm_of[column.column_id]]
     return frame[column.column_id]
+
+
+def layout(
+    regs: Cp1Registers,
+    columns: tuple[Column, ...],
+    frame: Frame,
+    exclude_unrealised: bool,
+    deck_as_of: str | None,
+) -> tuple[Line, ...]:
+    """The model's lines over `columns`, read from `frame` (`metric_frame`
+    over every column): every band's lines in the layout's order, one cell
+    per column. `exclude_unrealised` marks the add-backs it leaves out as
+    memos; `deck_as_of` names the rate deck on the reference rate."""
+    ltm_of = {
+        pf.column_id: ltm.column_id
+        for pf in columns
+        if pf.kind == "PF_LTM"
+        for ltm in columns
+        if ltm.kind == "LTM" and ltm.period_id == pf.period_id
+    }
+    with localcontext(CONTEXT):
+        lines = [
+            Line(
+                line_id=spec.line_id,
+                band=band,
+                label=spec.label,
+                kind=spec.kind,
+                unit=spec.unit,
+                unit_label=spec.unit_label,
+                rank=spec.rank,
+                terms=spec.terms,
+                cells=tuple(
+                    _cell(spec, column, _source(spec, column, frame, ltm_of))
+                    for column in columns
+                ),
+            )
+            for band, spec in _specs(regs, columns, exclude_unrealised, deck_as_of)
+        ]
+        return tuple(_revenue_noted(lines, columns))
