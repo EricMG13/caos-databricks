@@ -35,6 +35,9 @@ from pydantic import (
 from pydantic.json_schema import models_json_schema
 
 from caos.api.identity import GlobalRole
+from caos.calculators.credit_model.frame import Basis, Case, ColumnKind, Reason
+from caos.calculators.credit_model.layout import LineKind
+from caos.calculators.credit_model.layout import Unit as LineUnit
 from caos.deliverable.render import traced_line
 from caos.evidence.citations import WHOLE_LINE, WHOLE_LINE_AS_STORED, CitationRule
 from caos.graph.route import EdgeType, NodeState
@@ -1026,6 +1029,96 @@ class ModelForecast(BaseModel):
     scale: Literal["units", "thousands", "millions", "billions"]
     perimeter: Text
     periods: Annotated[list[ModelPeriod], Field(max_length=240)]
+
+
+# The credit model (Plan 2): CP-1's registers as the host's calculator lays
+# them out (`caos.calculators.credit_model`). Its text is CP-1's cell text or
+# a host label built on it, so it is bounded by a cell and a host prefix.
+MODEL_COLUMNS_MAX = 64
+MODEL_SOURCES_MAX = 8
+MODEL_TEXT_CHARS = 2 * CELL_CHARS
+ModelText = Annotated[str, Field(max_length=MODEL_TEXT_CHARS)]
+
+
+class ModelSourceView(BaseModel):
+    """A CP-1 row a cell's figure came from: its own source id and locator,
+    and the CP-1 citation its `[C<n>]` marker names (D107), else null."""
+
+    model_config = _CLOSED
+
+    source_id: ModelText
+    source_locator: ModelText
+    citation: CitationView | None
+
+
+class ModelCellView(BaseModel):
+    """One cell: an exact decimal string, or the reason it has none (never
+    both); how it was reached; CP-1's own figure where the host recomputed
+    one; the cell's note; and the rows it came from, at most
+    `MODEL_SOURCES_MAX`."""
+
+    model_config = _CLOSED
+
+    value: DecimalText | None
+    reason: Reason | None
+    basis: Basis | None
+    stated: DecimalText | None
+    note: ModelText | None
+    sources: Annotated[list[ModelSourceView], Field(max_length=MODEL_SOURCES_MAX)]
+
+
+class ModelColumnView(BaseModel):
+    """One column: a reported, derived or projected period. `column_id` is
+    opaque; a reader uses the other fields."""
+
+    model_config = _CLOSED
+
+    column_id: ModelText
+    kind: ColumnKind
+    label: ModelText
+    period_id: ModelText | None
+    fiscal_year: ModelText
+    end_date: ModelText | None
+    days: int | None
+    case: Case | None
+
+
+class ModelTermsView(BaseModel):
+    """A facility's rate terms as the layout states them."""
+
+    model_config = _CLOSED
+
+    reference_rate: ModelText
+    spread_or_coupon: ModelText
+    floor: ModelText
+    maturity: ModelText
+    amortisation: ModelText
+
+
+class ModelLineView(BaseModel):
+    """One line of the model, in its band, with one cell per column."""
+
+    model_config = _CLOSED
+
+    line_id: ModelText
+    band: ModelText
+    label: ModelText
+    kind: LineKind
+    unit: LineUnit
+    unit_label: ModelText | None
+    rank: ModelText | None
+    terms: ModelTermsView | None
+    cells: Annotated[list[ModelCellView], Field(max_length=MODEL_COLUMNS_MAX)]
+
+
+class RateDeckRefView(BaseModel):
+    """The rate deck the run pinned at its creation, where a projection read
+    it."""
+
+    model_config = _CLOSED
+
+    deck_id: UUID
+    as_of: Annotated[str, Field(max_length=10, pattern=r"^\d{4}-\d{2}-\d{2}$")]
 
 
 class ModelBody(BaseModel):
