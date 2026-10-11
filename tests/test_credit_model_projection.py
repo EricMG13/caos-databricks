@@ -944,6 +944,170 @@ def test_the_projection_opens_at_cp_cf_s_opening_period() -> None:
     assert unknown["fac:tlb"].value == 2328 - 24
 
 
+def test_debt_rolls_forward_with_cp_cf_non_cash_movements() -> None:
+    request = example_request()
+    request["drivers"][0].update(
+        {"pik": "10", "capitalised_interest": "5", "fx_perimeter": "-3"}
+    )
+    del request["drivers"][1]["pik"]
+    frame = _frame(_inputs(request=request))
+    first = frame["BASE:2026"]
+
+    assert first["debt_non_cash"] == Cell(Decimal(12), basis="CALCULATED")
+    assert first["debt_raised_net"].value == -822 - 24
+    assert first["debt_closing"].value == 13858 + 260 - 846 + 12
+    assert first["total_debt"] == first["debt_closing"]
+    # An absent movement is none.
+    assert frame["BASE:2027"]["debt_non_cash"].value == 0
+
+
+def test_projected_columns_carry_the_debt_totals_and_liquidity() -> None:
+    first = _frame(_inputs())["BASE:2026"]
+    cash = _value(first["cash_closing"])
+
+    # Super senior and senior secured: the revolver, the term loan, the
+    # 6.500% and 7.000% notes.
+    assert first["secured_debt"].value == 0 + 2304 + 2000 + 1000
+    assert first["net_debt"].value == _value(first["total_debt"]) - cash
+    assert first["undrawn_rcf"].value == 2200
+    assert first["undrawn_rcf"].note == "RCF drawing held at opening"
+    assert first["liquidity"].value == cash + 2200
+    assert first["ebitda"] == Cell(None, "NOT_PROJECTED")
+
+    # CP-1's accounts at the opening come first.
+    inputs = _at_opening(_inputs(), "acct:rcf_commitment", Cell(Decimal(2600)))
+    inputs = _at_opening(inputs, "acct:rcf_drawn", Cell(Decimal(300)))
+    assert _frame(inputs)["BASE:2027"]["undrawn_rcf"].value == 2300
+
+
+def test_without_rcf_accounts_the_revolver_row_gives_undrawn() -> None:
+    regs = example_registers()
+    rcf = next(
+        r for r in regs.facilities if r.facility_id == "rcf" and r.period_id == "FY2025"
+    )
+    assert rcf.source is not None
+    inputs = _without(_inputs(), "FY:FY2025", "acct:rcf_commitment")
+    first = _frame(inputs)["BASE:2026"]
+    assert first["undrawn_rcf"] == Cell(
+        Decimal(2200),
+        basis="CALCULATED",
+        sources=(rcf.source,),
+        note="RCF drawing held at opening",
+    )
+
+    named = _terms(regs, "rcf", {"facility_type": "RCF", "drawn_amount": Decimal(50)})
+    inputs = _without(_inputs(named), "FY:FY2025", "acct:rcf_drawn")
+    assert _frame(inputs)["BASE:2026"]["undrawn_rcf"].value == 2150
+
+    unstated = _terms(regs, "rcf", {"commitment": None})
+    inputs = _without(_inputs(unstated), "FY:FY2025", "acct:rcf_drawn")
+    first = _frame(inputs)["BASE:2026"]
+    assert first["undrawn_rcf"] == Cell(None, "COMPONENT_MISSING")
+    assert first["liquidity"] == Cell(None, "COMPONENT_MISSING")
+
+    none = replace(regs, facilities=())
+    inputs = _without(_inputs(none), "FY:FY2025", "acct:rcf_drawn")
+    assert _frame(inputs)["BASE:2026"]["undrawn_rcf"] == Cell(None, "NOT_SOURCED")
+
+
+def _deck(*years: tuple[str, int, str]) -> RateDeck:
+    return RateDeck(
+        "d",
+        "2026-10-01",
+        tuple(
+            RateDeckYear(ref, offset, Decimal(r), Decimal(r))
+            for ref, offset, r in years
+        ),
+    )
+
+
+def test_a_deck_without_the_reference_rate_falls_back_to_the_implied_rate() -> None:
+    deck = _deck(("SONIA", 1, "0.04"))
+
+    assert facility_rate(_row("tlb"), deck, "BASE", 1, Decimal("0.06")) == (
+        Decimal("0.06"),
+        "reference rate not in deck",
+    )
+    first = _frame(_inputs(deck=deck))["BASE:2026"]
+    assert first["fac:tlb"].note == "reference rate not in deck"
+    assert first["reference_rate"] == Cell(
+        None, "NOT_SOURCED", note="reference rate not in deck"
+    )
+
+
+def test_deck_notes_tell_a_held_year_from_a_missing_one() -> None:
+    deck = _deck(("SOFR", 1, "0.03"), ("SOFR", 3, "0.05"))
+    tlb = _row("tlb")
+
+    assert facility_rate(tlb, deck, "BASE", 1, None) == (Decimal("0.0575"), None)
+    assert facility_rate(tlb, deck, "BASE", 2, None) == (
+        Decimal("0.0575"),
+        "deck year missing",
+    )
+    assert facility_rate(tlb, deck, "BASE", 3, None) == (Decimal("0.0775"), None)
+    assert facility_rate(tlb, deck, "BASE", 4, None) == (
+        Decimal("0.0775"),
+        "last deck rate held flat",
+    )
+    late = _deck(("SOFR", 2, "0.03"))
+    assert facility_rate(tlb, late, "BASE", 1, Decimal("0.06")) == (
+        Decimal("0.06"),
+        "deck year missing",
+    )
+    frame = _frame(_inputs(deck=deck))
+    assert frame["BASE:2027"]["reference_rate"] == Cell(
+        Decimal("0.03"), basis="DRIVER", note="deck year missing"
+    )
+    assert frame["BASE:2027"]["fac:tlb"].note == "deck year missing"
+    assert frame["BASE:2028"]["reference_rate"] == Cell(Decimal("0.05"), basis="DRIVER")
+
+
+def test_a_revolver_in_another_currency_gives_no_undrawn() -> None:
+    regs = _terms(example_registers(), "rcf", {"currency": "EUR"})
+    inputs = _without(_inputs(regs), "FY:FY2025", "acct:rcf_drawn")
+
+    assert _frame(inputs)["BASE:2026"]["undrawn_rcf"] == Cell(None, "NOT_SOURCED")
+
+
+def test_two_periods_for_one_case_and_year_are_refused() -> None:
+    request = example_request()
+    request["periods"].append(
+        {"case": "BASE", "period_id": "FY2026b", "fiscal_year": "2026", "days": "365"}
+    )
+
+    with pytest.raises(Refusal) as caught:
+        projection(_inputs(request=request))
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+def test_debt_cp_cf_issues_on_no_facility_mix_bears_the_implied_rate() -> None:
+    zero = dict.fromkeys(_INTEREST_BEARING, Decimal(0))
+    regs = _at_anchor(example_registers(), zero)
+    request = example_request()
+    request["drivers"][0]["issuance"] = "5000"
+    frame = _frame(_inputs(regs, request))
+    second = frame["BASE:2027"]
+
+    assert _value(second["interest_bearing_debt_opening"]) == 4178
+    assert second["wa_rate"] == Cell(
+        _IMPLIED, basis="CALCULATED", note="no facility mix, implied rate"
+    )
+    assert second["cash_interest"].value == CONTEXT.minus(
+        CONTEXT.multiply(_IMPLIED, Decimal(4178))
+    )
+    assert second["cash_closing"].value is not None
+    assert frame["BASE:2028"]["cash_closing"].value is not None
+    # With the implied rate refused too, its reason is carried.
+    negative = Cell(Decimal(-14106), basis="CALCULATED")
+    second = _frame(_ltm(_inputs(regs, request), "debt_opening", negative))["BASE:2027"]
+    assert second["wa_rate"] == Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")
+    # Half a unit issued is still debt to bear interest.
+    request["drivers"][0].update({"issuance": "0.5", "optional_repayment": "0"})
+    second = _frame(_inputs(regs, request))["BASE:2027"]
+    assert _value(second["interest_bearing_debt_opening"]) == Decimal("0.5")
+    assert second["wa_rate"].note == "no facility mix, implied rate"
+
+
 # Fix wave B (the adversary audit of b64facb7): H4, H5, H6, M1, M4, M5, L1-L4.
 
 _WRONG_UNIT_IMPLIED = Decimal("0.061")
@@ -981,3 +1145,309 @@ def test_rate_term_bounds_are_inclusive() -> None:
         row = replace(_row("ssn29"), fixed_rate=Decimal(coupon))
         expected = Decimal(coupon) / 100
         assert facility_rate(row, deck, "BASE", 1, None) == (expected, None)
+
+
+def test_terms_in_the_wrong_unit_price_at_the_implied_rate_noted() -> None:
+    wrong = {"spread_bps": Decimal("2.25"), "floor_bps": Decimal("0.5")}
+    regs = _terms(example_registers(), "tlb", wrong)
+    regs = _terms(regs, "ssn29", {"fixed_rate": Decimal("0.065")})
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    assert first["fac:tlb"].note == "term out of range"
+    assert first["fac:ssn29"].note == "term out of range"
+    interest = CONTEXT.multiply(Decimal(4328), _IMPLIED) + _FIXED_INTEREST - 130
+    assert _about(first["cash_interest"], -interest)
+
+
+def test_projected_revenue_is_cp_cfs_with_the_business_units_kept() -> None:
+    regs = example_registers()
+    partial = replace(
+        regs,
+        segments=tuple(
+            s for s in regs.segments if s.segment_id in {"las_vegas", "regional"}
+        ),
+    )
+    first = _frame(_inputs(partial))["BASE:2026"]
+
+    assert first["revenue"] == Cell(Decimal(11809), basis="DRIVER")
+    las_vegas = Decimal(4213) * Decimal("1.025")
+    assert first["bu:las_vegas"] == Cell(las_vegas, basis="PROJECTED")
+    assert first["bu:regional"].value == Decimal(5746) * Decimal("1.010")
+
+
+def test_without_cp_cf_revenue_projected_revenue_is_the_business_units() -> None:
+    request = example_request()
+    for driver in request["drivers"]:
+        del driver["revenue"]
+    first = _frame(_inputs(request=request))["BASE:2026"]
+
+    revenue = sum(
+        (first[key].value or Decimal(0) for key in first if key.startswith("bu:")),
+        Decimal(0),
+    )
+    assert first["revenue"] == Cell(revenue, basis="CALCULATED")
+
+
+_FOREIGN = "excludes facility in another currency"
+_FOREIGN_KEYS = (
+    "total_debt",
+    "net_debt",
+    "debt_opening",
+    "debt_closing",
+    "interest_bearing_debt_opening",
+    "cash_interest",
+)
+
+
+def test_a_foreign_facility_is_noted_on_projected_debt_and_interest() -> None:
+    regs = _terms(example_registers(), "sun29", {"currency": "EUR"})
+    frame = _frame(_inputs(regs))
+
+    for column_id in ("BASE:2026", "BASE:2027", "DOWNSIDE:2028"):
+        for key in _FOREIGN_KEYS:
+            assert frame[column_id][key].note == _FOREIGN, (column_id, key)
+    # Unsecured: secured debt leaves out only CP-CF's unallocated movements.
+    assert frame["BASE:2026"]["secured_debt"].note == (
+        "excludes unallocated CP-CF movements"
+    )
+    assert frame["DOWNSIDE:2026"]["secured_debt"].note is None
+    secured = _terms(example_registers(), "ssn29", {"currency": "EUR"})
+    first = _frame(_inputs(secured))["BASE:2026"]
+    assert (
+        first["secured_debt"].note
+        == f"{_FOREIGN}; excludes unallocated CP-CF movements"
+    )
+    clean = _frame(_inputs())["BASE:2026"]
+    assert all(clean[key].note is None for key in _FOREIGN_KEYS)
+
+
+def test_projected_secured_debt_notes_unallocated_movements() -> None:
+    frame = _frame(_inputs())
+    unallocated = "excludes unallocated CP-CF movements"
+
+    # Base repays 822 optionally in 2026: total debt moves off the schedule.
+    assert frame["BASE:2026"]["secured_debt"] == Cell(
+        Decimal(0 + 2304 + 2000 + 1000), basis="CALCULATED", note=unallocated
+    )
+    # Downside moves only the scheduled amortisation: nothing unallocated.
+    assert frame["DOWNSIDE:2026"]["secured_debt"].note is None
+
+
+def _division_1_growth(value: str) -> ProjectionInputs:
+    """The example with DIVISION_1's (Las Vegas) Base FY2026 growth `value`."""
+    growth = tuple(
+        replace(g, value=Decimal(value))
+        if (g.case, g.fiscal_year, g.slot_id) == ("BASE", "2026", "DIVISION_1")
+        else g
+        for g in example_growth()
+    )
+    return replace(_inputs(), growth=growth)
+
+
+def test_a_growth_outside_100_percent_is_noted_on_the_business_unit() -> None:
+    frame = _frame(_division_1_growth("8"))  # 8 read as 800%
+
+    assert frame["BASE:2026"]["bu:las_vegas"] == Cell(
+        Decimal(4213) * 9, basis="PROJECTED", note="growth outside ±100%"
+    )
+    assert frame["BASE:2027"]["bu:las_vegas"].note is None
+    for value, note in (
+        ("1", None),
+        ("-1", None),
+        ("1.01", "growth outside ±100%"),
+        ("-1.01", "growth outside ±100%"),
+    ):
+        first = _frame(_division_1_growth(value))["BASE:2026"]
+        assert first["bu:las_vegas"].note == note, value
+
+
+def _malformed(request: dict[str, Any]) -> None:
+    with pytest.raises(Refusal) as caught:
+        projection(_inputs(request=request))
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+def test_a_request_missing_a_precondition_is_refused_typed() -> None:
+    for top in ("opening", "periods", "drivers"):
+        request = example_request()
+        del request[top]
+        _malformed(request)
+    for field in ("case", "period_id", "fiscal_year", "days"):
+        request = example_request()
+        del request["periods"][0][field]
+        _malformed(request)
+    for field in ("case", "period_id"):
+        request = example_request()
+        del request["drivers"][0][field]
+        _malformed(request)
+    request = example_request()
+    del request["opening"]["as_of_period_id"]
+    _malformed(request)
+
+
+def test_a_request_of_the_wrong_shape_is_refused_typed() -> None:
+    shapes: list[tuple[str, Any]] = [
+        ("opening", "FY2025"),
+        ("periods", {"case": "BASE"}),
+        ("periods", ["FY2026"]),
+        ("drivers", [None]),
+    ]
+    for top, value in shapes:
+        request = example_request()
+        request[top] = value
+        _malformed(request)
+    for field, value in (("case", ["BASE"]), ("fiscal_year", 2026)):
+        request = example_request()
+        request["periods"][0][field] = value
+        _malformed(request)
+    request = example_request()
+    request["drivers"][0]["period_id"] = {"FY2026"}
+    _malformed(request)
+
+
+def test_an_outflow_driver_of_zero_is_no_negative_zero() -> None:
+    request = example_request()
+    request["drivers"][0]["acquisitions_disposals"] = "-0"
+    frame = _frame(_inputs(request=request))
+
+    for column_id, key in (
+        ("DOWNSIDE:2026", "dividends"),
+        ("DOWNSIDE:2026", "acquisitions_net"),
+        ("BASE:2026", "acquisitions_net"),
+    ):
+        value = _value(frame[column_id][key])
+        assert value == 0 and not value.is_signed(), (column_id, key)
+
+
+def test_a_negative_interest_base_has_no_interest_noted() -> None:
+    request = example_request()
+    request["drivers"][0]["optional_repayment"] = "20000"
+    second = _frame(_inputs(request=request))["BASE:2027"]
+
+    assert _value(second["interest_bearing_debt_opening"]) < 0
+    assert second["cash_interest"] == Cell(
+        None, "COMPONENT_MISSING", note="negative interest base"
+    )
+
+
+def test_interest_is_not_rounded_through_the_weighted_rate() -> None:
+    first = _frame(_inputs())["BASE:2026"]
+
+    # 2,328 at 6.55% and the fixed coupons: 858.984 exactly, not the
+    # 38-digit weighted rate times 14,028.
+    assert first["cash_interest"] == Cell(Decimal("-858.984"), basis="CALCULATED")
+    with localcontext(CONTEXT):
+        rounded = -(_value(first["wa_rate"]) * 14028)
+    assert rounded != Decimal("-858.984")
+
+
+def test_an_incomplete_opening_stack_leaves_no_implied_rate_noted() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            f
+            for f in regs.facilities
+            if not (f.facility_id == "ssn29" and f.period_id == "Q2_2025")
+        ),
+    )
+    regs = _terms(regs, "tlb", {"rate_type": "NOT_STATED"})
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    incomplete = "opening stack incomplete"
+    assert first["wa_rate"] == Cell(None, "COMPONENT_MISSING", note=incomplete)
+    assert first["cash_interest"] == Cell(None, "COMPONENT_MISSING", note=incomplete)
+
+
+def test_interest_on_weights_below_one_is_not_rounded_through_the_rate() -> None:
+    debt = dict.fromkeys(_INTEREST_BEARING, Decimal(0)) | {
+        "tlb": Decimal("0.25"),
+        "ssn29": Decimal("0.5"),
+    }
+    first = _frame(_inputs(_at_anchor(example_registers(), debt)))["BASE:2026"]
+
+    # 0.25 at 6.55% and 0.5 at 6.5% on a base of 0.75: the rate does not
+    # terminate, the interest does.
+    assert _value(first["interest_bearing_debt_opening"]) == Decimal("0.75")
+    assert first["cash_interest"].value == Decimal("-0.048875")
+
+
+def test_with_no_facility_mix_an_incomplete_opening_says_why() -> None:
+    zero = dict.fromkeys(_INTEREST_BEARING, Decimal(0))
+    regs = _at_anchor(example_registers(), zero)
+    request = example_request()
+    request["drivers"][0]["issuance"] = "5000"
+    incomplete = Cell(None, "COMPONENT_MISSING", note="opening stack incomplete")
+    inputs = _ltm(_inputs(regs, request), "debt_opening", incomplete)
+
+    second = _frame(inputs)["BASE:2027"]
+    assert second["wa_rate"] == incomplete
+
+
+def test_interest_from_weights_below_one_on_a_larger_base_is_exact() -> None:
+    debt = dict.fromkeys(_INTEREST_BEARING, Decimal(0)) | {
+        "ssn29": Decimal("0.25"),
+        "ssn31": Decimal("0.5"),
+    }
+    request = example_request()
+    request["drivers"][0].update({"issuance": "5000", "optional_repayment": "0"})
+    second = _frame(_inputs(_at_anchor(example_registers(), debt), request))[
+        "BASE:2027"
+    ]
+
+    weighted = Decimal("0.25") * Decimal("0.065") + Decimal("0.5") * Decimal("0.07")
+    base = Decimal("5000.75")
+    assert _value(second["interest_bearing_debt_opening"]) == base
+    exact = CONTEXT.divide(CONTEXT.multiply(weighted, base), Decimal("0.75"))
+    rounded = CONTEXT.multiply(_value(second["wa_rate"]), base)
+    assert exact != rounded
+    assert second["cash_interest"].value == exact.copy_negate()
+
+
+def test_a_facility_whose_terms_were_written_out_of_range_prices_implied() -> None:
+    # In range as read (225 bp), but CP-1 wrote it out of its unit.
+    flagged = replace(_row("tlb"), terms_out_of_range=True)
+    assert facility_rate(flagged, example_deck(), "BASE", 1, _WRONG_UNIT_IMPLIED) == (
+        _WRONG_UNIT_IMPLIED,
+        "term out of range",
+    )
+    assert facility_rate(_row("tlb"), example_deck(), "BASE", 1, None)[1] is None
+
+    regs = _terms(example_registers(), "tlb", {"terms_out_of_range": True})
+    first = _frame(_inputs(regs))["BASE:2026"]
+    assert first["fac:tlb"].note == "term out of range"
+
+
+def _named_for_start_year(regs: Cp1Registers) -> Cp1Registers:
+    """`regs` with each fiscal year named for the year it starts in, a year
+    before its end (FY2025, ending 2025-12-31, is "2024")."""
+    return replace(
+        regs,
+        periods=tuple(
+            replace(p, fiscal_year=str(int(p.fiscal_year) - 1))
+            if p.period_type == "FY"
+            else p
+            for p in regs.periods
+        ),
+    )
+
+
+@pytest.mark.parametrize("year", ["9999", "2201", "1899", "2035", "2013"])
+def test_a_request_year_out_of_range_is_refused_not_raised(year: str) -> None:
+    regs = _named_for_start_year(example_registers())
+    request = example_request()
+    request["periods"][-1]["fiscal_year"] = year
+
+    with pytest.raises(Refusal) as caught:
+        projection(_inputs(regs, request))
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+def test_a_request_year_ten_from_the_base_year_is_placed() -> None:
+    regs = _named_for_start_year(example_registers())
+    request = example_request()
+    request["periods"][-1]["fiscal_year"] = "2034"  # the base year, 2024, + 10
+
+    columns, _ = projection(_inputs(regs, request))
+
+    assert columns[-1].end_date == "2035-12-31"
