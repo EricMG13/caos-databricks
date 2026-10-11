@@ -3,8 +3,9 @@ rate-deck interest, Base and Downside, chained year to year."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Any
 
 import pytest
@@ -15,10 +16,12 @@ from credit_model_fixture import (
     example_request,
     example_slots,
 )
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from caos.calculators.cash_flow import cash_flow_forecast
 from caos.calculators.credit_model._cells import CONTEXT
-from caos.calculators.credit_model.frame import Column, Frame
+from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.calculators.credit_model.history import account_frame, historical_columns
 from caos.calculators.credit_model.projection import (
     ProjectionInputs,
@@ -29,11 +32,16 @@ from caos.calculators.credit_model.projection import (
     rate_for,
 )
 from caos.calculators.credit_model.statements import statement_frame
-from caos.methodology.model_inputs import Cp1Registers, FacilityRow
+from caos.methodology.model_inputs import Cp1Registers, FacilityRow, SlotAllocation
+from caos.refusals import Refusal, RefusalCode
 
 # CP-CF opens at FY2025, the balances' column. Its stack,
 # finance lease and discount aside, is 14,028.
 _FIXED = {"ssn29": "0.065", "ssn31": "0.07", "sun29": "0.04625", "sun32": "0.06"}
+_FIXED_INTEREST = Decimal("130") + 70 + Decimal("166.5") + 210 + 130  # + sub27
+# LTM to Q2 2026: cash interest 862 over the average of total debt (finance
+# lease included) at 30 June 2025 (14,130) and 30 June 2026 (14,106).
+_IMPLIED = CONTEXT.divide(Decimal(862), (Decimal(14130) + Decimal(14106)) / 2)
 
 
 def _history(regs: Cp1Registers) -> Frame:
@@ -61,6 +69,23 @@ def _inputs(
 
 def _frame(inputs: ProjectionInputs) -> Frame:
     return projection(inputs)[1]
+
+
+def _terms(regs: Cp1Registers, facility_id: str, terms: dict[str, Any]) -> Cp1Registers:
+    """`regs` with every row of the facility carrying `terms`."""
+    return replace(
+        regs,
+        facilities=tuple(
+            replace(row, **terms) if row.facility_id == facility_id else row
+            for row in regs.facilities
+        ),
+    )
+
+
+def _about(cell: Cell, expected: Decimal) -> bool:
+    """`cell`'s figure is `expected` to 20 places: interest is the weighted
+    rate, a 38-digit quotient, times the debt."""
+    return cell.value is not None and abs(cell.value - expected) < Decimal("1e-20")
 
 
 def _row(facility_id: str) -> FacilityRow:
@@ -96,6 +121,35 @@ def test_columns_are_one_per_case_and_projected_year() -> None:
     assert list(frame) == [c.column_id for c in columns]
 
 
+def test_interest_is_weighted_rate_times_opening_interest_bearing_debt() -> None:
+    frame = _frame(_inputs())
+
+    # FY2026 Base: SOFR 3.80%; the term loan 2,328 at 3.80% + 2.75%.
+    first = frame["BASE:2026"]
+    interest = Decimal(2328) * Decimal("0.0655") + _FIXED_INTEREST
+    assert first["interest_bearing_debt_opening"].value == 14028
+    assert first["interest_bearing_debt_opening"].basis == "CALCULATED"
+    assert first["wa_rate"].value == CONTEXT.divide(interest, Decimal(14028))
+    # The weights cancel: interest is exact, not the rounded rate times 14,028.
+    assert first["cash_interest"].value == -interest
+    assert first["reference_rate"].value == Decimal("0.0380")
+    # FY2027's rate weights the amortised term loan, 2,304, at 3.40% + 2.75%;
+    # its base is CP-CF's opening debt, after FY2026's 822 sweep, less the
+    # finance lease (260) and the discount (-170).
+    second = frame["BASE:2027"]
+    weighted = Decimal(2304) * Decimal("0.0615") + _FIXED_INTEREST
+    base = _value(second["debt_opening"]) - 260 + 170
+    assert base == 14118 - 846 - 90
+    assert second["interest_bearing_debt_opening"].value == base
+    assert second["wa_rate"].value == CONTEXT.divide(weighted, Decimal(14004))
+    assert second["cash_interest"].value == CONTEXT.minus(
+        CONTEXT.divide(CONTEXT.multiply(weighted, base), Decimal(14004))
+    )
+    # Downside FY2026: SOFR 4.80%.
+    interest = Decimal(2328) * Decimal("0.0755") + _FIXED_INTEREST
+    assert _about(frame["DOWNSIDE:2026"]["cash_interest"], -interest)
+
+
 def test_a_floating_facility_uses_deck_rate_floor_and_spread() -> None:
     deck = example_deck()
     low = RateDeck(
@@ -127,6 +181,88 @@ def test_a_floating_facility_uses_deck_rate_floor_and_spread() -> None:
         )
 
 
+def test_terms_not_stated_fall_back_to_the_implied_rate_with_a_note() -> None:
+    deck = example_deck()
+    implied = Decimal("0.061")
+    tlb = _row("tlb")
+    implied_terms: list[dict[str, Any]] = [
+        {"rate_type": "NOT_STATED"},
+        {"reference_rate": "NOT_STATED"},
+        {"reference_rate": "NONE"},
+        {"spread_bps": None},
+    ]
+    for terms in implied_terms:
+        assert facility_rate(replace(tlb, **terms), deck, "BASE", 1, implied) == (
+            implied,
+            "implied rate",
+        )
+    assert facility_rate(
+        replace(_row("ssn29"), fixed_rate=None), deck, "BASE", 1, implied
+    ) == (
+        implied,
+        "implied rate",
+    )
+    out_of_range: list[tuple[FacilityRow, dict[str, Any]]] = [
+        (tlb, {"rate_type": "SWAP"}),
+        (tlb, {"reference_rate": "LIBOR"}),
+        (tlb, {"spread_bps": Decimal(-1)}),
+        (tlb, {"floor_bps": Decimal(-1)}),
+        (_row("ssn29"), {"fixed_rate": Decimal("-0.5")}),
+    ]
+    for row, terms in out_of_range:
+        assert facility_rate(replace(row, **terms), deck, "BASE", 1, implied) == (
+            implied,
+            "term out of range",
+        )
+    # With no implied rate there is no rate, the note kept.
+    assert facility_rate(
+        replace(tlb, rate_type="NOT_STATED"), deck, "BASE", 1, None
+    ) == (
+        None,
+        "implied rate",
+    )
+
+    regs = _terms(example_registers(), "tlb", {"rate_type": "NOT_STATED"})
+    first = _frame(_inputs(regs))["BASE:2026"]
+    interest = CONTEXT.multiply(Decimal(2328), _IMPLIED) + _FIXED_INTEREST
+    assert _about(first["cash_interest"], -interest)
+    assert first["fac:tlb"].note == "implied rate"
+
+
+def test_an_out_of_range_amortisation_is_not_stated_and_noted() -> None:
+    regs = _terms(example_registers(), "tlb", {"annual_amortisation": Decimal(-24)})
+    frame = _frame(_inputs(regs))
+
+    assert frame["BASE:2026"]["fac:tlb"] == Cell(
+        Decimal(2328), basis="PROJECTED", note="term out of range"
+    )
+    unstated = _terms(example_registers(), "tlb", {"annual_amortisation": None})
+    frame = _frame(_inputs(unstated))
+    assert frame["BASE:2026"]["fac:tlb"] == Cell(
+        Decimal(2328), basis="PROJECTED", note="amortisation not stated"
+    )
+    assert frame["BASE:2026"]["debt_raised_net"].value == -822
+
+
+def test_no_rate_deck_uses_the_implied_rate_for_floating_facilities() -> None:
+    assert facility_rate(_row("rcf"), None, "BASE", 1, Decimal("0.06")) == (
+        Decimal("0.06"),
+        "no rate deck",
+    )
+    # A fixed coupon needs no deck.
+    assert facility_rate(_row("ssn29"), None, "BASE", 1, Decimal("0.06")) == (
+        Decimal("0.065"),
+        None,
+    )
+
+    first = _frame(_inputs(no_deck=True))["BASE:2026"]
+    interest = CONTEXT.multiply(Decimal(2328), _IMPLIED) + _FIXED_INTEREST
+    assert _about(first["cash_interest"], -interest)
+    assert first["fac:tlb"].note == "no rate deck"
+    assert first["fac:rcf"].note == "no rate deck"
+    assert first["reference_rate"] == Cell(None, "NOT_SOURCED", note="no rate deck")
+
+
 def test_a_year_beyond_the_deck_holds_the_last_rate() -> None:
     deck = example_deck()
 
@@ -137,6 +273,433 @@ def test_a_year_beyond_the_deck_holds_the_last_rate() -> None:
     assert rate_for(deck, "SOFR", "BASE", 0) is None
     assert rate_for(deck, "SONIA", "BASE", 1) is None
     assert rate_for(None, "SOFR", "BASE", 1) is None
+
+    one_year = replace(deck, years=deck.years[:1])
+    frame = _frame(_inputs(deck=one_year))
+    assert frame["BASE:2026"]["reference_rate"] == Cell(
+        Decimal("0.0380"), basis="DRIVER"
+    )
+    assert frame["BASE:2027"]["reference_rate"] == Cell(
+        Decimal("0.0380"), basis="DRIVER", note="last deck rate held flat"
+    )
+    weighted = Decimal(2304) * Decimal("0.0655") + _FIXED_INTEREST
+    base = _value(frame["BASE:2027"]["interest_bearing_debt_opening"])
+    expected = -CONTEXT.multiply(CONTEXT.divide(weighted, Decimal(14004)), base)
+    assert _about(frame["BASE:2027"]["cash_interest"], expected)
+
+
+def test_amortisation_stops_at_zero_balance() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            replace(row, carrying_value=Decimal(30))
+            if row.facility_id == "tlb" and row.period_id in {"Q4_2025", "FY2025"}
+            else row
+            for row in regs.facilities
+        ),
+    )
+    frame = _frame(_inputs(regs))
+
+    assert [frame[f"BASE:{y}"]["fac:tlb"].value for y in (2026, 2027, 2028)] == [
+        6,
+        0,
+        0,
+    ]
+    assert [
+        frame[f"BASE:{y}"]["debt_raised_net"].value for y in (2026, 2027, 2028)
+    ] == [-822 - 24, -1097 - 6, -337]
+    assert _value(frame["BASE:2026"]["debt_closing"]) == (
+        _value(frame["BASE:2026"]["debt_opening"]) - 846
+    )
+
+
+def test_a_maturity_in_the_horizon_is_assumed_refinanced() -> None:
+    frame = _frame(_inputs())
+
+    # The 8.125% notes mature 1 July 2027, in FY2027.
+    assert frame["BASE:2027"]["fac:sub27"] == Cell(
+        Decimal(1600), basis="PROJECTED", note="assumed refinanced"
+    )
+    assert frame["BASE:2026"]["fac:sub27"].note is None
+    assert frame["BASE:2028"]["fac:sub27"].value == 1600
+    assert frame["DOWNSIDE:2027"]["fac:sub27"].note == "assumed refinanced"
+    # The finance lease and the discount are held flat; the lease is no
+    # interest-bearing debt.
+    assert frame["BASE:2028"]["fac:finl"] == Cell(
+        Decimal(260), basis="PROJECTED", note="held flat"
+    )
+    assert frame["BASE:2028"]["fac:disc"].value == -170
+
+
+def test_bu_revenue_compounds_the_slot_growth_and_sums_to_revenue() -> None:
+    frame = _frame(_inputs())
+
+    las_vegas = Decimal(4213) * Decimal("1.025")
+    assert frame["BASE:2026"]["bu:las_vegas"] == Cell(las_vegas, basis="PROJECTED")
+    las_vegas *= Decimal("1.030")
+    assert frame["BASE:2027"]["bu:las_vegas"].value == las_vegas
+    downside = Decimal(5746) * Decimal("0.96") * Decimal("0.98") * Decimal("1.01")
+    assert frame["DOWNSIDE:2028"]["bu:regional"].value == downside
+    # In no slot, or corporate: held flat.
+    assert frame["BASE:2028"]["bu:managed_other"] == Cell(
+        Decimal(343), basis="PROJECTED", note="held flat"
+    )
+    assert frame["BASE:2028"]["bu:corporate_eliminations"].value == -60
+    revenue = (
+        Decimal(4213) * Decimal("1.025")
+        + Decimal(5746) * Decimal("1.010")
+        + Decimal(1277) * Decimal("1.10")
+        + 343
+        - 60
+    )
+    # Revenue is CP-CF's own (H5); the units sum to it within its rounding.
+    assert revenue == Decimal("11809.485")
+    assert frame["BASE:2026"]["revenue"] == Cell(Decimal(11809), basis="DRIVER")
+
+    request = example_request()
+    request["drivers"][0]["revenue"] = "12000"
+    frame = _frame(_inputs(request=request))
+    assert frame["BASE:2026"]["revenue"] == Cell(Decimal(12000), basis="DRIVER")
+
+
+def test_drivers_sign_into_the_frame_and_the_cash_flow_follows() -> None:
+    first = _frame(_inputs())["BASE:2026"]
+    interest = Decimal(2328) * Decimal("0.0655") + _FIXED_INTEREST
+
+    assert first["adjusted_ebitda"].value == 4136
+    assert first["capex"].value == -1700
+    assert first["cash_taxes"].value == -170
+    assert first["other_operating"] == Cell(
+        Decimal(4025 - 4136), basis="CALCULATED", note="includes working capital"
+    )
+    assert _about(first["cfo_adjusted"], 4025 - interest - 170)
+    assert _about(first["fcf"], 4025 - interest - 170 - 1700)
+    assert first["dividends"].value == -400
+    assert first["acquisitions_net"].value == 0
+    assert first["equity_raised_net"].value == 0
+    assert first["debt_raised_net"].value == -822 - 24
+    ncf = 4025 - interest - 170 - 1700 - 846 - 400
+    assert _about(first["ncf"], ncf)
+    # Cash and debt open at CP-CF's opening, FY2025.
+    assert first["cash_opening"].value == 980
+    assert _about(first["cash_closing"], 980 + ncf)
+    assert first["debt_opening"].value == 13858 + 260
+    assert first["total_debt"].value == 13858 + 260 - 846
+    for key in ("lease_cash_not_in_ebitda", "ffo", "working_capital_change", "dso"):
+        assert first[key] == Cell(None, "NOT_PROJECTED")
+    assert first["kpi:lv_occupancy"] == Cell(None, "NOT_PROJECTED")
+    assert first["lease_liabilities"] == Cell(None, "NOT_PROJECTED")
+
+
+def test_an_acquisition_is_a_cash_outflow() -> None:
+    request = example_request()
+    request["drivers"][0]["acquisitions_disposals"] = "250"
+    first = _frame(_inputs(request=request))["BASE:2026"]
+
+    assert first["acquisitions_net"].value == -250
+
+
+def test_a_driver_missing_or_not_ready_leaves_its_lines_without_a_figure() -> None:
+    request = example_request()
+    del request["drivers"][0]["capex"]
+    request["drivers"][3]["status"] = "NOT_READY"
+    frame = _frame(_inputs(request=request))
+
+    assert frame["BASE:2026"]["capex"] == Cell(None, "NOT_SOURCED")
+    assert frame["BASE:2026"]["fcf"] == Cell(None, "COMPONENT_MISSING")
+    assert frame["BASE:2027"]["cash_opening"] == Cell(None, "COMPONENT_MISSING")
+    assert frame["DOWNSIDE:2026"]["adjusted_ebitda"] == Cell(
+        None, "NOT_STATED", note="driver not ready"
+    )
+
+
+def test_a_foreign_currency_facility_bears_no_interest_here() -> None:
+    regs = _terms(example_registers(), "ssn29", {"currency": "EUR"})
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    assert first["interest_bearing_debt_opening"].value == 14028 - 2000
+    assert first["fac:ssn29"].note == "different currency, not converted"
+
+
+def test_a_case_or_period_the_model_does_not_read_is_skipped() -> None:
+    request = example_request()
+    upside = {"case": "UPSIDE", "period_id": "FY2026", "fiscal_year": "2026"}
+    request["periods"].insert(0, upside | {"days": "365"})
+    columns, _ = projection(_inputs(request=request))
+
+    assert all(column.case in {"BASE", "DOWNSIDE"} for column in columns)
+    assert len(columns) == 6
+    request["periods"] = request["periods"][:1]
+    assert projection(_inputs(request=request)) == ((), {})
+
+
+def _value(cell: Cell) -> Decimal:
+    assert cell.value is not None, cell
+    return cell.value
+
+
+_AMOUNT = st.integers(min_value=0, max_value=10**6).map(Decimal)
+_SIGNED = st.integers(min_value=-(10**6), max_value=10**6).map(Decimal)
+
+
+@settings(max_examples=40, deadline=None)
+@given(
+    st.lists(
+        st.tuples(*([_AMOUNT] * 11), _SIGNED),
+        min_size=6,
+        max_size=6,
+    )
+)
+def test_projected_cash_and_debt_roll_forward_for_any_drivers(
+    figures: list[tuple[Decimal, ...]],
+) -> None:
+    request = example_request()
+    names = (
+        "ebitda",
+        "cfo",
+        "capex",
+        "cash_taxes",
+        "distributions",
+        "issuance",
+        "optional_repayment",
+        "acquisitions_disposals",
+        "revenue",
+        "pik",
+        "capitalised_interest",
+        "fx_perimeter",
+    )
+    for driver, values in zip(request["drivers"], figures, strict=True):
+        driver.update(
+            {name: str(value) for name, value in zip(names, values, strict=True)}
+        )
+    columns, frame = projection(_inputs(request=request))
+
+    for column, values in zip(columns, figures, strict=True):
+        assert _value(frame[column.column_id]["debt_non_cash"]) == sum(values[9:])
+    with localcontext(CONTEXT):
+        _rolls_forward(columns, frame)
+
+
+def _closes(total: Cell, parts: list[Cell]) -> None:
+    """`total` is the sum of `parts`, or has no figure when one of them has
+    none: the identity holds on every example."""
+    if any(part.value is None for part in parts):
+        assert total.value is None, total
+    else:
+        assert total.value == sum(_value(part) for part in parts)
+
+
+def _unit(value: Decimal) -> Decimal:
+    """A unit in the 38th significant digit of `value`."""
+    return Decimal(1).scaleb(value.adjusted() - 37)
+
+
+def _rolls_forward(columns: tuple[Column, ...], frame: Frame) -> None:
+    flows = ("fcf", "acquisitions_net", "debt_raised_net", "equity_raised_net")
+    for case in ("BASE", "DOWNSIDE"):
+        prior: dict[str, Cell] | None = None
+        for column in (c for c in columns if c.case == case):
+            cells = frame[column.column_id]
+            _closes(cells["cash_closing"], [cells["cash_opening"], cells["ncf"]])
+            _closes(cells["ncf"], [cells[key] for key in (*flows, "dividends")])
+            debt = ("debt_opening", "debt_raised_net", "debt_non_cash")
+            _closes(cells["debt_closing"], [cells[key] for key in debt])
+            assert cells["debt_closing"].value is not None
+            assert cells["total_debt"] == cells["debt_closing"]
+            base = _value(cells["interest_bearing_debt_opening"])
+            if base > 0:
+                # To the weighted rate's 38 digits: interest is computed from
+                # the weights, never through the rounded rate.
+                rate, interest = (
+                    _value(cells["wa_rate"]),
+                    _value(cells["cash_interest"]),
+                )
+                gap = abs(interest + rate * base)
+                rounding = abs(interest).scaleb(-37)
+                assert gap <= base * _unit(rate) + rounding + _unit(interest)
+            if prior is not None:
+                assert cells["cash_opening"] == prior["cash_closing"]
+                assert cells["debt_opening"].value == prior["debt_closing"].value
+            prior = cells
+
+
+def _at_anchor(
+    regs: Cp1Registers, balances: Mapping[str, Decimal | None]
+) -> Cp1Registers:
+    """`regs` with the facilities' carrying values at 31 December 2025 (Q4 and
+    FY2025) in `balances`."""
+    return replace(
+        regs,
+        facilities=tuple(
+            replace(row, carrying_value=balances[row.facility_id])
+            if row.period_id in {"Q4_2025", "FY2025"} and row.facility_id in balances
+            else row
+            for row in regs.facilities
+        ),
+    )
+
+
+_INTEREST_BEARING = ("rcf", "tlb", "ssn29", "ssn31", "sun29", "sun32", "sub27")
+
+
+def test_a_malformed_cp_cf_figure_or_period_is_refused() -> None:
+    bad_figure = example_request()
+    bad_figure["drivers"][0]["capex"] = "1,700"
+    bad_days = example_request()
+    bad_days["periods"][0]["days"] = "365.0"
+    bad_year = example_request()
+    bad_year["periods"][0]["fiscal_year"] = "FY"
+
+    for request in (bad_figure, bad_days, bad_year):
+        with pytest.raises(Refusal) as caught:
+            projection(_inputs(request=request))
+        assert caught.value.code == RefusalCode.METHODOLOGY_INPUT_INVALID
+
+
+def test_a_maturity_that_is_no_iso_date_is_not_placed() -> None:
+    for maturity in ("Jul 2027", None):
+        regs = _terms(example_registers(), "sub27", {"maturity_date": maturity})
+        frame = _frame(_inputs(regs))
+        assert frame["BASE:2027"]["fac:sub27"].note is None
+
+
+def test_a_missing_balance_leaves_no_interest() -> None:
+    regs = _at_anchor(example_registers(), {"tlb": None, "sub27": None})
+    frame = _frame(_inputs(regs))
+    first = frame["BASE:2026"]
+
+    assert first["fac:tlb"] == Cell(None, "COMPONENT_MISSING")
+    assert frame["BASE:2027"]["fac:sub27"] == Cell(
+        None, "COMPONENT_MISSING", note="assumed refinanced"
+    )
+    for key in ("interest_bearing_debt_opening", "wa_rate", "cash_interest"):
+        assert first[key] == Cell(None, "COMPONENT_MISSING")
+    assert first["debt_raised_net"] == Cell(None, "COMPONENT_MISSING")
+
+
+def _ltm(inputs: ProjectionInputs, key: str, cell: Cell) -> ProjectionInputs:
+    """`inputs` with the LTM's `key` cell replaced."""
+    history = {column_id: dict(cells) for column_id, cells in inputs.history.items()}
+    history["LTM:LTM_Q2_2026"][key] = cell
+    return replace(inputs, history=history)
+
+
+def _at_opening(inputs: ProjectionInputs, key: str, cell: Cell) -> ProjectionInputs:
+    """`inputs` with CP-CF's opening column's (FY2025) `key` cell replaced."""
+    history = {column_id: dict(cells) for column_id, cells in inputs.history.items()}
+    history["FY:FY2025"][key] = cell
+    return replace(inputs, history=history)
+
+
+def test_a_drawn_facility_without_a_rate_leaves_no_interest() -> None:
+    regs = _terms(example_registers(), "tlb", {"rate_type": "NOT_STATED"})
+    no_interest = Cell(None, "NOT_STATED")
+    first = _frame(_ltm(_inputs(regs), "cash_interest", no_interest))["BASE:2026"]
+
+    assert first["interest_bearing_debt_opening"].value == 14028
+    assert first["wa_rate"] == Cell(None, "COMPONENT_MISSING")
+    assert first["cash_interest"] == Cell(None, "COMPONENT_MISSING")
+    # An undrawn facility needs no rate.
+    undrawn = _inputs(_at_anchor(regs, {"tlb": Decimal(0)}))
+    first = _frame(_ltm(undrawn, "cash_interest", no_interest))["BASE:2026"]
+    assert first["wa_rate"].value == CONTEXT.divide(_FIXED_INTEREST, Decimal(11700))
+
+
+def test_no_average_debt_gives_no_implied_rate() -> None:
+    regs = _terms(example_registers(), "tlb", {"rate_type": "NOT_STATED"})
+    negative = Cell(Decimal(-14106), basis="CALCULATED")
+    first = _frame(_ltm(_inputs(regs), "debt_opening", negative))["BASE:2026"]
+
+    assert first["wa_rate"] == Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")
+    assert first["cash_interest"] == Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")
+
+
+def test_no_interest_bearing_debt_bears_no_interest() -> None:
+    zero = dict.fromkeys(_INTEREST_BEARING, Decimal(0))
+    first = _frame(_inputs(_at_anchor(example_registers(), zero)))["BASE:2026"]
+
+    assert first["interest_bearing_debt_opening"].value == 0
+    assert first["wa_rate"] == Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")
+    assert first["cash_interest"] == Cell(Decimal(0), basis="CALCULATED")
+
+    negative = zero | {"tlb": Decimal(-10)}
+    first = _frame(_inputs(_at_anchor(example_registers(), negative)))["BASE:2026"]
+    assert first["cash_interest"] == Cell(
+        None, "COMPONENT_MISSING", note="negative interest base"
+    )
+
+
+def test_an_operating_lease_is_not_projected() -> None:
+    regs = _terms(
+        example_registers(), "finl", {"lease_classification": "OPERATING_LEASE"}
+    )
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    assert first["fac:finl"] == Cell(None, "NOT_PROJECTED")
+    assert first["interest_bearing_debt_opening"].value == 14028
+
+
+def test_with_no_floating_facility_the_reference_rate_does_not_apply() -> None:
+    regs = example_registers()
+    for facility_id in ("rcf", "tlb"):
+        fixed = {
+            "rate_type": "FIXED",
+            "reference_rate": "NONE",
+            "fixed_rate": Decimal(7),
+        }
+        regs = _terms(regs, facility_id, fixed)
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    assert first["reference_rate"] == Cell(None, "NOT_APPLICABLE")
+    assert first["fac:tlb"].note is None
+
+
+def test_a_segment_without_a_prior_or_a_growth_has_no_revenue() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        segments=tuple(
+            replace(row, revenue=None)
+            if row.segment_id == "digital" and row.period_id == "FY2025"
+            else row
+            for row in regs.segments
+        ),
+    )
+    first = _frame(_inputs(regs))["BASE:2026"]
+    assert first["bu:digital"] == Cell(None, "COMPONENT_MISSING")
+    # Revenue is CP-CF's; the business units' sum only without it.
+    assert first["revenue"] == Cell(Decimal(11809), basis="DRIVER")
+    request = example_request()
+    for driver in request["drivers"]:
+        del driver["revenue"]
+    first = _frame(_inputs(regs, request))["BASE:2026"]
+    assert first["revenue"] == Cell(None, "COMPONENT_MISSING")
+
+    inputs = _inputs()
+    growth = tuple(
+        g
+        for g in inputs.growth
+        if not (g.slot_id == "DIVISION_3" and g.fiscal_year == "2027")
+    )
+    frame = _frame(replace(inputs, growth=growth))
+    assert frame["BASE:2027"]["bu:digital"] == Cell(None, "NOT_SOURCED")
+    assert frame["BASE:2026"]["bu:digital"].value == Decimal(1277) * Decimal("1.10")
+
+
+def test_a_segment_the_last_fy_does_not_report_is_not_projected() -> None:
+    regs = example_registers()
+    legacy = replace(regs.segments[0], segment_id="legacy", period_id="FY2023")
+    frame = _frame(_inputs(replace(regs, segments=(*regs.segments, legacy))))
+
+    assert "bu:legacy" not in frame["BASE:2026"]
+
+
+def test_with_no_segments_revenue_is_cp_cf_revenue() -> None:
+    first = _frame(_inputs(replace(example_registers(), segments=())))["BASE:2026"]
+
+    assert first["revenue"] == Cell(Decimal(11809), basis="DRIVER")
+    assert not any(key.startswith("bu:") for key in first)
 
 
 def test_zero_and_fractional_terms_are_in_range_and_exact() -> None:
@@ -152,6 +715,233 @@ def test_zero_and_fractional_terms_are_in_range_and_exact() -> None:
     fixed = replace(_row("ssn29"), fixed_rate=coupon)
     rate, _ = facility_rate(fixed, deck, "BASE", 1, None)
     assert rate == CONTEXT.divide(coupon, Decimal(100))
+
+
+def test_a_maturity_on_a_year_end_falls_in_the_year_it_ends() -> None:
+    regs = _terms(example_registers(), "sub27", {"maturity_date": "2026-12-31"})
+    frame = _frame(_inputs(regs))
+
+    assert frame["BASE:2026"]["fac:sub27"].note == "assumed refinanced"
+    assert frame["BASE:2027"]["fac:sub27"].note is None
+
+
+def test_a_facility_with_two_notes_carries_both() -> None:
+    regs = _terms(
+        example_registers(),
+        "tlb",
+        {"rate_type": "NOT_STATED", "annual_amortisation": None},
+    )
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    assert first["fac:tlb"].note == "implied rate; amortisation not stated"
+
+
+def test_the_reference_rate_is_the_first_floating_facilitys() -> None:
+    fixed = {
+        "rate_type": "FIXED",
+        "reference_rate": "TERM_SOFR",
+        "fixed_rate": Decimal(6),
+    }
+    regs = _terms(example_registers(), "rcf", fixed)
+    first = _frame(_inputs(regs))["BASE:2026"]
+    assert first["reference_rate"] == Cell(Decimal("0.0380"), basis="DRIVER")
+
+    sonia = RateDeck(
+        "sonia",
+        "2026-10-01",
+        (RateDeckYear("SONIA", 1, Decimal("0.04"), Decimal("0.05")),),
+    )
+    first = _frame(_inputs(deck=sonia))["BASE:2026"]
+    assert first["reference_rate"] == Cell(
+        None, "NOT_SOURCED", note="reference rate not in deck"
+    )
+    assert first["fac:tlb"].note == "reference rate not in deck"
+
+
+def test_interest_on_a_fraction_of_a_unit_of_debt_is_weighted() -> None:
+    debt = dict.fromkeys(_INTEREST_BEARING, Decimal(0)) | {"tlb": Decimal("0.5")}
+    first = _frame(_inputs(_at_anchor(example_registers(), debt)))["BASE:2026"]
+
+    assert first["wa_rate"] == Cell(Decimal("0.0655"), basis="CALCULATED")
+    assert first["cash_interest"] == Cell(Decimal("-0.03275"), basis="CALCULATED")
+
+    none = _frame(_inputs(replace(example_registers(), facilities=())))["BASE:2026"]
+    # With no debt register there is no total debt to take a base from.
+    assert none["interest_bearing_debt_opening"] == Cell(None, "COMPONENT_MISSING")
+    assert none["cash_interest"] == Cell(None, "COMPONENT_MISSING")
+
+
+def test_issuance_raises_debt_and_equity_is_no_cp_cf_movement() -> None:
+    request = example_request()
+    request["drivers"][0]["issuance"] = "100"
+    first = _frame(_inputs(request=request))["BASE:2026"]
+
+    assert first["debt_raised_net"] == Cell(Decimal(100 - 822 - 24), basis="CALCULATED")
+    assert first["equity_raised_net"] == Cell(
+        Decimal(0), basis="CALCULATED", note="not a CP-CF movement"
+    )
+
+
+def test_cash_and_debt_open_at_the_anchor_with_its_sources() -> None:
+    regs = example_registers()
+    ltm = _history(regs)["FY:FY2025"]
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    assert first["cash_opening"] == Cell(
+        Decimal(980), basis="CALCULATED", sources=ltm["cash_closing"].sources
+    )
+    assert first["debt_opening"] == Cell(
+        Decimal(14118), basis="CALCULATED", sources=ltm["total_debt"].sources
+    )
+    assert ltm["total_debt"].sources
+
+    first = _frame(_at_opening(_inputs(), "cash_closing", Cell(None, "NOT_STATED")))[
+        "BASE:2026"
+    ]
+    assert first["cash_opening"] == Cell(None, "COMPONENT_MISSING")
+
+
+def _without(inputs: ProjectionInputs, column_id: str, key: str) -> ProjectionInputs:
+    """`inputs` with the history column's `key` cell gone."""
+    history = {column: dict(cells) for column, cells in inputs.history.items()}
+    del history[column_id][key]
+    return replace(inputs, history=history)
+
+
+def test_an_absent_history_cell_is_no_figure() -> None:
+    regs = _terms(example_registers(), "tlb", {"rate_type": "NOT_STATED"})
+    for key in ("cash_interest", "debt_opening", "total_debt"):
+        first = _frame(_without(_inputs(regs), "LTM:LTM_Q2_2026", key))["BASE:2026"]
+        assert first["cash_interest"] == Cell(None, "COMPONENT_MISSING")
+    first = _frame(_without(_inputs(), "FY:FY2025", "cash_closing"))["BASE:2026"]
+    assert first["cash_opening"] == Cell(None, "COMPONENT_MISSING")
+    first = _frame(_without(_inputs(), "FY:FY2025", "total_debt"))["BASE:2026"]
+    assert first["debt_opening"] == Cell(None, "COMPONENT_MISSING")
+    first = _frame(_without(_inputs(), "FY:FY2025", "bu:digital"))["BASE:2026"]
+    assert "bu:digital" not in first
+
+    bare = _frame(replace(_inputs(), history={}))["BASE:2026"]
+    assert bare["cash_opening"] == Cell(None, "COMPONENT_MISSING")
+    assert bare["revenue"] == Cell(Decimal(11809), basis="DRIVER")
+    assert not any(key.startswith("fac:") for key in bare)
+
+
+def test_an_average_debt_below_one_still_implies_a_rate() -> None:
+    regs = _terms(example_registers(), "tlb", {"rate_type": "NOT_STATED"})
+    low = Cell(Decimal("-14105.5"), basis="CALCULATED")
+    first = _frame(_ltm(_inputs(regs), "debt_opening", low))["BASE:2026"]
+
+    assert _about(first["cash_interest"], -(2328 * Decimal(3448) + _FIXED_INTEREST))
+
+
+def test_terms_are_read_at_the_anchor() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            replace(row, spread_bps=Decimal(300))
+            if row.facility_id == "tlb" and row.period_id == "FY2025"
+            else row
+            for row in regs.facilities
+        ),
+    )
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    assert _about(first["cash_interest"], -(2328 * Decimal("0.068") + _FIXED_INTEREST))
+
+
+def _drop_year(request: dict[str, Any], year: str) -> dict[str, Any]:
+    """`request` without the periods, drivers and amortisation of `year`."""
+    period_id = f"FY{year}"
+    return request | {
+        "periods": [p for p in request["periods"] if p["period_id"] != period_id],
+        "drivers": [d for d in request["drivers"] if d["period_id"] != period_id],
+    }
+
+
+def test_the_deck_offset_counts_from_the_last_historical_fy() -> None:
+    first = _frame(_inputs(request=_drop_year(example_request(), "2026")))
+
+    assert first["BASE:2027"]["reference_rate"].value == Decimal("0.0340")
+
+
+def test_without_a_historical_fy_the_year_before_the_first_is_the_base() -> None:
+    regs = example_registers()
+    fiscal = {"FY2023", "FY2024", "FY2025"}
+    regs = replace(
+        regs,
+        periods=tuple(p for p in regs.periods if p.period_id not in fiscal),
+        accounts=tuple(a for a in regs.accounts if a.period_id not in fiscal),
+        segments=tuple(g for g in regs.segments if g.period_id not in fiscal),
+        addbacks=tuple(b for b in regs.addbacks if b.period_id not in fiscal),
+        kpis=tuple(k for k in regs.kpis if k.period_id not in fiscal),
+        facilities=tuple(f for f in regs.facilities if f.period_id not in fiscal),
+    )
+    request = _drop_year(example_request(), "2026")
+    columns, frame = projection(_inputs(regs, request))
+
+    assert columns[0].end_date == "2027-12-31"
+    assert frame["BASE:2027"]["reference_rate"].value == Decimal("0.0380")
+    interest = 2316 * Decimal("0.0655") + _FIXED_INTEREST
+    assert _about(frame["BASE:2027"]["cash_interest"], -interest)
+
+
+def test_a_fiscal_year_ending_in_september_projects_to_september() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(p, end_date="2025-09-30") if p.period_id == "FY2025" else p
+            for p in regs.periods
+        ),
+    )
+    columns, _ = projection(_inputs(regs))
+
+    assert columns[0].end_date == "2026-09-30"
+
+
+def test_corporate_and_eliminations_are_held_flat_even_in_a_slot() -> None:
+    inputs = _inputs()
+    slots = (SlotAllocation("DIVISION_1", ("las_vegas", "corporate_eliminations")),)
+    first = _frame(replace(inputs, slots=slots))["BASE:2026"]
+
+    assert first["bu:corporate_eliminations"] == Cell(
+        Decimal(-60), basis="PROJECTED", note="held flat"
+    )
+
+
+def test_with_no_history_nothing_opens() -> None:
+    regs = replace(example_registers(), periods=(), facilities=())
+    columns, frame = projection(_inputs(regs))
+    first = frame["BASE:2026"]
+
+    assert columns[0].end_date == "2026-12-31"
+    assert first["cash_opening"] == Cell(None, "COMPONENT_MISSING")
+    assert first["debt_opening"] == Cell(None, "COMPONENT_MISSING")
+    assert first["revenue"] == Cell(Decimal(11809), basis="DRIVER")
+
+
+def _opening_at(as_of: str) -> dict[str, Any]:
+    request = example_request()
+    request["opening"]["as_of_period_id"] = as_of
+    return request
+
+
+def test_the_projection_opens_at_cp_cf_s_opening_period() -> None:
+    # CP-CF opens at FY2025: the term loan's 2,328 then, not Q2 2026's 2,316.
+    first = _frame(_inputs())["BASE:2026"]
+
+    assert first["fac:tlb"].value == 2328 - 24
+    assert first["interest_bearing_debt_opening"].value == 14028
+    assert first["cash_opening"].value == 980
+    assert first["debt_opening"].value == 13858 + 260
+    # A quarter CP-CF names is used; a period no column has falls back to
+    # the latest FY end.
+    quarter = _frame(_inputs(request=_opening_at("Q2_2026")))["BASE:2026"]
+    assert quarter["fac:tlb"].value == 2316 - 24
+    assert quarter["cash_opening"].value == 1000
+    unknown = _frame(_inputs(request=_opening_at("FY2099")))["BASE:2026"]
+    assert unknown["fac:tlb"].value == 2328 - 24
 
 
 # Fix wave B (the adversary audit of b64facb7): H4, H5, H6, M1, M4, M5, L1-L4.
