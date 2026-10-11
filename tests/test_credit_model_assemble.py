@@ -16,7 +16,7 @@ from credit_model_fixture import (
     example_slots,
     with_figures,
 )
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from caos.calculators.credit_model._cells import CONTEXT
@@ -1294,6 +1294,14 @@ def _requests(draw: st.DrawFn) -> dict[str, Any]:
 
 @settings(max_examples=40, deadline=None)
 @given(regs=_registers(), request=_requests(), exclude=st.booleans())
+# Hypothesis's find: a year-end cash of "(0)" opened the next periods at -0.
+@example(
+    regs=with_figures(
+        example_registers(), "FY2023", {"cash_and_equivalents": Decimal("-0")}
+    ),
+    request=example_request(),
+    exclude=False,
+)
 def test_any_consistent_inputs_reconcile(
     regs: Cp1Registers, request: dict[str, Any], exclude: bool
 ) -> None:

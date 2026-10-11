@@ -5,7 +5,8 @@ debt totals, working capital, and the pro forma LTM.
 Outflows are negative in the frame. Each expense or outflow account in
 `OUTFLOW_METRICS` is read as minus its absolute value (`account_frame` does
 so row by row, before any sum), so a CP-1 run that wrote them positive reads
-the same; a signed flow keeps CP-1's sign. A line
+the same; a signed flow keeps CP-1's sign (cash taxes among them: a positive
+one is a refund, CP-1's sign convention). A line
 the host recomputes where CP-1 states its own figure (gross profit, EBIT,
 EBITDA, adjusted EBITDA) carries that figure as `stated`, noted where it
 differs beyond its rounding. Three lines are residuals the host calculates and
@@ -19,9 +20,12 @@ negative; the lines are the fixed keys (`cogs`, `da`, `capex` ...).
 
 Adjusted CFO moves the lease payments and interest CP-1 classes in financing
 into operating cash flow; where CP-1 has no row for either over the column's
-periods it counts as zero there and in FFO, noted on `cfo_adjusted`. An
-add-back with no row for the column's periods adds nothing to adjusted EBITDA
-(its `addback:` cell stays `NOT_SOURCED`); one whose row has no figure leaves
+periods it counts as zero there and in FFO. An add-back with no row for the
+column's periods adds nothing to adjusted EBITDA (its `addback:` cell stays
+`NOT_SOURCED`), and a PF adjustment to a facility the LTM has no balance for
+adds to nothing. Each such sum, and every figure built from it, is noted
+"not stated, treated as zero (<part>)" naming the part. One whose row has no
+figure leaves
 adjusted EBITDA `COMPONENT_MISSING`. With `exclude_unrealised`, an add-back
 with any row `UNREALIZED` or `NOT_STATED` is left out of adjusted EBITDA on
 every column (spec M7); CP-1's figure is kept as `stated` and compared only on
@@ -35,8 +39,11 @@ balance, so it keeps CP-1's sign (a refinancing that cuts interest is a
 positive adjustment to cash interest); a negative zero reads as zero. A PF
 facility adjustment for
 a facility the LTM has no balance for adds to zero. The PF-LTM's debt
-roll-forward opens at the LTM's opening, keeps the LTM's debt raised and
-non-cash movements, and closes at the pro forma total debt, so it foots.
+roll-forward opens at the LTM's opening, keeps its non-cash movements and
+closes at the pro forma total debt; its debt raised is `NOT_APPLICABLE` in
+this frame, and the layout's roll-forward reads the LTM's
+(`rollforward:debt_raised_net`) with the PF rows that enter total debt
+beneath, so the laid-out roll-forward foots.
 
 A debt balance that leaves something out (a facility in another currency,
 `debt.py`) passes its note to the balances read from it: net debt and the
@@ -65,6 +72,7 @@ from caos.calculators.credit_model._cells import (
     opening_date,
     periods_at,
     refs,
+    treated_as_zero,
 )
 from caos.calculators.credit_model.debt import (
     carried,
@@ -76,7 +84,6 @@ from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.methodology.model_inputs import Cp1Registers, PfAdjustmentRow
 
 _EXCLUDED = "excluded"
-_UNSTATED = "not stated, treated as zero"
 # The realisation statuses "exclude unrealised" leaves out (spec M7).
 UNREALISED = frozenset({"UNREALIZED", "NOT_STATED"})
 
@@ -151,8 +158,8 @@ def _line(accounts: dict[str, Cell], metric_id: str) -> Cell:
 def _stated(host: Cell, account: Cell, compare: bool = True) -> Cell:
     """`host` with CP-1's figure as `stated`: the account's own on a reported
     column, else the figure CP-1 stated for the derived one (the account's
-    value there is the host's sum); noted where it differs beyond its
-    rounding."""
+    value there is the host's sum); its own notes kept, and noted where it
+    differs beyond its rounding."""
     figure = account.value if account.basis == "REPORTED" else account.stated
     differs = (
         compare
@@ -160,7 +167,8 @@ def _stated(host: Cell, account: Cell, compare: bool = True) -> Cell:
         and host.value is not None
         and beyond_rounding(figure, host.value)
     )
-    return replace(host, stated=figure, note=DIFFERS if differs else None)
+    note = join_notes((host.note, DIFFERS if differs else None))
+    return replace(host, stated=figure, note=note)
 
 
 def excluded_addbacks(regs: Cp1Registers, exclude_unrealised: bool) -> frozenset[str]:
@@ -192,11 +200,9 @@ def _income(
     ebit = _stated(calc(((gross, 1), (opex, 1))), get("acct:ebit"))
     ebitda = _stated(calc(((ebit, 1), (da, -1))), get("acct:ebitda"))
     addbacks = [
-        (cell, 1)
+        (_zero_if_absent(cell, key), 1)
         for key, cell in accounts.items()
-        if key.startswith("addback:")
-        and key.removeprefix("addback:") not in excluded
-        and cell.reason != "NOT_SOURCED"
+        if key.startswith("addback:") and key.removeprefix("addback:") not in excluded
     ]
     adjusted = _stated(
         calc(((ebitda, 1), *addbacks)),
@@ -213,21 +219,23 @@ def _income(
     }
 
 
-def _zero_if_absent(cell: Cell) -> Cell:
-    """A financing line CP-1 has no row for counts as zero."""
-    return Cell(Decimal(0)) if cell.reason == "NOT_SOURCED" else cell
+def _zero_if_absent(cell: Cell, part: str) -> Cell:
+    """An add-back or financing line CP-1 has no row for counts as zero,
+    noted (`treated_as_zero`) so every figure built from it says so."""
+    if cell.reason != "NOT_SOURCED":
+        return cell
+    return Cell(Decimal(0), note=treated_as_zero(part))
 
 
 def _waterfall(get: _Get, adjusted: Cell) -> dict[str, Cell]:
     """Adjusted CFO, FFO and its residual, and free cash flow."""
-    lease = get("lease_cash_not_in_ebitda")
-    interest = get("acct:interest_paid_in_financing")
-    unstated = "NOT_SOURCED" in (lease.reason, interest.reason)
-    lease, interest = _zero_if_absent(lease), _zero_if_absent(interest)
-    cfo = calc(
-        ((get("cfo_reported"), 1), (lease, 1), (interest, 1)),
-        _UNSTATED if unstated else None,
+    lease = _zero_if_absent(
+        get("lease_cash_not_in_ebitda"), "lease_payments_in_financing"
     )
+    interest = _zero_if_absent(
+        get("acct:interest_paid_in_financing"), "interest_paid_in_financing"
+    )
+    cfo = calc(((get("cfo_reported"), 1), (lease, 1), (interest, 1)))
     funds = [
         (adjusted, 1),
         (get("cash_interest"), 1),
@@ -278,7 +286,7 @@ def _net_cash(get: _Get, fcf: Cell, opening: Cell) -> dict[str, Cell]:
 
 def _opening_cash(regs: Cp1Registers, column: Column) -> Cell:
     """CP-1's cash at the day before the column starts: the first period
-    ending then with a figure, in register order."""
+    ending then with a figure, in register order; a negative zero as zero."""
     for period_id in periods_at(regs, None, opening_date(column)):
         for row in regs.accounts:
             if (
@@ -286,15 +294,19 @@ def _opening_cash(regs: Cp1Registers, column: Column) -> Cell:
                 and row.period_id == period_id
                 and row.value is not None
             ):
-                return Cell(row.value, basis="REPORTED", sources=refs([row.source]))
+                value = no_negative_zero(row.value)
+                return Cell(value, basis="REPORTED", sources=refs([row.source]))
     return Cell(None, "NOT_SOURCED")
 
 
 def _days_ratio(balance: Cell, flow: Cell, days: Cell) -> Cell:
-    """`balance / flow x days`; `ZERO_OR_NEGATIVE_DENOMINATOR` for a flow at
-    or below zero."""
+    """`balance / flow x days`; `COMPONENT_MISSING` with the missing inputs'
+    notes; `ZERO_OR_NEGATIVE_DENOMINATOR` for a flow at or below zero."""
     if balance.value is None or flow.value is None or days.value is None:
-        return Cell(None, "COMPONENT_MISSING")
+        missing = (part for part in (balance, flow, days) if part.value is None)
+        return Cell(
+            None, "COMPONENT_MISSING", note=join_notes(tuple(p.note for p in missing))
+        )
     if flow.value <= 0:
         return Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")
     sources = refs([*balance.sources, *flow.sources])
@@ -350,7 +362,9 @@ def _column(
     for addback in excluded:
         key = f"addback:{addback}"
         if key in cells:
-            cells[key] = replace(cells[key], note=_EXCLUDED)
+            cells[key] = replace(
+                cells[key], note=join_notes((cells[key].note, _EXCLUDED))
+            )
     cells.update(debt)
     cells.update({key: _line(accounts, metric) for key, metric in _LINES.items()})
 
@@ -427,9 +441,9 @@ def _pf_add(key: str, base: Cell | None, adjustments: list[PfAdjustmentRow]) -> 
     unsourced = base is not None and base.reason == "NOT_SOURCED"
     start = base
     if start is None or (unsourced and key.startswith("fac:")):
-        start = Cell(Decimal(0))
+        start = Cell(Decimal(0), note=treated_as_zero(key))
     if start.value is None:
-        return Cell(None, "COMPONENT_MISSING")
+        return Cell(None, "COMPONENT_MISSING", note=start.note)
     total = start.value + sum(_pf_value(a) for a in adjustments)
     sources = refs([*start.sources, *(a.source for a in adjustments)])
     kept = [n for n in notes_of(start.note) if n in {FOREIGN, SIGN_NORMALISED}]

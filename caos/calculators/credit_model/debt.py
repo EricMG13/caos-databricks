@@ -17,12 +17,19 @@ validator reads the same column).
 
 The roll-forward opens at the stack on the day before the column starts (its
 end date less its days) and closes at the column's own; `debt_non_cash` is the
-residual after the net debt raised in the cash flow statement. Where the
+residual after the net debt raised in the cash flow statement, noted with
+what its closing or opening leaves out. Where the
 opening date has facility rows but none for a facility the closing stack
 counts in total debt, the opening is `COMPONENT_MISSING`, noted "opening
-stack incomplete" (a part-written stack is no opening balance); a facility
+stack incomplete" (a part-written stack is no opening balance). A facility
 whose every row is in a period ending after the opening date is a new issue,
-nil at the opening, and no gap.
+nil at the opening, only where CP-1's `total_debt` stated at the opening date
+agrees, within its rounding, with the opening stack less its finance leases;
+otherwise CP-1 left out the facility's history, and the opening is that stated
+figure plus those finance leases, noted "facility history incomplete" (as is
+the residual read from it). Without a stated figure, or with a facility in
+another currency left out of the opening (CP-1's figure is then on another
+footing), the opening is `COMPONENT_MISSING`, noted the same.
 
 Pure: Decimal only, no I/O, no rounding.
 """
@@ -46,6 +53,7 @@ from caos.calculators.credit_model._cells import (
     opening_date,
     periods_at,
     refs,
+    zeroed,
 )
 from caos.calculators.credit_model.frame import Cell, Column, Frame, SourceRef
 from caos.methodology.model_inputs import Cp1Registers, FacilityRow, iso_date
@@ -66,6 +74,7 @@ _DEBT_ADJUSTMENT = "DEBT ADJUSTMENT"
 EXCLUDES_FOREIGN = "excludes facility in another currency"
 EXCLUDES_UNALLOCATED = "excludes unallocated CP-CF movements"
 OPENING_INCOMPLETE = "opening stack incomplete"
+HISTORY_INCOMPLETE = "facility history incomplete"
 # The notes a figure passes to every figure read from it: what it leaves out.
 _CARRIED = (EXCLUDES_FOREIGN, EXCLUDES_UNALLOCATED)
 
@@ -92,9 +101,12 @@ def notes_of(note: str | None) -> tuple[str, ...]:
 
 def carried(cells: Iterable[Cell]) -> str | None:
     """What the cells leave out ("excludes facility in another currency",
-    "excludes unallocated CP-CF movements"), for a figure read from them."""
-    found = {part for cell in cells for part in notes_of(cell.note)}
-    return join_notes(tuple(note for note in _CARRIED if note in found))
+    "excludes unallocated CP-CF movements", then each part taken as nothing:
+    `zeroed`), for a figure read from them."""
+    kept = list(cells)
+    found = {part for cell in kept for part in notes_of(cell.note)}
+    leaves = (note for note in _CARRIED if note in found)
+    return join_notes((*leaves, *zeroed(kept)))
 
 
 def is_operating_lease(row: FacilityRow) -> bool:
@@ -252,20 +264,70 @@ def _opening_debt(
 ) -> Cell:
     """Total debt at the opening `day`; `COMPONENT_MISSING`, noted, where the
     opening has rows but none for a facility in the closing's total debt that
-    was issued by then."""
+    was issued by then; checked against CP-1's stated figure
+    (`_without_history`) where a facility has no row by then."""
     currency = regs.currency
     closing = {
         facility_id
         for facility_id, row in stack.items()
         if "total_debt" in facility_keys(row, currency)
-        and not _issued_after(regs, facility_id, day)
     }
-    if opening and not closing <= opening.keys():
+    issued = {f for f in closing if _issued_after(regs, f, day)}
+    if opening and not closing - issued <= opening.keys():
         return Cell(None, "COMPONENT_MISSING", note=OPENING_INCOMPLETE)
     total = _stack_totals(
         ((row, row.carrying_value) for row in opening.values()), currency
     )["total_debt"]
-    return _excluding(total, "total_debt", left_out(opening.values(), currency))
+    total = _excluding(total, "total_debt", left_out(opening.values(), currency))
+    if not opening or not issued or total.value is None:
+        return total
+    return _without_history(regs, day, total, opening)
+
+
+def _stated_at(regs: Cp1Registers, metric_id: str, day: str | None) -> Cell:
+    """CP-1's figure for the account at `day`: the first row with one, of a
+    period ending that day, in register order; `NOT_SOURCED` without one."""
+    for period_id in periods_at(regs, None, day):
+        for row in regs.accounts:
+            if (row.metric_id, row.period_id) == (metric_id, period_id) and (
+                row.value is not None
+            ):
+                value = no_negative_zero(row.value)
+                return Cell(value, basis="REPORTED", sources=refs([row.source]))
+    return ABSENT
+
+
+def _without_history(
+    regs: Cp1Registers, day: str | None, total: Cell, opening: dict[str, FacilityRow]
+) -> Cell:
+    """The opening `total`, where facilities in the closing stack have no row
+    by `day`: kept (they are new issues) where CP-1's `total_debt` at `day`
+    agrees with it less its finance leases; else that figure plus the leases,
+    noted `HISTORY_INCOMPLETE`; `COMPONENT_MISSING`, noted, without a stated
+    figure or where `total` leaves out a facility in another currency."""
+    stated = _stated_at(regs, "total_debt", day)
+    missing = Cell(None, "COMPONENT_MISSING", note=HISTORY_INCOMPLETE)
+    if stated.value is None or EXCLUDES_FOREIGN in notes_of(total.note):
+        return missing
+    leases = [
+        row
+        for row in opening.values()
+        if row.lease_classification == "FINANCE_LEASE"
+        and "total_debt" in facility_keys(row, regs.currency)
+    ]
+    lease_cells = [(_fac_cell(row, regs.currency), 1) for row in leases]
+    in_leases = calc(lease_cells)
+    if total.value is None or in_leases.value is None:
+        return missing
+    if not beyond_rounding(stated.value, total.value - in_leases.value):
+        return total
+    return calc([(stated, 1), *lease_cells], HISTORY_INCOMPLETE)
+
+
+def _history(cell: Cell) -> tuple[str, ...]:
+    """`HISTORY_INCOMPLETE` where the cell is noted so: a figure read from
+    it keeps it."""
+    return (HISTORY_INCOMPLETE,) if HISTORY_INCOMPLETE in notes_of(cell.note) else ()
 
 
 def _column_debt(
@@ -307,7 +369,10 @@ def _column_debt(
         undrawn_rcf=calc(undrawn),
         debt_opening=opened,
         debt_closing=totals["total_debt"],
-        debt_non_cash=calc(((total, 1), (opened, -1), (raised, -1)), RESIDUAL),
+        debt_non_cash=calc(
+            ((total, 1), (opened, -1), (raised, -1)),
+            join_notes((RESIDUAL, *_history(opened), carried((total, opened)))),
+        ),
     )
     return cells
 
