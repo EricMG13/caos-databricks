@@ -6,7 +6,8 @@ Outflows are negative in the frame. Each expense or outflow account in
 `OUTFLOW_METRICS` is read as minus its absolute value (`account_frame` does
 so row by row, before any sum), so a CP-1 run that wrote them positive reads
 the same; a signed flow keeps CP-1's sign (cash taxes among them: a positive
-one is a refund, CP-1's sign convention). A line
+one is a refund, CP-1's sign convention, served noted `TAX_REFUND`, where a
+model that wrote its outflow positive shows). A line
 the host recomputes where CP-1 states its own figure (gross profit, EBIT,
 EBITDA, adjusted EBITDA) carries that figure as `stated`, noted where it
 differs beyond its rounding. Three lines are residuals the host calculates and
@@ -84,6 +85,8 @@ from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.methodology.model_inputs import Cp1Registers, PfAdjustmentRow
 
 _EXCLUDED = "excluded"
+# A positive cash tax: CP-1 writes inflows positive, so it is a refund.
+TAX_REFUND = "positive: read as a tax refund"
 # The realisation statuses "exclude unrealised" leaves out (spec M7).
 UNREALISED = frozenset({"UNREALIZED", "NOT_STATED"})
 
@@ -153,6 +156,14 @@ _Get = Callable[[str], Cell]
 def _line(accounts: dict[str, Cell], metric_id: str) -> Cell:
     """The account's cell (`account_frame` reads an outflow negative)."""
     return accounts.get(f"acct:{metric_id}", ABSENT)
+
+
+def _refund(taxes: Cell) -> Cell:
+    """The cash taxes, noted `TAX_REFUND` where positive (a refund, as CP-1
+    signs it)."""
+    if taxes.value is None or taxes.value <= 0:
+        return taxes
+    return replace(taxes, note=join_notes((taxes.note, TAX_REFUND)))
 
 
 def _stated(host: Cell, account: Cell, compare: bool = True) -> Cell:
@@ -367,6 +378,7 @@ def _column(
             )
     cells.update(debt)
     cells.update({key: _line(accounts, metric) for key, metric in _LINES.items()})
+    cells["cash_taxes"] = _refund(cells["cash_taxes"])
 
     def get(key: str) -> Cell:
         if key.startswith("acct:"):

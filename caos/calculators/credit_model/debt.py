@@ -24,7 +24,9 @@ counts in total debt, the opening is `COMPONENT_MISSING`, noted "opening
 stack incomplete" (a part-written stack is no opening balance). A facility
 whose every row is in a period ending after the opening date is a new issue,
 nil at the opening, only where CP-1's `total_debt` stated at the opening date
-agrees, within its rounding, with the opening stack less its finance leases;
+agrees, within its rounding, with the opening stack less its finance leases
+(never a `DEBT ADJUSTMENT` row, which CP-1 counts in total debt however it
+is classified, as the closing does);
 otherwise CP-1 left out the facility's history, and the opening is that stated
 figure plus those finance leases, noted "facility history incomplete" (as is
 the residual read from it). Without a stated figure, or with a facility in
@@ -114,6 +116,16 @@ def is_operating_lease(row: FacilityRow) -> bool:
     ADJUSTMENT` row (one is debt however it is classified)."""
     return (
         row.lease_classification == "OPERATING_LEASE"
+        and row.facility_type != _DEBT_ADJUSTMENT
+    )
+
+
+def _finance_lease(row: FacilityRow) -> bool:
+    """Whether the row is a finance lease in total debt's leases: classified
+    so and not a `DEBT ADJUSTMENT` row (CP-1 counts every one in total debt,
+    however it is classified)."""
+    return (
+        row.lease_classification == "FINANCE_LEASE"
         and row.facility_type != _DEBT_ADJUSTMENT
     )
 
@@ -312,8 +324,7 @@ def _without_history(
     leases = [
         row
         for row in opening.values()
-        if row.lease_classification == "FINANCE_LEASE"
-        and "total_debt" in facility_keys(row, regs.currency)
+        if _finance_lease(row) and "total_debt" in facility_keys(row, regs.currency)
     ]
     lease_cells = [(_fac_cell(row, regs.currency), 1) for row in leases]
     in_leases = calc(lease_cells)
@@ -344,12 +355,7 @@ def _column_debt(
     excluded = left_out(stack.values(), currency)
     raw = _stack_totals(((row, row.carrying_value) for row in stack.values()), currency)
     totals = {key: _excluding(cell, key, excluded) for key, cell in raw.items()}
-    leases = [
-        row
-        for row in stack.values()
-        if row.lease_classification == "FINANCE_LEASE"
-        and row.facility_type != _DEBT_ADJUSTMENT
-    ]
+    leases = [row for row in stack.values() if _finance_lease(row)]
     stated = _account(accounts, "total_debt")
     total = _excluding(
         _stated_total(raw["total_debt"], leases, stated, currency),
