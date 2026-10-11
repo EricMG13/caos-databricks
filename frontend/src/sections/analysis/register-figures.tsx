@@ -14,6 +14,7 @@ import {
   type ChartSeries,
   type Datum,
   type RangeRow,
+  type ScatterPoint,
   type WaterfallStep,
 } from "@/charts";
 import { bridgeOf } from "@/charts/bridge";
@@ -1195,6 +1196,55 @@ export function scenarioMoves(handoff: HandoffView): Figure[] {
   );
 }
 
+/** CP-3D's issuer curve (`T3E.3`): a point a security, its `spread/yield`
+    against its `maturity/call date`, coloured by `seniority`, a figure a unit
+    its values are written in. The date is passed as written past its
+    citation markers: the chart places only the spellings it reads. A
+    security stated twice is one point, each cell a gap (a value) or an
+    unread date naming each text where they differ. */
+export function spreadCurve(handoff: HandoffView): Figure[] {
+  const rows = registerRows(handoff, "CP-3D", "T3E.3");
+  if (!rows?.length) return [];
+  const base = { key: "spread-curve", table: "T3E.3", title: "Spread against maturity" };
+  const unitOf = (row: Row) => suffixOf(row["spread/yield"]);
+  const securityOf = (row: Row) => text(row, "security_id").trim() || "security_id not stated";
+  const written = (same: readonly Row[], column: string) =>
+    restatement(same, column) ?? unmarked(text(same[0]!, column)).trim();
+  // A point a security, a row at most.
+  return perGroup(rows, base, bySuffix(unitOf), 1, (entries, head) => {
+    const securities = [...groupBy(entries, ({ row }) => securityOf(row))].map(([label, same]) => ({
+      label,
+      first: same[0]!.index,
+      same: same.map(({ row }) => row),
+    }));
+    const points = securities.map(({ label, first, same }): ScatterPoint => ({
+      key: `${first}`,
+      label,
+      at: written(same, "maturity/call date"),
+      value: pointOf(same, "spread/yield", datum),
+      group: written(same, "seniority") || "seniority not stated",
+      origin: "model",
+    }));
+    const said = points.map(
+      (point) => `${point.label} ${point.at || "undated"} ${say(point.value)}`,
+    );
+    return {
+      ...head,
+      kind: "scatter",
+      summary: `spread/yield as served, by maturity/call date: ${said.join("; ")}.`,
+      points,
+      xLabel: "maturity/call date",
+      pointLabel: "security_id",
+      valueLabel: "spread/yield",
+      groupLabel: "seniority",
+      sourceOf: (selection) => {
+        const same = securities[selection.index]?.same;
+        return same ? sourcesOf(same, ["curve residual", "explanation status"]) : null;
+      },
+    };
+  });
+}
+
 /** A trigger's label, which is also its identity: "Leverage (Issuer,
     downgrade)", its stated direction read trimmed and casefolded past its
     citation markers, so an upgrade and a downgrade trigger on one metric
@@ -1459,6 +1509,7 @@ export function registerFigures(handoff: HandoffView): Figure[] {
     ...rateSensitivities(handoff),
     ...refinancingWall(handoff),
     ...lmeExposure(handoff),
+    ...spreadCurve(handoff),
     ...scenarioMoves(handoff),
     ...valueAllocation(handoff),
     ...recoveryByClass(handoff),

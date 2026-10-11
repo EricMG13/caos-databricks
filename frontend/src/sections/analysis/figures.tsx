@@ -12,6 +12,7 @@ import {
   LineChart,
   ProvenanceKeyed,
   RangeStripChart,
+  ScatterChart,
   StackedBarChart,
   Swatch,
   WaterfallChart,
@@ -866,6 +867,9 @@ function markOf(figure: Figure, key: string): string | undefined {
       return key === "marker" ? figure.markerLabel : MARK_WORD[key];
     case "dumbbell":
       return key === "from" ? figure.fromLabel : figure.toLabel;
+    case "scatter":
+      // A point's series is its group, as written.
+      return key;
     default:
       return unreachable(figure);
   }
@@ -918,6 +922,17 @@ function Chart({
           categoryLabel={figure.categoryLabel}
         />
       );
+    case "scatter":
+      return (
+        <ScatterChart
+          {...common}
+          points={figure.points}
+          xLabel={figure.xLabel}
+          pointLabel={figure.pointLabel}
+          valueLabel={figure.valueLabel}
+          groupLabel={figure.groupLabel}
+        />
+      );
     case "line":
       return <LineChart {...common} categories={figure.categories} series={figure.series} />;
     case "diverging":
@@ -954,7 +969,7 @@ type KeyShape = "fill" | "line" | "rule" | "dot";
 function shapesOf(figure: Figure): KeyShape[] {
   if (figure.kind === "line") return ["line"];
   if (figure.kind === "bullet") return ["fill", "rule"];
-  if (figure.kind === "dumbbell") return ["dot"];
+  if (figure.kind === "dumbbell" || figure.kind === "scatter") return ["dot"];
   if (figure.kind !== "range") return ["fill"];
   const declares = (statistics: readonly (keyof RangeRow)[]) =>
     figure.ranges.some((row) => statistics.some((statistic) => row[statistic]));

@@ -12,6 +12,7 @@ import type {
   DumbbellRow,
   Orientation,
   RangeRow,
+  ScatterPoint,
   WaterfallStep,
 } from "@/charts";
 import { formatDecimal, fromScaled, placesOf, toScaled } from "@/charts/decimal";
@@ -176,6 +177,18 @@ export interface DumbbellFigure extends FigureBase {
   categoryLabel?: string;
 }
 
+/** A scatter's points, each a value against the date it is served with. */
+export interface ScatterFigure extends FigureBase {
+  kind: "scatter";
+  points: ScatterPoint[];
+  /** What the dates are, naming the time axis. */
+  xLabel: string;
+  /** What the table twin calls the points, their values and their groups. */
+  pointLabel?: string;
+  valueLabel?: string;
+  groupLabel?: string;
+}
+
 /** One figure: what it shows, drawn by which chart, from which table. Each
     kind carries its own rows, so a figure without them does not build. */
 export type Figure =
@@ -186,7 +199,8 @@ export type Figure =
   | WaterfallFigure
   | BulletFigure
   | RangeFigure
-  | DumbbellFigure;
+  | DumbbellFigure
+  | ScatterFigure;
 
 /** A figure past this many marks is stated, not drawn, and past this many
     figures a module's are stated too. The tables are model-authored and may
