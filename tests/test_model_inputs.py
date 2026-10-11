@@ -1167,6 +1167,27 @@ def test_a_period_naming_one_component_twice_is_refused() -> None:
     assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
 
 
+def test_components_nest_at_most_four_deep_and_never_in_a_cycle() -> None:
+    four = [("P0", "P1"), ("P1", "P2"), ("P2", "P3"), ("P3", "P4"), ("P4", "")]
+    assert len(cp1_registers(_chained(*four)).periods) == 5
+    # Wide and shared but shallow: many components, one named by two.
+    wide = [
+        ("W", "; ".join(f"L{n}" for n in range(10))),
+        *((f"L{n}", "D" if n < 2 else "") for n in range(10)),
+        ("D", ""),
+    ]
+    assert len(cp1_registers(_chained(*wide)).periods) == 12
+    for links in (
+        [*four[:-1], ("P4", "P5"), ("P5", "")],
+        [("A", "B"), ("B", "A")],
+        [("A", "A")],
+        [("A", "B"), ("B", "C"), ("C", "B")],
+    ):
+        with pytest.raises(Refusal) as caught:
+            cp1_registers(_chained(*links))
+        assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
 def test_at_most_two_hundred_periods_are_read() -> None:
     rows = [_period(f"P{n}", "period_end", "2026", None) for n in range(201)]
 
@@ -1298,6 +1319,50 @@ def test_a_spread_written_as_a_percent_prices_at_the_implied_rate_noted(
 
     assert facility.spread_bps == Decimal(written)  # never read as 2.25 bp priced
     assert rate == (implied, "term out of range")
+
+
+def _in_fiscal_year(year: str, end: str) -> tuple[TableCell, ...]:
+    """An FY period row ending on `end`, its fiscal year written `year`."""
+    row = list(_period("FY_X", "fy", year, None))
+    row[PERIOD_COLUMNS.index("start_date")] = NULL
+    row[PERIOD_COLUMNS.index("end_date")] = cell(end)
+    row[PERIOD_COLUMNS.index("day_count")] = NULL
+    return tuple(row)
+
+
+@pytest.mark.parametrize(
+    ("year", "end"),
+    [
+        ("FY1000", "2025-12-31"),
+        ("FY2027", "2025-12-31"),
+        ("FY2023", "2025-12-31"),
+        ("1899", "1900-06-30"),
+        ("FY2201", "2200-12-31"),
+    ],
+)
+def test_a_fiscal_year_far_from_its_end_date_or_out_of_range_is_refused(
+    year: str, end: str
+) -> None:
+    with pytest.raises(Refusal) as caught:
+        cp1_registers(_with_periods(_in_fiscal_year(year, end)))
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+@pytest.mark.parametrize(
+    ("year", "end"),
+    [
+        ("FY2026", "2025-12-31"),  # a fiscal year named for the year it ends in
+        ("FY2024", "2025-03-31"),  # or the year it starts in
+        ("FY2025", "2025-12-31"),
+        ("FY2025/26", "2026-03-31"),
+        ("1900", "1900-12-31"),
+        ("2200", "2200-12-31"),
+    ],
+)
+def test_a_fiscal_year_within_a_year_of_its_end_date_reads(year: str, end: str) -> None:
+    (period,) = cp1_registers(_with_periods(_in_fiscal_year(year, end))).periods
+
+    assert period.fiscal_year == year
 
 
 @pytest.mark.parametrize("year", ["FY1000", "FY2201"])
