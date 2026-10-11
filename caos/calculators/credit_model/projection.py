@@ -476,7 +476,7 @@ def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
             row, ctx.deck, period.case, period.year - ctx.base_year, ctx.implied.value
         )
         refinanced = REFINANCED if _matures_in(ctx, row, period.year) else None
-        note = join_notes(rate_note, amortisation_note, refinanced)
+        note = join_notes((rate_note, amortisation_note, refinanced))
         balances[row.facility_id] = closing
         cells[key] = _balance_cell(closing, note)
         if payment_rank(row) in SECURED_RANKS:
@@ -712,7 +712,7 @@ def _secured(ctx: _Context, schedule: _Schedule, debt: Cell) -> Cell:
     secured = schedule.secured
     if secured.value is None:
         return secured
-    return Cell(secured.value, basis=secured.basis, note=join_notes(*notes))
+    return Cell(secured.value, basis=secured.basis, note=join_notes(notes))
 
 
 def _undrawn(
