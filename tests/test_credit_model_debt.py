@@ -9,6 +9,7 @@ import pytest
 from credit_model_fixture import example_registers, with_figures
 
 from caos.calculators.credit_model.debt import (
+    HISTORY_INCOMPLETE,
     PAYMENT_RANKS,
     carried,
     debt_frame,
@@ -21,7 +22,7 @@ from caos.calculators.credit_model.debt import (
 from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.calculators.credit_model.history import account_frame, historical_columns
 from caos.calculators.credit_model.statements import statement_frame
-from caos.methodology.model_inputs import Cp1Registers, FacilityRow
+from caos.methodology.model_inputs import AccountRow, Cp1Registers, FacilityRow
 
 # CP-MODEL's SENIORITY_STATUSES and CP-1's secured_status values.
 _SENIORITIES = (
@@ -505,14 +506,99 @@ def test_left_out_names_the_totals_a_row_in_another_currency_would_enter() -> No
     assert left_out(regs.facilities, "USD") == frozenset()
 
 
+def _stated_debt(regs: Cp1Registers, figure: str | None) -> Cp1Registers:
+    """`regs` with CP-1's total debt at 30 June 2025 (Q2 and H1 2025) set to
+    `figure`, or without those rows."""
+    at = {"Q2_2025", "H1_2025"}
+
+    def opening(a: AccountRow) -> bool:
+        return a.metric_id == "total_debt" and a.period_id in at
+
+    if figure is None:
+        return replace(regs, accounts=tuple(a for a in regs.accounts if not opening(a)))
+    return replace(
+        regs,
+        accounts=tuple(
+            replace(a, value=Decimal(figure)) if opening(a) else a
+            for a in regs.accounts
+        ),
+    )
+
+
+_HISTORY = "facility history incomplete"
+_EARLY = ("FY2023", "Q1_2024", "Q2_2024", "Q3_2024", "Q4_2024", "FY2024")
+
+
+def test_a_facility_without_history_opens_at_cp1s_stated_total() -> None:
+    """The adversary's MAJOR-3 probe: the term loan written only from Q3 2025
+    on. CP-1 states 13870 at 30 June 2025 (no lease) and the facilities less
+    the 260 finance lease sum to 11530: the loan is no new issue."""
+    regs = _drop(example_registers(), "tlb", *_EARLY, "Q1_2025", "Q2_2025")
+    ltm = _debt(regs, historical_columns(regs))["LTM:LTM_Q2_2026"]
+    assert HISTORY_INCOMPLETE == _HISTORY
+
+    opening = ltm["debt_opening"]
+    assert (opening.value, opening.basis, opening.note) == (
+        Decimal(13870 + 260),
+        "CALCULATED",
+        _HISTORY,
+    )
+    assert {s.cell_text for s in opening.sources} == {"13870", "260"}
+    assert ltm["debt_closing"].value == 14106
+    assert ltm["debt_non_cash"].value == 0
+    assert ltm["debt_non_cash"].note == f"residual; {_HISTORY}"
+
+    # No stated total at the opening either: missing, noted.
+    unstated = _debt(_stated_debt(regs, None), historical_columns(regs))
+    assert unstated["LTM:LTM_Q2_2026"]["debt_opening"] == Cell(
+        None, "COMPONENT_MISSING", note=_HISTORY
+    )
+    # A facility in another currency at the opening: the stated total is on
+    # another footing, so missing, noted.
+    eur = replace(
+        regs,
+        facilities=tuple(
+            replace(f, currency="EUR") if f.facility_id == "sun29" else f
+            for f in regs.facilities
+        ),
+    )
+    assert _debt(eur, historical_columns(eur))["LTM:LTM_Q2_2026"][
+        "debt_opening"
+    ] == Cell(None, "COMPONENT_MISSING", note=_HISTORY)
+    # An opening row without a value: the total is missing however CP-1
+    # states it.
+    blank = replace(
+        regs,
+        facilities=tuple(
+            replace(f, carrying_value=None)
+            if (f.facility_id, f.period_id) == ("ssn29", "Q2_2025")
+            else f
+            for f in regs.facilities
+        ),
+    )
+    assert _debt(blank, historical_columns(blank))["LTM:LTM_Q2_2026"][
+        "debt_opening"
+    ] == Cell(None, "COMPONENT_MISSING")
+    # Where CP-1's stated total agrees, the loan is a new issue, nil then.
+    agreed = _debt(_stated_debt(regs, "11530"), historical_columns(regs))
+    assert agreed["LTM:LTM_Q2_2026"]["debt_opening"].value == 14130 - 2340
+    assert agreed["LTM:LTM_Q2_2026"]["debt_opening"].note is None
+    # Within the stated figure's rounding (to the nearest hundred) agrees.
+    rounded = _debt(_stated_debt(regs, "1.15E+4"), historical_columns(regs))
+    assert rounded["LTM:LTM_Q2_2026"]["debt_opening"].value == 14130 - 2340
+
+
 def test_a_facility_first_issued_inside_the_column_opens_at_nil() -> None:
-    early = ("FY2023", "Q1_2024", "Q2_2024", "Q3_2024", "Q4_2024", "FY2024")
+    early = _EARLY
     regs = _drop(example_registers(), "ssn29", *early, "Q1_2025", "Q2_2025")
+    # CP-1's total at the opening agrees: the notes were issued after it.
+    regs = _stated_debt(regs, "11870")
     ltm = _debt(regs, historical_columns(regs))["LTM:LTM_Q2_2026"]
 
     assert ltm["debt_opening"].value == 14130 - 2000
     assert ltm["debt_opening"].note is None
-    assert ltm["debt_non_cash"].value is not None
+    # The notes issued in the period, not raised in its cash flow statement.
+    assert ltm["debt_non_cash"].value == 2000
     # With an earlier row, a facility missing at the opening is still a gap.
     gap = _drop(example_registers(), "ssn29", *early[1:], "Q1_2025", "Q2_2025")
     ltm = _debt(gap, historical_columns(gap))["LTM:LTM_Q2_2026"]
@@ -532,3 +618,23 @@ def test_a_facility_written_as_a_negative_zero_is_zero() -> None:
 
     value = q2["fac:ssn29"].value
     assert value is not None and (str(value), value.is_signed()) == ("0", False)
+
+
+def test_debt_non_cash_keeps_what_its_closing_leaves_out() -> None:
+    """The adversary's MINOR-2: ssn31 in USD at the opening and in EUR at
+    the close; the residual names the facility it leaves out."""
+    regs = example_registers()
+    eur = replace(
+        regs,
+        facilities=tuple(
+            replace(f, currency="EUR")
+            if (f.facility_id, f.period_id) == ("ssn31", "Q2_2026")
+            else f
+            for f in regs.facilities
+        ),
+    )
+    q2 = _debt(eur, historical_columns(eur))["Q:Q2_2026"]
+    assert q2["debt_closing"].note == _EXCLUDES_FOREIGN
+    assert q2["debt_opening"].note is None
+    assert q2["debt_non_cash"].value == -1000
+    assert q2["debt_non_cash"].note == f"residual; {_EXCLUDES_FOREIGN}"

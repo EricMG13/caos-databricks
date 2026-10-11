@@ -10,6 +10,12 @@ from credit_model_fixture import example_registers, with_figures
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from caos.calculators.credit_model import statements
+from caos.calculators.credit_model._cells import (
+    SIGN_NORMALISED,
+    UNSPANNED,
+    treated_as_zero,
+)
 from caos.calculators.credit_model.frame import Cell, Column, Frame, SourceRef
 from caos.calculators.credit_model.history import (
     OUTFLOW_METRICS,
@@ -691,7 +697,9 @@ def test_financing_lease_and_interest_without_rows_count_zero_in_cfo_adjusted() 
     regs = example_registers()
     one = _cells(_without(regs, "interest_paid_in_financing", "Q2_2026"), "Q2 26")
     assert one["cfo_adjusted"] == replace(
-        one["cfo_adjusted"], value=Decimal(787), note="not stated, treated as zero"
+        one["cfo_adjusted"],
+        value=Decimal(787),
+        note=treated_as_zero("interest_paid_in_financing"),
     )
     assert one["ffo"].value == 773
     both = _cells(
@@ -704,7 +712,10 @@ def test_financing_lease_and_interest_without_rows_count_zero_in_cfo_adjusted() 
     )
     assert both["lease_cash_not_in_ebitda"] == Cell(None, "NOT_SOURCED")
     assert both["cfo_adjusted"].value == 791
-    assert both["cfo_adjusted"].note == "not stated, treated as zero"
+    assert both["cfo_adjusted"].note == (
+        f"{treated_as_zero('lease_payments_in_financing')}; "
+        f"{treated_as_zero('interest_paid_in_financing')}"
+    )
     assert both["ffo"].value == 791 - 14
     _equal(both, ("ffo", "working_capital_change"), ("cfo_adjusted",))
     assert _cells(regs, "Q2 26")["cfo_adjusted"].note is None
@@ -789,7 +800,7 @@ def test_an_all_absent_financing_line_with_a_stated_figure_counts_zero() -> None
         None, "NOT_SOURCED", stated=Decimal(-5)
     )
     assert ltm["cfo_adjusted"].value == 3029 - 16
-    assert ltm["cfo_adjusted"].note == "not stated, treated as zero"
+    assert ltm["cfo_adjusted"].note == treated_as_zero("interest_paid_in_financing")
 
 
 def test_an_excluded_addback_absent_on_a_column_leaves_nothing_out() -> None:
@@ -891,7 +902,10 @@ def test_a_pf_facility_with_no_ltm_row_starts_from_zero() -> None:
     pf = made[1]["PF:LTM_Q2_2026"]
 
     assert pf["fac:ssn33"] == Cell(
-        Decimal(45), basis="PRO_FORMA", sources=pf["pf:ssn33"].sources
+        Decimal(45),
+        basis="PRO_FORMA",
+        sources=pf["pf:ssn33"].sources,
+        note=treated_as_zero("fac:ssn33"),
     )
     assert pf["total_debt"].value == 14706 + 45
     # A line other than a facility's without an LTM figure stays without one.
@@ -964,3 +978,72 @@ def test_a_pf_adjustment_is_never_flipped_and_never_a_negative_zero(
     )
     total = pf["cash_interest"].value
     assert total is not None and str(total) != "-0"
+
+
+def test_a_figure_built_from_a_sign_normalised_part_says_so() -> None:
+    """The audit's p10 (b): cogs written positive on Q2 2026."""
+    regs = example_registers()
+    regs = replace(
+        regs,
+        accounts=tuple(
+            replace(a, value=-a.value)
+            if a.metric_id == "cogs" and a.period_id == "Q2_2026" and a.value
+            else a
+            for a in regs.accounts
+        ),
+    )
+    q2 = _cells(regs, "Q2 26")
+    assert q2["cogs"].note == SIGN_NORMALISED
+    for key in ("gross_profit", "ebit", "ebitda"):
+        assert SIGN_NORMALISED in (q2[key].note or ""), key
+
+
+def test_the_pro_forma_and_days_ratios_name_a_missing_input() -> None:
+    """The audit's p11."""
+    why = Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
+    pf = [
+        a for a in example_registers().pro_forma if a.metric_id == "cash_interest_paid"
+    ]
+    assert statements._pf_add("cash_interest", why, pf) == why
+    days = Cell(Decimal(365))
+    assert statements._days_ratio(Cell(Decimal(10)), why, days) == why
+    assert statements._days_ratio(why, Cell(Decimal(10)), days) == why
+    bare = Cell(None, "NOT_SOURCED")
+    assert statements._days_ratio(bare, Cell(Decimal(10)), days) == Cell(
+        None, "COMPONENT_MISSING"
+    )
+
+
+def _restructuring(regs: Cp1Registers, figures: dict[str, int]) -> Cp1Registers:
+    """`regs` with the restructuring add-back on the given periods only."""
+    template = next(b for b in regs.addbacks if b.addback_id == "restructuring")
+    rows = tuple(
+        replace(template, period_id=period_id, value=Decimal(value))
+        for period_id, value in figures.items()
+    )
+    kept = tuple(b for b in regs.addbacks if b.addback_id != "restructuring")
+    return replace(regs, addbacks=(*kept, *rows))
+
+
+def test_an_excluded_addback_keeps_its_own_notes() -> None:
+    """The adversary's MINOR-11: "excluded" is appended, never overwrites
+    "differs from components"."""
+    regs = example_registers()
+    differs = replace(
+        regs,
+        addbacks=tuple(
+            replace(
+                b,
+                realization_status="UNREALIZED",
+                value=Decimal(99) if b.period_id == "FY2025" else b.value,
+            )
+            if b.addback_id == "transaction_costs"
+            else b
+            for b in regs.addbacks
+        ),
+    )
+    fy = _cells(differs, "FY25", exclude=True)["addback:transaction_costs"]
+    assert (fy.value, fy.note) == (Decimal(99), "differs from components; excluded")
+    assert _cells(differs, "FY25")["addback:transaction_costs"].note == (
+        "differs from components"
+    )

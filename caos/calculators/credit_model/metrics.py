@@ -50,7 +50,7 @@ from datetime import date
 from decimal import Decimal, localcontext
 from typing import Literal
 
-from caos.calculators.credit_model._cells import ABSENT, CONTEXT, refs
+from caos.calculators.credit_model._cells import ABSENT, CONTEXT, join_notes, refs
 from caos.calculators.credit_model.debt import carried
 from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.methodology.model_inputs import fiscal_year_number
@@ -162,12 +162,13 @@ def _ratio(
     numerator: Sequence[tuple[Cell, int]], denominator: Sequence[tuple[Cell, int]]
 ) -> Cell:
     """The numerator's parts over the denominator's, noted with what they
-    leave out: the first part without a figure gives its reason; a
-    denominator <= 0 refuses."""
+    leave out: the first part without a figure gives its reason, noted with
+    why each such part is missing; a denominator <= 0 refuses."""
     parts = (*numerator, *denominator)
     missing = next((cell for cell, _ in parts if cell.value is None), None)
     if missing is not None:
-        return Cell(None, missing.reason)
+        why = join_notes(tuple(cell.note for cell, _ in parts if cell.value is None))
+        return Cell(None, missing.reason, note=why)
     bottom = _total(denominator)
     if bottom <= 0:
         return Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")
