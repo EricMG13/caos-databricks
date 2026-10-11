@@ -126,7 +126,7 @@ test("wallSummary, nearestOf, yearOf, unique: a maturity wall's words", () => {
     amountOf: (r: Row) => r["amount"]?.value,
     dateOf: (r: Row) => text(r, "date"),
     nameOf: (r: Row) => text(r, "name"),
-    noun: "loans",
+    noun: ["loan", "loans"] as const,
   };
   const rows = [
     row("Later", "2030-01-01", "1.5"),
@@ -141,8 +141,10 @@ test("wallSummary, nearestOf, yearOf, unique: a maturity wall's words", () => {
   expect(nearestOf(undated, wall.dateOf)).toEqual({ row: undated[1], dated: false });
   expect(wallSummary(undated, wall, undefined)).toBe("Principal unstated for all 2 loans.");
   expect(wallSummary([rows[0]!], wall, undefined)).toBe(
-    "1.5 principal in 1 loans; the nearest, Later, falls due 2030-01-01.",
+    "1.5 principal in 1 loan; the nearest, Later, falls due 2030-01-01.",
   );
+  // One of anything is said in the singular.
+  expect(wallSummary([undated[0]!], wall, undefined)).toBe("Principal unstated for the 1 loan.");
 });
 
 test("the readers the register figures share: groupBy, pair, text, datum, oversized", () => {
@@ -1065,6 +1067,30 @@ test("pressing a security's point names its seniority, security and stated sourc
   expect(container.querySelector("[data-figures-key]")).toHaveTextContent(
     "Hollow dot: model-authored",
   );
+});
+
+test("pressing a cell of the risk matrix names both labels and its count", () => {
+  const columns = ["Event ID", "Description", "Probability", "Impact", "P/I Classification"];
+  const events: Register = {
+    register_id: "T5.4",
+    columns,
+    declared: columns,
+    rows: [["EV-1", "Event one", "High", "High", "Critical"].map((cell) => served(cell))],
+  };
+  const container = shown({ ...handoffOf("CP-4"), module_id: "CP-2A", registers: [events] });
+  const figure = container.querySelector("[data-figure='risk-matrix']") as HTMLElement;
+  expect(figure.querySelector("[data-chart='risk-matrix']")).not.toBeNull();
+  fireEvent.click(
+    within(figure).getByRole("button", {
+      name: "Probability High, Impact High: 1 event, EV-1 (a count of the model's rows)",
+    }),
+  );
+  const picked = container.querySelector("[data-picked]")!;
+  expect(picked.querySelector("[data-picked-value]")!.textContent).toBe("1 event");
+  expect(picked).toHaveTextContent("Probability High · Impact High");
+  expect(picked).toHaveTextContent("Computed here: a count of the model's rows, not served");
+  expect(picked).not.toHaveTextContent("Model-authored");
+  expect(container.querySelector("[data-figures-key]")).toHaveTextContent("Outlined");
 });
 
 test("the figures' key keys a rule and a dot only where one is drawn", () => {

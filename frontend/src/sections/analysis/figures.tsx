@@ -12,6 +12,7 @@ import {
   LineChart,
   ProvenanceKeyed,
   RangeStripChart,
+  RiskMatrix,
   ScatterChart,
   StackedBarChart,
   Swatch,
@@ -278,7 +279,7 @@ export function maturityLadder(tables: readonly Table[]): StackFigure | null {
     amountOf: (row) => row.principal?.value,
     dateOf: (row) => text(row, "maturity_date"),
     nameOf: (row) => text(row, "facility_name"),
-    noun: "facilities",
+    noun: ["facility", "facilities"],
   };
   const { row: nearest } = nearestOf(own, wall.dateOf);
   const unit = periodUnit(tables, latest) ?? unitOf(text(nearest, "currency"), "");
@@ -833,6 +834,11 @@ export interface FigurePick {
   source: string | null;
   /** `null` for a waterfall's unreconciled residual: computed here, not served. */
   origin: Origin | null;
+  /** What the value is where this host computed it, said in place of its
+      origin: "a count of the model's rows". */
+  computed?: string;
+  /** The unit said of a value of exactly 1. */
+  unitOne?: string;
 }
 
 /** What a bullet's or a range strip's marks are, by their selection's key. */
@@ -870,6 +876,9 @@ function markOf(figure: Figure, key: string): string | undefined {
     case "scatter":
       // A point's series is its group, as written.
       return key;
+    case "matrix":
+      // A cell's series is its probability, named with its label.
+      return key;
     default:
       return unreachable(figure);
   }
@@ -891,6 +900,8 @@ function Chart({
         value: selection.value,
         ...(selection.interval ? { interval: selection.interval } : {}),
         unit: figure.unit,
+        ...(figure.computed ? { computed: figure.computed } : {}),
+        ...(figure.unitOne ? { unitOne: figure.unitOne } : {}),
         source: figure.sourceOf(selection),
         origin: selection.origin,
       },
@@ -933,6 +944,15 @@ function Chart({
           groupLabel={figure.groupLabel}
         />
       );
+    case "matrix":
+      return (
+        <RiskMatrix
+          title={figure.title}
+          summary={figure.summary}
+          events={figure.events}
+          onSelect={onSelect}
+        />
+      );
     case "line":
       return <LineChart {...common} categories={figure.categories} series={figure.series} />;
     case "diverging":
@@ -946,6 +966,8 @@ function Chart({
           categories={figure.categories}
           series={figure.series}
           categoryLabel={figure.categoryLabel}
+          unitOne={figure.unitOne}
+          computed={figure.computed}
         />
       );
     case "bars":
@@ -1030,6 +1052,27 @@ function Unread({ handoff }: { handoff: HandoffView }) {
   );
 }
 
+/** One figure in a grid: its chart, or past `MAX_MARKS` its title and summary. */
+export function FigureCell({
+  figure,
+  onPick,
+}: {
+  figure: Figure;
+  onPick: (pick: FigurePick, opener: HTMLElement) => void;
+}) {
+  return (
+    <div className={`fig ${figure.kind}`} data-figure={figure.key}>
+      {figure.oversized ? (
+        <p className="note" data-figure-oversized>
+          <b>{figure.title}.</b> {figure.summary}
+        </p>
+      ) : (
+        <Chart figure={figure} onPick={onPick} />
+      )}
+    </div>
+  );
+}
+
 export function Figures({
   handoff,
   calculation,
@@ -1069,15 +1112,7 @@ export function Figures({
         <ProvenanceKeyed value={false}>
           <div className="figgrid">
             {figures.map((figure) => (
-              <div key={figure.key} className={`fig ${figure.kind}`} data-figure={figure.key}>
-                {figure.oversized ? (
-                  <p className="note" data-figure-oversized>
-                    <b>{figure.title}.</b> {figure.summary}
-                  </p>
-                ) : (
-                  <Chart figure={figure} onPick={onPick} />
-                )}
-              </div>
+              <FigureCell key={figure.key} figure={figure} onPick={onPick} />
             ))}
           </div>
         </ProvenanceKeyed>
