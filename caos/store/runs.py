@@ -14,6 +14,7 @@ that commit to a caller would leave the invariant to a caller.
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -40,6 +41,7 @@ from caos.store.outcomes import (
     drop_stop_owed,
     record_outcome,
 )
+from caos.store.rate_decks import PinnedDeck, pin_latest_deck
 from caos.store.work import (
     LEASE_SECONDS,
     Lease,
@@ -113,6 +115,29 @@ def start_run(
     supersedes: UUID | None = None,
     price: ModelPrice | None = None,
 ) -> UUID:
+    """`started_run`'s run, for a caller that does not bind the deck."""
+    return started_run(
+        conn, case_id, budget_ceiling=budget_ceiling, supersedes=supersedes, price=price
+    ).run_id
+
+
+@dataclass(frozen=True, slots=True)
+class StartedRun:
+    """A run just started, and the rate deck it was pinned to (None when
+    there was no deck, or the store predates decks)."""
+
+    run_id: UUID
+    deck: PinnedDeck | None
+
+
+def started_run(
+    conn: StoreConnection,
+    case_id: UUID,
+    *,
+    budget_ceiling: Decimal | None = None,
+    supersedes: UUID | None = None,
+    price: ModelPrice | None = None,
+) -> StartedRun:
     """Start a run against a case. RUNNING is the only state a run starts in.
 
     The ceiling is carried from the first row rather than attached later: a run
@@ -134,6 +159,10 @@ def start_run(
     with the row (F468) so the worker executes the run on that model or not at
     all; None leaves the columns null, a run on the deployment's configured
     model.
+
+    The latest rate deck, if one was ever saved, is pinned to the run in the
+    same unit (`caos.store.rate_decks.pin_latest_deck`): a deck saved after
+    this never moves it.
     """
     ceiling = CEILING if budget_ceiling is None else budget_ceiling
     validate_spend(ceiling)
@@ -159,19 +188,33 @@ def start_run(
         }
     if supersedes is not None:
         written["supersedes_run_id"] = supersedes
-    insert = sql.SQL("INSERT INTO runs ({}) VALUES ({})").format(
+    # The insert also answers whether this store holds rate decks (0050): a
+    # store at an earlier migration prefix starts an ordinary run and pins
+    # none, at no extra round trip. A store the app serves is always at the
+    # full schema (`apply_schema` refuses drift at boot), so there it is true.
+    insert = sql.SQL(
+        "INSERT INTO runs ({}) VALUES ({})"
+        " RETURNING to_regclass('run_rate_decks') IS NOT NULL"
+    ).format(
         sql.SQL(", ").join(map(sql.Identifier, written)),
         sql.SQL(", ").join(sql.Placeholder() * len(written)),
     )
     try:
         # Sent as its text, as every other statement here is: the suite's
         # statement recorders read a query as a string.
-        conn.execute(insert.as_string(conn), tuple(written.values()))
+        [(decks,)] = conn.execute(
+            insert.as_string(conn), tuple(written.values())
+        ).fetchall()
     except psycopg.errors.UniqueViolation as violation:
         if violation.diag.constraint_name != ONE_SUCCESSOR_PER_RUN:
             raise
         raise Refusal(RefusalCode.RUN_ALREADY_SUPERSEDED) from None
-    return run_id
+    if not decks:
+        # The documented fail-open, said once per run: a store below 0050.
+        print(f"rate_deck_pin_skipped run={run_id} reason=no_table", file=sys.stderr)
+        return StartedRun(run_id, None)
+    # In this unit, so the run and its deck commit together or not at all.
+    return StartedRun(run_id, pin_latest_deck(conn, run_id))
 
 
 def _require_answerable(conn: StoreConnection, case_id: UUID, run_id: UUID) -> None:

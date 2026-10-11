@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import unicodedata
+from datetime import date
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -27,6 +29,7 @@ from caos.api.reads import run as run_read
 from caos.api.wire import CLEARS, PinRunInput
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.calculators.credit_model.projection import RateDeckYear
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import (
     MODEL_MODULE,
@@ -48,6 +51,7 @@ from caos.store.gates import (
     withdraw_source,
 )
 from caos.store.members import Standing, grant, revoke
+from caos.store.rate_decks import rates_digest, save_deck
 from caos.store.routes import pinned_route, resolved_route
 from caos.store.run_inputs import RunSubject, linked_research_brief, load_run_input
 from caos.store.runs import block_run, create_case, start_run
@@ -397,6 +401,7 @@ def test_a_successor_run_links_a_blocked_run_of_its_case(
         {
             **body,
             "route_digest": pinned_route(conn, successor),
+            "rate_deck": None,
             "request_sha256": request_digest(
                 "CREATE_RUN", case_id=case_id, run_id=None, gate=None, body=body
             ),
@@ -413,6 +418,36 @@ def test_a_successor_run_links_a_blocked_run_of_its_case(
     assert _outcome(again) == "409 RUN_ALREADY_SUPERSEDED"
     assert again.json() == _refusal("RUN_ALREADY_SUPERSEDED")
     assert _effects(conn) == effects
+
+
+def test_the_run_created_audit_binds_the_rate_deck_the_run_pinned(
+    client: TestClient, case: tuple[StoreConnection, UUID]
+) -> None:
+    """A run's deck is part of what the audit trail says the run was created
+    with: the pinned deck and the digest of its rates, in the RUN_CREATED
+    payload, so the chain names the rates a projection will read."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    rows = (RateDeckYear("SOFR", 1, Decimal("0.0380"), Decimal("0.0450")),)
+    deck_id = save_deck(conn, uuid4(), date(2026, 10, 1), rows)
+    conn.commit()
+
+    created = _send(client, _path(case_id), writer, ROUTE)
+
+    assert created.status_code == 201, created.text
+    run_id = UUID(created.json()["run_id"])
+    [entry] = audit_trail(conn, case_id)
+    assert entry.payload_sha256 == digest_of(
+        {
+            **ROUTE,
+            "route_digest": pinned_route(conn, run_id),
+            "rate_deck": {"deck_id": str(deck_id), "rates_sha256": rates_digest(rows)},
+            "request_sha256": request_digest(
+                "CREATE_RUN", case_id=case_id, run_id=None, gate=None, body=ROUTE
+            ),
+        }
+    )
+    conn.rollback()
 
 
 def test_a_successor_for_a_running_run_or_another_case_is_refused(

@@ -7,6 +7,7 @@ itself -- so each test here holds two.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -49,6 +50,7 @@ from caos.store import (
     StoreConnection,
     apply_schema,
     connect,
+    rate_decks,
     runs,
 )
 from caos.store.commands import NIL_SCOPE, record_receipt, request_digest
@@ -62,7 +64,7 @@ from caos.store.outcomes import (
     record_outcome,
     record_refusal,
 )
-from caos.store.rate_decks import save_deck
+from caos.store.rate_decks import deck_for_run, save_deck
 from caos.store.runs import (
     Accepted,
     accept_attempt,
@@ -1996,3 +1998,122 @@ def test_twin_deck_saves_under_one_key_keep_one_deck(empty_database: str) -> Non
             True,
         )
         assert first.execute("SELECT deck_id FROM rate_decks").fetchall() == [(deck,)]
+
+
+def test_a_run_started_while_a_deck_save_is_in_flight_pins_that_deck(
+    empty_database: str,
+) -> None:
+    """A run's pin waits for a save in flight (the save lock, taken shared),
+    so a deck that commits before the run does is never missed: without the
+    wait the run would pin the deck before it although the newer one had
+    committed first."""
+    with connect(empty_database) as runner, connect(empty_database) as saver:
+        apply_schema(runner)
+        case_id = create_case(runner, BoundaryText.of("Issuer"))
+        runner.commit()
+        save_deck(saver, uuid4(), date(2026, 9, 1), _deck_rows("0.0300"))
+        saver.commit()
+        newer = save_deck(saver, uuid4(), date(2026, 10, 1), _deck_rows("0.0400"))
+        started = Event()
+
+        def start() -> UUID:
+            run_id = start_run(runner, case_id)
+            started.set()
+            runner.commit()
+            return run_id
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(start)
+            assert not started.wait(1), "the pin did not wait for the save"
+            saver.commit()
+            run_id = future.result(30)
+
+        pinned = deck_for_run(runner, run_id)
+        assert pinned is not None and pinned.deck_id == str(newer)
+
+
+def test_a_run_start_queued_behind_a_waiting_save_gives_up_typed(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run unit held open (its pin holds the save lock shared) makes a save
+    wait; every later pin queues behind that save. The pin's wait is bounded
+    (`PIN_LOCK_TIMEOUT_MS`), so a run start on another case is refused
+    `STORE_UNAVAILABLE` -- retryable -- rather than queued for as long as the
+    first unit stays open; and the bound does not outlive the wait."""
+    monkeypatch.setattr(rate_decks, "PIN_LOCK_TIMEOUT_MS", 300)
+    with (
+        connect(empty_database) as holder,
+        connect(empty_database) as saver,
+        connect(empty_database) as other,
+    ):
+        apply_schema(holder)
+        first = create_case(holder, BoundaryText.of("one"))
+        second = create_case(holder, BoundaryText.of("two"))
+        holder.commit()
+        before = other.execute("SHOW lock_timeout").fetchone()
+        other.rollback()
+        start_run(holder, first)  # holds the save lock shared, uncommitted
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            saving = pool.submit(
+                lambda: save_deck(saver, uuid4(), date(2026, 10, 1), _deck_rows("0.03"))
+            )
+            try:
+                with pytest.raises(TimeoutError):
+                    saving.result(0.5)
+                with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+                    start_run(other, second)
+                other.rollback()
+            finally:
+                # Released whatever was asserted, so a failure ends the save
+                # rather than leaving this test waiting on it.
+                holder.commit()
+            saving.result(30)
+            saver.commit()
+        # Unqueued, the same start succeeds, and the session's own bound is
+        # what it was.
+        run_id = start_run(other, second)
+        assert other.execute("SHOW lock_timeout").fetchone() == before
+        other.commit()
+        assert deck_for_run(other, run_id) is not None
+
+
+@pytest.mark.parametrize(("caller", "pin_ms"), [("250ms", 5000), ("10s", 300)])
+def test_the_pin_bound_only_ever_tightens_the_callers(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch, caller: str, pin_ms: int
+) -> None:
+    """A caller's tighter `lock_timeout` stands (refused near 250 ms, not
+    after the pin's 5 s); a looser one is tightened to the pin's bound. Either
+    way the caller's own setting is what is left after a pin that succeeds."""
+    monkeypatch.setattr(rate_decks, "PIN_LOCK_TIMEOUT_MS", pin_ms)
+    with (
+        connect(empty_database) as holder,
+        connect(empty_database) as saver,
+        connect(empty_database) as other,
+    ):
+        apply_schema(holder)
+        first = create_case(holder, BoundaryText.of("one"))
+        second = create_case(holder, BoundaryText.of("two"))
+        holder.commit()
+        start_run(holder, first)  # holds the save lock shared, uncommitted
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            saving = pool.submit(
+                lambda: save_deck(saver, uuid4(), date(2026, 10, 1), _deck_rows("0.03"))
+            )
+            try:
+                with pytest.raises(TimeoutError):
+                    saving.result(0.5)
+                other.execute(f"SET LOCAL lock_timeout = '{caller}'")
+                began = time.monotonic()
+                with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+                    start_run(other, second)
+                waited = time.monotonic() - began
+                other.rollback()
+            finally:
+                holder.commit()
+            saving.result(30)
+            saver.commit()
+        assert waited < 2, waited
+        other.execute(f"SET LOCAL lock_timeout = '{caller}'")
+        start_run(other, second)
+        assert other.execute("SHOW lock_timeout").fetchone() == (caller,)
+        other.rollback()

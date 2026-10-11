@@ -49,6 +49,8 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
+import psycopg
+
 from caos.calculators.credit_model.projection import RateDeck, RateDeckYear
 from caos.digest import canonical_digest
 from caos.refusals import Refusal, RefusalCode
@@ -96,6 +98,41 @@ _READ_PINNED = (
     " WHERE u.run_id = %s"
     " ORDER BY r.reference_rate, r.year_offset"
 )
+# How long, in milliseconds, a pin waits for a save in flight. A save waiting
+# for the lock queues every later pin behind it (Postgres grants in arrival
+# order), so an unbounded wait would hold every run start on every case for
+# as long as one run unit stays open. Past this a run start is refused
+# `STORE_UNAVAILABLE`, retryable, the way the store answers any lock wait a
+# `lock_timeout` ended. A tighter bound the caller or an operator already set
+# stands: the pin only ever tightens it.
+PIN_LOCK_TIMEOUT_MS = 5000
+# The bound in force before this pin (in milliseconds, `0` for none), and the
+# unit's bound for the wait: the tighter of the two, or the pin's when there
+# was none. The CTE is materialised, so the prior bound is read first.
+_PIN_BOUND = (
+    "WITH prior AS MATERIALIZED (SELECT setting::bigint AS ms"
+    " FROM pg_catalog.pg_settings WHERE name = 'lock_timeout')"
+    " SELECT ms, set_config('lock_timeout',"
+    " (CASE WHEN ms > 0 AND ms < %(pin)s THEN ms ELSE %(pin)s END)::text, true)"
+    " FROM prior"
+)
+_PIN_WAITS = "SELECT pg_advisory_xact_lock_shared(%s::integer, 0)"
+_PIN_UNBOUND = "SELECT set_config('lock_timeout', %s, true)"
+_PIN_LATEST = (
+    "INSERT INTO run_rate_decks (run_id, deck_id)"
+    " SELECT %s, deck_id FROM rate_decks ORDER BY deck_seq DESC LIMIT 1"
+    " RETURNING deck_id,"
+    " (SELECT rates_sha256 FROM rate_decks d WHERE d.deck_id = run_rate_decks.deck_id)"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PinnedDeck:
+    """The deck a run was pinned to at its creation, and the digest of its
+    rates: what the run-creating command binds into its audit payload."""
+
+    deck_id: UUID
+    rates_sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,3 +274,27 @@ def deck_for_run(conn: StoreConnection, run_id: UUID) -> RateDeck | None:
         raise Refusal(RefusalCode.RUN_NOT_FOUND)
     saved = _deck(rows)
     return None if saved is None else saved.deck
+
+
+def pin_latest_deck(conn: StoreConnection, run_id: UUID) -> PinnedDeck | None:
+    """Pin the latest committed deck to the run, in the caller's unit, and
+    name it; with no deck, pin and name nothing. Called by `start_run` only,
+    in the unit that creates the run (the store refuses any other).
+
+    Four statements: the unit's lock wait bounded to `PIN_LOCK_TIMEOUT_MS`
+    (or the caller's tighter bound); the
+    save lock taken shared, which waits for a save in flight to commit
+    (`STORE_UNAVAILABLE` past the bound, the unit failed for the caller to
+    roll back); the session's own bound put back; then the pin, read under a
+    fresh snapshot that sees the deck that save committed.
+    """
+    [(prior, _bound)] = conn.execute(
+        _PIN_BOUND, {"pin": PIN_LOCK_TIMEOUT_MS}
+    ).fetchall()
+    try:
+        conn.execute(_PIN_WAITS, (SAVE_LOCK,))
+    except psycopg.errors.LockNotAvailable:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    conn.execute(_PIN_UNBOUND, (str(prior),))
+    row = conn.execute(_PIN_LATEST, (run_id,)).fetchone()
+    return None if row is None else PinnedDeck(row[0], str(row[1]))

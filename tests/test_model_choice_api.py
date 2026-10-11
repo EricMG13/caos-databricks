@@ -64,6 +64,7 @@ def test_a_new_run_is_pinned_to_the_model_it_names_or_the_configured_one(
                 **body,
                 "model": pinned_to,
                 "route_digest": pinned_route(conn, run_id),
+                "rate_deck": None,
                 "request_sha256": request_digest(
                     "CREATE_RUN", case_id=case_id, run_id=None, gate=None, body=body
                 ),
