@@ -755,7 +755,8 @@ def _resolved(series: _Series, register: _Register, period_id: str | None) -> Ce
         cell = parts if own.reason == "NOT_SOURCED" else own
     else:
         differs = beyond_rounding(own.value, parts.value)
-        cell = replace(own, note=join_notes(own.note, _FROM_PARTS if differs else None))
+        note = join_notes((own.note, _FROM_PARTS if differs else None))
+        cell = replace(own, note=note)
     series.resolved[period_id] = cell
     return cell
 
@@ -851,7 +852,7 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
     if total.value is None:
         return Cell(None, total.reason, stated=stated, note=total.note)
     differs = stated is not None and beyond_rounding(stated, total.value)
-    note = join_notes(total.note, DIFFERS if differs else None)
+    note = join_notes((total.note, DIFFERS if differs else None))
     return replace(total, stated=stated, note=note)
 
 

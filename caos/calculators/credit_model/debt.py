@@ -94,7 +94,7 @@ def carried(cells: Iterable[Cell]) -> str | None:
     """What the cells leave out ("excludes facility in another currency",
     "excludes unallocated CP-CF movements"), for a figure read from them."""
     found = {part for cell in cells for part in notes_of(cell.note)}
-    return join_notes(*(note for note in _CARRIED if note in found))
+    return join_notes(tuple(note for note in _CARRIED if note in found))
 
 
 def is_operating_lease(row: FacilityRow) -> bool:
@@ -227,7 +227,7 @@ def _excluding(cell: Cell, key: str, excluded: frozenset[str]) -> Cell:
     of the `key` total."""
     if key not in excluded or cell.value is None:
         return cell
-    return replace(cell, note=join_notes(cell.note, EXCLUDES_FOREIGN))
+    return replace(cell, note=join_notes((cell.note, EXCLUDES_FOREIGN)))
 
 
 def _issued_after(regs: Cp1Registers, facility_id: str, day: str | None) -> bool:
