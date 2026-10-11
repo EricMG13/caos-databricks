@@ -195,6 +195,61 @@ describe("the rate deck card", () => {
   });
 });
 
+describe("the rate deck card's surface state", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  const state = () =>
+    document.querySelector("[data-rate-deck]")?.getAttribute("data-surface-state");
+
+  test("loading while the read is outstanding", () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise(() => {})),
+    );
+    mount();
+    expect(state()).toBe("loading");
+  });
+
+  test("ready with a deck on show", async () => {
+    stubServer(() => jsonResponse({}));
+    mount();
+    await screen.findByText(/Current deck: as of/);
+    expect(state()).toBe("ready");
+  });
+
+  test("observed-empty when no deck has been saved", async () => {
+    stubServer(() => jsonResponse({}), null);
+    mount();
+    await screen.findByText("No deck has been saved.");
+    expect(state()).toBe("observed-empty");
+  });
+
+  test("error when the server refuses the read", async () => {
+    stubServer(() => jsonResponse({}), { nope: 1 });
+    mount();
+    await screen.findByText(/WIRE_SHAPE_INVALID/);
+    expect(state()).toBe("error");
+  });
+
+  test("unavailable when the deck is not found", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        Promise.resolve(url.endsWith("/latest") ? jsonResponse({}, 404) : directoryAs("ADMIN")),
+      ),
+    );
+    mount();
+    await waitFor(() => expect(state()).toBe("unavailable"));
+  });
+
+  test("offline when the read does not reach the server", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("down")));
+    mount();
+    await waitFor(() => expect(state()).toBe("offline"));
+  });
+});
+
 describe("the rate deck helpers", () => {
   test("percentToDecimal shifts the point exactly, never through a float", () => {
     expect(percentToDecimal("3.80")).toBe("0.0380");

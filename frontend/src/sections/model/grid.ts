@@ -3,6 +3,7 @@
 // three charts draw. The server's figures arrive as exact decimal strings and
 // are only re-spelled here (digit moves and rounding on the digits), never
 // computed on.
+import type { ChartSeries, Datum } from "@/charts";
 import { displayDecimal, hundredfold } from "@/ds/format";
 import type { Citation, Passport } from "@/wire";
 import type { ModelDocument } from "@/wire/v1";
@@ -246,4 +247,81 @@ export function passportOfCell(input: PassportInput): Passport {
     driver: null,
     deviation: null,
   };
+}
+
+// ---- the chart strip ----
+
+export interface StripChart {
+  key: string;
+  title: string;
+  unit: string;
+  categories: string[];
+  series: ChartSeries[];
+}
+
+const STRIP: { lineId: string; title: string; multiple: boolean }[] = [
+  { lineId: "metric:net_leverage_adjusted", title: "Adjusted net leverage", multiple: true },
+  {
+    lineId: "metric:interest_coverage_adjusted",
+    title: "Adjusted interest coverage",
+    multiple: true,
+  },
+  { lineId: "liquidity", title: "Liquidity", multiple: false },
+];
+
+/** Adjusted net leverage, adjusted interest coverage and liquidity: the
+    history is the FY and LTM columns, and Base and Downside are two projected
+    series over the projected years. A cell with no figure is a gap with its
+    reason, never zero. */
+export function stripCharts(body: Body): StripChart[] {
+  const history = body.columns
+    .map((column, index) => ({ column, index }))
+    .filter((entry) => entry.column.kind === "FY" || entry.column.kind === "LTM");
+  const years = [
+    ...new Set(
+      body.columns.filter((column) => column.kind === "PROJECTED").map((column) => column.label),
+    ),
+  ];
+  const categories = [...history.map((entry) => entry.column.label), ...years];
+  return STRIP.flatMap((spec) => {
+    const line = body.lines.find((entry) => entry.line_id === spec.lineId);
+    if (!line) return [];
+    const datum = (cell: ModelCell | undefined): Datum =>
+      cell && cell.value !== null
+        ? { value: cell.value }
+        : { value: null, reason: cell?.reason ?? "not served" };
+    const projected = (name: "BASE" | "DOWNSIDE"): Datum[] =>
+      years.map((label) => {
+        const index = body.columns.findIndex(
+          (column) => column.kind === "PROJECTED" && column.case === name && column.label === label,
+        );
+        return datum(index === -1 ? undefined : line.cells[index]);
+      });
+    const gaps = (count: number): Datum[] =>
+      Array.from({ length: count }, () => ({ value: null, reason: "not projected" }));
+    const series: ChartSeries[] = [
+      {
+        key: `${spec.lineId}:actual`,
+        label: "Actual",
+        origin: "host" as const,
+        data: [...history.map((entry) => datum(line.cells[entry.index])), ...gaps(years.length)],
+      },
+      ...(["BASE", "DOWNSIDE"] as const).map((name) => ({
+        key: `${spec.lineId}:${name}`,
+        label: name === "BASE" ? "Base case" : "Downside case",
+        origin: "host" as const,
+        data: [...gaps(history.length), ...projected(name)],
+      })),
+    ].filter((entry) => entry.data.some((point) => point.value !== null));
+    if (series.length === 0 || categories.length < 2) return [];
+    return [
+      {
+        key: spec.lineId,
+        title: spec.title,
+        unit: spec.multiple ? "multiple" : `${body.currency ?? ""} ${body.unit ?? ""}`.trim(),
+        categories,
+        series,
+      },
+    ];
+  });
 }

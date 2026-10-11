@@ -85,6 +85,7 @@ test("demo fixture HTTP is read-only before fixture selection", async ({ request
 test("demo Model, Report, and Committee routes render parsed v1 content", async ({ page }) => {
   await page.goto("/model/?case=00000000-0000-4000-8000-000000000001");
   await expect(page.locator("[data-model-v1]")).toBeVisible();
+  await expect(page.locator("[data-model-grid]")).toBeVisible();
   await expect(page.locator("[data-model-periods]")).toContainText("123.45");
   await expect(page.locator("main#body [data-surface-state]")).toHaveCount(0);
   await page.goto(
