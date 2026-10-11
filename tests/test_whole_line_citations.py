@@ -791,6 +791,43 @@ def test_a_near_miss_is_hinted_from_delivered_lines_only(
     assert (source_id, 2) not in index.pages
 
 
+def _recorded(monkeypatch: pytest.MonkeyPatch, name: str) -> list[tuple[object, ...]]:
+    """The arguments of every call to `caos.evidence.citations.<name>`, each
+    answered by the function itself."""
+    from caos.evidence import citations
+
+    calls: list[tuple[object, ...]] = []
+    real: Callable[..., object] = getattr(citations, name)
+
+    def recording(*args: object) -> object:
+        calls.append(args)
+        return real(*args)
+
+    monkeypatch.setattr(citations, name, recording)
+    return calls
+
+
+def _widest(calls: list[tuple[object, ...]], at: int) -> int:
+    """The most words in the `at`th argument of any of `calls`."""
+    sizes = []
+    for args in calls:
+        words = args[at]
+        assert isinstance(words, list)
+        sizes.append(len(words))
+    return max(sizes)
+
+
+class _Looked(str):
+    """A line that counts the `in` tests made on it, each answered by `str`."""
+
+    looks = 0
+
+    def __contains__(self, key: object, /) -> bool:
+        self.looks += 1
+        assert isinstance(key, str), key
+        return super().__contains__(key)
+
+
 def test_placing_a_near_miss_stays_linear_in_the_lines_delivered(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -798,41 +835,51 @@ def test_placing_a_near_miss_stays_linear_in_the_lines_delivered(
     searched for a near miss in one pass. Lines that share neither end of
     the quote cost one comparison; when every line shares its first words
     at a near length, at most `NEAR_MEASURED` are measured and the search
-    gives up -- no hint, never a quadratic cost."""
+    gives up -- no hint, never a quadratic cost. Counted, not timed: one
+    candidate test per line delivered, and a ratio only on the lines that
+    pass it, each of at most `NEAR_MEASURED_WORDS` words."""
     import random
-    import time
 
-    from caos.evidence import citations
-    from caos.evidence.citations import NEAR_MEASURED, NEAR_WORDS, near_line
+    from caos.evidence.citations import (
+        NEAR_MEASURED,
+        NEAR_MEASURED_WORDS,
+        NEAR_WORDS,
+        near_line,
+    )
 
-    measured: list[int] = []
-    similar = citations._similar
-
-    def counted(words: list[str], split: list[str]) -> bool:
-        measured.append(1)
-        return similar(words, split)
-
-    monkeypatch.setattr(citations, "_similar", counted)
+    tested = _recorded(monkeypatch, "_candidate")
+    measured = _recorded(monkeypatch, "_similar")
     lines = [
         f"Page {page} line {line} " + " ".join(f"w{n}" for n in range(70))
         for page in range(360)
         for line in range(30)
     ]
     lines[5000] = MERGER
-    started = time.perf_counter()
-    assert near_line(ONE_LETTER, lines) == 5000
-    unrelated = time.perf_counter() - started
+    placed = near_line(ONE_LETTER, lines)
+    assert placed == 5000
+    # One test a line, the merger's included. None but the merger shares an
+    # end of the quote, and it shares both, so no ratio is asked.
+    looks = len(tested)
+    assert len(lines) == 10_800
+    assert looks == 10_800
+    assert not measured
     words = MERGER.split()
     rows = random.Random(0)
     lookalikes = [
         " ".join(words[:NEAR_WORDS] + rows.sample(words[NEAR_WORDS:], 70))
         for _ in range(360 * 30)
     ]
-    started = time.perf_counter()
-    assert near_line(ONE_LETTER, [*lookalikes, MERGER]) is None
-    alike = time.perf_counter() - started
-    assert len(measured) == NEAR_MEASURED
-    assert unrelated < 0.5 and alike < 0.5
+    tested.clear()
+    placed = near_line(ONE_LETTER, [*lookalikes, MERGER])
+    assert placed is None
+    # The search gives up at the 65th look-alike, so it never reaches the
+    # merger at the end: 65 tests, and 64 ratios.
+    assert NEAR_MEASURED == 64
+    looks = len(tested)
+    assert looks == NEAR_MEASURED + 1
+    ratios = len(measured)
+    assert ratios == NEAR_MEASURED
+    assert _widest(measured, 1) <= NEAR_MEASURED_WORDS
 
 
 def test_a_near_miss_never_measures_a_long_line(
@@ -984,28 +1031,45 @@ def test_a_dropped_cells_row_is_hinted_from_delivered_lines_only(
     assert (source_id, 2) not in index.pages
 
 
-def test_placing_a_dropped_cells_row_stays_linear_in_the_lines_delivered() -> None:
+def test_placing_a_dropped_cells_row_stays_linear_in_the_lines_delivered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """F495, bounded as F493: 360 delivered pages of 30 rows are searched in
     one pass; rows sharing the quote's first cell are checked at most
-    `NEAR_MEASURED` times, each check linear in cells."""
-    import time
-
+    `NEAR_MEASURED` times, each check linear in cells. Counted, not timed:
+    one first-cell read per row delivered, and one subsequence check per
+    row sharing it, up to the cap."""
     from caos.evidence.citations import NEAR_MEASURED, cells_line
 
+    first = _recorded(monkeypatch, "_first_cell")
+    checked = _recorded(monkeypatch, "_in_order")
     cells = " | ".join(str(n) for n in range(40))
     lines = [
         f"Row {page} {line} | {cells}" for page in range(360) for line in range(30)
     ]
     lines[5000] = ROW
-    started = time.perf_counter()
-    assert cells_line(DROPPED, lines) == 5000
-    unrelated = time.perf_counter() - started
+    placed = cells_line(DROPPED, lines)
+    assert placed == 5000
+    # One read a row, the dropped row's included; only it shares the quote's
+    # first cell, so it alone is checked.
+    reads = len(first)
+    assert len(lines) == 10_800
+    assert reads == 10_800
+    assert len(checked) == 1
+    first.clear()
+    checked.clear()
     alike = [f"Balance at June 30 | {cells}" for _ in range(360 * 30)]
-    started = time.perf_counter()
-    assert cells_line(DROPPED, [*alike, ROW]) is None
-    shared = time.perf_counter() - started
+    placed = cells_line(DROPPED, [*alike, ROW])
+    assert placed is None
+    # The search gives up at the 65th row sharing the first cell, before its
+    # check, so it never reaches the dropped row at the end.
     assert NEAR_MEASURED == 64
-    assert unrelated < 0.5 and shared < 0.5
+    reads = len(first)
+    assert reads == NEAR_MEASURED + 1
+    checks = len(checked)
+    assert checks == NEAR_MEASURED
+    # Each check is of the 40 cells after the first against the 40 after it.
+    assert _widest(checked, 1) == 40
 
 
 def test_an_unknown_source_id_is_told_so_and_a_delivered_one_keeps_its_wording(
@@ -1125,26 +1189,47 @@ def test_an_overrun_is_hinted_before_a_near_miss_from_delivered_lines_only(
     assert (source_id, 2) not in index.pages
 
 
-def test_placing_an_overrun_stays_linear_in_the_lines_delivered() -> None:
+def test_placing_an_overrun_stays_linear_in_the_lines_delivered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """F496, bounded as F493: 360 delivered pages of 30 lines are searched in
     one pass; lines holding the quote's first words are checked at most
-    `NEAR_MEASURED` times, each check linear in words."""
-    import time
-
+    `NEAR_MEASURED` times, each check linear in words. Counted, not timed:
+    one `in` test per line delivered, and one prefix check per place in a
+    line that holds them, up to the cap."""
     from caos.evidence.citations import NEAR_MEASURED, NEAR_WORDS, overrun_line
 
+    starts = _recorded(monkeypatch, "_quote_starts")
+    checked = _recorded(monkeypatch, "_overruns")
     tail = " ".join(f"w{n}" for n in range(70))
     lines = [
-        f"Page {page} line {line} {tail}" for page in range(360) for line in range(30)
+        _Looked(f"Page {page} line {line} {tail}")
+        for page in range(360)
+        for line in range(30)
     ]
-    lines[5000] = SPLIT
-    started = time.perf_counter()
-    assert overrun_line(OVERRUN, lines) == 5000
-    unrelated = time.perf_counter() - started
+    lines[5000] = _Looked(SPLIT)
+    placed = overrun_line(OVERRUN, lines)
+    assert placed == 5000
+    # One test a line, the split line's included; only it holds the quote's
+    # second word, so only it is read for a place, and checked once.
+    looks = {line.looks for line in lines}
+    assert looks == {1}
+    assert len(starts) == 1
+    assert len(checked) == 1
+    starts.clear()
+    checked.clear()
     head = " ".join(SPLIT.split()[:NEAR_WORDS])
-    alike = [f"{head} {tail}" for _ in range(360 * 30)]
-    started = time.perf_counter()
-    assert overrun_line(OVERRUN, [*alike, SPLIT]) is None
-    shared = time.perf_counter() - started
+    alike = [_Looked(f"{head} {tail}") for _ in range(360 * 30)]
+    lines = [*alike, _Looked(SPLIT)]
+    placed = overrun_line(OVERRUN, lines)
+    assert placed is None
+    # Each look-alike holds one place, so the search gives up at the 65th,
+    # after its read and before its check: the lines past it are not looked
+    # at, the split line at the end among them.
     assert NEAR_MEASURED == 64
-    assert unrelated < 0.5 and shared < 0.5
+    looked = sum(line.looks for line in lines)
+    assert looked == NEAR_MEASURED + 1
+    reads = len(starts)
+    assert reads == NEAR_MEASURED + 1
+    checks = len(checked)
+    assert checks == NEAR_MEASURED
