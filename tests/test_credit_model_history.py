@@ -1168,10 +1168,10 @@ def test_an_addback_without_a_row_for_a_period_counts_zero_in_a_sum() -> None:
     resolved = account_frame(halves, historical_columns(halves))
     assert resolved["YTD:H1_2026"][key].value == 3
     assert resolved["LTM:LTM_Q2_2026"][key].value == 21 - 3
-    # Q2 2026 has no row beside three stated quarters: never 12 + 3 + 3.
-    assert ltm_frames(regs, columns)["Q:Q2_2026"][key] == Cell(
-        None, "COMPONENT_MISSING", note=history.PARTLY_STATED
-    )
+    # Q2 2026 has no row beside three stated quarters: an add-back is a
+    # one-off, so it is nothing there, named (MAJOR-A): 12 + 3 + 3.
+    window = ltm_frames(regs, columns)["Q:Q2_2026"][key]
+    assert (window.value, window.note) == (Decimal(18), treated_as_zero("Q2_2026"))
     assert ltm_frames(regs, columns)["Q:Q2_2026"]["acct:revenue"].value == 11654
 
 
@@ -1197,7 +1197,8 @@ def _costs(regs: Cp1Registers) -> dict[str, Cell]:
 def test_a_sparse_item_resolves_each_period_bottom_up() -> None:
     regs = example_registers()
     # (a) rows only for Q1 2025 and H1 2025: FY2025 is its quarters (3); the
-    # PYTD is stated and the YTD has no row, so the LTM is never 3 + 0 - 3.
+    # PYTD is stated and the YTD has no row, nothing for a one-off add-back
+    # (MAJOR-A): the LTM is 3 + 0 - 3, H1 2026 named.
     probe = _costs(_sparse_rows(regs, {"Q1_2025": 3, "H1_2025": 3}))
     # Q3 and Q4 2025 have no row: nothing, and named.
     assert probe["FY:FY2025"] == Cell(
@@ -1207,9 +1208,9 @@ def test_a_sparse_item_resolves_each_period_bottom_up() -> None:
         note="not stated, treated as zero (Q3_2025); "
         "not stated, treated as zero (Q4_2025)",
     )
-    assert probe["LTM:LTM_Q2_2026"] == Cell(
-        None, "COMPONENT_MISSING", note=history.PARTLY_STATED
-    )
+    ltm = probe["LTM:LTM_Q2_2026"]
+    assert ltm.value == 0
+    assert treated_as_zero("H1_2026") in (ltm.note or "")
     assert probe["YTD:H1_2026"] == Cell(None, "NOT_SOURCED")
     assert probe["Q:Q2_2025"] == Cell(None, "NOT_SOURCED")
     # (b) only Q3 2025 and FY2025: the LTM keeps the 12, the YTD has none.
@@ -1324,11 +1325,14 @@ def test_a_flow_that_is_not_sparse_never_resolves_from_its_parts() -> None:
 def test_a_sparse_period_is_covered_greedily_by_its_longest_parts() -> None:
     regs = example_registers()
     # (a) H1 2025 and Q3 2025 only: FY2025 is H1 + Q3 + nothing for Q4; the
-    # YTD has no row beside a stated PYTD, so the LTM is not built.
+    # YTD has no row beside a stated PYTD, nothing for a one-off (MAJOR-A).
     probe = _costs(_sparse_rows(regs, {"H1_2025": 6, "Q3_2025": 12}))
     assert probe["FY:FY2025"].value == 18
     assert probe["PYTD:H1_2025"].value == 6
-    assert probe["LTM:LTM_Q2_2026"].note == history.PARTLY_STATED
+    assert (probe["LTM:LTM_Q2_2026"].value, probe["LTM:LTM_Q2_2026"].note) == (
+        Decimal(12),
+        "; ".join((treated_as_zero("Q4_2025"), treated_as_zero("H1_2026"))),
+    )
     # (b) a 9M row and Q4: FY = 9M + Q4.
     h1 = next(p for p in regs.periods if p.period_id == "H1_2025")
     nine = replace(
@@ -1365,10 +1369,11 @@ def test_a_sparse_period_is_covered_greedily_by_its_longest_parts() -> None:
     covered = _costs(_sparse_rows(stub, {"H1_2025": 6, "STUB_2025": 100}))
     assert covered["FY:FY2025"].value == 6
     # (c) round 2's probe: rows for Q1 2025 and H1 2025 only; a stated PYTD
-    # beside no YTD row, so the LTM is not built.
+    # beside no YTD row: 3 + nothing - 3 for a one-off (MAJOR-A).
     first = _costs(_sparse_rows(regs, {"Q1_2025": 3, "H1_2025": 3}))
     assert first["FY:FY2025"].value == 3
-    assert first["LTM:LTM_Q2_2026"].note == history.PARTLY_STATED
+    assert first["LTM:LTM_Q2_2026"].value == 0
+    assert treated_as_zero("H1_2026") in (first["LTM:LTM_Q2_2026"].note or "")
 
 
 def test_a_sparse_own_row_wins_and_is_noted_where_its_parts_differ() -> None:
@@ -3756,3 +3761,121 @@ def test_a_period_on_another_footing_never_takes_its_parts_figure() -> None:
     # With its own row, it is its own figure.
     own = _footing(example_registers(), FY2024=("RESTATED", "Consolidated"))
     assert _frame(own)["FY:FY2024"]["addback:restructuring"].value == 32
+
+
+def _only_addback(
+    regs: Cp1Registers, addback_id: str, rows: dict[str, int]
+) -> Cp1Registers:
+    """`regs` with the add-back's rows on the given periods only."""
+    kept = tuple(b for b in regs.addbacks if b.addback_id != addback_id)
+    model = next(b for b in regs.addbacks if b.addback_id == addback_id)
+    added = tuple(
+        replace(model, period_id=pid, value=Decimal(v)) for pid, v in rows.items()
+    )
+    return replace(regs, addbacks=(*kept, *added))
+
+
+def test_an_addback_absent_from_an_interim_or_a_quarter_is_nil_noted() -> None:
+    """The stack adversary's MAJOR-A: CP-1 writes an add-back only where it
+    occurred. A one-off in Q3 2025 (rows Q3 2025, FY2025, the LTM) leaves
+    the twelve months ending Q2 2026 its quarters' sum, each quarter without
+    a row nil and named; a programme begun in 2026, or ended in 2025, leaves
+    the LTM FY + YTD - PYTD with an absent interim nil and named."""
+    one_off = _only_addback(
+        example_registers(),
+        "transaction_costs",
+        {"Q3_2025": 12, "FY2025": 12, "LTM_Q2_2026": 12},
+    )
+    model = credit_model(_model_inputs(one_off))
+    key = "metric:total_leverage_adjusted"
+    quarter = _line_cell(model, key, "Q:Q2_2026")
+    ltm = _line_cell(model, key, "LTM:LTM_Q2_2026")
+    assert quarter.value is not None and quarter.value == ltm.value
+    assert str(quarter.value)[:6] == "3.4573"
+    for nil in ("Q4_2025", "Q1_2026", "Q2_2026"):
+        assert treated_as_zero(nil) in (quarter.note or ""), nil
+    frames = ltm_frames(one_off, historical_columns(one_off))
+    assert frames["Q:Q2_2026"]["addback:transaction_costs"].value == 12
+
+    begun = _only_addback(
+        example_registers(),
+        "transaction_costs",
+        {"Q2_2026": 8, "H1_2026": 8, "LTM_Q2_2026": 8},
+    )
+    ltm_cell = _frame(begun)["LTM:LTM_Q2_2026"]["addback:transaction_costs"]
+    assert ltm_cell.value == 8
+    assert ltm_cell.note == "; ".join(
+        (treated_as_zero("FY2025"), treated_as_zero("H1_2025"))
+    )
+    model = credit_model(_model_inputs(begun))
+    assert _line_cell(model, "adjusted_ebitda", "LTM:LTM_Q2_2026").value is not None
+    ended = _only_addback(
+        example_registers(),
+        "transaction_costs",
+        {"Q1_2025": 8, "Q2_2025": 8, "H1_2025": 16, "FY2025": 32},
+    )
+    ended_cell = _frame(ended)["LTM:LTM_Q2_2026"]["addback:transaction_costs"]
+    assert (ended_cell.value, ended_cell.note) == (
+        Decimal(16),
+        treated_as_zero("H1_2026"),
+    )
+
+    # A recurring classified flow keeps the refusal: run 9b9e2b72's interest
+    # in financing, stated on FY2025 and H1 2026 only, is never 18 months.
+    live = _live_interest()
+    interest = "acct:interest_paid_in_financing"
+    assert _frame(live)["LTM:LTM_Q2_2026"][interest] == Cell(
+        None, "COMPONENT_MISSING", stated=None, note=history.PARTLY_STATED
+    )
+    assert ltm_frames(live, historical_columns(live))["Q:Q2_2026"][interest] == Cell(
+        None, "COMPONENT_MISSING", note=history.PARTLY_STATED
+    )
+
+
+def test_a_53_week_year_with_its_extra_week_in_q1_resolves_its_ltm() -> None:
+    """The stack adversary's MAJOR-B (apple.py): the example register on a
+    late-September calendar whose FY2025 is 53 weeks, a 14-week Q1 and a
+    27-week H1 2025 against a 26-week H1 2026."""
+    dates = {
+        "FY2023": ("2022-09-25", "2023-09-30"),
+        "Q1_2024": ("2023-10-01", "2023-12-30"),
+        "Q2_2024": ("2023-12-31", "2024-03-30"),
+        "Q3_2024": ("2024-03-31", "2024-06-29"),
+        "Q4_2024": ("2024-06-30", "2024-09-28"),
+        "FY2024": ("2023-10-01", "2024-09-28"),
+        "Q1_2025": ("2024-09-29", "2025-01-04"),
+        "Q2_2025": ("2025-01-05", "2025-04-05"),
+        "H1_2025": ("2024-09-29", "2025-04-05"),
+        "Q3_2025": ("2025-04-06", "2025-07-05"),
+        "Q4_2025": ("2025-07-06", "2025-10-04"),
+        "FY2025": ("2024-09-29", "2025-10-04"),
+        "Q1_2026": ("2025-10-05", "2026-01-03"),
+        "Q2_2026": ("2026-01-04", "2026-04-04"),
+        "H1_2026": ("2025-10-05", "2026-04-04"),
+        "LTM_Q2_2026": ("2025-04-06", "2026-04-04"),
+    }
+
+    def dated(period: PeriodRow) -> PeriodRow:
+        first, last = (date.fromisoformat(d) for d in dates[period.period_id])
+        days = last.toordinal() - first.toordinal() + 1
+        return replace(
+            period,
+            start_date=first.isoformat(),
+            end_date=last.isoformat(),
+            day_count=days,
+        )
+
+    regs = example_registers()
+    regs = replace(regs, periods=tuple(dated(p) for p in regs.periods))
+    columns = historical_columns(regs)
+    frame = account_frame(regs, columns)
+    assert frame["PYTD:H1_2025"]["acct:revenue"].value == 5750
+    assert frame["LTM:LTM_Q2_2026"]["acct:revenue"].value == 11654
+    assert ltm_frames(regs, columns)["Q:Q2_2026"]["acct:revenue"].value == 11654
+    # The same calendar from its quarters alone.
+    quarters = replace(
+        regs,
+        periods=tuple(p for p in regs.periods if not p.period_id.startswith("H1")),
+    )
+    quarterly = _frame(quarters)
+    assert quarterly["LTM:LTM_Q2_2026"]["acct:revenue"].value == 11654
