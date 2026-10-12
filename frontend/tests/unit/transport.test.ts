@@ -60,6 +60,7 @@ function v1Model(runId = RUN) {
       displayed_run_status: "COMPLETE",
       currency: null,
       unit: null,
+      snapshot_sha256: null,
       exclude_unrealised: false,
       rate_deck: null,
       columns: [],
