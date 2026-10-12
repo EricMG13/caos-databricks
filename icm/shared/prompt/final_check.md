@@ -9,10 +9,12 @@ and `canonical_filename` belong outside canonical front matter.
 Include every register required by the authority. `committee_status` must be
 one of {committee_statuses}: what this pathway's decision scope
 ({decision_scope}) permits.
-No cell of a register's critical column may be, in any letter case, exactly
-one of the values the authority lists as `critical_cell_values_casefold`:
-where the evidence is missing, write the authority's reason form,
-`[Insufficient Information] — ` followed by the reason, never the bare placeholder.
+No cell of a register's critical column, except those the authority lists
+for that register as `disqualifier_exempt_columns`, may be, in any letter
+case, exactly one of its `critical_cell_values_casefold` values. In those
+non-exempt critical cells, where the evidence is missing, write the
+authority's reason form, `[Insufficient Information] — ` followed by the
+reason, never the bare placeholder.
 An evidence line is all the text between two blank lines in the EVIDENCE
 section, other than an evidence header (its `source_id:` and `page:` lines);
 it may be a whole paragraph or a whole table row. The section's last line,
