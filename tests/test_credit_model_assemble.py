@@ -19,7 +19,11 @@ from credit_model_fixture import (
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
-from caos.calculators.credit_model._cells import CONTEXT, treated_as_zero
+from caos.calculators.credit_model._cells import (
+    CONTEXT,
+    UNSPANNED,
+    treated_as_zero,
+)
 from caos.calculators.credit_model.assemble import (
     NO_PROJECTIONS,
     NOT_APPLIED,
@@ -45,7 +49,12 @@ from caos.calculators.credit_model.layout import (
 )
 from caos.calculators.credit_model.metrics import metric_frame
 from caos.calculators.credit_model.statements import statement_frame
-from caos.methodology.model_inputs import Cp1Registers, PeriodRow, PfAdjustmentRow
+from caos.methodology.model_inputs import (
+    Cp1Registers,
+    PeriodRow,
+    PfAdjustmentRow,
+    coupon_percent,
+)
 
 _PF = "PF:LTM_Q2_2026"
 _LTM = "LTM:LTM_Q2_2026"
@@ -1686,6 +1695,83 @@ def test_interest_at_an_implied_rate_reconciles_to_its_last_digits() -> None:
     assert reconciliation_faults(model) == ()
 
 
+def _ssn29_terms(coupon: Decimal, *, fraction: bool, decided: bool) -> CreditModel:
+    """The model with ssn29's coupon, as read, set."""
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            replace(
+                f,
+                fixed_rate=coupon,
+                coupon_as_fraction=fraction,
+                terms_out_of_range=not decided,
+            )
+            if f.facility_id == "ssn29"
+            else f
+            for f in regs.facilities
+        ),
+    )
+    return _model(regs=regs)
+
+
+def _ssn29_written(written: str, text: str) -> CreditModel:
+    """The model with ssn29's coupon `written` beside `text`, as the reader
+    reads it."""
+    coupon, as_fraction, decided = coupon_percent(Decimal(written), text)
+    return _ssn29_terms(coupon, fraction=as_fraction, decided=decided)
+
+
+_FRACTION = "coupon read as a fraction"
+
+
+def test_a_genuine_quarter_percent_coupon_prices_at_a_quarter_percent() -> None:
+    model = _ssn29_written("0.250", "0.250%")
+    stated = _ssn29_terms(Decimal("0.250"), fraction=False, decided=True)
+
+    assert _value(model, "cash_interest", _BASE) == Decimal("-733.984")
+    for line in ("wa_rate", "cash_interest", "metric:interest_coverage_adjusted"):
+        assert _cell(model, line, _BASE) == _cell(stated, line, _BASE)
+        assert _cell(model, line, _BASE).note is None
+
+
+def test_a_quarter_percent_coupon_written_per_cent_prices_at_a_quarter_percent() -> (
+    None
+):
+    model = _ssn29_written("0.250", "0.25 per cent. Convertible Bonds due 2029")
+    stated = _ssn29_terms(Decimal("0.250"), fraction=False, decided=True)
+
+    assert _value(model, "cash_interest", _BASE) == Decimal("-733.984")
+    assert _cell(model, "fac:ssn29", _BASE).note is None
+    for line in ("wa_rate", "cash_interest", "metric:interest_coverage_adjusted"):
+        assert _cell(model, line, _BASE) == _cell(stated, line, _BASE)
+
+
+def test_a_fraction_coupon_prices_as_the_percent_and_notes_its_interest() -> None:
+    model = _ssn29_written("0.065", "6.500%")
+    stated = _ssn29_terms(Decimal("6.500"), fraction=False, decided=True)
+
+    assert _value(model, "cash_interest", _BASE) == Decimal("-858.984")
+    for line in (
+        "wa_rate",
+        "cash_interest",
+        "metric:interest_coverage_adjusted",
+    ):
+        cell = _cell(model, line, _BASE)
+        assert cell.value == _cell(stated, line, _BASE).value, line
+        assert cell.note == _FRACTION, line
+        assert _cell(stated, line, _BASE).note is None, line
+
+
+def test_a_coupon_with_no_deciding_text_prices_at_the_implied_rate_noted() -> None:
+    model = _ssn29_written("0.065", "Senior notes")
+
+    assert _cell(model, "fac:ssn29", _BASE).note == "term out of range"
+    for line in ("wa_rate", "cash_interest", "metric:interest_coverage_adjusted"):
+        assert _FRACTION not in (_cell(model, line, _BASE).note or ""), line
+    assert reconciliation_faults(model) == ()
+
+
 def test_business_unit_growth_reads_the_like_period() -> None:
     model = _model()
     with localcontext(CONTEXT):
@@ -1905,3 +1991,176 @@ def test_a_latest_fiscal_year_that_is_not_twelve_months_is_no_ltm(
         ), line_id
     # The fiscal year itself is still a column with its own figures.
     assert _value(model, "revenue", "FY:FY2025") > 0
+
+
+def test_the_model_lists_a_short_or_long_latest_fiscal_year_once() -> None:
+    for first, last, days, note in (
+        ("2025-04-01", "2025-12-31", 275, "short fiscal year (FY2025)"),
+        ("2024-10-01", "2025-12-31", 457, "long fiscal year (FY2025)"),
+    ):
+        model = _model(regs=_fy_anchored(first, last, days), projected=False)
+
+        assert f"{note}: LTM:FY2025" in model.limitations
+
+
+def test_a_stated_ltm_ending_at_a_short_fiscal_year_keeps_only_the_stated_figure() -> (
+    None
+):
+    """CP-1's own LTM row ending where the short fiscal year does: the host
+    builds nothing, notes why, and CP-1's figure stays `stated`."""
+    full = example_registers()
+    base = _fy_anchored("2025-04-01", "2025-12-31", 275)
+    stated_ltm = next(p for p in full.periods if p.period_id == "LTM_Q2_2026")
+    ltm = replace(
+        stated_ltm,
+        period_id="LTM_FY2025",
+        fiscal_year="2025",
+        start_date="2025-04-01",
+        end_date="2025-12-31",
+        day_count=275,
+        component_period_ids=(),
+    )
+    rows = tuple(
+        replace(a, period_id="LTM_FY2025")
+        for a in full.accounts
+        if a.period_id == "LTM_Q2_2026"
+    )
+    regs = replace(base, periods=(*base.periods, ltm), accounts=(*base.accounts, *rows))
+    model = _model(regs=regs, projected=False)
+
+    column = next(c for c in model.columns if c.kind == "LTM")
+    assert column.column_id == "LTM:LTM_FY2025"
+    revenue = next(r for r in rows if r.metric_id == "revenue")
+    cell = _cell(model, "revenue", column.column_id)
+    assert (cell.value, cell.reason, cell.note) == (
+        None,
+        "COMPONENT_MISSING",
+        "short fiscal year (FY2025)",
+    )
+    assert cell.stated == revenue.value
+
+
+@pytest.mark.parametrize(
+    ("first", "last", "days"),
+    [
+        ("2024-12-30", "2025-12-28", 364),  # 52 weeks
+        ("2024-12-30", "2026-01-04", 371),  # 53 weeks
+        ("2025-01-01", "2025-12-31", 365),
+    ],
+)
+def test_a_52_or_53_week_latest_fiscal_year_still_builds_the_ltm(
+    first: str, last: str, days: int
+) -> None:
+    model = _model(regs=_fy_anchored(first, last, days), projected=False)
+
+    for line_id in ("revenue", "adjusted_ebitda"):
+        ltm = _cell(model, line_id, "LTM:FY2025")
+        assert ltm.value is not None and ltm.note is None, line_id
+        assert ltm.value == _value(model, line_id, "FY:FY2025")
+    assert _cell(model, "metric:total_leverage_adjusted", "LTM:FY2025").note is None
+
+
+@pytest.mark.parametrize(
+    ("first", "last", "days"),
+    [
+        ("2025-12-31", "2025-01-01", 0),  # it ends before it starts
+        ("9999-01-01", "9999-12-31", 365),  # the day after it is beyond the calendar
+    ],
+)
+def test_a_latest_fiscal_year_that_cannot_be_spanned_is_no_ltm(
+    first: str, last: str, days: int
+) -> None:
+    model = _model(regs=_fy_anchored(first, last, days), projected=False)
+
+    cell = _cell(model, "revenue", "LTM:FY2025")
+    assert (cell.value, cell.reason, cell.note) == (
+        None,
+        "COMPONENT_MISSING",
+        UNSPANNED,
+    )
+
+
+def test_a_latest_fiscal_year_that_cannot_be_dated_is_no_ltm() -> None:
+    regs = _fy_anchored("2025-01-01", "2025-12-31", None)
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(p, start_date=None) if p.period_id == "FY2025" else p
+            for p in regs.periods
+        ),
+    )
+    model = _model(regs=regs, projected=False)
+
+    cell = _cell(model, "revenue", "LTM:FY2025")
+    assert (cell.value, cell.reason, cell.note) == (
+        None,
+        "COMPONENT_MISSING",
+        UNSPANNED,
+    )
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "days", "why"),
+    [
+        ("2025-04-01", "2025-12-31", 275, "short fiscal year (FY2025)"),
+        ("2024-10-01", "2025-12-31", 457, "long fiscal year (FY2025)"),
+        (None, "2025-12-31", None, UNSPANNED),
+        ("2025-01-01", None, 365, UNSPANNED),
+    ],
+)
+def test_an_invalid_projection_base_reaches_model_limitations(
+    start: str | None,
+    end: str | None,
+    days: int | None,
+    why: str,
+) -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(p, start_date=start, end_date=end, day_count=days)
+            if p.period_id == "FY2025"
+            else p
+            for p in regs.periods
+        ),
+    )
+    model = _model(regs)
+    note = f"projection base: {why}"
+    assert any(
+        note in limitation
+        and "BASE:2026" in limitation
+        and "DOWNSIDE:2028" in limitation
+        for limitation in model.limitations
+    )
+    for column in (c for c in model.columns if c.kind == "PROJECTED"):
+        for key in (
+            "revenue",
+            "adjusted_ebitda",
+            "total_debt",
+            "metric:adjusted_ebitda_margin",
+        ):
+            cell = _cell(model, key, column.column_id)
+            assert cell.value is None and cell.reason == "COMPONENT_MISSING"
+            assert note in (cell.note or "")
+    for column in (c for c in model.columns if c.kind == "PROJECTED"):
+        for key in (
+            "metric:total_leverage_reported",
+            "metric:net_leverage_reported",
+            "metric:interest_coverage_reported",
+            "metric:lease_adjusted_leverage",
+            "metric:lease_adjusted_net_leverage",
+            "metric:ebitdar_coverage",
+            "metric:ffo_to_debt",
+            "metric:ffo_to_lease_adjusted_debt",
+            "metric:gross_margin",
+            "metric:ebitda_margin",
+        ):
+            cell = _cell(model, key, column.column_id)
+            assert cell.value is None and cell.reason == "NOT_PROJECTED", (
+                key,
+                column.column_id,
+            )
+        for key in ("metric:total_leverage_adjusted", "metric:net_leverage_adjusted"):
+            cell = _cell(model, key, column.column_id)
+            assert cell == Cell(None, "COMPONENT_MISSING", note=note)
+    assert _value(model, "revenue", "FY:FY2025") == 11519

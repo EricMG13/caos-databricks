@@ -1261,6 +1261,72 @@ def test_a_coupon_read_as_a_fraction_is_noted_on_the_facility() -> None:
     assert first["wa_rate"].value == stated["wa_rate"].value
 
 
+def test_a_coupon_read_as_a_fraction_is_noted_on_the_weighted_rate_and_interest() -> (
+    None
+):
+    terms = _read_coupon("0.065", "6.500%")
+    first = _frame(_inputs(_terms(example_registers(), "ssn29", terms)))["BASE:2026"]
+    stated = _frame(_inputs())["BASE:2026"]
+
+    assert first["wa_rate"].note == COUPON_AS_FRACTION
+    assert COUPON_AS_FRACTION in (first["cash_interest"].note or "")
+    assert stated["wa_rate"].note is None
+    assert stated["cash_interest"].note is None
+
+
+def test_a_fraction_coupon_on_a_balance_under_one_unit_still_notes_the_interest() -> (
+    None
+):
+    # The facility weight is any positive balance, however small.
+    zero = dict.fromkeys(_INTEREST_BEARING, Decimal(0)) | {"ssn29": Decimal("0.5")}
+    terms = _read_coupon("0.065", "6.500%")
+    regs = _terms(_at_anchor(example_registers(), zero), "ssn29", terms)
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    assert first["wa_rate"].note == COUPON_AS_FRACTION
+    assert first["cash_interest"].value is not None
+    assert COUPON_AS_FRACTION in (first["cash_interest"].note or "")
+
+
+def test_a_coupon_stated_beside_its_text_prices_at_that_percent_unnoted() -> None:
+    terms = _read_coupon("0.250", "0.250%")
+    first = _frame(_inputs(_terms(example_registers(), "ssn29", terms)))["BASE:2026"]
+
+    assert first["fac:ssn29"].note is None
+    assert first["wa_rate"].note is None
+    assert first["cash_interest"].note is None
+
+
+def test_only_the_fraction_note_reaches_the_weighted_rate_and_interest() -> None:
+    # A coupon with no deciding text prices at the implied rate, noted "term
+    # out of range" on the facility alone, as every other facility-rate note.
+    terms = _read_coupon("0.065", "Senior notes")
+    first = _frame(_inputs(_terms(example_registers(), "ssn29", terms)))["BASE:2026"]
+
+    assert first["fac:ssn29"].note is not None
+    assert projection_module.OUT_OF_RANGE in first["fac:ssn29"].note
+    assert COUPON_AS_FRACTION not in (first["wa_rate"].note or "")
+    assert COUPON_AS_FRACTION not in (first["cash_interest"].note or "")
+    assert projection_module.OUT_OF_RANGE not in (first["wa_rate"].note or "")
+
+
+def test_an_undrawn_fraction_coupon_leaves_the_weighted_rate_unnoted() -> None:
+    terms = _read_coupon("0.065", "6.500%")
+    regs = _terms(example_registers(), "ssn29", terms)
+    regs = replace(
+        regs,
+        facilities=tuple(
+            replace(f, drawn_amount=Decimal(0), carrying_value=Decimal(0))
+            if f.facility_id == "ssn29"
+            else f
+            for f in regs.facilities
+        ),
+    )
+    first = _frame(_inputs(regs))["BASE:2026"]
+
+    assert first["wa_rate"].note is None
+
+
 def test_terms_in_the_wrong_unit_price_at_the_implied_rate_noted() -> None:
     wrong = {"spread_bps": Decimal("2.25"), "floor_bps": Decimal("0.5")}
     regs = _terms(example_registers(), "tlb", wrong)
@@ -1658,3 +1724,139 @@ def test_the_implied_rate_carries_an_opening_whose_history_is_incomplete() -> No
     # No implied rate: its reason is the weighted rate's, not the facility's.
     missing = Cell(None, "COMPONENT_MISSING", note=HISTORY_INCOMPLETE)
     assert facility_rate(ssn29, None, "BASE", 1, missing) == (None, "implied rate")
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "days", "why"),
+    [
+        ("2025-04-01", "2025-12-31", 275, "short fiscal year (FY2025)"),
+        ("2024-10-01", "2025-12-31", 457, "long fiscal year (FY2025)"),
+        (None, "2025-12-31", None, UNSPANNED),
+        ("2025-01-01", None, 365, UNSPANNED),
+    ],
+)
+@pytest.mark.parametrize("driver_revenue", [True, False])
+def test_an_incomplete_base_fy_withholds_every_projected_figure(
+    start: str | None,
+    end: str | None,
+    days: int | None,
+    why: str,
+    driver_revenue: bool,
+) -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(p, start_date=start, end_date=end, day_count=days)
+            if p.period_id == "FY2025"
+            else p
+            for p in regs.periods
+        ),
+    )
+    request = example_request()
+    if not driver_revenue:
+        for driver in request["drivers"]:
+            del driver["revenue"]
+    inputs = _inputs(regs, request)
+    columns, frame = projection(inputs)
+    assert [(c.column_id, c.end_date) for c in columns] == [
+        (f"{case}:{year}", f"{year}-12-31")
+        for case in ("BASE", "DOWNSIDE")
+        for year in (2026, 2027, 2028)
+    ]
+    expected = Cell(None, "COMPONENT_MISSING", note=f"projection base: {why}")
+    for column in columns:
+        for key, cell in frame[column.column_id].items():
+            if cell.reason not in {"NOT_PROJECTED", "NOT_APPLICABLE"}:
+                assert cell == expected, (column.column_id, key)
+    assert inputs.history["FY:FY2025"]["revenue"].value == 11519
+    assert frame["BASE:2026"]["ebitda"] == Cell(None, "NOT_PROJECTED")
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "days"),
+    [
+        ("2025-01-01", "2025-12-31", 365),
+        ("2024-03-01", "2025-02-28", 365),
+        ("2024-01-01", "2024-12-31", 366),
+        ("2024-02-04", "2025-02-01", 364),
+        ("2024-02-04", "2025-02-08", 371),
+        (None, "2025-12-31", 365),
+        ("2025-01-01", "2026-01-07", 372),
+    ],
+)
+def test_a_complete_base_fy_preserves_projection_compounding(
+    start: str | None,
+    end: str,
+    days: int,
+) -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(p, start_date=start, end_date=end, day_count=days)
+            if p.period_id == "FY2025"
+            else p
+            for p in regs.periods
+        ),
+    )
+    frame = _frame(_inputs(regs))
+    assert frame["BASE:2028"]["bu:las_vegas"].value == (
+        Decimal(4213) * Decimal("1.025") * Decimal("1.030") * Decimal("1.030")
+    )
+    assert frame["DOWNSIDE:2026"]["revenue"].value is not None
+
+
+def test_an_incomplete_base_preserves_no_floating_reference_rate() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(row for row in regs.facilities if row.rate_type != "FLOATING"),
+    )
+    # The actual facility mix has no floating reference rate before applying
+    # the base-FY refusal; the refusal must preserve that structural reason.
+    valid_columns, valid_frame = projection(_inputs(regs))
+    assert len(valid_columns) == 6
+    for column in valid_columns:
+        assert valid_frame[column.column_id]["reference_rate"] == Cell(
+            None, "NOT_APPLICABLE"
+        )
+        assert valid_frame[column.column_id]["revenue"].value is not None
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(p, start_date="2025-04-01", day_count=275)
+            if p.period_id == "FY2025"
+            else p
+            for p in regs.periods
+        ),
+    )
+    columns, frame = projection(_inputs(regs))
+    assert columns == valid_columns
+    for column in columns:
+        cells = frame[column.column_id]
+        assert cells["reference_rate"] == Cell(None, "NOT_APPLICABLE")
+        assert cells["revenue"] == Cell(
+            None,
+            "COMPONENT_MISSING",
+            note="projection base: short fiscal year (FY2025)",
+        )
+        assert cells["ebitda"] == Cell(None, "NOT_PROJECTED")
+
+
+def test_an_incomplete_base_fy_still_refuses_a_malformed_driver() -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(p, start_date="2025-04-01", day_count=275)
+            if p.period_id == "FY2025"
+            else p
+            for p in regs.periods
+        ),
+    )
+    request = example_request()
+    request["drivers"][0]["capex"] = "1,700"
+    with pytest.raises(Refusal) as caught:
+        projection(_inputs(regs, request))
+    assert caught.value.code == RefusalCode.METHODOLOGY_INPUT_INVALID
