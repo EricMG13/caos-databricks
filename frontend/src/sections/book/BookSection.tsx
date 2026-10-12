@@ -15,7 +15,7 @@ import { useLedger } from "@/app/ledger";
 import { Digest } from "@/ds/Digest";
 import { useEvidence } from "@/evidence/EvidenceContext";
 import type { Refusal } from "@/wire";
-import type { BookColumn, BookDocument, BookPeriod, BookRow } from "@/wire/v1";
+import type { BookColumn, BookDocument, BookPeriod, BookRow, LegacyBookDocument } from "@/wire/v1";
 
 /** Every period any credit carries, in the order the first credit to carry it
     states: the comparison is over what was served, never a period this view
@@ -48,7 +48,12 @@ function reasonOf(row: BookRow): string | null {
   return null;
 }
 
-export function BookSection({ document }: { document: BookDocument; tab: string | null }) {
+export function LegacyBookSection({
+  document,
+}: {
+  document: LegacyBookDocument;
+  tab: string | null;
+}) {
   const { body, observed_at: observedAt } = document;
   const [selected, setSelected] = useState<string | null>(null);
   const [refusedLens, setRefusedLens] = useState<Record<string, Refusal>>({});
@@ -235,6 +240,45 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
           </div>
         </section>
       ))}
+    </div>
+  );
+}
+
+export function BookSection({ document }: { document: BookDocument; tab: string | null }) {
+  const issuers = document.body.issuers;
+  return (
+    <div className="col" data-book-v2>
+      <section className="pnl">
+        <header>
+          <h2>Issuers</h2>
+          <span className="cp">{issuers.length} issuers</span>
+        </header>
+        <div className="pb tscroll" tabIndex={0} role="region" aria-label="Issuers in the Book">
+          <table className="tbl pin-first">
+            <caption className="sr-only">Issuers in the Book</caption>
+            <thead>
+              <tr>
+                <th scope="col">Issuer</th>
+                <th scope="col">Reporting period</th>
+                <th scope="col">Sector</th>
+                <th scope="col">Composite</th>
+              </tr>
+            </thead>
+            <tbody>
+              {issuers.map(({ issuer_key: key, displayed: entry }) => (
+                <tr key={key} data-issuer={key} data-entry={entry.entry_id}>
+                  <th scope="row" className="l wrap">
+                    {entry.issuer_name}
+                  </th>
+                  <td className="l">{entry.reporting_period}</td>
+                  <td className="l">{entry.sector}</td>
+                  <td className="l">{entry.composite}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

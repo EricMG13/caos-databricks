@@ -137,7 +137,7 @@ test("the Book title survives zoom reflow in both colour schemes", async ({ page
     await page.goto("/book/?case=00000000-0000-4000-8000-000000000001");
     const title = page.getByRole("heading", { name: "Book", level: 1 });
     await expect(title).toBeVisible();
-    await expect(page.getByText("Partial", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("table", { name: "Issuers in the Book" })).toBeAttached();
     await expect(page.getByRole("button", { name: "Colour theme" })).toBeVisible();
     const titleBox = await title.boundingBox();
     expect(titleBox).toBeTruthy();

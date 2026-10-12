@@ -2,884 +2,1362 @@
   "chrome": {
     "subject": null,
     "served_role": {
-      "global_role": "READER",
+      "global_role": "ANALYST",
       "standing": null
     },
     "actions": []
   },
   "body": {
-    "basis": {
-      "period": "EVERY_ACCEPTED_PERIOD",
-      "scenario": "EVERY_ACCEPTED_CASE",
-      "accepted_only": true
-    },
-    "columns": [
+    "issuers": [
       {
-        "key": "operating.revenue",
-        "label": "Revenue",
-        "unit": "currency"
-      },
-      {
-        "key": "operating.ebitda",
-        "label": "EBITDA",
-        "unit": "currency"
-      },
-      {
-        "key": "operating.cfo",
-        "label": "Cash flow from operations",
-        "unit": "currency"
-      },
-      {
-        "key": "investing.capex",
-        "label": "Capital expenditure",
-        "unit": "currency"
-      },
-      {
-        "key": "financing.cash_interest",
-        "label": "Cash interest",
-        "unit": "currency"
-      },
-      {
-        "key": "operating.margin",
-        "label": "EBITDA margin",
-        "unit": "percent"
-      }
-    ],
-    "rows": [
-      {
-        "case_id": "00000000-0000-4000-8000-000000000001",
-        "title": "Carvana Co.",
-        "standing": "READER",
-        "subject": {
+        "issuer_key": "CVNA",
+        "displayed": {
+          "entry_id": "00000000-0000-4000-8000-0000000000e1",
+          "case_id": "00000000-0000-4000-8000-000000000001",
+          "run_id": "00000000-0000-4000-8000-0000000000b2",
+          "issuer_key": "CVNA",
           "issuer_id": "CVNA",
           "issuer_name": "Carvana Co.",
           "reporting_period": "FY2025",
-          "analysis_date": "2026-09-14"
+          "analysis_date": "2026-09-14",
+          "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+          "filed": true,
+          "sources_withdrawn": false,
+          "sector": "Consumer Discretionary",
+          "industry_group": "Consumer Discretionary Distribution & Retail",
+          "domicile": "US",
+          "moodys": "B2",
+          "moodys_outlook": "POSITIVE",
+          "sp": "B",
+          "sp_outlook": "POSITIVE",
+          "fitch": null,
+          "fitch_outlook": null,
+          "composite": "B",
+          "composite_bucket": "B",
+          "composite_notch": 15,
+          "currency": "USD",
+          "unit": "MILLIONS",
+          "metrics": {
+            "LTM": {
+              "revenue": "20322",
+              "metric:gross_margin": "0.2062",
+              "metric:ebitda_margin": "0.0989",
+              "adjusted_ebitda": "2150",
+              "metric:adjusted_ebitda_margin": "0.1058",
+              "ffo": "1180",
+              "fcf": "960",
+              "cash_closing": "2160",
+              "liquidity": "3660",
+              "total_debt": "5480",
+              "net_debt": "3320",
+              "lease_adjusted_net_debt": "4020",
+              "metric:total_leverage_reported": "2.73",
+              "metric:total_leverage_adjusted": "2.55",
+              "metric:net_leverage_reported": "1.65",
+              "metric:net_leverage_adjusted": "1.54",
+              "metric:senior_secured_leverage": "1.53",
+              "metric:senior_secured_net_leverage": "0.52",
+              "metric:lease_adjusted_leverage": "2.70",
+              "metric:lease_adjusted_net_leverage": "1.76",
+              "metric:interest_coverage_reported": "3.41",
+              "metric:interest_coverage_adjusted": "3.64",
+              "metric:capex_adjusted_coverage": "3.24",
+              "metric:ebitdar_coverage": "2.81",
+              "metric:ffo_to_debt": "0.2153",
+              "metric:ffo_to_lease_adjusted_debt": "0.1909",
+              "metric:fcf_to_debt": "0.1752",
+              "metric:fcf_to_adjusted_ebitda": "0.4465",
+              "metric:capex_to_revenue": "0.0118",
+              "metric:liquidity_to_debt": "0.6679"
+            },
+            "BASE_FY1": {
+              "revenue": "22950",
+              "metric:gross_margin": "0.2074",
+              "metric:ebitda_margin": "0.1037",
+              "adjusted_ebitda": "2480",
+              "metric:adjusted_ebitda_margin": "0.1081",
+              "ffo": "1520",
+              "fcf": "1240",
+              "cash_closing": "2840",
+              "liquidity": "4340",
+              "total_debt": "5210",
+              "net_debt": "2370",
+              "lease_adjusted_net_debt": "3120",
+              "metric:total_leverage_reported": "2.19",
+              "metric:total_leverage_adjusted": "2.10",
+              "metric:net_leverage_reported": "1.00",
+              "metric:net_leverage_adjusted": "0.96",
+              "metric:senior_secured_leverage": "1.26",
+              "metric:senior_secured_net_leverage": "0.12",
+              "metric:lease_adjusted_leverage": "2.27",
+              "metric:lease_adjusted_net_leverage": "1.19",
+              "metric:interest_coverage_reported": "4.58",
+              "metric:interest_coverage_adjusted": "4.77",
+              "metric:capex_adjusted_coverage": "4.23",
+              "metric:ebitdar_coverage": "3.51",
+              "metric:ffo_to_debt": "0.2917",
+              "metric:ffo_to_lease_adjusted_debt": "0.2550",
+              "metric:fcf_to_debt": "0.2380",
+              "metric:fcf_to_adjusted_ebitda": "0.5000",
+              "metric:capex_to_revenue": "0.0122",
+              "metric:liquidity_to_debt": "0.8330"
+            },
+            "PF_LTM": {
+              "revenue": "21338",
+              "metric:gross_margin": "0.2062",
+              "metric:ebitda_margin": "0.0989",
+              "adjusted_ebitda": "2258",
+              "metric:adjusted_ebitda_margin": "0.1058",
+              "ffo": "1239",
+              "fcf": "1008",
+              "cash_closing": "2268",
+              "liquidity": "3843",
+              "total_debt": "5754",
+              "net_debt": "3486",
+              "lease_adjusted_net_debt": "4221",
+              "metric:total_leverage_reported": "2.73",
+              "metric:total_leverage_adjusted": "2.55",
+              "metric:net_leverage_reported": "1.65",
+              "metric:net_leverage_adjusted": "1.84",
+              "metric:senior_secured_leverage": "1.53",
+              "metric:senior_secured_net_leverage": "0.52",
+              "metric:lease_adjusted_leverage": "2.70",
+              "metric:lease_adjusted_net_leverage": "2.06",
+              "metric:interest_coverage_reported": "3.41",
+              "metric:interest_coverage_adjusted": "3.64",
+              "metric:capex_adjusted_coverage": "3.24",
+              "metric:ebitdar_coverage": "2.81",
+              "metric:ffo_to_debt": "0.2153",
+              "metric:ffo_to_lease_adjusted_debt": "0.1909",
+              "metric:fcf_to_debt": "0.1752",
+              "metric:fcf_to_adjusted_ebitda": "0.4465",
+              "metric:capex_to_revenue": "0.0118",
+              "metric:liquidity_to_debt": "0.6679"
+            },
+            "DOWNSIDE_FY1": {
+              "revenue": "18899",
+              "metric:gross_margin": "0.2062",
+              "metric:ebitda_margin": "0.0989",
+              "adjusted_ebitda": "2000",
+              "metric:adjusted_ebitda_margin": "0.1058",
+              "ffo": "1097",
+              "fcf": "893",
+              "cash_closing": "2009",
+              "liquidity": "3404",
+              "total_debt": "5096",
+              "net_debt": "3088",
+              "lease_adjusted_net_debt": "3739",
+              "metric:total_leverage_reported": "2.73",
+              "metric:total_leverage_adjusted": "2.55",
+              "metric:net_leverage_reported": "1.65",
+              "metric:net_leverage_adjusted": "2.14",
+              "metric:senior_secured_leverage": "1.53",
+              "metric:senior_secured_net_leverage": "0.52",
+              "metric:lease_adjusted_leverage": "2.70",
+              "metric:lease_adjusted_net_leverage": "2.36",
+              "metric:interest_coverage_reported": "3.41",
+              "metric:interest_coverage_adjusted": "3.64",
+              "metric:capex_adjusted_coverage": "3.24",
+              "metric:ebitdar_coverage": "2.81",
+              "metric:ffo_to_debt": "0.2153",
+              "metric:ffo_to_lease_adjusted_debt": "0.1909",
+              "metric:fcf_to_debt": "0.1752",
+              "metric:fcf_to_adjusted_ebitda": "0.4465",
+              "metric:capex_to_revenue": "0.0118",
+              "metric:liquidity_to_debt": "0.6679"
+            }
+          },
+          "fiscal_years": {
+            "BASE_FY1": "2026",
+            "DOWNSIDE_FY1": "2026"
+          },
+          "limitations": ["no rate deck: BASE:2026"],
+          "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "added_at": "2026-09-14T11:20:00Z",
+          "withdrawn_at": null,
+          "withdrawal_reason": null,
+          "withdrawal_note": null,
+          "actions": ["WITHDRAW_BOOK_ENTRY"]
         },
-        "displayed_run_id": "00000000-0000-4000-8000-0000000000a1",
-        "displayed_run_status": "COMPLETE",
-        "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
-        "currency": "USD",
-        "scale": "millions",
-        "periods": [
-          {
-            "case": "BASE",
-            "period_id": "FY2026",
-            "fiscal_year": "2026",
-            "days": "365",
-            "unavailable_reason": null,
-            "cells": [
-              {
-                "column": "operating.revenue",
-                "value": "500.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "Revenue, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].revenue \u2014 revenue = 500",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/revenue = \"500\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/revenue = \"500\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 336.0,
-                          "x1": 244.8,
-                          "y1": 348.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "operating.ebitda",
-                "value": "100.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "EBITDA, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].ebitda \u2014 ebitda = 100",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/ebitda = \"100\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/ebitda = \"100\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 348.0,
-                          "x1": 244.8,
-                          "y1": 360.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "operating.cfo",
-                "value": "80.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "Cash flow from operations, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].cfo \u2014 cfo = 80",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/cfo = \"80\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/cfo = \"80\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 360.0,
-                          "x1": 244.8,
-                          "y1": 372.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "investing.capex",
-                "value": "20.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "Capital expenditure, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].capex \u2014 capex = 20",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/capex = \"20\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/capex = \"20\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 372.0,
-                          "x1": 244.8,
-                          "y1": 384.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "financing.cash_interest",
-                "value": "10.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "Cash interest, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].cash_interest \u2014 cash_interest = 10",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/cash_interest = \"10\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/cash_interest = \"10\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 384.0,
-                          "x1": 244.8,
-                          "y1": 396.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "operating.margin",
-                "value": "0.2000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "EBITDA margin, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "operating.ebitda / operating.revenue \u2014 ebitda = 100, revenue = 500",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/ebitda = \"100\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/ebitda = \"100\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 348.0,
-                          "x1": 244.8,
-                          "y1": 360.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    },
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/revenue = \"500\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/revenue = \"500\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 336.0,
-                          "x1": 244.8,
-                          "y1": 348.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ],
-        "unavailable_reason": null,
-        "refusal": null
+        "history": []
       },
       {
-        "case_id": "00000000-0000-4000-8000-000000000002",
-        "title": "Virgin Media O2",
-        "standing": "READER",
-        "subject": {
-          "issuer_id": "CVNA",
-          "issuer_name": "Virgin Media O2",
+        "issuer_key": "CZR",
+        "displayed": {
+          "entry_id": "00000000-0000-4000-8000-0000000000e4",
+          "case_id": "00000000-0000-4000-8000-000000000003",
+          "run_id": "00000000-0000-4000-8000-0000000000b5",
+          "issuer_key": "CZR",
+          "issuer_id": "CZR",
+          "issuer_name": "Caesars Entertainment, Inc.",
           "reporting_period": "FY2025",
-          "analysis_date": "2026-09-14"
+          "analysis_date": "2026-03-31",
+          "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+          "filed": false,
+          "sources_withdrawn": true,
+          "sector": "Consumer Discretionary",
+          "industry_group": "Consumer Services",
+          "domicile": "US",
+          "moodys": "B1",
+          "moodys_outlook": "STABLE",
+          "sp": "B+",
+          "sp_outlook": "STABLE",
+          "fitch": "BB-",
+          "fitch_outlook": "STABLE",
+          "composite": "B+",
+          "composite_bucket": "B",
+          "composite_notch": 14,
+          "currency": "USD",
+          "unit": "MILLIONS",
+          "metrics": {
+            "LTM": {
+              "revenue": "11250",
+              "metric:gross_margin": "0.5351",
+              "metric:ebitda_margin": "0.3093",
+              "adjusted_ebitda": "3590",
+              "metric:adjusted_ebitda_margin": "0.3191",
+              "ffo": "1660",
+              "fcf": "400",
+              "cash_closing": "880",
+              "liquidity": "2960",
+              "total_debt": "12050",
+              "net_debt": "11170",
+              "lease_adjusted_net_debt": "17570",
+              "metric:total_leverage_reported": "3.46",
+              "metric:total_leverage_adjusted": "3.36",
+              "metric:net_leverage_reported": "3.21",
+              "metric:net_leverage_adjusted": "3.11",
+              "metric:senior_secured_leverage": "2.01",
+              "metric:senior_secured_net_leverage": "1.77",
+              "metric:lease_adjusted_leverage": "3.79",
+              "metric:lease_adjusted_net_leverage": "3.61",
+              "metric:interest_coverage_reported": "3.31",
+              "metric:interest_coverage_adjusted": "3.42",
+              "metric:capex_adjusted_coverage": "2.22",
+              "metric:ebitdar_coverage": "1.55",
+              "metric:ffo_to_debt": "0.1378",
+              "metric:ffo_to_lease_adjusted_debt": "0.0900",
+              "metric:fcf_to_debt": "0.0332",
+              "metric:fcf_to_adjusted_ebitda": "0.1114",
+              "metric:capex_to_revenue": "0.1120",
+              "metric:liquidity_to_debt": "0.2456"
+            }
+          },
+          "fiscal_years": {},
+          "limitations": [],
+          "snapshot_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "added_at": "2026-04-06T14:45:00Z",
+          "withdrawn_at": null,
+          "withdrawal_reason": null,
+          "withdrawal_note": null,
+          "actions": []
         },
-        "displayed_run_id": "00000000-0000-4000-8000-0000000000a1",
-        "displayed_run_status": "COMPLETE",
-        "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
-        "currency": "USD",
-        "scale": "millions",
-        "periods": [
-          {
-            "case": "BASE",
-            "period_id": "FY2026",
-            "fiscal_year": "2026",
-            "days": "365",
-            "unavailable_reason": null,
-            "cells": [
-              {
-                "column": "operating.revenue",
-                "value": "1000.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "Revenue, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].revenue \u2014 revenue = 1000",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/revenue = \"1000\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/revenue = \"1000\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 336.0,
-                          "x1": 244.8,
-                          "y1": 348.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "operating.ebitda",
-                "value": "200.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "EBITDA, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].ebitda \u2014 ebitda = 200",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/ebitda = \"200\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/ebitda = \"200\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 348.0,
-                          "x1": 244.8,
-                          "y1": 360.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "operating.cfo",
-                "value": "160.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "Cash flow from operations, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].cfo \u2014 cfo = 160",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/cfo = \"160\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/cfo = \"160\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 360.0,
-                          "x1": 244.8,
-                          "y1": 372.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "investing.capex",
-                "value": "40.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "Capital expenditure, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].capex \u2014 capex = 40",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/capex = \"40\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/capex = \"40\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 372.0,
-                          "x1": 244.8,
-                          "y1": 384.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "financing.cash_interest",
-                "value": "20.000000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "Cash interest, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "drivers[period].cash_interest \u2014 cash_interest = 20",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/cash_interest = \"20\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/cash_interest = \"20\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 384.0,
-                          "x1": 244.8,
-                          "y1": 396.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              },
-              {
-                "column": "operating.margin",
-                "value": "0.2000",
-                "unavailable_reason": null,
-                "passport": {
-                  "definition": "EBITDA margin, as the accepted driver row for the period states it (caos-forecast-v1).",
-                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
-                  "scenario": "BASE",
-                  "reporting_period": "FY2025",
-                  "computed_at": "2026-09-14T10:00:00Z",
-                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
-                  "method": "cash_flow_forecast \u00b7 VERIFIED",
-                  "derivation": "operating.ebitda / operating.revenue \u2014 ebitda = 200, revenue = 1000",
-                  "citations": [
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/ebitda = \"200\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/ebitda = \"200\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 348.0,
-                          "x1": 244.8,
-                          "y1": 360.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    },
-                    {
-                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                      "source_id": "00000000-0000-4000-8000-0000000000d1",
-                      "filename": "issuer-pack.txt",
-                      "page": 1,
-                      "matched_text": "/drivers/0/revenue = \"1000\"",
-                      "line": {
-                        "before": "",
-                        "excerpt": "/drivers/0/revenue = \"1000\"",
-                        "after": "",
-                        "recorded": true
-                      },
-                      "rects": [
-                        {
-                          "x0": 72.0,
-                          "y0": 336.0,
-                          "x1": 244.8,
-                          "y1": 348.0
-                        }
-                      ],
-                      "withdrawn_at": null,
-                      "cited_page": null,
-                      "linked": true,
-                      "marker": null
-                    }
-                  ],
-                  "supporting_research": [
-                    {
-                      "route_node_id": "CP-1",
-                      "module_id": "CP-1",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-2G",
-                      "module_id": "CP-2G",
-                      "qa_status": "Passed"
-                    },
-                    {
-                      "route_node_id": "CP-CF",
-                      "module_id": "CP-CF",
-                      "qa_status": "Passed"
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ],
-        "unavailable_reason": null,
-        "refusal": null
+        "history": []
       },
       {
-        "case_id": "00000000-0000-4000-8000-000000000003",
-        "title": "Terra Firma Holdings",
-        "standing": "READER",
-        "subject": null,
-        "displayed_run_id": "00000000-0000-4000-8000-0000000000a3",
-        "displayed_run_status": "BLOCKED",
-        "snapshot": null,
-        "currency": null,
-        "scale": null,
-        "periods": [],
-        "unavailable_reason": "NO_ACCEPTED_FORECAST",
-        "refusal": null
+        "issuer_key": "VMO2",
+        "displayed": {
+          "entry_id": "00000000-0000-4000-8000-0000000000e3",
+          "case_id": "00000000-0000-4000-8000-000000000002",
+          "run_id": "00000000-0000-4000-8000-0000000000b4",
+          "issuer_key": "VMO2",
+          "issuer_id": "VMO2",
+          "issuer_name": "Virgin Media O2",
+          "reporting_period": "H1 2026",
+          "analysis_date": "2026-06-30",
+          "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+          "filed": false,
+          "sources_withdrawn": false,
+          "sector": "Communication Services",
+          "industry_group": "Telecommunication Services",
+          "domicile": "GB",
+          "moodys": "B1",
+          "moodys_outlook": "STABLE",
+          "sp": "BB-",
+          "sp_outlook": "STABLE",
+          "fitch": "BB-",
+          "fitch_outlook": "NEGATIVE",
+          "composite": "BB-",
+          "composite_bucket": "BB",
+          "composite_notch": 13,
+          "currency": "GBP",
+          "unit": "MILLIONS",
+          "metrics": {
+            "LTM": {
+              "revenue": "10380",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "3890",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "2260",
+              "fcf": "300",
+              "cash_closing": "1150",
+              "liquidity": "2500",
+              "total_debt": "22350",
+              "net_debt": "21200",
+              "lease_adjusted_net_debt": "22250",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "5.45",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.43",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            },
+            "PF_LTM": {
+              "revenue": "10899",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "4084",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "2373",
+              "fcf": "315",
+              "cash_closing": "1208",
+              "liquidity": "2625",
+              "total_debt": "23468",
+              "net_debt": "22260",
+              "lease_adjusted_net_debt": "23362",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "5.75",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.73",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            },
+            "BASE_FY1": {
+              "revenue": "10795",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "4046",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "2350",
+              "fcf": "312",
+              "cash_closing": "1196",
+              "liquidity": "2600",
+              "total_debt": "23244",
+              "net_debt": "22048",
+              "lease_adjusted_net_debt": "23140",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "5.30",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.28",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            },
+            "DOWNSIDE_FY1": {
+              "revenue": "9653",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "3618",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "2102",
+              "fcf": "279",
+              "cash_closing": "1070",
+              "liquidity": "2325",
+              "total_debt": "20786",
+              "net_debt": "19716",
+              "lease_adjusted_net_debt": "20692",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "6.05",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "6.03",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            }
+          },
+          "fiscal_years": {
+            "BASE_FY1": "2026",
+            "DOWNSIDE_FY1": "2026"
+          },
+          "limitations": [],
+          "snapshot_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "added_at": "2026-08-03T10:30:00Z",
+          "withdrawn_at": null,
+          "withdrawal_reason": null,
+          "withdrawal_note": null,
+          "actions": ["WITHDRAW_BOOK_ENTRY"]
+        },
+        "history": [
+          {
+            "entry_id": "00000000-0000-4000-8000-0000000000e2",
+            "case_id": "00000000-0000-4000-8000-000000000002",
+            "run_id": "00000000-0000-4000-8000-0000000000b3",
+            "issuer_key": "VMO2",
+            "issuer_id": "VMO2",
+            "issuer_name": "Virgin Media O2",
+            "reporting_period": "H1 2026",
+            "analysis_date": "2026-06-30",
+            "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+            "filed": false,
+            "sources_withdrawn": false,
+            "sector": "Communication Services",
+            "industry_group": "Telecommunication Services",
+            "domicile": "GB",
+            "moodys": "B1",
+            "moodys_outlook": "STABLE",
+            "sp": "BB-",
+            "sp_outlook": "STABLE",
+            "fitch": "BB-",
+            "fitch_outlook": "NEGATIVE",
+            "composite": "BB-",
+            "composite_bucket": "BB",
+            "composite_notch": 13,
+            "currency": "GBP",
+            "unit": "MILLIONS",
+            "metrics": {
+              "LTM": {
+                "revenue": "10380",
+                "metric:gross_margin": "0.6397",
+                "metric:ebitda_margin": "0.3584",
+                "adjusted_ebitda": "3890",
+                "metric:adjusted_ebitda_margin": "0.3748",
+                "ffo": "2260",
+                "fcf": "300",
+                "cash_closing": "1150",
+                "liquidity": "2500",
+                "total_debt": "22100",
+                "net_debt": "20950",
+                "lease_adjusted_net_debt": "22000",
+                "metric:total_leverage_reported": "5.94",
+                "metric:total_leverage_adjusted": "5.68",
+                "metric:net_leverage_reported": "5.63",
+                "metric:net_leverage_adjusted": "5.39",
+                "metric:senior_secured_leverage": "3.41",
+                "metric:senior_secured_net_leverage": "3.11",
+                "metric:lease_adjusted_leverage": "5.65",
+                "metric:lease_adjusted_net_leverage": "5.37",
+                "metric:interest_coverage_reported": "2.95",
+                "metric:interest_coverage_adjusted": "3.09",
+                "metric:capex_adjusted_coverage": "1.38",
+                "metric:ebitdar_coverage": "1.33",
+                "metric:ffo_to_debt": "0.1023",
+                "metric:ffo_to_lease_adjusted_debt": "0.0976",
+                "metric:fcf_to_debt": "0.0136",
+                "metric:fcf_to_adjusted_ebitda": "0.0771",
+                "metric:capex_to_revenue": "0.2071",
+                "metric:liquidity_to_debt": "0.1131"
+              }
+            },
+            "fiscal_years": {},
+            "limitations": [],
+            "snapshot_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "added_at": "2026-08-02T09:05:00Z",
+            "withdrawn_at": "2026-08-03T10:12:00Z",
+            "withdrawal_reason": "DATA_ERROR",
+            "withdrawal_note": null,
+            "actions": []
+          }
+        ]
+      },
+      {
+        "issuer_key": "NGE",
+        "displayed": {
+          "entry_id": "00000000-0000-4000-8000-000000000e10",
+          "case_id": "00000000-0000-4000-8000-000000000015",
+          "run_id": "00000000-0000-4000-8000-0000000000b6",
+          "issuer_key": "NGE",
+          "issuer_id": "NGE",
+          "issuer_name": "Northgate Energy plc",
+          "reporting_period": "FY 2025",
+          "analysis_date": "2026-03-31",
+          "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+          "filed": false,
+          "sources_withdrawn": false,
+          "sector": "Energy",
+          "industry_group": "Oil, Gas and Consumable Fuels",
+          "domicile": "GB",
+          "moodys": "Baa3",
+          "moodys_outlook": "STABLE",
+          "sp": "BBB-",
+          "sp_outlook": "STABLE",
+          "fitch": "BBB-",
+          "fitch_outlook": "POSITIVE",
+          "composite": "BBB-",
+          "composite_bucket": "IG",
+          "composite_notch": 10,
+          "currency": "GBP",
+          "unit": "MILLIONS",
+          "metrics": {
+            "LTM": {
+              "revenue": "6228",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "2334",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "1356",
+              "fcf": "180",
+              "cash_closing": "690",
+              "liquidity": "1500",
+              "total_debt": "13410",
+              "net_debt": "12720",
+              "lease_adjusted_net_debt": "13350",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "3.25",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.43",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            },
+            "PF_LTM": {
+              "revenue": "6539",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "2451",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "1424",
+              "fcf": "189",
+              "cash_closing": "724",
+              "liquidity": "1575",
+              "total_debt": "14080",
+              "net_debt": "13356",
+              "lease_adjusted_net_debt": "14018",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "3.55",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.73",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            },
+            "BASE_FY1": {
+              "revenue": "6477",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "2427",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "1410",
+              "fcf": "187",
+              "cash_closing": "718",
+              "liquidity": "1560",
+              "total_debt": "13946",
+              "net_debt": "13229",
+              "lease_adjusted_net_debt": "13884",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "3.10",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.28",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            },
+            "DOWNSIDE_FY1": {
+              "revenue": "5792",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "2171",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "1261",
+              "fcf": "167",
+              "cash_closing": "642",
+              "liquidity": "1395",
+              "total_debt": "12471",
+              "net_debt": "11830",
+              "lease_adjusted_net_debt": "12416",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "3.85",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "6.03",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            }
+          },
+          "fiscal_years": {
+            "BASE_FY1": "2026",
+            "DOWNSIDE_FY1": "2026"
+          },
+          "limitations": [],
+          "snapshot_sha256": "2020202020202020202020202020202020202020202020202020202020202020",
+          "added_at": "2026-08-01T09:00:00Z",
+          "withdrawn_at": null,
+          "withdrawal_reason": null,
+          "withdrawal_note": null,
+          "actions": []
+        },
+        "history": []
+      },
+      {
+        "issuer_key": "RCH",
+        "displayed": {
+          "entry_id": "00000000-0000-4000-8000-000000000e11",
+          "case_id": "00000000-0000-4000-8000-000000000016",
+          "run_id": "00000000-0000-4000-8000-0000000000b7",
+          "issuer_key": "RCH",
+          "issuer_id": "RCH",
+          "issuer_name": "Rhein Chemie AG",
+          "reporting_period": "Q2 2026",
+          "analysis_date": "2026-06-30",
+          "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+          "filed": false,
+          "sources_withdrawn": false,
+          "sector": "Materials",
+          "industry_group": "Chemicals",
+          "domicile": "DE",
+          "moodys": "Ba2",
+          "moodys_outlook": "NEGATIVE",
+          "sp": "BB",
+          "sp_outlook": "NEGATIVE",
+          "fitch": null,
+          "fitch_outlook": null,
+          "composite": "BB",
+          "composite_bucket": "BB",
+          "composite_notch": 12,
+          "currency": "EUR",
+          "unit": "MILLIONS",
+          "metrics": {
+            "LTM": {
+              "revenue": "4152",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "1556",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "904",
+              "fcf": "120",
+              "cash_closing": "460",
+              "liquidity": "1000",
+              "total_debt": "8940",
+              "net_debt": "8480",
+              "lease_adjusted_net_debt": "8900",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "4.60",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.43",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            }
+          },
+          "fiscal_years": {},
+          "limitations": [],
+          "snapshot_sha256": "2121212121212121212121212121212121212121212121212121212121212121",
+          "added_at": "2026-08-02T09:00:00Z",
+          "withdrawn_at": null,
+          "withdrawal_reason": null,
+          "withdrawal_note": null,
+          "actions": []
+        },
+        "history": []
+      },
+      {
+        "issuer_key": "PFL",
+        "displayed": {
+          "entry_id": "00000000-0000-4000-8000-000000000e12",
+          "case_id": "00000000-0000-4000-8000-000000000017",
+          "run_id": "00000000-0000-4000-8000-0000000000b8",
+          "issuer_key": "PFL",
+          "issuer_id": "PFL",
+          "issuer_name": "Pacific Freight Ltd",
+          "reporting_period": "FY 2025",
+          "analysis_date": "2026-03-31",
+          "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+          "filed": false,
+          "sources_withdrawn": false,
+          "sector": "Industrials",
+          "industry_group": "Marine Transportation",
+          "domicile": "JP",
+          "moodys": "A3",
+          "moodys_outlook": "STABLE",
+          "sp": "A-",
+          "sp_outlook": "STABLE",
+          "fitch": "A-",
+          "fitch_outlook": "STABLE",
+          "composite": "A-",
+          "composite_bucket": "IG",
+          "composite_notch": 7,
+          "currency": "JPY",
+          "unit": "MILLIONS",
+          "metrics": {
+            "LTM": {
+              "revenue": "1245600",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "466800",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "271200",
+              "fcf": "36000",
+              "cash_closing": "138000",
+              "liquidity": "300000",
+              "total_debt": "2682000",
+              "net_debt": "2544000",
+              "lease_adjusted_net_debt": "2670000",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "1.80",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.43",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            }
+          },
+          "fiscal_years": {},
+          "limitations": [],
+          "snapshot_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "added_at": "2026-08-03T09:00:00Z",
+          "withdrawn_at": null,
+          "withdrawal_reason": null,
+          "withdrawal_note": null,
+          "actions": []
+        },
+        "history": []
+      },
+      {
+        "issuer_key": "ALH",
+        "displayed": {
+          "entry_id": "00000000-0000-4000-8000-000000000e13",
+          "case_id": "00000000-0000-4000-8000-000000000018",
+          "run_id": "00000000-0000-4000-8000-0000000000b9",
+          "issuer_key": "ALH",
+          "issuer_id": "ALH",
+          "issuer_name": "Alder Health Inc.",
+          "reporting_period": "FY 2025",
+          "analysis_date": "2026-03-31",
+          "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+          "filed": true,
+          "sources_withdrawn": false,
+          "sector": "Health Care",
+          "industry_group": "Health Care Providers and Services",
+          "domicile": "US",
+          "moodys": "B2",
+          "moodys_outlook": "STABLE",
+          "sp": "B",
+          "sp_outlook": "STABLE",
+          "fitch": null,
+          "fitch_outlook": null,
+          "composite": "B",
+          "composite_bucket": "B",
+          "composite_notch": 15,
+          "currency": "USD",
+          "unit": "MILLIONS",
+          "metrics": {
+            "LTM": {
+              "revenue": "3114",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "1167",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "678",
+              "fcf": "90",
+              "cash_closing": "345",
+              "liquidity": "750",
+              "total_debt": "6705",
+              "net_debt": "6360",
+              "lease_adjusted_net_debt": "6675",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "5.90",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.43",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            }
+          },
+          "fiscal_years": {},
+          "limitations": [],
+          "snapshot_sha256": "2323232323232323232323232323232323232323232323232323232323232323",
+          "added_at": "2026-08-04T09:00:00Z",
+          "withdrawn_at": null,
+          "withdrawal_reason": null,
+          "withdrawal_note": null,
+          "actions": []
+        },
+        "history": [
+          {
+            "entry_id": "00000000-0000-4000-8000-000000000e30",
+            "case_id": "00000000-0000-4000-8000-000000000018",
+            "run_id": "00000000-0000-4000-8000-0000000000c9",
+            "issuer_key": "ALH",
+            "issuer_id": "ALH",
+            "issuer_name": "Alder Health Inc.",
+            "reporting_period": "Q3 2025",
+            "analysis_date": "2025-09-30",
+            "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+            "filed": true,
+            "sources_withdrawn": false,
+            "sector": "Health Care",
+            "industry_group": "Health Care Providers and Services",
+            "domicile": "US",
+            "moodys": "B2",
+            "moodys_outlook": "STABLE",
+            "sp": "B",
+            "sp_outlook": "STABLE",
+            "fitch": null,
+            "fitch_outlook": null,
+            "composite": "B",
+            "composite_bucket": "B",
+            "composite_notch": 15,
+            "currency": "USD",
+            "unit": "MILLIONS",
+            "metrics": {
+              "LTM": {
+                "revenue": "3114",
+                "metric:gross_margin": "0.6397",
+                "metric:ebitda_margin": "0.3584",
+                "adjusted_ebitda": "1167",
+                "metric:adjusted_ebitda_margin": "0.3748",
+                "ffo": "678",
+                "fcf": "90",
+                "cash_closing": "345",
+                "liquidity": "750",
+                "total_debt": "6705",
+                "net_debt": "6360",
+                "lease_adjusted_net_debt": "6675",
+                "metric:total_leverage_reported": "6.01",
+                "metric:total_leverage_adjusted": "5.75",
+                "metric:net_leverage_reported": "5.70",
+                "metric:net_leverage_adjusted": "5.90",
+                "metric:senior_secured_leverage": "3.45",
+                "metric:senior_secured_net_leverage": "3.15",
+                "metric:lease_adjusted_leverage": "5.71",
+                "metric:lease_adjusted_net_leverage": "5.43",
+                "metric:interest_coverage_reported": "2.95",
+                "metric:interest_coverage_adjusted": "3.09",
+                "metric:capex_adjusted_coverage": "1.38",
+                "metric:ebitdar_coverage": "1.33",
+                "metric:ffo_to_debt": "0.1011",
+                "metric:ffo_to_lease_adjusted_debt": "0.0966",
+                "metric:fcf_to_debt": "0.0134",
+                "metric:fcf_to_adjusted_ebitda": "0.0771",
+                "metric:capex_to_revenue": "0.2071",
+                "metric:liquidity_to_debt": "0.1119"
+              }
+            },
+            "fiscal_years": {},
+            "limitations": [],
+            "snapshot_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "added_at": "2026-07-01T09:00:00Z",
+            "withdrawn_at": "2026-08-04T09:00:00Z",
+            "withdrawal_reason": "SUPERSEDED_SOURCES",
+            "withdrawal_note": "Replaced by the FY 2025 filing",
+            "actions": []
+          }
+        ]
+      },
+      {
+        "issuer_key": "MRG",
+        "displayed": {
+          "entry_id": "00000000-0000-4000-8000-000000000e14",
+          "case_id": "00000000-0000-4000-8000-000000000019",
+          "run_id": "00000000-0000-4000-8000-0000000000ba",
+          "issuer_key": "MRG",
+          "issuer_id": "MRG",
+          "issuer_name": "Meridian Retail Group",
+          "reporting_period": "LTM Q1 2026",
+          "analysis_date": "2026-03-31",
+          "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+          "filed": false,
+          "sources_withdrawn": false,
+          "sector": "Consumer Discretionary",
+          "industry_group": "Specialty Retail",
+          "domicile": "US",
+          "moodys": "Caa1",
+          "moodys_outlook": "NEGATIVE",
+          "sp": "CCC+",
+          "sp_outlook": "NEGATIVE",
+          "fitch": "CCC+",
+          "fitch_outlook": "NEGATIVE",
+          "composite": "CCC+",
+          "composite_bucket": "CCC_AND_BELOW",
+          "composite_notch": 17,
+          "currency": "USD",
+          "unit": "MILLIONS",
+          "metrics": {
+            "LTM": {
+              "revenue": "5190",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "1945",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "1130",
+              "fcf": "150",
+              "cash_closing": "575",
+              "liquidity": "1250",
+              "total_debt": "11175",
+              "net_debt": "10600",
+              "lease_adjusted_net_debt": "11125",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "7.40",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.43",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            }
+          },
+          "fiscal_years": {},
+          "limitations": ["interim period annualised by the host", "no rate deck: BASE:2026"],
+          "snapshot_sha256": "2424242424242424242424242424242424242424242424242424242424242424",
+          "added_at": "2026-08-05T09:00:00Z",
+          "withdrawn_at": null,
+          "withdrawal_reason": null,
+          "withdrawal_note": null,
+          "actions": []
+        },
+        "history": []
+      },
+      {
+        "issuer_key": "SLU",
+        "displayed": {
+          "entry_id": "00000000-0000-4000-8000-000000000e15",
+          "case_id": "00000000-0000-4000-8000-00000000001a",
+          "run_id": "00000000-0000-4000-8000-0000000000bb",
+          "issuer_key": "SLU",
+          "issuer_id": "SLU",
+          "issuer_name": "Solent Utilities",
+          "reporting_period": "FY 2025",
+          "analysis_date": "2026-03-31",
+          "route": "FULL_CREDIT_32/RELATIVE_VALUE",
+          "filed": false,
+          "sources_withdrawn": false,
+          "sector": "Utilities",
+          "industry_group": "Water Utilities",
+          "domicile": "GB",
+          "moodys": "A2",
+          "moodys_outlook": "STABLE",
+          "sp": "A",
+          "sp_outlook": "STABLE",
+          "fitch": "A",
+          "fitch_outlook": "STABLE",
+          "composite": "A",
+          "composite_bucket": "IG",
+          "composite_notch": 6,
+          "currency": "GBP",
+          "unit": "MILLIONS",
+          "metrics": {
+            "LTM": {
+              "revenue": "4671",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "1750",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "1017",
+              "fcf": "135",
+              "cash_closing": "518",
+              "liquidity": "1125",
+              "total_debt": "10058",
+              "net_debt": "9540",
+              "lease_adjusted_net_debt": "10012",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "3.90",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.43",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            },
+            "PF_LTM": {
+              "revenue": "4905",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "1838",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "1068",
+              "fcf": "142",
+              "cash_closing": "544",
+              "liquidity": "1181",
+              "total_debt": "10561",
+              "net_debt": "10017",
+              "lease_adjusted_net_debt": "10513",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "4.20",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.73",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            },
+            "BASE_FY1": {
+              "revenue": "4858",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "1820",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "1058",
+              "fcf": "140",
+              "cash_closing": "539",
+              "liquidity": "1170",
+              "total_debt": "10460",
+              "net_debt": "9922",
+              "lease_adjusted_net_debt": "10412",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "3.75",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "5.28",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            },
+            "DOWNSIDE_FY1": {
+              "revenue": "4344",
+              "metric:gross_margin": "0.6397",
+              "metric:ebitda_margin": "0.3584",
+              "adjusted_ebitda": "1628",
+              "metric:adjusted_ebitda_margin": "0.3748",
+              "ffo": "946",
+              "fcf": "126",
+              "cash_closing": "482",
+              "liquidity": "1046",
+              "total_debt": "9354",
+              "net_debt": "8872",
+              "lease_adjusted_net_debt": "9311",
+              "metric:total_leverage_reported": "6.01",
+              "metric:total_leverage_adjusted": "5.75",
+              "metric:net_leverage_reported": "5.70",
+              "metric:net_leverage_adjusted": "4.50",
+              "metric:senior_secured_leverage": "3.45",
+              "metric:senior_secured_net_leverage": "3.15",
+              "metric:lease_adjusted_leverage": "5.71",
+              "metric:lease_adjusted_net_leverage": "6.03",
+              "metric:interest_coverage_reported": "2.95",
+              "metric:interest_coverage_adjusted": "3.09",
+              "metric:capex_adjusted_coverage": "1.38",
+              "metric:ebitdar_coverage": "1.33",
+              "metric:ffo_to_debt": "0.1011",
+              "metric:ffo_to_lease_adjusted_debt": "0.0966",
+              "metric:fcf_to_debt": "0.0134",
+              "metric:fcf_to_adjusted_ebitda": "0.0771",
+              "metric:capex_to_revenue": "0.2071",
+              "metric:liquidity_to_debt": "0.1119"
+            }
+          },
+          "fiscal_years": {
+            "BASE_FY1": "2026",
+            "DOWNSIDE_FY1": "2026"
+          },
+          "limitations": [],
+          "snapshot_sha256": "2525252525252525252525252525252525252525252525252525252525252525",
+          "added_at": "2026-08-06T09:00:00Z",
+          "withdrawn_at": null,
+          "withdrawal_reason": null,
+          "withdrawal_note": null,
+          "actions": []
+        },
+        "history": []
+      }
+    ],
+    "metric_catalogue": [
+      {
+        "line_id": "revenue",
+        "label": "Total revenue",
+        "unit": "MONEY"
+      },
+      {
+        "line_id": "metric:gross_margin",
+        "label": "Gross margin",
+        "unit": "PERCENT"
+      },
+      {
+        "line_id": "metric:ebitda_margin",
+        "label": "EBITDA margin",
+        "unit": "PERCENT"
+      },
+      {
+        "line_id": "adjusted_ebitda",
+        "label": "Adjusted EBITDA",
+        "unit": "MONEY"
+      },
+      {
+        "line_id": "metric:adjusted_ebitda_margin",
+        "label": "Adjusted EBITDA margin",
+        "unit": "PERCENT"
+      },
+      {
+        "line_id": "ffo",
+        "label": "Funds from operations (FFO)",
+        "unit": "MONEY"
+      },
+      {
+        "line_id": "fcf",
+        "label": "Free cash flow (FCF)",
+        "unit": "MONEY"
+      },
+      {
+        "line_id": "cash_closing",
+        "label": "Closing cash and equivalents",
+        "unit": "MONEY"
+      },
+      {
+        "line_id": "liquidity",
+        "label": "Liquidity",
+        "unit": "MONEY"
+      },
+      {
+        "line_id": "total_debt",
+        "label": "Total debt",
+        "unit": "MONEY"
+      },
+      {
+        "line_id": "net_debt",
+        "label": "Net debt",
+        "unit": "MONEY"
+      },
+      {
+        "line_id": "lease_adjusted_net_debt",
+        "label": "Lease-adjusted net debt",
+        "unit": "MONEY"
+      },
+      {
+        "line_id": "metric:total_leverage_reported",
+        "label": "Total leverage, reported EBITDA",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:total_leverage_adjusted",
+        "label": "Total leverage, adjusted EBITDA",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:net_leverage_reported",
+        "label": "Net leverage, reported EBITDA",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:net_leverage_adjusted",
+        "label": "Net leverage, adjusted EBITDA",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:senior_secured_leverage",
+        "label": "Senior secured leverage, adjusted EBITDA",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:senior_secured_net_leverage",
+        "label": "Senior secured net leverage, adjusted EBITDA",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:lease_adjusted_leverage",
+        "label": "Lease-adjusted leverage, adjusted EBITDAR",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:lease_adjusted_net_leverage",
+        "label": "Lease-adjusted net leverage, adjusted EBITDAR",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:interest_coverage_reported",
+        "label": "EBITDA / cash interest, reported",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:interest_coverage_adjusted",
+        "label": "Adjusted EBITDA / cash interest",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:capex_adjusted_coverage",
+        "label": "(Adjusted EBITDA - capex) / cash interest",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:ebitdar_coverage",
+        "label": "(Adjusted EBITDAR - capex) / (cash interest + rent)",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:ffo_to_debt",
+        "label": "FFO / total debt",
+        "unit": "PERCENT"
+      },
+      {
+        "line_id": "metric:ffo_to_lease_adjusted_debt",
+        "label": "FFO / lease-adjusted debt",
+        "unit": "PERCENT"
+      },
+      {
+        "line_id": "metric:fcf_to_debt",
+        "label": "FCF / total debt",
+        "unit": "PERCENT"
+      },
+      {
+        "line_id": "metric:fcf_to_adjusted_ebitda",
+        "label": "FCF / adjusted EBITDA",
+        "unit": "PERCENT"
+      },
+      {
+        "line_id": "metric:capex_to_revenue",
+        "label": "Capex / revenue",
+        "unit": "PERCENT"
+      },
+      {
+        "line_id": "metric:liquidity_to_debt",
+        "label": "Liquidity / total debt",
+        "unit": "PERCENT"
       }
     ]
   },
-  "observed_at": "2026-09-14T10:05:00Z",
+  "observed_at": "2026-09-14T12:00:00Z",
   "observed_empty": false,
-  "status": "partial",
+  "status": "complete",
   "notes": []
 }

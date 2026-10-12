@@ -188,10 +188,6 @@ def test_a_long_unverified_quote_is_the_records_typed_refusal(
     ):
         response = _get(client, lite, path)
         assert response.json()["code"] == "ARTIFACT_RECORD_MISMATCH", path
-    book = _get(client, lite, "/api/v1/book")
-    assert book.status_code == 200
-    [row] = book.json()["body"]["rows"]
-    assert row["refusal"]["code"] == "ARTIFACT_RECORD_MISMATCH"
     with pytest.raises(Refusal) as caught:
         _save(lite, [])
     assert caught.value.code == RefusalCode.ARTIFACT_RECORD_MISMATCH

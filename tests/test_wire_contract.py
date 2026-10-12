@@ -203,7 +203,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         ).split()
     ),
     wire.BookBasis: frozenset({"period", "scenario", "accepted_only"}),
-    wire.BookBody: frozenset({"basis", "columns", "rows"}),
+    wire.BookBody: frozenset({"issuers", "metric_catalogue"}),
     wire.BookDocument: ENVELOPE,
     wire.ModelValue: frozenset({"name", "unit", "value", "unavailable_reason"}),
     wire.ModelPeriod: frozenset(
@@ -971,9 +971,7 @@ def test_v1_command_models_are_closed_bounded_and_in_the_committed_schema() -> N
         assert defs["VerdictRecorded"]["properties"][moment]["format"] == "date-time"
 
 
-def test_book_views_validate_real_constructors_without_changing_the_active_body() -> (
-    None
-):
+def test_book_views_validate_real_constructors_and_the_active_body() -> None:
     entry: dict[str, Any] = {
         "entry_id": str(uuid4()),
         "case_id": str(uuid4()),
@@ -1052,7 +1050,7 @@ def test_book_views_validate_real_constructors_without_changing_the_active_body(
         for node in _schemas(model.model_json_schema()):
             if node.get("type") == "object" and "properties" not in node:
                 assert _bounded_record(node)
-    assert set(wire.BookBody.model_fields) == {"basis", "columns", "rows"}
-    assert not {"BookMetricView", "BookEntryView", "BookIssuerView"} & set(
+    assert set(wire.BookBody.model_fields) == {"issuers", "metric_catalogue"}
+    assert {"BookMetricView", "BookEntryView", "BookIssuerView"} <= set(
         json.loads(wire_schema())["$defs"]
     )
