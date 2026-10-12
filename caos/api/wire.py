@@ -1390,11 +1390,14 @@ class BookBasis(BaseModel):
 
 
 class BookBody(BaseModel):
+    """The desk-wide Book (spec B2, B15): every issuer with a live entry,
+    and the metrics the column chooser offers. The client filters and
+    sorts."""
+
     model_config = _CLOSED
 
-    basis: BookBasis
-    columns: Annotated[list[BookColumn], Field(max_length=BOOK_COLUMNS_MAX)]
-    rows: Annotated[list[BookRow], Field(max_length=BOOK_CASES_MAX)]
+    issuers: Annotated[list[BookIssuerView], Field(max_length=BOOK_ISSUERS_MAX)]
+    metric_catalogue: Annotated[list[BookMetricView], Field(max_length=MODEL_LINES_MAX)]
 
 
 class NarrativeFigure(BaseModel):

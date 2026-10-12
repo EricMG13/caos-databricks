@@ -2,52 +2,111 @@
   "chrome": {
     "subject": null,
     "served_role": {
-      "global_role": "READER",
+      "global_role": "ANALYST",
       "standing": null
     },
     "actions": []
   },
   "body": {
-    "basis": {
-      "period": "EVERY_ACCEPTED_PERIOD",
-      "scenario": "EVERY_ACCEPTED_CASE",
-      "accepted_only": true
-    },
-    "columns": [
+    "issuers": [],
+    "metric_catalogue": [
+      { "line_id": "revenue", "label": "Total revenue", "unit": "MONEY" },
+      { "line_id": "metric:gross_margin", "label": "Gross margin", "unit": "PERCENT" },
+      { "line_id": "metric:ebitda_margin", "label": "EBITDA margin", "unit": "PERCENT" },
+      { "line_id": "adjusted_ebitda", "label": "Adjusted EBITDA", "unit": "MONEY" },
       {
-        "key": "operating.revenue",
-        "label": "Revenue",
-        "unit": "currency"
+        "line_id": "metric:adjusted_ebitda_margin",
+        "label": "Adjusted EBITDA margin",
+        "unit": "PERCENT"
+      },
+      { "line_id": "ffo", "label": "Funds from operations (FFO)", "unit": "MONEY" },
+      { "line_id": "fcf", "label": "Free cash flow (FCF)", "unit": "MONEY" },
+      { "line_id": "cash_closing", "label": "Closing cash and equivalents", "unit": "MONEY" },
+      { "line_id": "liquidity", "label": "Liquidity", "unit": "MONEY" },
+      { "line_id": "total_debt", "label": "Total debt", "unit": "MONEY" },
+      { "line_id": "net_debt", "label": "Net debt", "unit": "MONEY" },
+      { "line_id": "lease_adjusted_net_debt", "label": "Lease-adjusted net debt", "unit": "MONEY" },
+      {
+        "line_id": "metric:total_leverage_reported",
+        "label": "Total leverage, reported EBITDA",
+        "unit": "MULTIPLE"
       },
       {
-        "key": "operating.ebitda",
-        "label": "EBITDA",
-        "unit": "currency"
+        "line_id": "metric:total_leverage_adjusted",
+        "label": "Total leverage, adjusted EBITDA",
+        "unit": "MULTIPLE"
       },
       {
-        "key": "operating.cfo",
-        "label": "Cash flow from operations",
-        "unit": "currency"
+        "line_id": "metric:net_leverage_reported",
+        "label": "Net leverage, reported EBITDA",
+        "unit": "MULTIPLE"
       },
       {
-        "key": "investing.capex",
-        "label": "Capital expenditure",
-        "unit": "currency"
+        "line_id": "metric:net_leverage_adjusted",
+        "label": "Net leverage, adjusted EBITDA",
+        "unit": "MULTIPLE"
       },
       {
-        "key": "financing.cash_interest",
-        "label": "Cash interest",
-        "unit": "currency"
+        "line_id": "metric:senior_secured_leverage",
+        "label": "Senior secured leverage, adjusted EBITDA",
+        "unit": "MULTIPLE"
       },
       {
-        "key": "operating.margin",
-        "label": "EBITDA margin",
-        "unit": "percent"
+        "line_id": "metric:senior_secured_net_leverage",
+        "label": "Senior secured net leverage, adjusted EBITDA",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:lease_adjusted_leverage",
+        "label": "Lease-adjusted leverage, adjusted EBITDAR",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:lease_adjusted_net_leverage",
+        "label": "Lease-adjusted net leverage, adjusted EBITDAR",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:interest_coverage_reported",
+        "label": "EBITDA / cash interest, reported",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:interest_coverage_adjusted",
+        "label": "Adjusted EBITDA / cash interest",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:capex_adjusted_coverage",
+        "label": "(Adjusted EBITDA - capex) / cash interest",
+        "unit": "MULTIPLE"
+      },
+      {
+        "line_id": "metric:ebitdar_coverage",
+        "label": "(Adjusted EBITDAR - capex) / (cash interest + rent)",
+        "unit": "MULTIPLE"
+      },
+      { "line_id": "metric:ffo_to_debt", "label": "FFO / total debt", "unit": "PERCENT" },
+      {
+        "line_id": "metric:ffo_to_lease_adjusted_debt",
+        "label": "FFO / lease-adjusted debt",
+        "unit": "PERCENT"
+      },
+      { "line_id": "metric:fcf_to_debt", "label": "FCF / total debt", "unit": "PERCENT" },
+      {
+        "line_id": "metric:fcf_to_adjusted_ebitda",
+        "label": "FCF / adjusted EBITDA",
+        "unit": "PERCENT"
+      },
+      { "line_id": "metric:capex_to_revenue", "label": "Capex / revenue", "unit": "PERCENT" },
+      {
+        "line_id": "metric:liquidity_to_debt",
+        "label": "Liquidity / total debt",
+        "unit": "PERCENT"
       }
-    ],
-    "rows": []
+    ]
   },
-  "observed_at": "2026-09-14T10:05:00Z",
+  "observed_at": "2026-09-14T12:00:00Z",
   "observed_empty": true,
   "status": "complete",
   "notes": []

@@ -88,41 +88,19 @@ test("Run's input gate copy does not invent approvals or future work", () => {
   expect(endedWithOpenGate.verdict.conclusion).toBe("Complete");
 });
 
-test("Book separates listed credits from accepted forecasts, including partial reads", () => {
-  const mixed = composeChrome("book", parseBookDocument(load("book.json")));
-  expect(mixed.brief.change).toMatch(
-    /^3 credits · 2 accepted forecasts · 1 credit unavailable\. Observed /,
-  );
-  expect(mixed.brief.evidence).toBe(
-    "1 credit unavailable for comparison. Some parts of this document could not be read.",
-  );
-  expect(mixed.brief.headline).toBe("3");
+test("Book counts its issuers and names those with withdrawn sources", () => {
+  const book = composeChrome("book", parseBookDocument(load("book.json")));
+  expect(book.brief.change).toMatch(/^9 issuers in the Book\. Observed /);
+  expect(book.brief.evidence).toBe("1 issuer with withdrawn sources.");
+  expect(book.brief.headline).toBe("9");
 
   const fixture = load("book.json");
-  fixture.body.rows = [fixture.body.rows[2]];
-  const unavailable = composeChrome("book", parseBookDocument(fixture));
-  expect(unavailable.brief.change).toMatch(
-    /^1 credit · 0 accepted forecasts · 1 credit unavailable\. Observed /,
-  );
-
-  fixture.body.rows = [];
+  fixture.body.issuers = [];
+  fixture.status = "partial";
+  fixture.notes = ["LIST_TRUNCATED"];
   const empty = composeChrome("book", parseBookDocument(fixture));
-  expect(empty.brief.change).toMatch(/^No credits to compare\. Observed /);
-  expect(empty.brief.evidence).toBe("Some parts of this document could not be read.");
-});
-
-test("a refused Book row is unavailable without being called a missing forecast", () => {
-  const fixture = load("book.json");
-  fixture.body.rows[0].refusal = {
-    code: "NOT_AUTHORISED",
-    clears: "Obtain the required standing on the case.",
-  };
-  const chrome = composeChrome("book", parseBookDocument(fixture));
-  expect(chrome.brief.change).toMatch(
-    /^3 credits · 1 accepted forecast · 2 credits unavailable\. Observed /,
-  );
-  expect(chrome.brief.evidence).toContain("2 credits unavailable for comparison.");
-  expect(chrome.brief.evidence).not.toContain("without an accepted forecast");
+  expect(empty.brief.change).toMatch(/^No issuers in the Book\. Observed /);
+  expect(empty.brief.evidence).toBe("Partial: LIST_TRUNCATED.");
 });
 
 test("Upload's verdict agrees with its count of withdrawn sources", () => {

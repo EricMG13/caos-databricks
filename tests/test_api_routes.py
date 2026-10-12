@@ -1170,14 +1170,9 @@ def test_every_section_read_depends_on_the_shared_dependencies() -> None:
         for path, route in routes.items()
     }
     assert calls["/api/v1/directory"] == [actor_from_request, store_connection]
-    # The Book is portfolio-scoped: no case in its path, so no `case_path` and
-    # no `visible_case`. Standing is read per credit from the listing instead.
-    assert calls["/api/v1/book"] == [
-        actor_from_request,
-        store_connection,
-        deps.request_blobs,
-        deps.methodology_bundle,
-    ]
+    # The Book is desk-wide (spec B2): no case in its path, so no `case_path`
+    # and no `visible_case`, and it reads stored entries, never a blob.
+    assert calls["/api/v1/book"] == [actor_from_request, store_connection]
     # The request's blobs are the process's store remembering what it
     # verified (ED-7): a layer over `blob_store`, so overriding that reaches
     # every route, and each request gets a memo of its own.

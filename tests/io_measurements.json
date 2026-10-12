@@ -8,8 +8,7 @@
     "io": 249
   },
   "caos/api/reads/book.py": {
-    "blob": 160,
-    "io": 998
+    "io": 2
   },
   "caos/api/reads/deliverable.py": {
     "blob": {

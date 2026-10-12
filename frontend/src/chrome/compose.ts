@@ -354,24 +354,21 @@ function analysis(document: AnalysisDocument): Facts {
 }
 
 function book(document: BookDocument): Facts {
-  const rows = document.body.rows;
-  const available = rows.filter(
-    (row) => row.snapshot !== null && row.unavailable_reason === null && row.refusal === null,
-  ).length;
-  const unavailable = rows.length - available;
+  const issuers = document.body.issuers;
+  const flagged = issuers.filter((issuer) => issuer.displayed.sources_withdrawn).length;
   return {
     ribbon: QUIET,
     brief: {
-      change: rows.length
-        ? `${plural(rows.length, "credit")} · ${plural(available, "accepted forecast")} · ${plural(unavailable, "credit")} unavailable.`
-        : "No credits to compare.",
+      change: issuers.length
+        ? `${plural(issuers.length, "issuer")} in the Book.`
+        : "No issuers in the Book.",
       impact: null,
       action: null,
-      evidence: unavailable ? `${plural(unavailable, "credit")} unavailable for comparison.` : null,
-      headline: String(rows.length),
-      headline_label: noun(rows.length, "credit"),
+      evidence: flagged ? `${plural(flagged, "issuer")} with withdrawn sources.` : null,
+      headline: String(issuers.length),
+      headline_label: noun(issuers.length, "issuer"),
     },
-    verdict: verdict("IDLE", plural(rows.length, "credit")),
+    verdict: verdict("IDLE", plural(issuers.length, "issuer")),
   };
 }
 

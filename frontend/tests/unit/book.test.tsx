@@ -4,15 +4,15 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { LedgerProvider } from "@/app/ledger";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
 import { PASSPORT_FIELDS } from "@/wire";
-import { BookSection } from "@/sections/book/BookSection";
+import { LegacyBookSection as BookSection } from "@/sections/book/BookSection";
 import { citationOf, passportOf, shownValue } from "@/sections/book/passport";
 import { tailed } from "@/app/authority";
-import { parseBookDocument, type BookColumn, type BookDocument } from "@/wire/v1";
+import { parse, LegacyBookDocument as BookDocument, type BookColumn } from "@/wire/v1";
 
-const FIXTURE = resolve(process.cwd(), "fixtures", "book.json");
+const FIXTURE = resolve(process.cwd(), "fixtures", "book.legacy.json");
 
 function document(): BookDocument {
-  return parseBookDocument(JSON.parse(readFileSync(FIXTURE, "utf8")));
+  return parse(BookDocument, JSON.parse(readFileSync(FIXTURE, "utf8")));
 }
 
 function mount(doc: BookDocument = document()) {

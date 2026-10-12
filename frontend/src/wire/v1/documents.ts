@@ -757,10 +757,16 @@ const BookBasis = object({
   scenario: literal("EVERY_ACCEPTED_CASE"),
   accepted_only: literal(true),
 });
-const BookBody = object({
+const LegacyBookBody = object({
   basis: BookBasis,
   columns: array(BookColumn, 16),
   rows: array(BookRow, 4),
+});
+export const LegacyBookDocument = sectionDocument(LegacyBookBody);
+export type LegacyBookDocument = Infer<typeof LegacyBookDocument>;
+const BookBody = object({
+  issuers: array(BookIssuerView, 1000),
+  metric_catalogue: array(BookMetricView, 400),
 });
 const BookDocument = sectionDocument(BookBody);
 
@@ -977,13 +983,9 @@ export const V1_SHAPES = {
   RateDeckRefView,
   ModelBody,
   ModelDocument,
-  BookColumn,
-  BookResearch,
-  BookPassport,
-  BookCell,
-  BookPeriod,
-  BookRow,
-  BookBasis,
+  BookMetricView,
+  BookEntryView,
+  BookIssuerView,
   BookBody,
   BookDocument,
   ActionName,

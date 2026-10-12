@@ -13,22 +13,17 @@ from uuid import UUID, uuid4
 import pytest
 from command_fixtures import member
 from fastapi.testclient import TestClient
-from test_analysis_section import _as, _CountingConnection, _serving, client
+from test_analysis_section import _as, _CountingConnection, _serving
+from test_book_entries import CLASSIFIED, added, client, harness, route
 from test_execution_freshness import _Harness
-from test_forecast_route import ForecastCompletions, harness
-from test_forecast_route import route as forecast_route
-from test_model_section import _complete, route
+from test_model_section import _complete
 
 from caos.api.app import app, store_connection
 from caos.api.identity import Actor, GlobalRole
-from caos.api.reads import analysis as analysis_read
 from caos.api.reads import book as book_read
 from caos.api.reads import model as model_read
-from caos.api.wire import CLEARS, BookDocument, BookIssuerView
+from caos.api.wire import BookDocument, BookEntryView, BookIssuerView, BookMetricView
 from caos.boundary_text import BoundaryText
-from caos.methodology import tables
-from caos.methodology.vendor import VendorContract
-from caos.refusals import RefusalCode
 from caos.store.book import (
     Classification,
     EntryFigures,
@@ -39,11 +34,10 @@ from caos.store.book import (
     withdraw_entry,
 )
 from caos.store.gates import withdraw_source
-from caos.store.members import Standing, grant
-from caos.store.run_inputs import load_run_input
+from caos.store.members import Standing
 from caos.store.runs import create_case, start_run
 
-__all__ = ["ForecastCompletions", "client", "forecast_route", "harness", "route"]
+__all__ = ["added", "client", "harness", "route"]
 
 PATH = "/api/v1/book"
 STATED = Classification(
@@ -81,195 +75,115 @@ def _book(client: TestClient, harness: _Harness, user: UUID) -> BookDocument:
     return BookDocument.model_validate(response.json())
 
 
-def test_the_book_row_carries_the_accepted_projection_cells_and_their_passports(
-    client: TestClient, harness: _Harness
+def _issuer(document: BookDocument, key: str) -> BookIssuerView:
+    [issuer] = [issuer for issuer in document.body.issuers if issuer.issuer_key == key]
+    return issuer
+
+
+def test_every_viewer_sees_every_issuer(
+    added: tuple[UUID, str, UUID], client: TestClient, harness: _Harness
 ) -> None:
-    _complete(harness)
-    document = _book(client, harness, harness.approver)
-
-    assert document.chrome.subject is None
-    assert document.status == "complete" and document.observed_empty is False
-    assert [column.key for column in document.body.columns] == [
-        "operating.revenue",
-        "operating.ebitda",
-        "operating.cfo",
-        "investing.capex",
-        "financing.cash_interest",
-        "operating.margin",
-    ]
-    # N60: a plain fraction and a currency amount are the same shape of
-    # Decimal, so the cell is told which the column is.
-    assert {column.key: column.unit for column in document.body.columns} == {
-        "operating.revenue": "currency",
-        "operating.ebitda": "currency",
-        "operating.cfo": "currency",
-        "investing.capex": "currency",
-        "financing.cash_interest": "currency",
-        "operating.margin": "percent",
-    }
-    [row] = document.body.rows
-    assert row.case_id == harness.case_id
-    assert row.displayed_run_id == harness.run_id
-    assert row.unavailable_reason is None
-    assert row.snapshot is not None
-    assert (row.currency, row.scale) == ("USD", "millions")
-    [period] = row.periods
-    assert (period.case, period.period_id, period.fiscal_year) == (
-        "BASE",
-        "FY2026",
-        "2026",
-    )
-    cells = {cell.column: cell for cell in period.cells}
-    assert cells["operating.ebitda"].value == "100.000000"
-    assert cells["operating.margin"].value == "0.2000"
-
-    # The ten passport fields, each answered from what the record says.
-    passport = cells["operating.margin"].passport
-    assert passport.period == "FY2026 · FY2026 · 365 days"
-    # The scenario is the record's own `case`, not a constant: two cases
-    # produce two tables and a reader tells them apart here.
-    assert passport.scenario == period.case == "BASE"
-    assert document.body.basis.scenario == "EVERY_ACCEPTED_CASE"
-    assert passport.snapshot == row.snapshot
-    # The analyst's declared reporting period, named as what it is: the host
-    # derives no date from any admitted document, so the field does not claim
-    # to be one.
-    pinned = load_run_input(harness.conn, harness.run_id)
-    harness.conn.rollback()
-    assert pinned is not None and pinned.subject is not None
-    assert passport.reporting_period == pinned.subject.reporting_period
-    assert "evidence_date" not in type(passport).model_fields
-    assert passport.method == "cash_flow_forecast · VERIFIED"
-    assert passport.derivation == (
-        "operating.ebitda / operating.revenue — ebitda = 100, revenue = 500"
-    )
-    assert "EBITDA margin" in passport.definition
-    assert "caos-forecast-v1" in passport.definition
-    # The driver's own evidence: the CP-2G quote the accepted binding names,
-    # anchored where that module cited it, all from the one source document.
-    assert passport.citations, "a projected cell names the evidence of its driver"
-    assert len({citation.document_sha256 for citation in passport.citations}) == 1
-    # One anchored line per driver the cell reads (N28: a quote is one line).
-    assert sorted(
-        citation.matched_text.split(" = ")[0] for citation in passport.citations
-    ) == ["/drivers/0/ebitda", "/drivers/0/revenue"]
-    assert {research.module_id for research in passport.supporting_research} >= {
-        "CP-1",
-        "CP-2G",
-        "CP-4",
-        "CP-CF",
-    }
-
-
-def test_the_book_lists_only_the_cases_the_caller_holds_standing_on(
-    client: TestClient, harness: _Harness
-) -> None:
-    _complete(harness)
-    stranger = uuid4()
-    assert _book(client, harness, stranger).body.rows == []
-    assert _book(client, harness, stranger).observed_empty is True
-
-    other = create_case(harness.conn, BoundaryText.of("A second credit"))
-    grant(
-        harness.conn,
-        case_id=other,
-        user_id=harness.approver,
-        standing=Standing.READER,
-    )
+    """Spec B2: a viewer with no standing on either case sees both issuers,
+    and the entry the command stored is served as it was stored."""
+    entry_id, digest, writer = added
+    other = create_case(harness.conn, BoundaryText.of("Another desk's credit"))
     harness.conn.commit()
-    rows = _book(client, harness, harness.approver).body.rows
-    assert {row.case_id for row in rows} == {harness.case_id, other}
+    _entry(harness, "ZETA", "2026-06-30", case_id=other)
+    stranger = uuid4()
 
+    document = _book(client, harness, stranger)
+    assert document.chrome.subject is None
+    assert (document.status, document.observed_empty, document.notes) == (
+        "complete",
+        False,
+        [],
+    )
+    assert [issuer.issuer_key for issuer in document.body.issuers] == ["ACME", "ZETA"]
+    acme = _issuer(document, "ACME")
+    assert acme.history == []
+    shown: BookEntryView = acme.displayed
+    assert (shown.entry_id, shown.case_id, shown.run_id) == (
+        entry_id,
+        harness.case_id,
+        harness.run_id,
+    )
+    assert (shown.issuer_id, shown.issuer_name) == ("ACME", "Acme Holdings plc")
+    assert (shown.reporting_period, shown.analysis_date) == ("FY2025", "2026-09-08")
+    assert shown.route == "FULL_CREDIT_32/RELATIVE_VALUE"
+    assert (shown.filed, shown.sources_withdrawn) == (False, False)
+    stated = {name: getattr(shown, name) for name in CLASSIFIED}
+    assert stated == CLASSIFIED
+    # Ba2, BB and BB-: the middle notch, 12, is BB (spec B6).
+    assert (shown.composite, shown.composite_bucket, shown.composite_notch) == (
+        "BB",
+        "BB",
+        12,
+    )
+    # Audit N1: the entry's own stored digest, which Withdraw is bound to.
+    assert shown.snapshot_sha256 == digest
+    row = harness.conn.execute(
+        "SELECT metrics, limitations, added_at FROM book_entries WHERE entry_id = %s",
+        (entry_id,),
+    ).fetchone()
+    harness.conn.rollback()
+    assert row is not None
+    stored, limitations, added_at = row
+    # Every metrics leaf is a figure; a projected basis' year is served apart.
+    year = stored["BASE_FY1"].pop("fiscal_year")
+    assert shown.fiscal_years == {"BASE_FY1": year}
+    assert shown.metrics == stored
+    assert shown.limitations == limitations
+    assert (shown.currency, shown.unit) == ("USD", "MILLIONS")
+    # The store holds no person's name, so the entry serves none.
+    assert "added_by_name" not in BookEntryView.model_fields
+    assert shown.added_at == added_at
+    assert (shown.withdrawn_at, shown.withdrawal_reason, shown.withdrawal_note) == (
+        None,
+        None,
+        None,
+    )
+    assert writer != stranger
 
-def test_a_case_with_no_accepted_forecast_is_a_row_that_says_so(
-    client: TestClient, harness: _Harness
-) -> None:
-    document = _book(client, harness, harness.approver)
-    [row] = document.body.rows
-    assert row.periods == []
-    assert row.snapshot is None
-    assert row.unavailable_reason == "NO_ACCEPTED_FORECAST"
-    assert document.status == "partial"
+    # The column chooser's metrics are the Model's own book lines, in the
+    # Model's order, with its labels and units.
+    model = client.get(
+        f"/api/v1/cases/{harness.case_id}/model?run={harness.run_id}",
+        headers=_as(harness.approver),
+    ).json()["body"]
+    harness.conn.rollback()
+    catalogue: list[BookMetricView] = document.body.metric_catalogue
+    assert [metric.line_id for metric in catalogue] == [
+        line["line_id"] for line in model["lines"] if line["line_id"] in stored["LTM"]
+    ]
+    assert [metric.line_id for metric in catalogue] == [
+        metric.line_id for metric in model_read.book_catalogue()
+    ]
+    assert {(m.line_id, m.label, m.unit) for m in catalogue} >= {
+        ("revenue", "Total revenue", "MONEY"),
+        ("metric:net_leverage_adjusted", "Net leverage, adjusted EBITDA", "MULTIPLE"),
+    }
 
 
 def test_the_book_reads_within_its_declared_io_budget(
     client: TestClient, harness: _Harness
 ) -> None:
-    _complete(harness)
+    """The store's `now()` and one query over every entry: constant in the
+    issuers and entries served, and no blob."""
+    for issuer, day in (("ACME", "03-31"), ("ACME", "06-30"), ("ZETA", "06-30")):
+        _entry(harness, issuer, f"2026-{day}")
     counter = _CountingConnection(harness.conn)
     app.dependency_overrides[store_connection] = _serving(counter)
-    response = client.get(PATH, headers=_as(harness.approver))
+    response = client.get(PATH, headers=_as(uuid4()))
     harness.conn.rollback()
     assert response.status_code == 200, response.json()
-    # Exact for the one credit served: a ceiling four times this size would
-    # pass whatever one credit cost. The credit is the forecast route's ten
-    # handoffs, inside a per-credit share declared for the longest route
-    # (ED-7).
-    one_credit = (
-        analysis_read.FIXED_IO
-        + len(harness.route.nodes) * analysis_read.PER_HANDOFF_IO
-        + analysis_read.MODEL_PROOFS_IO
-    )
-    assert counter.executed == book_read.FIXED_IO + one_credit
-    assert one_credit <= book_read.PER_ROW_IO == analysis_read.IO_BUDGET
-    assert book_read.IO_BUDGET == book_read.FIXED_IO + 4 * book_read.PER_ROW_IO
-    assert book_read.BLOB_BUDGET == 4 * analysis_read.BLOB_BUDGET
-
-
-def test_the_book_does_not_derive_the_tagged_tables_analysis_drops_for_it(
-    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """N58: the Book reads every accepted handoff through
-    `read_analysis_without_tables`, not `read_analysis` -- `BookResearch`
-    carries no `tables` field, so deriving each handoff's tagged tables for
-    this row only ever produced a value the wire then dropped."""
-    _complete(harness)
-    calls: list[None] = []
-
-    def counting(contract: VendorContract, markdown: str) -> tables.HandoffTables:
-        calls.append(None)
-        return tables.handoff_tables(contract, markdown)
-
-    monkeypatch.setattr(analysis_read, "handoff_tables", counting)
-    document = _book(client, harness, harness.approver)
-    assert document.body.rows[0].unavailable_reason is None
-    assert calls == []
+    assert len(response.json()["body"]["issuers"]) == 2
+    assert counter.executed == book_read.IO_BUDGET == 2
+    assert not hasattr(book_read, "BLOB_BUDGET")
 
 
 @pytest.mark.parametrize("path", [PATH, f"{PATH}?case=x"])
 def test_the_book_refuses_an_anonymous_request(client: TestClient, path: str) -> None:
     assert client.get(path).status_code == 401
-
-
-def test_a_credit_whose_projection_refuses_names_its_code_and_spares_the_others(
-    client: TestClient, harness: _Harness
-) -> None:
-    """One credit's refusal is stated on its row, never on the portfolio."""
-    _complete(harness)
-    other = create_case(harness.conn, BoundaryText.of("A second credit"))
-    grant(
-        harness.conn, case_id=other, user_id=harness.approver, standing=Standing.READER
-    )
-    withdraw_source(
-        harness.conn,
-        case_id=harness.case_id,
-        source_id=harness.source_id,
-        actor_id=harness.approver,
-    )
-    harness.conn.commit()
-
-    document = _book(client, harness, harness.approver)
-    rows = {row.case_id: row for row in document.body.rows}
-    refused = rows[harness.case_id]
-    assert refused.periods == []
-    assert refused.unavailable_reason is None
-    assert refused.refusal is not None
-    # Withdrawal is checked live (invariant 1), so this credit's own read
-    # refuses before its projection is re-derived.
-    assert refused.refusal.code is RefusalCode.EVIDENCE_NOT_AVAILABLE
-    assert refused.refusal.clears == CLEARS[RefusalCode.EVIDENCE_NOT_AVAILABLE]
-    assert rows[other].unavailable_reason == "NO_ACCEPTED_FORECAST"
-    assert document.status == "partial"
 
 
 def _entry(

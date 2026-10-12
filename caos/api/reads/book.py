@@ -25,24 +25,20 @@ from typing import Any, Literal
 from fastapi import APIRouter
 from psycopg import sql
 
-from caos.api.deps import IDENTITY_FIRST, Blobs, Caller, Methodology, Store
+from caos.api.deps import IDENTITY_FIRST, Caller, Store
 from caos.api.identity import Actor, GlobalRole
 from caos.api.reads.analysis import AnalysisQuery, read_analysis_without_tables
-from caos.api.reads.model import BLOB_BUDGET as MODEL_BLOBS
-from caos.api.reads.model import DECK_IO, FISCAL_YEAR, accepted_forecast
+from caos.api.reads.model import DECK_IO, FISCAL_YEAR, accepted_forecast, book_catalogue
 from caos.api.reads.model import IO_BUDGET as MODEL_IO
 from caos.api.wire import (
-    BOOK_CASES_MAX,
     BOOK_HISTORY_MAX,
     BOOK_ISSUERS_MAX,
     BOOK_PERIODS_MAX,
     CLEARS,
     ActionName,
     AnalysisBody,
-    BookBasis,
     BookBody,
     BookCell,
-    BookColumn,
     BookDocument,
     BookEntryView,
     BookIssuerView,
@@ -65,7 +61,7 @@ from caos.methodology.bundle import Bundle
 from caos.methodology.forecast import forecast_inputs
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
-from caos.store.members import CaseListing, Standing, cases_for_member, satisfies
+from caos.store.members import CaseListing, Standing, satisfies
 
 # The store's `now()` and the one listing query, then per credit exactly what
 # the Model section pays -- it is the same Analysis read and the same
@@ -76,10 +72,7 @@ from caos.store.members import CaseListing, Standing, cases_for_member, satisfie
 # `tests/test_book_section.py`.
 FIXED_IO = 2
 PER_ROW_IO = MODEL_IO - DECK_IO - 1
-IO_BUDGET = FIXED_IO + BOOK_CASES_MAX * PER_ROW_IO
-# Each credit's Analysis blobs, once each: the request's store remembers what
-# it verified, so no record is downloaded twice within a credit (ED-7).
-BLOB_BUDGET = BOOK_CASES_MAX * MODEL_BLOBS
+IO_BUDGET = 2
 
 router = APIRouter()
 
@@ -177,43 +170,21 @@ COLUMNS: tuple[_Column, ...] = (
 
 
 @router.get("/api/v1/book", response_model=BookDocument, dependencies=[IDENTITY_FIRST])
-def read_book(
-    actor: Caller, conn: Store, blobs: Blobs, bundle: Methodology
-) -> BookDocument:
+def read_book(actor: Caller, conn: Store) -> BookDocument:
     """`actor` is declared before `conn`: an anonymous request is refused
     before a connection opens, as Directory's read is."""
     [observed_at] = conn.execute("SELECT now()").fetchall()[0]
-    listed = cases_for_member(conn, user_id=actor.user_id, limit=BOOK_CASES_MAX + 1)
-    truncated = len(listed) > BOOK_CASES_MAX
-    rows = []
-    for listing in listed[:BOOK_CASES_MAX]:
-        row, row_truncated = _row(actor, listing, conn, blobs, bundle)
-        rows.append(row)
-        truncated = truncated or row_truncated
-    # A member holding no credits holds nothing incomplete: Directory answers
-    # `complete` for the same state, and a warning strip over an empty page
-    # tells a reader something is wrong when nothing is.
-    complete = all(_stated_row(row) for row in rows)
+    issuers, truncated = _issuers(conn, actor)
     return BookDocument(
         chrome=Chrome(
             subject=None,
             served_role=ServedRole(global_role=actor.role, standing=None),
             actions=[],
         ),
-        body=BookBody(
-            basis=BookBasis(
-                period="EVERY_ACCEPTED_PERIOD",
-                scenario="EVERY_ACCEPTED_CASE",
-                accepted_only=True,
-            ),
-            columns=[
-                BookColumn(key=c.key, label=c.label, unit=c.unit) for c in COLUMNS
-            ],
-            rows=rows,
-        ),
+        body=BookBody(issuers=issuers, metric_catalogue=list(book_catalogue())),
         observed_at=observed_at,
-        observed_empty=not rows,
-        status="complete" if complete and not truncated else "partial",
+        observed_empty=not issuers,
+        status="partial" if truncated else "complete",
         notes=[SectionNote.LIST_TRUNCATED] if truncated else [],
     )
 

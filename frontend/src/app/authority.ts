@@ -138,15 +138,17 @@ export function analyticalIdentity(section: Section, doc: SectionDocument): stri
   if (section === "committee" && "revision_id" in body) {
     return `${body.revision_id}|${body.payload_sha256}`;
   }
-  if (section === "book" && "basis" in body) {
-    // Every compared credit's snapshot, so a document moving any one of them
-    // waits for Reload rather than replacing figures under a lens still bound
-    // to the old snapshot. Without this the row drew the new digest, the new
-    // figures, and a note saying the comparison had stayed on the old one.
-    const snapshots = body.rows
-      .map((row) => `${row.case_id}=${row.snapshot ?? ""}`)
+  if (section === "book" && "issuers" in body) {
+    // Every issuer's displayed entry and its stored digest, so a document
+    // moving any one of them waits for Reload rather than replacing a row
+    // under the reader.
+    const displayed = body.issuers
+      .map(
+        ({ issuer_key: key, displayed: entry }) =>
+          `${key}=${entry.entry_id}|${entry.snapshot_sha256}`,
+      )
       .sort((a, b) => a.localeCompare(b));
-    return snapshots.join(",");
+    return displayed.join(",");
   }
   return null;
 }
