@@ -54,6 +54,7 @@ def build(document: dict[str, Any]) -> dict[str, Any]:
         read._line(line, {}).model_dump(mode="json") for line in built.lines
     ]
     body["limitations"] = list(built.limitations)
+    body["snapshot_sha256"] = None
     return document
 
 
