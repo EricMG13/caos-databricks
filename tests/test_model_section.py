@@ -1218,7 +1218,8 @@ def test_the_model_reads_within_its_declared_io_budget(
         harness.conn.rollback()
         assert response.status_code == 404
         assert response.json()["code"] == "CASE_NOT_FOUND"
-        # Live standing, then whether the named run has a live book entry.
+        # Live standing, then -- the request names a run -- whether it has a
+        # live book entry (spec B9's grant, `deps.visible_run`); no case data.
         assert counter.executed == 1 + deps.GRANT_IO
     from caos.api.reads import analysis, model
 
@@ -1242,12 +1243,14 @@ def test_the_model_reads_within_its_declared_io_budget(
         assert (
             counter.executed
             == ten_nodes + model.PIN_IO + model.DECK_IO
+            <= model.READ_IO
             <= model.IO_BUDGET
         )
         assert len(downloads) == nodes * analysis.PER_HANDOFF_BLOBS
         assert len(downloads) <= model.BLOB_BUDGET
         assert response.json()["chrome"]["actions"] == []
-    assert model.IO_BUDGET == analysis.IO_BUDGET + model.PIN_IO + model.DECK_IO
+    assert model.READ_IO == analysis.IO_BUDGET + model.PIN_IO + model.DECK_IO
+    assert model.IO_BUDGET == model.READ_IO + model.ENTRY_IO
 
 
 def test_model_malformed_or_anonymous_opens_no_connection(

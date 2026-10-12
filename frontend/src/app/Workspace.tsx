@@ -44,7 +44,7 @@ import { QualificationStrip } from "@/chrome/QualificationStrip";
 import { SectionPanel, SectionTabs } from "@/chrome/SectionTabs";
 import { SectionSummary } from "@/chrome/SectionSummary";
 import { SiteHeader } from "@/chrome/SiteHeader";
-import { composeChrome, markDisabled } from "@/chrome/compose";
+import { CASE_SECTIONS, composeChrome, markDisabled } from "@/chrome/compose";
 import { fallbackChrome } from "@/chrome/fallback";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
 import { ReportDraftProvider } from "@/sections/report/draft";
@@ -219,11 +219,21 @@ export function Workspace({ section }: { section: Section }) {
   // Reload moves the tail with it (decision 6). A view the server says is
   // gone has nothing to follow.
   const tailRun = runId ?? displayedRunId;
+  // A read under the desk-wide Book grant (spec B9) serves no standing: the
+  // reader holds no membership, so the member-only event stream is never
+  // opened for it. Analysis and Model are where that read lands, and they wait
+  // for the first document to say which reader this is.
+  const grantable = section === "analysis" || section === "model";
+  const readOnly = document !== null && document.chrome.served_role.standing === null;
+  // Only a document can say "granted"; a first answer that is a refusal or
+  // offline is no such answer, and the tail's reconnect is what re-reads it.
+  const failedFirst = status.kind === "error" || status.kind === "offline";
   const tailWanted =
     requested &&
     caseId !== null &&
     tailed(section) &&
     (runId !== null || current !== null) &&
+    (!grantable || (document !== null && !readOnly) || failedFirst) &&
     status.kind !== "unavailable";
 
   // A section no event refetches opens no stream -- Directory, and Book,
@@ -334,6 +344,8 @@ export function Workspace({ section }: { section: Section }) {
   const listed = document && "revisions" in document.body ? document.body.revisions : null;
   const committeeRevision = listed ? committeeRevisionOf(listed, displayedRevisionId) : revisionId;
   const railSearch = (id: Section): string => {
+    // A closed entry (a granted reader's member-only sections) carries no case.
+    if (readOnly && id !== section && CASE_SECTIONS.includes(id)) return "";
     const query = new URLSearchParams(carried);
     if ((id === "report" || id === "committee") && !runId && displayedRunId) {
       query.set("run", displayedRunId);
@@ -430,7 +442,7 @@ export function Workspace({ section }: { section: Section }) {
       sidebar={
         <AppSidebar
           section={section}
-          entries={markDisabled(chrome?.rail ?? null)}
+          entries={markDisabled(chrome?.rail ?? null, readOnly ? section : null)}
           local={chrome?.rail_local ?? null}
           servedRole={chrome?.served_role ?? null}
           searchFor={railSearch}

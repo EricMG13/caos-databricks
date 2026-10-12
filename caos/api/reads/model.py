@@ -59,12 +59,15 @@ from caos.api.deps import (
     VisibleRun,
     granted,
 )
+from caos.api.identity import GlobalRole
 from caos.api.reads import analysis
 from caos.api.reads.analysis import AnalysisQuery, read_analysis_without_tables
 from caos.api.wire import (
     MODEL_COLUMNS_MAX,
     MODEL_LINES_MAX,
     MODEL_SOURCES_MAX,
+    ActionName,
+    ActionView,
     AnalysisBody,
     AnalysisDocument,
     BookMetricView,
@@ -110,7 +113,8 @@ from caos.methodology.tables import FIGURE_CHARS, HandoffTable, handoff_tables
 from caos.methodology.vendor import cached_contract
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
-from caos.store.book import EntryFigures, snapshot_sha256
+from caos.store.book import EntryFigures, entry_of_run, snapshot_sha256
+from caos.store.members import Standing, satisfies
 from caos.store.rate_decks import deck_for_run
 from caos.store.source_sets import pinned_live_sources
 
@@ -124,7 +128,12 @@ from caos.store.source_sets import pinned_live_sources
 # Markdown Analysis already verified.
 PIN_IO = 1
 DECK_IO = 1
-IO_BUDGET = analysis.IO_BUDGET + PIN_IO + DECK_IO
+# What the document costs to build, which Add to Book pays too (it builds the
+# same model); and the one lookup of the run's entry that decides whether the
+# read offers an add, paid only by a writer reading a complete default view.
+READ_IO = analysis.IO_BUDGET + PIN_IO + DECK_IO
+ENTRY_IO = 1
+IO_BUDGET = READ_IO + ENTRY_IO
 BLOB_BUDGET = analysis.BLOB_BUDGET
 router = APIRouter()
 
@@ -187,10 +196,38 @@ def read_model(  # noqa: PLR0913 -- authenticated case/run before dependencies
     query = AnalysisQuery(actor, case_id, run, standing, conn, blobs, bundle)
     document = _model_document(query, exclude_unrealised=exclude_unrealised)
     if not granted(standing):
-        return document
+        return _with_add_to_book(query, document)
     # Read-only (spec B9): the digest exists only for an Add to Book to bind.
     read_only = document.body.model_copy(update={"snapshot_sha256": None})
     return document.model_copy(update={"body": read_only})
+
+
+def _with_add_to_book(query: AnalysisQuery, document: ModelDocument) -> ModelDocument:
+    """The document, offering Add to Book where the add would be judged: a
+    WRITER-or-above member whose global role may write, a `COMPLETE` run with a
+    pinned issuer subject, the default view (it alone serves the digest an add
+    binds, which also says CP-1 is accepted and a grid is served), and no entry
+    for the run -- a withdrawn one is no way back, one entry per run being for
+    good. Advisory; the command rechecks every one at commit."""
+    body = document.body
+    standing = query.standing
+    if (
+        body.snapshot_sha256 is None
+        or body.displayed_run_status != "COMPLETE"
+        or body.displayed_run_id is None
+        or body.subject is None
+        or not body.subject.issuer_id.strip()
+        or query.actor.role is GlobalRole.READER
+        or granted(standing)
+        or not satisfies(standing, Standing.WRITER)
+    ):
+        return document
+    if entry_of_run(query.conn, body.displayed_run_id) is not None:
+        return document
+    chrome = document.chrome.model_copy(
+        update={"actions": [ActionView(action=ActionName.ADD_TO_BOOK, refusal=None)]}
+    )
+    return document.model_copy(update={"chrome": chrome})
 
 
 def _model_document(query: AnalysisQuery, *, exclude_unrealised: bool) -> ModelDocument:

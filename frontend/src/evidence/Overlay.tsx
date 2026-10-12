@@ -7,9 +7,23 @@
 // happened to be (WebKit does not focus a clicked button), and only while
 // that opener is still on the page (FE-4); otherwise nothing,
 // and the caller's own fallback places it.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Button } from "@/components/ui/button";
+
+/** Base UI draws a focus guard at each edge of a modal; under WebKit on an
+    Apple system it gives each `role="button"` for VoiceOver and no name, which
+    axe (aria-command-name) and VoiceOver both report. Named here, once drawn. */
+const GUARD_NAME = "Edge of the dialog";
+
+function NameFocusGuards() {
+  useEffect(() => {
+    for (const guard of document.querySelectorAll("[data-base-ui-focus-guard]")) {
+      if (!guard.hasAttribute("aria-label")) guard.setAttribute("aria-label", GUARD_NAME);
+    }
+  }, []);
+  return null;
+}
 
 export function Overlay({
   look,
@@ -64,6 +78,7 @@ export function Overlay({
               </kbd>
             </Dialog.Close>
           </div>
+          <NameFocusGuards />
           {children}
         </Dialog.Popup>
       </Dialog.Portal>

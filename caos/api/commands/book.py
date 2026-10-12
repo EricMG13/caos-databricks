@@ -119,7 +119,7 @@ from caos.store.routes import resolved_route
 # The Model's is declared for the longest route a run can pin, so this is
 # too. Measured in `tests/test_book_entries.py`.
 ADD_FIXED_IO = 14
-ADD_IO = ADD_FIXED_IO + model_read.IO_BUDGET
+ADD_IO = ADD_FIXED_IO + model_read.READ_IO
 # Standing, the receipt lookup, the case lock's isolation check and lock,
 # the chain head, live standing, the twin lookup, the entry (locked), the
 # stamp, the receipt, the audit event and the chain head.

@@ -259,6 +259,10 @@ export type FreezeDeliverable = Infer<typeof FreezeDeliverable>;
 export type DeliverableFrozen = Infer<typeof DeliverableFrozen>;
 export type FileDeliverable = Infer<typeof FileDeliverable>;
 export type DeliverableFiled = Infer<typeof DeliverableFiled>;
+export type AddToBook = Infer<typeof AddToBook>;
+export type BookEntryAdded = Infer<typeof BookEntryAdded>;
+export type WithdrawBookEntry = Infer<typeof WithdrawBookEntry>;
+export type BookEntryWithdrawn = Infer<typeof BookEntryWithdrawn>;
 export type SaveRateDeck = Infer<typeof SaveRateDeck>;
 export type RateDeckSaved = Infer<typeof RateDeckSaved>;
 
@@ -286,6 +290,10 @@ export const parseStandingGranted = (value: unknown): StandingGranted =>
   parse(StandingGranted, value);
 export const parseStandingRevoked = (value: unknown): StandingRevoked =>
   parse(StandingRevoked, value);
+// The Model's Add to Book dialog and the Book's Withdraw control read these back.
+export const parseBookEntryAdded = (value: unknown): BookEntryAdded => parse(BookEntryAdded, value);
+export const parseBookEntryWithdrawn = (value: unknown): BookEntryWithdrawn =>
+  parse(BookEntryWithdrawn, value);
 export const parseRateDeckSaved = (value: unknown): RateDeckSaved => parse(RateDeckSaved, value);
 // No `parseVerdictRecorded`: the workspace has no control for it, and a
 // validator nothing calls is coverage without a caller. Its shape is pinned

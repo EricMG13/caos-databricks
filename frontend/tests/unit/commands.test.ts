@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  addToBook,
   admitSources,
   approveGate,
   cancelRun,
@@ -12,6 +13,7 @@ import {
   retryRun,
   sendCommand,
   startRun,
+  withdrawBookEntry,
 } from "@/app/commands";
 
 const CASE = "3f1c2a4e-8b7d-4c6e-9a1f-0d2e3c4b5a69";
@@ -262,6 +264,45 @@ describe("the command transport", () => {
       },
     );
     expect(result.kind).toBe("ok");
+  });
+
+  test("test_the_book_commands_post_to_their_routes_and_validate_their_receipts", async () => {
+    const ENTRY = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ entry_id: ENTRY }, 201))
+      .mockResolvedValueOnce(jsonResponse({ entry_id: ENTRY }))
+      .mockResolvedValueOnce(jsonResponse({ entry_id: ENTRY, extra: 1 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    // `addToBook` narrows its receipt with `parseBookEntryAdded` and
+    // `withdrawBookEntry` with `parseBookEntryWithdrawn`.
+    const classification = {
+      snapshot_sha256: HASH,
+      sector: "Energy",
+      industry_group: null,
+      domicile: "GB",
+      moodys: null,
+      moodys_outlook: null,
+      sp: null,
+      sp_outlook: null,
+      fitch: null,
+      fitch_outlook: null,
+    };
+    const added = await addToBook(CASE, RUN, classification);
+    expect(added).toMatchObject({ kind: "ok", status: 201, receipt: { entry_id: ENTRY } });
+    expect(fetchSpy.mock.calls[0]![0]).toBe(`/api/v1/cases/${CASE}/runs/${RUN}/book-entry`);
+    expect(JSON.parse(fetchSpy.mock.calls[0]![1].body as string)).toEqual(classification);
+
+    const withdrawal = { snapshot_sha256: HASH, reason: "DATA_ERROR", note: null } as const;
+    expect(await withdrawBookEntry(CASE, ENTRY, withdrawal)).toMatchObject({ kind: "ok" });
+    expect(fetchSpy.mock.calls[1]![0]).toBe(
+      `/api/v1/cases/${CASE}/book-entries/${ENTRY}/withdrawal`,
+    );
+    // A receipt with a field the wire does not name is not a receipt.
+    expect(await withdrawBookEntry(CASE, ENTRY, withdrawal)).toEqual({
+      kind: "error",
+      code: "RESPONSE_INVALID",
+    });
   });
 
   test("test_no_cast_of_parsed_json_in_commands", () => {

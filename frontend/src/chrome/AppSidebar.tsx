@@ -117,7 +117,7 @@ export function AppSidebar({
                 const Icon = ICONS[id];
                 // A section this deployment does not serve says so in words;
                 // a served one needs none (its state is the link itself).
-                const off = !isEnabledSection(id);
+                const off = !isEnabledSection(id) || entry?.state === "Unavailable";
                 return (
                   <SidebarMenuItem key={id}>
                     <SidebarMenuButton

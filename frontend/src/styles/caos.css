@@ -762,6 +762,36 @@
     color: var(--warning);
   }
 
+  /* The Add to Book dialog and the Withdraw control: native fields in a
+     label, one agency to a fieldset, a rating beside its outlook. */
+  .book-form {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+  .book-form > .book-pair,
+  .book-agency {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.5rem 1rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .book-agency legend {
+    margin-bottom: 0.25rem;
+    padding: 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+  .book-withdraw {
+    display: grid;
+    gap: 0.5rem;
+    max-width: 28rem;
+  }
+
   /* ---- the Model grid: two sticky header rows, a pinned label column, bands,
      debt ranks, and the tints for pro forma, Base, Downside and a refinanced
      maturity. The header height is a class's custom property, not a style. ---- */
