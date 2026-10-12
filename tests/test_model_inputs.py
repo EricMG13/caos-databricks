@@ -1459,7 +1459,7 @@ def test_a_spread_written_as_a_percent_prices_at_the_implied_rate_noted(
     (facility,) = cp1_registers(with_table(table)).facilities
     implied = Decimal("0.06")
 
-    rate = facility_rate(facility, None, "BASE", 1, implied)
+    rate = facility_rate(facility, None, "BASE", 1, Cell(implied))
 
     assert facility.spread_bps == Decimal(written)  # never read as 2.25 bp priced
     assert rate == (implied, "term out of range")
@@ -1546,7 +1546,7 @@ def test_a_fixed_coupon_prices_as_the_reader_reads_it(
 ) -> None:
     facility = _fixed(written)
 
-    assert facility_rate(facility, None, "BASE", 1, Decimal("0.06")) == expected
+    assert facility_rate(facility, None, "BASE", 1, Cell(Decimal("0.06"))) == expected
 
 
 def test_a_coupon_read_as_a_fraction_is_shown_as_its_percent() -> None:
@@ -1598,7 +1598,7 @@ def test_a_coupon_written_with_percent_prices_at_that_percent() -> None:
         table = replaced(table, column, new)
     (facility,) = cp1_registers(with_table(table)).facilities
 
-    rate = facility_rate(facility, None, "BASE", 1, Decimal("0.06"))
+    rate = facility_rate(facility, None, "BASE", 1, Cell(Decimal("0.06")))
 
     assert rate == (Decimal("0.00065"), None)
     assert facility_terms(facility).spread_or_coupon == "0.065%"

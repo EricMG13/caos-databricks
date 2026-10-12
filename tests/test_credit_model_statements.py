@@ -26,6 +26,7 @@ from caos.calculators.credit_model.history import (
     historical_columns,
 )
 from caos.calculators.credit_model.statements import (
+    TAX_REFUND,
     UNREALISED,
     excluded_addbacks,
     pro_forma_column,
@@ -779,13 +780,27 @@ def test_a_sparse_addback_and_financing_line_resolve_bottom_up() -> None:
         ),
     )
     ltm = _cells(probe, "LTM Q2 26")
-    # A PYTD row beside no YTD row: the add-back's LTM is not built, and the
-    # adjusted EBITDA that adds it is missing too.
-    assert ltm["addback:transaction_costs"] == Cell(
-        None, "COMPONENT_MISSING", note=PARTLY_STATED
-    )
-    assert ltm["adjusted_ebitda"].value is None
+    # A PYTD row beside no YTD row: a one-off add-back's YTD is nothing,
+    # named (MAJOR-A), and so is the adjusted EBITDA that adds it.
+    nil = treated_as_zero("H1_2026")
+    assert ltm["addback:transaction_costs"].value == 0
+    assert nil in (ltm["addback:transaction_costs"].note or "")
+    assert ltm["adjusted_ebitda"].value is not None
+    assert nil in (ltm["adjusted_ebitda"].note or "")
     assert ltm["ebitda"].value == 3904
+    # A recurring financing line in the same shape is never built.
+    interest = replace(
+        regs,
+        accounts=tuple(
+            a
+            for a in regs.accounts
+            if a.metric_id != "interest_paid_in_financing"
+            or a.period_id in ("Q1_2025", "H1_2025", "FY2025")
+        ),
+    )
+    recurring = _cells(interest, "LTM Q2 26")
+    assert recurring["acct:interest_paid_in_financing"].note == PARTLY_STATED
+    assert recurring["cfo_adjusted"].value is None
     lease = _without(regs, "lease_payments_in_financing", "Q2_2026", "H1_2026")
     ytd = _cells(lease, "YTD H1 26")
     assert ytd["cfo_adjusted"].value == 1504 - 4
@@ -1042,10 +1057,13 @@ def test_a_sum_that_takes_a_missing_part_as_nil_says_so() -> None:
     assert treated_as_zero("Q2_2025") == f"{TREATED_AS_ZERO} (Q2_2025)"
     regs = _restructuring(example_registers(), {"FY2025": 32, "H1_2026": 16})
     zero = treated_as_zero("addback:restructuring")
-    # Earlier rulings already leave the LTM missing, never 32 + 16 - 0.
+    # An add-back is a one-off (MAJOR-A): the PYTD without a row is nothing,
+    # 32 + 16 - 0, named on the LTM and on what adds it.
     ltm = _cells(regs, "LTM Q2 26")
-    assert ltm["addback:restructuring"].reason == "COMPONENT_MISSING"
-    assert ltm["adjusted_ebitda"].value is None
+    pytd = treated_as_zero("H1_2025")
+    assert ltm["addback:restructuring"].value == 48
+    assert ltm["addback:restructuring"].note == pytd
+    assert pytd in notes_of(ltm["adjusted_ebitda"].note)
     # A column without a row adds nothing to adjusted EBITDA, and says so;
     # so does every figure built from it.
     q1 = _cells(regs, "Q1 26")
@@ -1116,3 +1134,33 @@ def test_a_positive_cash_tax_is_a_refund_never_flipped() -> None:
     assert other is not None and base_other is not None
     assert other == base_other - (12 - (-42))
     assert "cash_taxes_paid" not in OUTFLOW_METRICS
+
+
+def test_a_positive_cash_tax_served_as_a_refund_says_so() -> None:
+    """The stack adversary's MINOR-E (taxes.py): CP-1 writes inflows
+    positive, so a positive cash tax is a refund, kept; served so, it is
+    noted, where a model writing its outflow positive would show."""
+    regs = example_registers()
+    positive = replace(
+        regs,
+        accounts=tuple(
+            replace(a, value=abs(a.value))
+            if a.metric_id == "cash_taxes_paid"
+            and a.value is not None
+            and a.period_id in ("Q1_2026", "Q2_2026", "H1_2026")
+            else a
+            for a in regs.accounts
+        ),
+    )
+    q1 = _cells(positive, "Q1 26")["cash_taxes"]
+    assert q1.value is not None and q1.value > 0
+    assert q1.note == TAX_REFUND
+    ltm = _cells(positive, "LTM Q2 26")["cash_taxes"]
+    assert ltm.value == 8
+    assert notes_of(ltm.note) == ("differs from CP-1 stated", TAX_REFUND)
+    # Paid (negative) or nil: no note; any figure above nil is a refund.
+    assert _cells(regs, "Q1 26")["cash_taxes"].note is None
+    assert _cells(positive, "Q2 25")["cash_taxes"].note is None
+    for written, note in (("0", None), ("1", TAX_REFUND), ("0.01", TAX_REFUND)):
+        taxed = with_figures(regs, "Q1_2026", {"cash_taxes_paid": Decimal(written)})
+        assert _cells(taxed, "Q1 26")["cash_taxes"].note == note, written
