@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen, within } from "@testing-library/react";
 import { BookSection } from "@/sections/book/BookSection";
-import { analyticalIdentity } from "@/app/authority";
+import { analyticalIdentity, tailed } from "@/app/authority";
 import { WireShapeError, parseBookDocument, type BookDocument } from "@/wire/v1";
 
 const FIXTURE = resolve(process.cwd(), "fixtures", "book.json");
@@ -85,5 +85,16 @@ describe("the book", () => {
     };
     expect(analyticalIdentity("book", moved)).not.toBe(analyticalIdentity("book", doc));
     expect(analyticalIdentity("book", document())).toBe(analyticalIdentity("book", doc));
+  });
+
+  test("no case event names the book, so it holds no stream", () => {
+    // `tailed` is what `Workspace` asks before opening a per-case SSE tail. A
+    // tail over Book could never usefully fire -- `REFETCHES` maps no event to
+    // it -- and would hold a worker thread and one of the API's 32
+    // concurrency slots for its whole deadline.
+    expect(tailed("book")).toBe(false);
+    expect(tailed("directory")).toBe(false);
+    expect(tailed("analysis")).toBe(true);
+    expect(tailed("committee")).toBe(true);
   });
 });

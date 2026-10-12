@@ -700,70 +700,6 @@ const BookIssuerView = object({
   history: array(BookEntryView, 100),
 });
 
-// Book, `/api/v1/book`: the credit across the portfolio. No
-// case in its body, so it is the one section document beside Directory's that
-// answers for no single case.
-// What the column's own figure is (N60): a plain fraction and a currency
-// amount are the same shape of decimal string, so the cell is told which.
-const BookColumn = object({
-  key: short,
-  label: text,
-  unit: enumOf(["percent", "currency", "multiple", "count", "none"]),
-});
-const BookResearch = object({ route_node_id: short, module_id: short, qa_status: short });
-/** The ten passport fields, in their order and closed to them. */
-const BookPassport = object({
-  definition: text,
-  period: text,
-  scenario: text,
-  reporting_period: text,
-  computed_at: datetime,
-  snapshot: hash,
-  method: text,
-  derivation: text,
-  citations: array(CitationView, 1024),
-  supporting_research: array(BookResearch, 256),
-});
-const BookCell = object({
-  column: short,
-  value: nullable(string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" })),
-  unavailable_reason: nullable(literal("ZERO_OR_NEGATIVE_DENOMINATOR")),
-  passport: BookPassport,
-});
-const BookPeriod = object({
-  case: text,
-  period_id: text,
-  fiscal_year: text,
-  days: string({ max: 3, pattern: "^[0-9]+$" }),
-  unavailable_reason: nullable(text),
-  cells: array(BookCell, 16),
-});
-const BookRow = object({
-  case_id: uuid,
-  title: text,
-  standing: Standing,
-  subject: nullable(RunSubjectView),
-  displayed_run_id: nullable(uuid),
-  displayed_run_status: nullable(enumOf(RUN_STATUSES)),
-  snapshot: nullable(hash),
-  currency: nullable(string({ max: 3, pattern: "^[A-Z]{3}$" })),
-  scale: nullable(enumOf(["units", "thousands", "millions", "billions"])),
-  periods: array(BookPeriod, 8),
-  unavailable_reason: nullable(literal("NO_ACCEPTED_FORECAST")),
-  refusal: nullable(later(() => RefusalBody)),
-});
-const BookBasis = object({
-  period: literal("EVERY_ACCEPTED_PERIOD"),
-  scenario: literal("EVERY_ACCEPTED_CASE"),
-  accepted_only: literal(true),
-});
-const LegacyBookBody = object({
-  basis: BookBasis,
-  columns: array(BookColumn, 16),
-  rows: array(BookRow, 4),
-});
-export const LegacyBookDocument = sectionDocument(LegacyBookBody);
-export type LegacyBookDocument = Infer<typeof LegacyBookDocument>;
 const BookBody = object({
   issuers: array(BookIssuerView, 1000),
   metric_catalogue: array(BookMetricView, 400),
@@ -1062,12 +998,6 @@ export type BookDocument = Infer<typeof BookDocument>;
 export type BookEntryView = Infer<typeof BookEntryView>;
 export type BookIssuerView = Infer<typeof BookIssuerView>;
 export type BookMetricView = Infer<typeof BookMetricView>;
-
-export type BookRow = Infer<typeof BookRow>;
-export type BookCell = Infer<typeof BookCell>;
-export type BookPassport = Infer<typeof BookPassport>;
-export type BookColumn = Infer<typeof BookColumn>;
-export type BookPeriod = Infer<typeof BookPeriod>;
 export type ReportDocument = Infer<typeof ReportDocument>;
 export type CommitteeDocument = Infer<typeof CommitteeDocument>;
 export type RevisionSummary = Infer<typeof RevisionSummary>;
