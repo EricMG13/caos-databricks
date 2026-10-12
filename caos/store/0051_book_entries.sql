@@ -95,7 +95,7 @@ CREATE TABLE book_entries (
     -- OTHER says what, in a note with something in it but white space.
     CHECK (
         withdrawal_reason IS DISTINCT FROM 'OTHER'
-        OR withdrawal_note ~ '[^[:space:]]'
+        OR (withdrawal_note IS NOT NULL AND withdrawal_note ~ '[^[:space:]]')
     )
 );
 CREATE INDEX book_entries_live_by_issuer
