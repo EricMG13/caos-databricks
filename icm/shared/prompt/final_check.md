@@ -6,6 +6,9 @@ exactly these {heading_count} H2 headings once, in this order: {headings}.
 Add only these model-authored front-matter fields: {authored_fields}. Do not add
 any other front-matter fields; `owned_object`, `schema_family`, `runtime_output`
 and `canonical_filename` belong outside canonical front matter.
+`confidence_score` must be an integer from 0 to 100 inclusive.
+`confidence_band` must match `confidence_score` exactly, with inclusive ranges:
+0-39: `Insufficient Information`; 40-59: `Low`; 60-79: `Medium`; 80-100: `High`.
 Include every register required by the authority. `committee_status` must be
 one of {committee_statuses}: what this pathway's decision scope
 ({decision_scope}) permits.

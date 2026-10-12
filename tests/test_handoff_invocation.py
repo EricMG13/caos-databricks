@@ -37,6 +37,7 @@ from canonical_route_fixtures import (
     research_identity,
     research_markdown,
     research_section,
+    route_identity,
 )
 from conftest import reserve_at as reserve
 from fake_chat import ScriptedChat, fake_completions
@@ -49,6 +50,7 @@ from caos.graph.route import (
     NodeResult,
     NodeState,
     ResolvedRoute,
+    RouteExtensions,
     RouteNode,
     node_states,
     resolve_route,
@@ -781,6 +783,93 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     assert ("CP-1 C3 for the [CP-1 C3] by which" in whole) is bool(upstream)
     assert ("shown as [CP-1 C3] for CP-1's [C3]" in whole) is bool(upstream)
     assert "no other rule is stated" not in whole
+
+
+def test_cp_cf_prompt_confidence_ranges_match_the_verified_public_validator() -> None:
+    """The ordinary prompt states every score/band pair the validator accepts."""
+    route = resolve_route(
+        CATALOG,
+        "FULL_CREDIT_32",
+        "RELATIVE_VALUE",
+        extensions=RouteExtensions(model_extension=True),
+    )
+    upstream = []
+    for edge in route.edges:
+        if edge.target == "CP-CF":
+            owner = route_identity(edge.source)
+            markdown = handoff_markdown(owner)
+            upstream.append((upstream_ref(owner, markdown), markdown))
+    node = next(node for node in route.nodes if node.module_id == "CP-CF")
+    of = replace(
+        route_identity("CP-0"),
+        module_id="CP-CF",
+        module_name="CashFlowForecast",
+        route_node_id=node.route_node_id,
+        upstream=tuple(ref for ref, _ in upstream),
+    )
+    prompt = build_handoff_prompt(
+        CONTRACT,
+        identity=of,
+        authority=delivered_authority(BUNDLE, "CP-CF"),
+        catalog=CATALOG,
+        delivered=_delivered(),
+        upstream=upstream,
+        upstream_citations={ref.route_node_id: ANCHORED for ref, _ in upstream},
+        route=route,
+    )
+    tag = _tag(prompt)
+    final = prompt.split(f"--- FINAL RESPONSE CHECK {tag} ---\n", 1)[1].split(
+        f"--- END FINAL RESPONSE CHECK {tag} ---", 1
+    )[0]
+    compact = " ".join(final.split())
+    assert "`confidence_score` must be an integer from 0 to 100 inclusive" in compact
+    assert "`confidence_band` must match `confidence_score` exactly" in compact
+    ranges = re.findall(r"(\d+)-(\d+): `([^`]+)`", compact)
+    assert ranges == [
+        ("0", "39", "Insufficient Information"),
+        ("40", "59", "Low"),
+        ("60", "79", "Medium"),
+        ("80", "100", "High"),
+    ]
+    assert {band for _, _, band in ranges} == set(
+        CONTRACT.validate_handoff.CONFIDENCE_BANDS
+    )
+    # The diagnostic named CP-MODEL's copy; the host loads CP-OS's verified
+    # copy. Prove they are the same contract before checking the public API.
+    assert verified_bytes(BUNDLE, "CP-MODEL", "scripts/validate_handoff.py") == (
+        verified_bytes(BUNDLE, VENDOR_MODULE, "scripts/validate_handoff.py")
+    )
+    expected = {
+        score: band
+        for low, high, band in ranges
+        for score in range(int(low), int(high) + 1)
+    }
+    assert set(expected) == set(range(101))
+    baseline = handoff_markdown(identity("CP-0")).decode()
+    for score, band in expected.items():
+        for candidate in CONTRACT.validate_handoff.CONFIDENCE_BANDS:
+            candidate_markdown = baseline.replace(
+                "confidence_score: 90\n", f"confidence_score: {score}\n"
+            ).replace('confidence_band: "High"\n', f'confidence_band: "{candidate}"\n')
+            result = CONTRACT.validate_handoff.validate_text(candidate_markdown)
+            assert result.fields["confidence_score"] == score
+            assert result.fields["confidence_band"] == candidate
+            if candidate == band:
+                assert result.errors == (), (score, candidate)
+            else:
+                assert len(result.errors) == 1, (score, candidate)
+                assert "is inconsistent with score" in result.errors[0]
+    for invalid, expected_error in (
+        ("-1", "confidence_score must be between 0 and 100"),
+        ("101", "confidence_score must be between 0 and 100"),
+        ("1.5", "confidence_score must be an integer"),
+        ("true", "confidence_score must be an integer"),
+    ):
+        candidate_markdown = baseline.replace(
+            "confidence_score: 90\n", f"confidence_score: {invalid}\n"
+        )
+        result = CONTRACT.validate_handoff.validate_text(candidate_markdown)
+        assert expected_error in result.errors, invalid
 
 
 def _missing(of: HostIdentity) -> UpstreamRef:
