@@ -161,6 +161,7 @@ const RateDeckSaved = object({ deck_id: uuid });
 // note `OTHER` requires.
 const classification = string({ max: 64 });
 const rating = string({ max: 8 });
+// The longest agency outlook, DEVELOPING; the server judges its word.
 const outlook = string({ max: 10 });
 const AddToBook = object({
   snapshot_sha256: hash,

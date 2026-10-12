@@ -2061,6 +2061,7 @@ class RateDeckView(BaseModel):
 # vocabularies are `caos.book.classification`'s, judged by the command.
 CLASSIFICATION_CHARS = 64
 RATING_CHARS = 8
+# The longest agency outlook is DEVELOPING; the command judges its word.
 OUTLOOK_CHARS = max(len(outlook) for outlook in OUTLOOKS)
 WITHDRAWAL_NOTE_CHARS = 1000
 ClassificationText = Annotated[str, Field(max_length=CLASSIFICATION_CHARS)]
