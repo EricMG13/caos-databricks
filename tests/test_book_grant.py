@@ -15,30 +15,48 @@ The run under test is the forecast route's, added by a WRITER
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from command_fixtures import command_headers
 from fastapi.testclient import TestClient
 from httpx2 import Response
 from test_analysis_section import _as, client
 from test_book_entries import _withdraw, added
+from test_evidence_page import _CountingConnection
 from test_execution_freshness import _Harness
 from test_forecast_route import harness, route
+from test_identity_first import _routes
 from test_model_section import pinned_deck
 
 from caos.api import deps
+from caos.api.app import app, store_connection
 from caos.api.identity import Actor, GlobalRole
+from caos.api.reads import analysis as analysis_read
+from caos.api.reads import evidence as evidence_read
 from caos.api.wire import CLEARS
 from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document, admit_pack
 from caos.refusals import Refusal, RefusalCode
+from caos.store import StoreConnection
 from caos.store.book import entry_run
-from caos.store.members import Standing
-from caos.store.runs import start_run
+from caos.store.members import Standing, grant, revoke
+from caos.store.runs import create_case, start_run
 
 __all__ = ["added", "client", "harness", "pinned_deck", "route"]
 
+# The reads the grant reaches; every other read under a case stays
+# member-only.
+_GRANTED_READS = frozenset(
+    {
+        "/api/v1/cases/{case_id}/analysis",
+        "/api/v1/cases/{case_id}/model",
+        "/api/v1/cases/{case_id}/runs/{run_id}/sources/{source_id}/pages/{page}",
+    }
+)
+_PARAM = re.compile(r"\{(\w+)\}")
 _NOT_FOUND = (
     404,
     {"code": "CASE_NOT_FOUND", "clears": CLEARS[RefusalCode.CASE_NOT_FOUND]},
@@ -105,6 +123,49 @@ def test_a_non_member_reads_an_entry_runs_analysis_and_model(
     )
     assert logged.count(line) == 2, logged
     assert entry_run(harness.conn, harness.case_id, harness.run_id) is True
+    harness.conn.rollback()
+
+
+def test_a_non_member_cannot_read_another_run_of_the_same_case(
+    client: TestClient, harness: _Harness, added: tuple[UUID, str, UUID]
+) -> None:
+    other = start_run(harness.conn, harness.case_id)
+    harness.conn.commit()
+    stranger = uuid4()
+    for section in ("analysis", "model"):
+        path = _section(harness, section, other)
+        assert _answer(_read(client, harness, path, stranger)) == _NOT_FOUND
+    page = _page(harness, harness.source_id, other)
+    assert _answer(_read(client, harness, page, stranger)) == _NOT_FOUND
+    assert entry_run(harness.conn, harness.case_id, other) is False
+    harness.conn.rollback()
+
+
+def test_a_non_member_cannot_read_without_a_run_parameter(
+    client: TestClient, harness: _Harness, added: tuple[UUID, str, UUID]
+) -> None:
+    """The entry's run is the case's latest, and still: no `run`, no grant."""
+    stranger = uuid4()
+    for section in ("analysis", "model"):
+        path = _section(harness, section)
+        assert _answer(_read(client, harness, path, stranger)) == _NOT_FOUND
+
+
+def test_a_withdrawn_entry_no_longer_grants(
+    client: TestClient, harness: _Harness, added: tuple[UUID, str, UUID]
+) -> None:
+    """Evaluated per request: the read after the withdrawal is refused."""
+    stranger = uuid4()
+    paths = [
+        _section(harness, "analysis", harness.run_id),
+        _section(harness, "model", harness.run_id),
+        _page(harness, harness.source_id),
+    ]
+    assert all(_read(client, harness, p, stranger).status_code == 200 for p in paths)
+    _withdrawn(client, harness, added)
+    for path in paths:
+        assert _answer(_read(client, harness, path, stranger)) == _NOT_FOUND, path
+    assert entry_run(harness.conn, harness.case_id, harness.run_id) is False
     harness.conn.rollback()
 
 
@@ -181,6 +242,176 @@ def test_a_granted_read_serves_no_actions(
         client, harness, _section(harness, "model", harness.run_id), harness.approver
     )
     assert member_model.json()["body"]["snapshot_sha256"] == added[1]
+
+
+def _filled(path: str, harness: _Harness, entry_id: UUID) -> str:
+    """`path` with every id the entry's: its case, its run, its own id, its
+    pinned source; anything else a fresh id."""
+    known = {
+        "case_id": harness.case_id,
+        "run_id": harness.run_id,
+        "entry_id": entry_id,
+        "source_id": harness.source_id,
+        "page": 1,
+        "gate": "source-set",
+    }
+    return _PARAM.sub(lambda m: str(known.get(m.group(1), uuid4())), path)
+
+
+def _case_routes(*, reads: bool) -> list[tuple[str, str]]:
+    """Every route under a case, as `test_identity_first` reaches them
+    through the routers the app includes: its reads or its commands."""
+    return sorted(
+        (method, route.path)
+        for route in _routes()
+        if "{case_id}" in route.path
+        for method in route.methods or ()
+        if (method == "GET") is reads
+    )
+
+
+def test_run_report_committee_deliverable_and_events_stay_member_only(
+    client: TestClient, harness: _Harness, added: tuple[UUID, str, UUID]
+) -> None:
+    """Every read under a case but the three the grant reaches refuses a
+    non-member naming the entry's run, as it refuses a stranger."""
+    stranger = uuid4()
+    member_only = [
+        path for _m, path in _case_routes(reads=True) if path not in _GRANTED_READS
+    ]
+    assert {
+        "/api/v1/cases/{case_id}/run",
+        "/api/v1/cases/{case_id}/report",
+        "/api/v1/cases/{case_id}/committee",
+        "/api/v1/cases/{case_id}/revisions/{revision_id}/render",
+        "/api/v1/cases/{case_id}/revisions/{revision_id}/package",
+        "/api/v1/cases/{case_id}/events",
+        "/api/v1/cases/{case_id}/upload",
+    } <= set(member_only)
+    query = f"?run={harness.run_id}&revision={uuid4()}"
+    for path in member_only:
+        url = _filled(path, harness, added[0]) + query
+        assert _answer(_read(client, harness, url, stranger)) == _NOT_FOUND, path
+
+
+def test_commands_never_accept_the_grant(
+    client: TestClient, harness: _Harness, added: tuple[UUID, str, UUID]
+) -> None:
+    """Every command under a case, naming the entry's run, refuses a
+    non-member ANALYST as it refuses a stranger, and writes nothing."""
+    stranger = uuid4()
+    commands = _case_routes(reads=False)
+    assert ("POST", "/api/v1/cases/{case_id}/runs/{run_id}/book-entry") in commands
+    before = _rows(harness.conn)
+    for method, path in commands:
+        # The admission reads a multipart pack, every other command JSON.
+        body: dict[str, Any] = (
+            {"files": [("document", ("note.txt", b"A note.\n", "text/plain"))]}
+            if path.endswith("/sources")
+            else {"json": {}}
+        )
+        answer = client.request(
+            method,
+            _filled(path, harness, added[0]),
+            headers=command_headers(stranger),
+            **body,
+        )
+        harness.conn.rollback()
+        assert _answer(answer) == _NOT_FOUND, (method, path)
+    assert _rows(harness.conn) == before
+
+
+def _rows(conn: StoreConnection) -> tuple[object, ...]:
+    row = conn.execute(
+        "SELECT (SELECT count(*) FROM audit_events),"
+        " (SELECT count(*) FROM book_entries WHERE withdrawn_at IS NULL),"
+        " (SELECT count(*) FROM runs), (SELECT count(*) FROM sources),"
+        " (SELECT count(*) FROM case_members)"
+    ).fetchone()
+    conn.rollback()
+    assert row is not None
+    return tuple(row)
+
+
+def test_a_non_member_the_grant_does_not_reach_learns_nothing(
+    client: TestClient, harness: _Harness, added: tuple[UUID, str, UUID]
+) -> None:
+    """Refusal parity: a run with no entry, an unknown run, no run, a revoked
+    member, and another case's entry run named under this case are each the
+    answer a stranger gets for an unknown case -- status, code and body."""
+    conn = harness.conn
+    other = start_run(conn, harness.case_id)
+    elsewhere = create_case(conn, title=BoundaryText.of("Another case"))
+    conn.commit()
+    revoked = uuid4()
+    grant(conn, case_id=harness.case_id, user_id=revoked, standing=Standing.READER)
+    revoke(conn, case_id=harness.case_id, user_id=revoked)
+    conn.commit()
+    stranger = uuid4()
+    for section in ("analysis", "model"):
+        baseline = _answer(
+            _read(client, harness, f"/api/v1/cases/{uuid4()}/{section}", stranger)
+        )
+        assert baseline == _NOT_FOUND
+        asked = [
+            (_section(harness, section, other), stranger),
+            (_section(harness, section, uuid4()), stranger),
+            (_section(harness, section), stranger),
+            (_section(harness, section, other), revoked),
+            (f"/api/v1/cases/{elsewhere}/{section}?run={harness.run_id}", stranger),
+        ]
+        for path, user in asked:
+            assert _answer(_read(client, harness, path, user)) == baseline, path
+    pages = [
+        _page(harness, harness.source_id, other),
+        _page(harness, harness.source_id, uuid4()),
+        f"/api/v1/cases/{elsewhere}/runs/{harness.run_id}/sources/"
+        f"{harness.source_id}/pages/1",
+    ]
+    for path in pages:
+        assert _answer(_read(client, harness, path, stranger)) == _NOT_FOUND, path
+    assert entry_run(conn, elsewhere, harness.run_id) is False
+    conn.rollback()
+
+
+def test_a_revoked_member_still_reads_the_entry_run_under_the_grant(
+    client: TestClient, harness: _Harness, added: tuple[UUID, str, UUID]
+) -> None:
+    """A revoked member is a non-member: the grant reaches them as anyone,
+    read-only, and nothing of the standing they held is served."""
+    conn = harness.conn
+    former = uuid4()
+    grant(conn, case_id=harness.case_id, user_id=former, standing=Standing.WRITER)
+    revoke(conn, case_id=harness.case_id, user_id=former)
+    conn.commit()
+    path = _section(harness, "analysis", harness.run_id)
+    document = _read(client, harness, path, former).json()
+    assert document["chrome"]["served_role"]["standing"] is None
+
+
+def test_the_granted_reads_meet_their_declared_budgets(
+    client: TestClient, harness: _Harness, added: tuple[UUID, str, UUID]
+) -> None:
+    """A granted read pays the one live-entry lookup a member's does not;
+    the page read folds it into the row it already reads."""
+    counter = _CountingConnection(harness.conn)
+    app.dependency_overrides[store_connection] = lambda: counter
+    stranger = uuid4()
+    member_count = []
+    for user in (harness.approver, stranger):
+        counter.executed = 0
+        path = _section(harness, "analysis", harness.run_id)
+        assert _read(client, harness, path, user).status_code == 200
+        member_count.append(counter.executed)
+    assert member_count[1] == member_count[0] + deps.GRANT_IO
+    assert member_count[1] <= analysis_read.IO_BUDGET
+    assert deps.IO_BUDGET == 1 + deps.GRANT_IO
+    counter.executed = 0
+    assert (
+        _read(client, harness, _page(harness, harness.source_id), stranger).status_code
+        == 200
+    )
+    assert counter.executed == evidence_read.IO_BUDGET
 
 
 def test_visible_run_answers_standing_first_then_the_grant(
