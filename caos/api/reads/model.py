@@ -664,11 +664,16 @@ FISCAL_YEAR = "fiscal_year"
 
 
 def _base_year(columns: Sequence[Column], first: int) -> int:
-    """The projection's base year: the last historical FY, else the year
-    before the first projected one (`projection._context`'s rule)."""
-    fiscal = [column for column in columns if column.kind == "FY"]
-    last = fiscal_year_number(fiscal[-1].fiscal_year) if fiscal else None
-    return last or first - 1
+    """The projection's base year: the latest labelled historical FY,
+    even if undated, else the year before the first projected one
+    (`projection._context`'s rule). Historical display order is unrelated."""
+    latest = 0
+    for column in columns:
+        if column.kind == "FY":
+            year = fiscal_year_number(column.fiscal_year) or 0
+            if year > latest:
+                latest = year
+    return latest or first - 1
 
 
 def book_bases(columns: Sequence[Column]) -> dict[str, tuple[int, int | None]]:

@@ -3,6 +3,11 @@ rate-deck interest and the cash flow, per case and year, chained (spec
 M10-M14).
 
 One column per (case, period) of CP-CF's request, Base and Downside only.
+The base is the latest labelled historical FY, including an undated one:
+if it is short, long or unknown under history's whole-month/slack rules,
+every projected figure is COMPONENT_MISSING with the base reason. Structural
+NOT_PROJECTED and NOT_APPLICABLE cells remain. No FY retains the existing
+LTM/opening fallback. Requests still validate before figures are withheld.
 Business-unit revenue is the prior year's (the last historical FY, then the
 year before) times one plus its slot's CP-2G growth, noted "growth outside
 ±100%" where that growth is (the figure kept); a segment in no slot, and
@@ -28,11 +33,14 @@ used: a spread outside 0-2,000 bp or a floor outside 0-1,000 bp, either not a
 whole number of basis points (a percent read as basis points), or a fixed
 coupon (as `model_inputs` reads it) outside 0-30 percent (from 0, a
 zero-coupon convertible; 0.5-30 where read as a fraction), or any term CP-1
-wrote so (a spread or floor written with `%`, `terms_out_of_range`). The
+wrote so (a spread or floor written with `%`, or a coupon below half a
+percent that no text decides, `terms_out_of_range`). The
 rate falls back to the implied rate, and a negative amortisation to none,
 each noted "term out of range". A `FIXED` coupon `model_inputs` read as a
 fraction (`0.065` as 6.5 percent) is priced at the percent read, noted
-"coupon read as a fraction".
+"coupon read as a fraction"; that note also reaches the year's weighted
+rate and cash interest (and so the coverage metrics built on it) where a
+drawn, priced facility carries it, and no other facility-rate note does.
 
 Interest is the weighted rate of the interest-bearing facilities, weighted
 on their scheduled opening balances, times the interest base: the year's
@@ -93,6 +101,7 @@ from caos.calculators.credit_model._cells import (
     refs,
 )
 from caos.calculators.credit_model.debt import (
+    COUPON_AS_FRACTION,
     EXCLUDES_FOREIGN,
     EXCLUDES_UNALLOCATED,
     HISTORY_INCOMPLETE,
@@ -105,11 +114,12 @@ from caos.calculators.credit_model.debt import (
     payment_rank,
 )
 from caos.calculators.credit_model.frame import Case, Cell, Column, Frame
-from caos.calculators.credit_model.history import historical_columns
+from caos.calculators.credit_model.history import _fiscal_year_note, historical_columns
 from caos.methodology.model_inputs import (
     Cp1Registers,
     DivisionGrowth,
     FacilityRow,
+    PeriodRow,
     SlotAllocation,
     coupon_in_range,
     fiscal_year_number,
@@ -119,7 +129,6 @@ from caos.refusals import Refusal, RefusalCode
 IMPLIED = "implied rate"
 NO_DECK = "no rate deck"
 OUT_OF_RANGE = "term out of range"
-COUPON_AS_FRACTION = "coupon read as a fraction"
 AMORTISATION_NOT_STATED = "amortisation not stated"
 REFINANCED = "assumed refinanced"
 HELD_FLAT = "held flat"
@@ -266,7 +275,9 @@ def facility_rate(
 ) -> tuple[Decimal | None, str | None]:
     """The facility's all-in rate as a decimal, and the note when it is not
     its own terms': a `FIXED` coupon (percent) / 100, noted "coupon read as
-    a fraction" where `model_inputs` read it so; a `FLOATING` rate on a
+    a fraction" where `model_inputs` read it so (a coupon below half a
+    percent is read by its text: times 100, as stated, or, undecided, out of
+    range, below); a `FLOATING` rate on a
     deck reference rate, `max(deck rate, floor) + spread`, noted where the
     deck year is held ("last deck rate held flat", "deck year missing");
     else the `implied` rate's figure, noted "implied rate", "no rate deck",
@@ -328,6 +339,7 @@ class _Context:
     left_out: frozenset[str]  # the totals a facility in another currency left
     base_year: int  # the last historical FY: FY+1 is the year after
     year_end: date  # its end date (31 December without one)
+    base_note: str | None  # selected FY is not twelve whole months
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,6 +363,7 @@ class _Schedule:
     held: Cell  # in total debt but bearing no interest, at its opening
     rated: tuple[tuple[Decimal | None, Decimal | None], ...]  # (opening, rate)
     in_total: Cell  # the closing balances total debt counts
+    fraction: bool = False  # a drawn, priced facility's coupon read as a fraction
 
 
 def _malformed() -> Refusal:
@@ -474,6 +487,7 @@ def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
     secured: list[tuple[Cell, int]] = []
     held: list[tuple[Cell, int]] = []
     rated: list[tuple[Decimal | None, Decimal | None]] = []
+    fraction = False
     in_total: list[tuple[Cell, int]] = []
     for row in ctx.facilities:
         opening = state.balances[row.facility_id]
@@ -502,6 +516,11 @@ def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
             secured.append((cells[key], 1))
         scheduled.append((_balance_cell(paid, None), 1))
         rated.append((opening, rate))
+        fraction = fraction or (
+            rate is not None
+            and bool(opening)
+            and COUPON_AS_FRACTION in notes_of(rate_note)
+        )
         in_total.append((cells[key], 1))
     return _Schedule(
         cells,
@@ -511,6 +530,7 @@ def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
         calc(held),
         tuple(rated),
         calc(in_total),
+        fraction,
     )
 
 
@@ -567,7 +587,8 @@ def _mix(schedule: _Schedule, implied: Cell, base: Cell) -> _Mix:
     be missing), leaves none: the implied rate's own reason and note. With
     no facility weight but a positive base (debt CP-CF issued onto
     facilities at nil), the implied rate, noted; with no base either,
-    none."""
+    none. The weighted rate is noted "coupon read as a fraction" where a
+    drawn, priced facility's coupon was (`_Schedule.fraction`), and only so."""
     known = [(opening, rate) for opening, rate in schedule.rated if opening is not None]
     if len(known) != len(schedule.rated):
         return _Mix(Cell(None, "COMPONENT_MISSING"))
@@ -579,7 +600,10 @@ def _mix(schedule: _Schedule, implied: Cell, base: Cell) -> _Mix:
     if weights <= 0:
         return _Mix(_unweighted(implied, base))
     weighted = sum((opening * rate for opening, rate in priced), Decimal(0))
-    return _Mix(Cell(weighted / weights, basis="CALCULATED"), weighted, weights)
+    note = COUPON_AS_FRACTION if schedule.fraction else None
+    return _Mix(
+        Cell(weighted / weights, basis="CALCULATED", note=note), weighted, weights
+    )
 
 
 def _charge(mix: _Mix, rate: Decimal, base: Decimal) -> Decimal:
@@ -594,7 +618,9 @@ def _interest(state: _State, schedule: _Schedule, implied: Cell) -> dict[str, Ce
     """The interest base, CP-CF's opening debt less what in it bears no
     interest (finance leases, the debt adjustment; another currency is in no
     total), with what that debt leaves out; its weighted rate; and the cash
-    interest: none on no debt, none, noted, on a negative base."""
+    interest: none on no debt, none, noted, on a negative base. The interest
+    carries the base's note, and the weighted rate's note where facilities
+    weight it, not the no-mix reason."""
     base = calc(((state.debt, 1), (schedule.held, -1)), carried((state.debt,)))
     mix = _mix(schedule, implied, base)
     if base.value is None:
@@ -607,7 +633,12 @@ def _interest(state: _State, schedule: _Schedule, implied: Cell) -> dict[str, Ce
         interest = mix.rate
     else:
         charge = _charge(mix, mix.rate.value, base.value)
-        interest = Cell(charge, basis="CALCULATED", note=carried((base,)))
+        # The weighted rate's note ("coupon read as a fraction") reaches the
+        # interest; with no facility weight the rate's note is the no-mix
+        # reason (and the implied rate's own), which stays on the rate.
+        weighted_note = mix.rate.note if mix.weights > 0 else None
+        note = join_notes((carried((base,)), weighted_note))
+        interest = Cell(charge, basis="CALCULATED", note=note)
     return {
         "interest_bearing_debt_opening": base,
         "wa_rate": mix.rate,
@@ -904,14 +935,18 @@ def _context(inputs: ProjectionInputs, request: _Request) -> tuple[_Context, _St
     """The context every year reads and the state each case opens with.
     Balances open at the historical column of CP-CF's `as_of_period_id`,
     else the last FY (the host LTM without one); the implied rate is the
-    host LTM's; the base year the last historical FY (the year before the
-    first projected one without one)."""
+    host LTM's; the base year the latest labelled historical FY, even if
+    undated (the year before the first projected one without one).
+    Its span determines whether all projected figures must be withheld."""
     regs = inputs.regs
     columns = historical_columns(regs)
     ltm = next((column for column in columns if column.kind == "LTM"), None)
     anchor = inputs.history.get(ltm.column_id, {}) if ltm is not None else {}
-    fiscal = [column for column in columns if column.kind == "FY"]
-    last_fy = fiscal[-1] if fiscal else None
+    last_fy = max(
+        (column for column in reversed(columns) if column.kind == "FY"),
+        key=lambda column: fiscal_year_number(column.fiscal_year) or 0,
+        default=None,
+    )
     prior = inputs.history.get(last_fy.column_id, {}) if last_fy is not None else {}
     first = min(period.year for period in request.periods)
     base_year = _placed(
@@ -926,6 +961,10 @@ def _context(inputs: ProjectionInputs, request: _Request) -> tuple[_Context, _St
     opened = named or last_fy or ltm
     at = inputs.history.get(opened.column_id, {}) if opened is not None else {}
     facilities = _anchor_rows(regs, opened, at)
+    periods: dict[str | None, PeriodRow] = {p.period_id: p for p in regs.periods}
+    base_note = (
+        None if last_fy is None else _fiscal_year_note(periods[last_fy.period_id])
+    )
     context = _Context(
         regs=regs,
         deck=inputs.deck,
@@ -950,6 +989,7 @@ def _context(inputs: ProjectionInputs, request: _Request) -> tuple[_Context, _St
         left_out=left_out(facilities, regs.currency),
         base_year=base_year,
         year_end=date.fromisoformat(end) if end else date(base_year, 12, 31),
+        base_note=base_note,
     )
     return context, _opening(inputs, facilities, at, prior)
 
@@ -958,7 +998,9 @@ def projection(inputs: ProjectionInputs) -> tuple[tuple[Column, ...], Frame]:
     """The projected columns, Base then Downside in CP-CF's request order,
     and their frame: business-unit revenue, the cash flow from CP-CF's
     drivers, each facility's schedule, interest and the cash and debt
-    roll-forwards, each year opening at the one before it."""
+    roll-forwards, each year opening at the one before it. An incomplete
+    selected base FY withholds every numeric figure, for every case/year,
+    after request validation; structural unprojected/nonapplicable cells remain."""
     with localcontext(CONTEXT):
         request = _Request(
             _periods(inputs.request), _drivers(inputs.request), _as_of(inputs.request)
@@ -972,6 +1014,18 @@ def projection(inputs: ProjectionInputs) -> tuple[tuple[Column, ...], Frame]:
         for period in request.periods:
             state = states.get(period.case, opening)
             cells, states[period.case] = _year(context, state, period)
+            if context.base_note is not None:
+                refused = Cell(
+                    None,
+                    "COMPONENT_MISSING",
+                    note=f"projection base: {context.base_note}",
+                )
+                cells = {
+                    key: cell
+                    if cell.reason in {"NOT_PROJECTED", "NOT_APPLICABLE"}
+                    else refused
+                    for key, cell in cells.items()
+                }
             column = Column(
                 column_id=f"{period.case}:{period.fiscal_year}",
                 kind="PROJECTED",

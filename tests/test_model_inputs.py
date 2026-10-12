@@ -1465,15 +1465,18 @@ def test_a_spread_written_as_a_percent_prices_at_the_implied_rate_noted(
     assert rate == (implied, "term out of range")
 
 
-def _fixed(written: str) -> FacilityRow:
-    """The debt register's one facility as a `FIXED` coupon written `written`."""
+def _fixed(written: str, text: str | None = None) -> FacilityRow:
+    """The debt register's one facility as a `FIXED` coupon written `written`,
+    its `margin_or_coupon` text `text` (the register's own where none)."""
     table = debt_table()
+    if text is not None:
+        table = replaced(table, "margin_or_coupon", cell(text))
     for column, new in (
         ("rate_type", cell("fixed")),
         ("reference_rate", cell("none")),
         ("spread_bps", NULL),
         ("floor_bps", NULL),
-        ("fixed_rate", figure(written, written)),
+        ("fixed_rate", figure(written, written.rstrip("%"))),
     ):
         table = replaced(table, column, new)
     (facility,) = cp1_registers(with_table(table)).facilities
@@ -1481,77 +1484,161 @@ def _fixed(written: str) -> FacilityRow:
 
 
 @pytest.mark.parametrize(
-    ("written", "read", "as_fraction", "out_of_range"),
+    ("written", "text", "read", "as_fraction", "out_of_range"),
     [
-        ("0", "0", False, False),  # a zero-coupon convertible, as stated
-        ("0.065", "6.5", True, False),  # CP-1's 6.500 written as a fraction
-        ("0.005", "0.5", True, False),
-        ("0.3", "30", True, False),
-        ("0.3001", "30.01", True, True),
-        ("0.4", "40", True, True),
-        ("0.49", "49", True, True),
-        ("0.001", "0.1", True, True),
-        ("0.5", "0.5", False, False),
-        ("30", "30", False, False),
-        ("30.01", "30.01", False, True),
-        ("-0.01", "-0.01", False, True),
+        ("0", "", "0", False, False),  # a zero-coupon convertible, as stated
+        ("0.065", "6.5%", "6.5", True, False),  # CP-1's 6.500 written as a fraction
+        ("0.065", "6.500%", "6.5", True, False),
+        ("0.065", "6.500 %", "6.5", True, False),
+        ("0.065", "SOFR + 6.5%", "6.5", True, False),
+        ("0.0650", "6.5%", "6.50", True, False),
+        ("0.005", "0.5%", "0.5", True, False),
+        ("0.3", "30%", "30", True, False),
+        ("0.250", "25%", "25.0", True, False),
+        ("0.3001", "30.01%", "30.01", True, True),
+        ("0.4", "40%", "40", True, True),
+        ("0.001", "0.1%", "0.1", True, True),
+        # The text shows the coupon itself: a genuine sub-half-percent coupon.
+        ("0.250", "0.250%", "0.250", False, False),
+        ("0.250", "0.25%", "0.250", False, False),
+        ("0.250", "0.25 %", "0.250", False, False),
+        ("0.065", "0.065%", "0.065", False, False),
+        ("0.001", "0.001%", "0.001", False, False),
+        # "per cent" and "percent", in any case, and the fullwidth sign, are
+        # percent markers too.
+        ("0.250", "0.25 per cent. Convertible Bonds due 2029", "0.250", False, False),
+        ("0.065", "6.500 per cent. Senior Notes due 2029", "6.5", True, False),
+        ("0.065", "6.5 Percent", "6.5", True, False),
+        ("0.065", "6.5 PER CENT", "6.5", True, False),
+        ("0.065", "6.5 per  cent", "6.5", True, False),
+        ("0.065", "6.5 percent.", "6.5", True, False),
+        ("0.065", "6.5percent", "6.5", True, False),
+        ("0.065", "6.5\uff05", "6.5", True, False),
+        ("0.065", "6.5 \uff05", "6.5", True, False),
+        # "percentage", "per centum" and "percents" are no marker.
+        ("0.25", "0.25 percentage points", "0.25", False, True),
+        ("0.065", "6.5 percents", "0.065", False, True),
+        ("0.065", "6.5 per centum", "0.065", False, True),
+        ("0.065", "6.5 per", "0.065", False, True),
+        # Both readings shown, by either marker.
+        (
+            "0.250",
+            "coupon 0.25 per cent.; conversion premium 25%",
+            "0.250",
+            False,
+            True,
+        ),
+        # The lookbehind holds for the words too.
+        ("0.065", "-6.5 per cent", "0.065", False, True),
+        ("0.065", "16.5 per cent", "0.065", False, True),
+        # No text decides: kept as written, out of range.
+        ("0.065", "", "0.065", False, True),
+        ("0.065", "Senior notes", "0.065", False, True),
+        ("0.065", "6.5", "0.065", False, True),  # no %
+        ("0.065", "7%", "0.065", False, True),  # neither reading
+        ("0.065", "SOFR + 3.20%", "0.065", False, True),
+        ("0.065", "6.5% (0.065%)", "0.065", False, True),  # both readings
+        ("0.065", "%6.5", "0.065", False, True),
+        ("0.065", ".5%", "0.065", False, True),  # not a decimal figure
+        ("0.05", "6,5%", "0.05", False, True),  # "5" is not read out of "6,5"
+        ("0.065", "-6.5%", "0.065", False, True),  # a signed figure is no coupon
+        ("0.065", "+6.5%", "0.065", False, True),
+        # Not read from the text: 0.5 and above, `%` in the written coupon.
+        ("0.5", "", "0.5", False, False),
+        ("30", "7%", "30", False, False),
+        ("30.01", "", "30.01", False, True),
+        ("-0.01", "", "-0.01", False, True),
+        ("0.065%", "6.5%", "0.065", False, False),
+        ("0.065%", "", "0.065", False, False),
     ],
 )
-def test_a_fixed_coupon_strictly_between_0_and_half_is_read_as_a_fraction(
-    written: str, read: str, as_fraction: bool, out_of_range: bool
+def test_a_fixed_coupon_strictly_between_0_and_half_is_read_by_its_text(
+    written: str, text: str, read: str, as_fraction: bool, out_of_range: bool
 ) -> None:
-    facility = _fixed(written)
+    facility = _fixed(written, text)
 
     assert facility.fixed_rate == Decimal(read)
     assert facility.coupon_as_fraction is as_fraction
     assert facility.terms_out_of_range is out_of_range
-    assert coupon_percent(Decimal(written)) == (Decimal(read), as_fraction)
+
+
+@pytest.mark.parametrize(
+    ("written", "text", "expected"),
+    [
+        ("0.065", "6.5%", (Decimal("6.5"), True, True)),
+        ("0.250", "0.25%", (Decimal("0.250"), False, True)),
+        ("0.250", "0.25 per cent.", (Decimal("0.250"), False, True)),
+        ("0.065", "6.5 Percent", (Decimal("6.5"), True, True)),
+        ("0.065", "6.5\uff05", (Decimal("6.5"), True, True)),
+        ("0.25", "0.25 percentage points", (Decimal("0.25"), False, False)),
+        ("0.065", "7%", (Decimal("0.065"), False, False)),
+        ("0.065", "6.5% and 0.065%", (Decimal("0.065"), False, False)),
+        ("0", "6.5%", (Decimal(0), False, True)),
+        ("0.5", "", (Decimal("0.5"), False, True)),
+    ],
+)
+def test_coupon_percent_reads_a_coupon_by_the_percent_its_text_shows(
+    written: str, text: str, expected: tuple[Decimal, bool, bool]
+) -> None:
+    assert coupon_percent(Decimal(written), text) == expected
 
 
 def test_a_coupon_is_read_as_a_fraction_whatever_the_callers_context() -> None:
     with localcontext(Context(prec=3)):
-        read = coupon_percent(Decimal("0.0654321"))
+        read = coupon_percent(Decimal("0.0654321"), "6.54321%")
 
-    assert read == (Decimal("6.54321"), True)
+    assert read == (Decimal("6.54321"), True, True)
 
 
 @given(
     st.decimals(min_value=Decimal(-1), max_value=Decimal(40), places=6, allow_nan=False)
 )
-def test_a_coupon_is_converted_only_strictly_between_0_and_half(
+def test_a_coupon_is_converted_only_strictly_between_0_and_half_and_by_its_text(
     written: Decimal,
 ) -> None:
-    read, as_fraction = coupon_percent(written)
-
-    assert as_fraction is (0 < written < Decimal("0.5"))
-    assert read == (written * 100 if as_fraction else written)
+    if 0 < written < Decimal("0.5"):
+        assert coupon_percent(written, f"{written * 100:f}%") == (
+            written * 100,
+            True,
+            True,
+        )
+        assert coupon_percent(written, f"{written:f}%") == (written, False, True)
+        assert coupon_percent(written, "") == (written, False, False)
+    else:
+        assert coupon_percent(written, "") == (written, False, True)
+    read, as_fraction, _ = coupon_percent(written, f"{written * 100:f}%")
     low = Decimal("0.5") if as_fraction else Decimal(0)
     assert coupon_in_range(read, as_fraction=as_fraction) is (low <= read <= 30)
 
 
 @pytest.mark.parametrize(
-    ("written", "expected"),
+    ("written", "text", "expected"),
     [
-        ("0.065", (Decimal("0.065"), "coupon read as a fraction")),
-        ("0", (Decimal(0), None)),
-        ("0.4", (Decimal("0.06"), "term out of range")),
-        ("0.5", (Decimal("0.005"), None)),
-        ("30", (Decimal("0.3"), None)),
-        ("30.01", (Decimal("0.06"), "term out of range")),
-        ("-0.01", (Decimal("0.06"), "term out of range")),
+        ("0.065", "6.5%", (Decimal("0.065"), "coupon read as a fraction")),
+        ("0.250", "0.250%", (Decimal("0.0025"), None)),
+        ("0.250", "25%", (Decimal("0.25"), "coupon read as a fraction")),
+        ("0.065", "Senior notes", (Decimal("0.06"), "term out of range")),
+        ("0.065", "6.5% (0.065%)", (Decimal("0.06"), "term out of range")),
+        ("0", "", (Decimal(0), None)),
+        ("0.4", "40%", (Decimal("0.06"), "term out of range")),
+        ("0.5", "", (Decimal("0.005"), None)),
+        ("30", "", (Decimal("0.3"), None)),
+        ("30.01", "", (Decimal("0.06"), "term out of range")),
+        ("-0.01", "", (Decimal("0.06"), "term out of range")),
     ],
 )
 def test_a_fixed_coupon_prices_as_the_reader_reads_it(
-    written: str, expected: tuple[Decimal, str | None]
+    written: str, text: str, expected: tuple[Decimal, str | None]
 ) -> None:
-    facility = _fixed(written)
+    facility = _fixed(written, text)
 
     assert facility_rate(facility, None, "BASE", 1, Cell(Decimal("0.06"))) == expected
 
 
 def test_a_coupon_read_as_a_fraction_is_shown_as_its_percent() -> None:
-    assert facility_terms(_fixed("0.065")).spread_or_coupon == "6.5%"
+    assert facility_terms(_fixed("0.065", "6.5%")).spread_or_coupon == "6.5%"
     assert facility_terms(_fixed("6.500")).spread_or_coupon == "6.500%"
+    assert facility_terms(_fixed("0.250", "0.250%")).spread_or_coupon == "0.250%"
 
 
 def _rated(rate_type: str, written: TableCell) -> FacilityRow:

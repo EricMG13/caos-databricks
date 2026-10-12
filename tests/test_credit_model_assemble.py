@@ -1839,3 +1839,69 @@ def test_pf_rows_for_an_ltm_without_a_pf_column_raise_a_limitation() -> None:
     one = replace(regs, pro_forma=(*regs.pro_forma, replace(first, period_id="FY2025")))
     found = [t for t in _model(regs=one).limitations if t.startswith(PF_NOT_SHOWN)]
     assert found == [f"{PF_NOT_SHOWN}: FY2025 (1 adjustment)"]
+
+
+def _fy_anchored(first: str, last: str, days: int | None) -> Cp1Registers:
+    """The worked example cut to fiscal years alone (no 2026 periods, no
+    stated LTM, no interim), FY2025 running `first` to `last`."""
+    regs = example_registers()
+    gone = {
+        p.period_id
+        for p in regs.periods
+        if p.period_type != "FY" or p.fiscal_year == "2026"
+    }
+
+    def kept(rows: tuple[Any, ...]) -> tuple[Any, ...]:
+        return tuple(r for r in rows if r.period_id not in gone)
+
+    def dated(p: PeriodRow) -> PeriodRow:
+        if p.period_id == "FY2025":
+            return replace(p, start_date=first, end_date=last, day_count=days)
+        return p
+
+    return replace(
+        regs,
+        periods=tuple(dated(p) for p in regs.periods if p.period_id not in gone),
+        accounts=kept(regs.accounts),
+        addbacks=kept(regs.addbacks),
+        segments=kept(regs.segments),
+        kpis=kept(regs.kpis),
+        facilities=kept(regs.facilities),
+        pro_forma=kept(regs.pro_forma),
+    )
+
+
+_FY_ANCHOR_LINES = ("revenue", "adjusted_ebitda", "metric:total_leverage_adjusted")
+
+
+@pytest.mark.parametrize(
+    ("first", "last", "days", "note"),
+    [
+        ("2025-04-01", "2025-12-31", 275, "short fiscal year (FY2025)"),
+        ("2024-10-01", "2025-12-31", 457, "long fiscal year (FY2025)"),
+        # Its first day plus twelve months is beyond the calendar: short.
+        ("9999-01-01", "9999-06-30", 181, "short fiscal year (FY2025)"),
+        # A single day is short; twelve months and 20 days is long, not twelve
+        # months: it is more than twelve months, though fewer than thirteen.
+        ("2025-12-31", "2025-12-31", 1, "short fiscal year (FY2025)"),
+        ("2025-01-01", "2026-01-20", 385, "long fiscal year (FY2025)"),
+        # Beginning on the first day of the calendar, it is long, not undated.
+        ("0001-01-01", "2025-12-31", 739616, "long fiscal year (FY2025)"),
+    ],
+)
+def test_a_latest_fiscal_year_that_is_not_twelve_months_is_no_ltm(
+    first: str, last: str, days: int, note: str
+) -> None:
+    model = _model(regs=_fy_anchored(first, last, days), projected=False)
+
+    ltm = next(c for c in model.columns if c.kind == "LTM")
+    assert (ltm.column_id, ltm.days) == ("LTM:FY2025", days)
+    for line_id in _FY_ANCHOR_LINES:
+        cell = _cell(model, line_id, ltm.column_id)
+        assert (cell.value, cell.reason, cell.note) == (
+            None,
+            "COMPONENT_MISSING",
+            note,
+        ), line_id
+    # The fiscal year itself is still a column with its own figures.
+    assert _value(model, "revenue", "FY:FY2025") > 0

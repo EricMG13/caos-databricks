@@ -5,7 +5,10 @@ column; where CP-1's period register has no quarter, one is calculated as
 H1 - Q1, 9M - H1 or FY - 9M when both periods exist.
 
 The anchor is the latest end date of a quarter, YTD or FY period. At a
-fiscal-year end there is no YTD and the LTM is that FY. Otherwise the YTD is
+fiscal-year end there is no YTD and the LTM is that FY when it is twelve whole
+months (a 52- or 53-week year is); a short or long FY (a transition year) or an
+undated one is no LTM, its flows `COMPONENT_MISSING` noted "short fiscal year
+(id)", "long fiscal year (id)" or `UNSPANNED`. Otherwise the YTD is
 the YTD period ending at the anchor, else the anchor year's quarters to date
 when every one is a column (a YTD's fiscal quarter is its register label, else,
 as CP-1 leaves it null on every period that is not a QUARTER, its whole
@@ -138,6 +141,7 @@ from caos.calculators.credit_model._cells import (
     footing_of,
     join_notes,
     no_negative_zero,
+    odd_year,
     off_footing,
     refs,
     treated_as_zero,
@@ -790,19 +794,38 @@ def _rolled(
     return ((fy, 1), (ytd, 1), (pytd, -1)), None if met else UNSPANNED
 
 
+def _fiscal_year_note(period: PeriodRow) -> str | None:
+    """Why the fiscal year is not twelve whole months, else None: `UNSPANNED`
+    where its span cannot be dated, "short fiscal year (id)" where the day
+    after it ends comes before its first day plus twelve months (or that
+    day is beyond the calendar), and "long fiscal year (id)" where it is
+    not twelve whole months otherwise."""
+    dated = _dated(period)
+    if dated is None or not 1 <= dated[0] <= dated[1] < date.max.toordinal():
+        return UNSPANNED
+    months = _whole_months(dated)
+    if months is not None and months[1] == 12:
+        return None
+    twelve = _plus_months(date.fromordinal(dated[0]), 12)
+    short = twelve is None or dated[1] + 1 < twelve.toordinal()
+    return odd_year(period.period_id, short)
+
+
 def _host_ltm(
     regs: Cp1Registers,
     anchor: PeriodRow,
     fiscal: list[_Spec],
     to_date: tuple[_Spec | None, _Spec | None],
 ) -> _Spec:
-    """The LTM to the anchor: the FY ending then, or FY + YTD - PYTD with the
-    prior year's FY; named by CP-1's LTM row ending at the anchor. Unbuilt,
-    noted, where that FY, YTD and PYTD do not meet."""
+    """The LTM to the anchor: the FY ending then, if it is twelve whole
+    months, or FY + YTD - PYTD with the prior year's FY; named by CP-1's LTM
+    row ending at the anchor. Unbuilt, noted, where that FY is short, long or
+    undated (`_fiscal_year_note`), or that FY, YTD and PYTD do not meet."""
     unbuilt = None
     if anchor.period_type == "FY":
         own_fy = next(spec for spec in fiscal if spec.own == anchor.period_id)
         terms: tuple[_Term, ...] = ((own_fy, 1),)
+        unbuilt = _fiscal_year_note(anchor)
         number: int | None = 4
     else:
         terms, unbuilt = _rolled(regs, anchor, fiscal, to_date)

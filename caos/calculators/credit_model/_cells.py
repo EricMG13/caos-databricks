@@ -44,6 +44,10 @@ SIGN_NORMALISED = "sign normalised"
 # A derived period whose components are not distinct, contiguous and its
 # exact span; or an LTM whose fiscal year does not meet its YTD and PYTD.
 UNSPANNED = "components do not span the period"
+# A latest fiscal year that is not twelve whole months is no LTM; `odd_year`
+# names it with the period.
+SHORT_YEAR = "short fiscal year"
+LONG_YEAR = "long fiscal year"
 ABSENT = Cell(None, "NOT_SOURCED")  # no row, or a key the frame has no cell for
 # A sum that took a part with no row as nothing; `treated_as_zero` names it.
 TREATED_AS_ZERO = "not stated, treated as zero"
@@ -101,6 +105,12 @@ def join_notes(notes: tuple[str | None, ...]) -> str | None:
 def treated_as_zero(part: str) -> str:
     """The note on a sum that took `part`, which has no row, as nothing."""
     return f"{TREATED_AS_ZERO} ({part})"
+
+
+def odd_year(period_id: str, short: bool) -> str:
+    """The note on an LTM that is a fiscal year, `period_id`, of fewer
+    (`short`) or more than twelve months."""
+    return f"{SHORT_YEAR if short else LONG_YEAR} ({period_id})"
 
 
 def zeroed(cells: Iterable[Cell]) -> tuple[str, ...]:
