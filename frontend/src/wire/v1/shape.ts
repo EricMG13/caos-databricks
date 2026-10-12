@@ -168,6 +168,29 @@ export function array<T>(item: Shape<T>, max: number): Shape<T[]> {
   };
 }
 
+/** A bounded map: at most `max` entries, each key at most `keyMax` code
+    points and each value `value`'s shape (a pydantic `dict[str, V]`). */
+export function record<T>(value: Shape<T>, max: number, keyMax: number): Shape<Record<string, T>> {
+  return {
+    check: (input, path): input is Record<string, T> => {
+      if (typeof input !== "object" || input === null || Array.isArray(input)) refuse(path);
+      const entries = Object.entries(input);
+      if (entries.length > max) refuse(path);
+      for (const [key, entry] of entries) {
+        if (codePoints(key, keyMax) > keyMax) refuse(path);
+        value.check(entry, `${path}.${key}`);
+      }
+      return true;
+    },
+    toSchema: () => ({
+      type: "object",
+      additionalProperties: value.toSchema(),
+      maxProperties: max,
+      propertyNames: { maxLength: keyMax },
+    }),
+  };
+}
+
 type Fields = Record<string, Shape<unknown>>;
 export type ObjectOf<F extends Fields> = { [K in keyof F]: Infer<F[K]> };
 

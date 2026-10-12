@@ -14,6 +14,7 @@ import {
   number,
   object,
   parse,
+  record,
   string,
   uuid,
   type Shape,
@@ -59,6 +60,8 @@ const ActionName = enumOf([
   "SIGN_OPINION",
   "FREEZE_DELIVERABLE",
   "FILE_DELIVERABLE",
+  "ADD_TO_BOOK",
+  "WITHDRAW_BOOK_ENTRY",
 ]);
 
 const Subject = object({ case_id: uuid, title: text });
@@ -72,7 +75,7 @@ const ActionView = object({
 const Chrome = object({
   subject: nullable(Subject),
   served_role: ServedRole,
-  actions: array(ActionView, 16),
+  actions: array(ActionView, 18),
 });
 
 function sectionDocument<B extends ReturnType<typeof object>>(body: B) {
@@ -641,6 +644,62 @@ const ModelBody = object({
 });
 const ModelDocument = sectionDocument(ModelBody);
 
+const LINE_UNITS = ["MONEY", "PERCENT", "MULTIPLE", "DAYS", "COUNT", "RATE", "KPI"] as const;
+const BookMetricView = object({ line_id: modelText, label: modelText, unit: enumOf(LINE_UNITS) });
+const issuerKey = string({ max: 128 });
+const classification = string({ max: 64 });
+const rating = string({ max: 8 });
+const outlook = string({ max: 10 });
+// Every metrics leaf is a decimal string or null; a projected basis' fiscal
+// year is served apart, in `fiscal_years`.
+const decimalText = string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" });
+const BookEntryView = object({
+  entry_id: uuid,
+  case_id: uuid,
+  run_id: uuid,
+  issuer_key: issuerKey,
+  issuer_id: issuerKey,
+  issuer_name: text,
+  reporting_period: text,
+  analysis_date: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+  route: text,
+  filed: bool,
+  sources_withdrawn: bool,
+  sector: classification,
+  industry_group: nullable(classification),
+  domicile: string({ max: 2 }),
+  moodys: nullable(rating),
+  moodys_outlook: nullable(outlook),
+  sp: nullable(rating),
+  sp_outlook: nullable(outlook),
+  fitch: nullable(rating),
+  fitch_outlook: nullable(outlook),
+  composite: rating,
+  composite_bucket: enumOf(["IG", "BB", "B", "CCC_AND_BELOW", "NR"]),
+  composite_notch: nullable(int({ min: 1, max: 22 })),
+  currency: nullable(modelText),
+  unit: nullable(modelText),
+  metrics: record(record(nullable(decimalText), 400, SHORT), 8, SHORT),
+  fiscal_years: record(string({ max: 4, pattern: "^[0-9]{4}$" }), 8, SHORT),
+  limitations: array(string({ max: MODEL_TEXT + 64 * (MODEL_TEXT + 2) }), 2048),
+  // The entry's own stored digest: what Withdraw is bound to.
+  snapshot_sha256: hash,
+  added_at: datetime,
+  withdrawn_at: nullable(datetime),
+  withdrawal_reason: nullable(
+    enumOf(["ADDED_IN_ERROR", "DATA_ERROR", "SUPERSEDED_SOURCES", "OTHER"]),
+  ),
+  withdrawal_note: nullable(string({ max: 1000 })),
+  // What this viewer may do to the entry; advisory, the command rechecks.
+  actions: array(ActionName, 1),
+});
+const BookIssuerView = object({
+  issuer_key: issuerKey,
+  displayed: BookEntryView,
+  // Newest first, withdrawn entries included, the displayed one excluded.
+  history: array(BookEntryView, 100),
+});
+
 // Book, `/api/v1/book`: the credit across the portfolio. No
 // case in its body, so it is the one section document beside Directory's that
 // answers for no single case.
@@ -998,6 +1057,10 @@ export type ModelLineView = Infer<typeof ModelLineView>;
 export type ModelColumnView = Infer<typeof ModelColumnView>;
 export type ModelCellView = Infer<typeof ModelCellView>;
 export type BookDocument = Infer<typeof BookDocument>;
+export type BookEntryView = Infer<typeof BookEntryView>;
+export type BookIssuerView = Infer<typeof BookIssuerView>;
+export type BookMetricView = Infer<typeof BookMetricView>;
+
 export type BookRow = Infer<typeof BookRow>;
 export type BookCell = Infer<typeof BookCell>;
 export type BookPassport = Infer<typeof BookPassport>;

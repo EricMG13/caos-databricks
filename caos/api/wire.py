@@ -102,6 +102,9 @@ MOMENT_CHARS = 64  # an ISO-8601 instant with its offset, as `read_verdict` read
 # what refuses a draft past them.
 NARRATIVE_CHARS = 2000
 NARRATIVE_SPANS = 64
+BOOK_ISSUERS_MAX = 1000  # beyond it the Book is partial, `LIST_TRUNCATED`
+BOOK_HISTORY_MAX = 100  # an issuer's other entries; beyond it `LIST_TRUNCATED`
+BOOK_BASES_MAX = 8  # LTM, PF_LTM, BASE_FY1..3 and DOWNSIDE_FY1..3 (spec B11)
 BOOK_CASES_MAX = 4  # "Two to four credits side by side"
 BOOK_COLUMNS_MAX = 16  # the host-declared columns of the CP-CF projection
 BOOK_PERIODS_MAX = 8  # beyond it a row is partial, `LIST_TRUNCATED`
@@ -407,6 +410,10 @@ class ActionName(StrEnum):
     SIGN_OPINION = "SIGN_OPINION"
     FREEZE_DELIVERABLE = "FREEZE_DELIVERABLE"
     FILE_DELIVERABLE = "FILE_DELIVERABLE"
+    # Plan 3 Task 5. Add to Book is judged by the Model read (per run); Withdraw
+    # by the Book read (per entry, on the entry's own case).
+    ADD_TO_BOOK = "ADD_TO_BOOK"
+    WITHDRAW_BOOK_ENTRY = "WITHDRAW_BOOK_ENTRY"
 
 
 class ActionView(BaseModel):
@@ -1171,6 +1178,105 @@ class ModelBody(BaseModel):
         if any(len(line.cells) != len(self.columns) for line in self.lines):
             raise ValueError  # a line with a cell too many or too few
         return self
+
+
+# Plan 3 Task 2: an analyst-stated classification field (spec B5). The
+# vocabularies are `caos.book.classification`'s, judged by the command.
+CLASSIFICATION_CHARS = 64
+RATING_CHARS = 8
+# The longest agency outlook (`DEVELOPING`); the command judges the word.
+OUTLOOK_CHARS = max(len(outlook) for outlook in OUTLOOKS)
+WITHDRAWAL_NOTE_CHARS = 1000
+ClassificationText = Annotated[str, Field(max_length=CLASSIFICATION_CHARS)]
+Rating = Annotated[str, Field(max_length=RATING_CHARS)]
+Outlook = Annotated[str, Field(max_length=OUTLOOK_CHARS)]
+
+
+class BookMetricView(BaseModel):
+    """A metric the Book's column chooser offers: one of the Model's own
+    book lines (`caos.api.reads.model.book_catalogue`), in the Model's
+    order."""
+
+    model_config = _CLOSED
+
+    line_id: ModelText
+    label: ModelText
+    unit: LineUnit
+
+
+class BookEntryView(BaseModel):
+    """One book entry as stored (spec B10): the run's pinned subject, the
+    analyst-stated classification and its composite (spec B6), and the
+    metrics on each basis as the Add to Book command stored them.
+    `fiscal_years` names a projected basis' fiscal year, kept out of
+    `metrics` so every figure there is decimal text or null.
+    `snapshot_sha256` is the entry's stored digest, which Withdraw is bound
+    to. `filed` says the run's deliverable is filed (spec B4);
+    `sources_withdrawn` that a source pinned to the run is no longer live
+    (spec B8)."""
+
+    model_config = _CLOSED
+
+    entry_id: UUID
+    case_id: UUID
+    run_id: UUID
+    issuer_key: Annotated[str, Field(max_length=128)]
+    issuer_id: Annotated[str, Field(max_length=128)]
+    issuer_name: Text
+    reporting_period: Text
+    analysis_date: Annotated[str, Field(max_length=10, pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    route: Text
+    filed: StrictBool
+    sources_withdrawn: StrictBool
+    sector: ClassificationText
+    industry_group: ClassificationText | None
+    domicile: Annotated[str, Field(max_length=2)]
+    moodys: Rating | None
+    moodys_outlook: Outlook | None
+    sp: Rating | None
+    sp_outlook: Outlook | None
+    fitch: Rating | None
+    fitch_outlook: Outlook | None
+    composite: Rating
+    composite_bucket: Literal["IG", "BB", "B", "CCC_AND_BELOW", "NR"]
+    composite_notch: Annotated[int, Field(ge=1, le=22)] | None
+    currency: ModelText | None
+    unit: ModelText | None
+    metrics: Annotated[
+        dict[
+            Id,
+            Annotated[dict[Id, DecimalText | None], Field(max_length=MODEL_LINES_MAX)],
+        ],
+        Field(max_length=BOOK_BASES_MAX),
+    ]
+    fiscal_years: Annotated[
+        dict[Id, Annotated[str, Field(max_length=4, pattern=r"^[0-9]{4}$")]],
+        Field(max_length=BOOK_BASES_MAX),
+    ]
+    limitations: Annotated[
+        list[Annotated[str, Field(max_length=MODEL_LIMITATION_CHARS)]],
+        Field(max_length=MODEL_LIMITATIONS_MAX),
+    ]
+    snapshot_sha256: Sha256
+    added_at: AwareDatetime
+    withdrawn_at: AwareDatetime | None
+    withdrawal_reason: WithdrawalReason | None
+    withdrawal_note: Annotated[str, Field(max_length=WITHDRAWAL_NOTE_CHARS)] | None
+    # What this viewer may do to the entry: `WITHDRAW_BOOK_ENTRY` for a
+    # WRITER-or-above member of the entry's case (global role permitting)
+    # while it is live. Advisory; the command rechecks.
+    actions: Annotated[list[ActionName], Field(max_length=1)]
+
+
+class BookIssuerView(BaseModel):
+    """One issuer's row (spec B1, B4): its newest live entry, and every
+    other entry it has, withdrawn ones included, newest first."""
+
+    model_config = _CLOSED
+
+    issuer_key: Annotated[str, Field(max_length=128)]
+    displayed: BookEntryView
+    history: Annotated[list[BookEntryView], Field(max_length=BOOK_HISTORY_MAX)]
 
 
 class BookColumn(BaseModel):
@@ -2055,18 +2161,6 @@ class RateDeckView(BaseModel):
     as_of: CalendarDate
     saved_at: AwareDatetime
     rates: Annotated[list[RateDeckRateView], Field(max_length=RATE_DECK_ROWS_MAX)]
-
-
-# Plan 3 Task 2: an analyst-stated classification field (spec B5). The
-# vocabularies are `caos.book.classification`'s, judged by the command.
-CLASSIFICATION_CHARS = 64
-RATING_CHARS = 8
-# The longest agency outlook is DEVELOPING; the command judges its word.
-OUTLOOK_CHARS = max(len(outlook) for outlook in OUTLOOKS)
-WITHDRAWAL_NOTE_CHARS = 1000
-ClassificationText = Annotated[str, Field(max_length=CLASSIFICATION_CHARS)]
-Rating = Annotated[str, Field(max_length=RATING_CHARS)]
-Outlook = Annotated[str, Field(max_length=OUTLOOK_CHARS)]
 
 
 class AddToBook(BaseModel):
