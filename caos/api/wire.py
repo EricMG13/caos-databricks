@@ -105,9 +105,6 @@ NARRATIVE_SPANS = 64
 BOOK_ISSUERS_MAX = 1000  # beyond it the Book is partial, `LIST_TRUNCATED`
 BOOK_HISTORY_MAX = 100  # an issuer's other entries; beyond it `LIST_TRUNCATED`
 BOOK_BASES_MAX = 8  # LTM, PF_LTM, BASE_FY1..3 and DOWNSIDE_FY1..3 (spec B11)
-BOOK_CASES_MAX = 4  # "Two to four credits side by side"
-BOOK_COLUMNS_MAX = 16  # the host-declared columns of the CP-CF projection
-BOOK_PERIODS_MAX = 8  # beyond it a row is partial, `LIST_TRUNCATED`
 BRIEF_QUESTIONS_MAX = 32  # `CP_DR_RESEARCH_BRIEF_V1.md`'s bounded batch
 # The whole brief, as `caos.store.run_inputs` pins it and CP-DR reads it: its
 # canonical JSON is at most 64 KiB. Every field above may be at its own bound
@@ -1277,116 +1274,6 @@ class BookIssuerView(BaseModel):
     issuer_key: Annotated[str, Field(max_length=128)]
     displayed: BookEntryView
     history: Annotated[list[BookEntryView], Field(max_length=BOOK_HISTORY_MAX)]
-
-
-class BookColumn(BaseModel):
-    """One column of the book: a value the accepted projection already
-    carries. `unit` is what the cell's own figure is (N60): a plain
-    `Decimal` states a fraction (`0.20`) and a count identically, so the
-    cell has to be told which -- the calculator names its own margins and
-    coverage ratios, and the column declares that naming, never a guess
-    from the figure's magnitude."""
-
-    model_config = _CLOSED
-
-    key: Id
-    label: Text
-    unit: Literal["percent", "currency", "multiple", "count", "none"]
-
-
-class BookResearch(BaseModel):
-    """An accepted module artifact of the row's displayed run."""
-
-    model_config = _CLOSED
-
-    route_node_id: Id
-    module_id: Id
-    qa_status: Id
-
-
-class BookPassport(BaseModel):
-    """The ten fields a passport always carries, in its
-    order. Every one is read from the accepted record, the pinned run subject
-    or the host's declaration of its own calculator; none is a judgement about
-    the run. `scenario` is the accepted projection's own `case` -- the name
-    `caos-forecast-v1` gives a scenario, and the one
-    `caos/qualification/matrix.py` already reads as `ExpectedForecast.scenario`
-    -- so a base case and a downside are told apart in the field whose only job
-    is to tell them apart. The legacy spec's "evidence date" is served as
-    `reporting_period`, the analyst's declared period from the pinned subject,
-    because the host derives no date from any admitted document."""
-
-    model_config = _CLOSED
-
-    definition: Text
-    period: Text
-    scenario: Text
-    reporting_period: Text
-    computed_at: AwareDatetime
-    snapshot: Sha256
-    method: Text
-    derivation: Text
-    citations: Annotated[list[CitationView], Field(max_length=CITATIONS_MAX)]
-    supporting_research: Annotated[
-        list[BookResearch], Field(max_length=ROUTE_NODES_MAX)
-    ]
-
-
-class BookCell(BaseModel):
-    model_config = _CLOSED
-
-    column: Id
-    value: Annotated[str, Field(max_length=64, pattern=r"^-?[0-9]+(\.[0-9]+)?$")] | None
-    unavailable_reason: Literal["ZERO_OR_NEGATIVE_DENOMINATOR"] | None
-    passport: BookPassport
-
-
-class BookPeriod(BaseModel):
-    model_config = _CLOSED
-
-    case: Text
-    period_id: Text
-    fiscal_year: Text
-    days: Annotated[str, Field(max_length=3, pattern=r"^[0-9]+$")]
-    unavailable_reason: Text | None
-    cells: Annotated[list[BookCell], Field(max_length=BOOK_COLUMNS_MAX)]
-
-
-class BookRow(BaseModel):
-    """One credit, and why it carries no cells when it carries none.
-
-    `unavailable_reason` says no forecast is accepted; `refusal` is the typed
-    refusal this credit's own projection read raised. A refusal on one credit
-    never decides the others, so the book states it here rather than declining
-    the whole portfolio.
-    """
-
-    model_config = _CLOSED
-
-    case_id: UUID
-    title: Text
-    standing: Standing
-    subject: RunSubjectView | None
-    displayed_run_id: UUID | None
-    displayed_run_status: RunStatus | None
-    snapshot: Sha256 | None
-    # The projection's own units. A portfolio that compared credits without
-    # them would put two currencies in one column and say nothing.
-    currency: Annotated[str, Field(max_length=3, pattern="^[A-Z]{3}$")] | None
-    scale: Literal["units", "thousands", "millions", "billions"] | None
-    periods: Annotated[list[BookPeriod], Field(max_length=BOOK_PERIODS_MAX)]
-    unavailable_reason: Literal["NO_ACCEPTED_FORECAST"] | None
-    refusal: RefusalBody | None
-
-
-class BookBasis(BaseModel):
-    """The one basis the comparison is stated on."""
-
-    model_config = _CLOSED
-
-    period: Literal["EVERY_ACCEPTED_PERIOD"]
-    scenario: Literal["EVERY_ACCEPTED_CASE"]
-    accepted_only: Literal[True]
 
 
 class BookBody(BaseModel):

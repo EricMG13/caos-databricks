@@ -181,28 +181,6 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         ).split()
     ),
     wire.BookIssuerView: frozenset({"issuer_key", "displayed", "history"}),
-    wire.BookColumn: frozenset({"key", "label", "unit"}),
-    wire.BookResearch: frozenset({"route_node_id", "module_id", "qa_status"}),
-    # The ten passport fields, and nothing beside them: a passport
-    # that grew an eleventh would be this host asserting something the
-    # accepted record does not say.
-    wire.BookPassport: frozenset(
-        (
-            "definition period scenario reporting_period computed_at snapshot method "
-            "derivation citations supporting_research"
-        ).split()
-    ),
-    wire.BookCell: frozenset({"column", "value", "unavailable_reason", "passport"}),
-    wire.BookPeriod: frozenset(
-        {"case", "period_id", "fiscal_year", "days", "unavailable_reason", "cells"}
-    ),
-    wire.BookRow: frozenset(
-        (
-            "case_id title standing subject displayed_run_id displayed_run_status "
-            "snapshot currency scale periods unavailable_reason refusal"
-        ).split()
-    ),
-    wire.BookBasis: frozenset({"period", "scenario", "accepted_only"}),
     wire.BookBody: frozenset({"issuers", "metric_catalogue"}),
     wire.BookDocument: ENVELOPE,
     wire.ModelValue: frozenset({"name", "unit", "value", "unavailable_reason"}),
