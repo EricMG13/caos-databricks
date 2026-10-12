@@ -2,11 +2,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { vi } from "vitest";
+import type * as Grid from "@/sections/model/grid";
 import { MemoryRouter, useLocation } from "react-router";
+import { analyticalIdentity, tailed } from "@/app/authority";
 import { displayDecimal } from "@/ds/format";
-import { spelled } from "@/sections/model/grid";
-import { DEFAULT_VIEW, LOCKED } from "@/sections/book/view";
 import { BookSection } from "@/sections/book/BookSection";
+import { spelled } from "@/sections/model/grid";
 import {
   BASES,
   BASIS_LABELS,
@@ -18,10 +19,21 @@ import {
   unitOf,
 } from "@/sections/book/columns";
 import { metricOf } from "@/sections/book/filter";
-import { analyticalIdentity, tailed } from "@/app/authority";
+import { DEFAULT_VIEW, LOCKED } from "@/sections/book/view";
 import { WireShapeError, parseBookDocument, type BookDocument } from "@/wire/v1";
 
+// Global setup preloads every section; reload this one under the real spelling spy.
+vi.hoisted(() => {
+  vi.resetModules();
+});
+
+vi.mock("@/sections/model/grid", async (original) => {
+  const actual = await original<typeof Grid>();
+  return { ...actual, spelled: vi.fn(actual.spelled) };
+});
+
 const FIXTURE = resolve(process.cwd(), "fixtures", "book.json");
+const EMPTY = resolve(process.cwd(), "fixtures", "states", "book.observed-empty.json");
 
 function raw() {
   return JSON.parse(readFileSync(FIXTURE, "utf8"));
@@ -65,6 +77,10 @@ function cell(issuer: string, column: string): HTMLElement {
 
 beforeEach(() => {
   window.localStorage.clear();
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -180,7 +196,6 @@ describe("the book", () => {
     expect(box.getByLabelText("Unit")).toBeChecked();
   });
 
-  // ColumnChooser is reached through the real section and changes its table.
   test("adding and removing a column updates the URL", () => {
     renderBook();
     const box = chooser();
@@ -220,7 +235,6 @@ describe("the book", () => {
     expect(search().getAll("col")).not.toContain("m:adjusted_ebitda_margin");
   });
 
-  // FilterBar is reached through the real section and changes its kept issuers.
   test("a range filter hides issuers outside it", () => {
     renderBook();
     fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
@@ -315,6 +329,13 @@ describe("the book", () => {
     expect(window.localStorage.getItem("caos.book.view")).toContain("basis=LTM");
   });
 
+  test("an empty Book says so and counts none", () => {
+    const empty = parseBookDocument(JSON.parse(readFileSync(EMPTY, "utf8")));
+    renderBook(empty);
+    expect(screen.getByText("0 of 0 issuers")).toBeInTheDocument();
+    expect(screen.getByText("No issuers in the Book.")).toBeInTheDocument();
+  });
+
   test("the currency select offers only currencies a displayed issuer holds", () => {
     renderBook(document(), "/book/?sort=asc%7Cm%3Arevenue&cur=CHF");
     const select = screen.getByLabelText<HTMLSelectElement>("Currency");
@@ -322,60 +343,6 @@ describe("the book", () => {
     // A currency nobody holds is no currency: the select says so and the order is the document's.
     expect(select.value).toBe("");
     expect(rows()[0]).toHaveAttribute("data-issuer", "CVNA");
-  });
-
-  test("the URL beats the remembered view", () => {
-    window.localStorage.setItem("caos.book.view", "basis=BASE_FY1");
-    renderBook(document(), "/book/?basis=PF_LTM");
-    expect(search().get("basis")).toBe("PF_LTM");
-  });
-
-  test("a browser that refuses storage still shows and changes the view", () => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new DOMException("denied", "SecurityError");
-    });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new DOMException("denied", "SecurityError");
-    });
-    renderBook();
-    expect(rows()).toHaveLength(9);
-    fireEvent.click(screen.getByRole("radio", { name: "Base FY1" }));
-    expect(search().get("basis")).toBe("BASE_FY1");
-  });
-
-  test("URL columns and filters remain editable without losing context", () => {
-    renderBook(
-      document(),
-      "/book/?case=keep&tag=one&tag=two&col=id%3Afiled&col=id%3Afiscal_year_base_fy1&f=set%7Cid%253Aissuer_id%7CCVNA",
-    );
-    expect(rows()).toHaveLength(1);
-    expect(cell("CVNA", "id:filed")).toHaveTextContent(/^Yes$/);
-    expect(cell("CVNA", "id:fiscal_year_base_fy1")).toHaveTextContent(/^2026$/);
-    expect(screen.getByText("1 of 9 issuers")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Columns" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Add filter" })).toBeVisible();
-    expect(screen.getByRole("button", { name: /^Remove filter/ })).toBeVisible();
-    const entry = document().body.issuers[0]!;
-    expect(entry.displayed.actions).toContain("WITHDRAW_BOOK_ENTRY");
-    expect(screen.getByRole("button", { name: "Withdraw Carvana Co." })).toBeVisible();
-    expect(entry.history).toHaveLength(0);
-    expect(screen.queryByRole("button", { name: /^History/ })).toBeNull();
-    expect(entry.displayed.limitations).toHaveLength(1);
-    expect(screen.getByRole("button", { name: /^Limited/ })).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
-    expect(search().get("case")).toBe("keep");
-    expect(search().getAll("tag")).toEqual(["one", "two"]);
-    expect(search().getAll("f")).toEqual([]);
-    expect(rows()).toHaveLength(9);
-  });
-
-  test("a URL money range waits for a native currency", () => {
-    renderBook(document(), "/book/?f=range%7Cm%253Arevenue%7C1000000%7C");
-    expect(rows()).toHaveLength(9);
-    expect(screen.getByText(/choose a currency to compare/i)).toBeVisible();
-    fireEvent.change(screen.getByLabelText("Currency"), { target: { value: "JPY" } });
-    expect(rows().map((row) => row.getAttribute("data-issuer"))).toEqual(["PFL"]);
-    expect(cell("PFL", "id:currency")).toHaveTextContent(/^JPY$/);
   });
 
   test("a filter chip names the basis its column follows", () => {
@@ -418,6 +385,142 @@ describe("the book", () => {
     fireEvent.click(apply);
     expect(search().getAll("f")).toEqual([]);
     expect(screen.getByText("9 of 9 issuers")).toBeInTheDocument();
+  });
+
+  test("the URL beats the remembered view", () => {
+    window.localStorage.setItem("caos.book.view", "basis=BASE_FY1");
+    renderBook(document(), "/book/?basis=PF_LTM");
+    expect(search().get("basis")).toBe("PF_LTM");
+  });
+
+  test("a browser that refuses storage still shows and changes the view", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    renderBook();
+    expect(rows()).toHaveLength(9);
+    fireEvent.click(screen.getByRole("radio", { name: "Base FY1" }));
+    expect(search().get("basis")).toBe("BASE_FY1");
+  });
+
+  test("a chooser or row toggle does not redraw every row", () => {
+    renderBook();
+    const draws = vi.mocked(spelled);
+    const full = draws.mock.calls.length;
+    expect(full).toBeGreaterThan(30);
+    draws.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Columns" }));
+    expect(draws).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /^History \(1\).*Virgin Media O2/ }));
+    expect(draws.mock.calls.length).toBeLessThan(full / 2);
+  });
+
+  test("the column vocabulary names every column once", () => {
+    const units = document().body.metric_catalogue;
+    expect(IDENTIFIERS).toHaveLength(Object.keys(IDENTIFIER_LABELS).length);
+    expect(BASES.map((basis) => BASIS_LABELS[basis])).toEqual([
+      "LTM",
+      "PF LTM",
+      "Base FY1",
+      "Downside FY1",
+    ]);
+    expect(columnLabel("id:moodys", units)).toBe("Moody's");
+    expect(columnLabel("m:revenue", units)).toBe("Total revenue");
+    expect(columnLabel("m:revenue@BASE_FY1", units)).toBe("Total revenue · Base FY1");
+    expect(unitOf("m:revenue", units)?.unit).toBe("MONEY");
+    expect(unitOf("id:sector", units)).toBeUndefined();
+    expect(unitLookup(units)("m:revenue@PF_LTM")?.label).toBe("Total revenue");
+    expect(unitLookup(units)("id:unit")).toBeUndefined();
+    expect(columnLabel("id:unit", units)).toBe("Unit");
+    expect(columnLabel("id:fiscal_year_base_fy1", units)).toBe("Fiscal year · Base FY1");
+    expect(agencyOf("id:sp")).toBe("sp");
+    expect(agencyOf("id:sp_outlook")).toBeNull();
+    expect(metricOf("m:revenue@PF_LTM", "LTM")).toEqual({ lineId: "revenue", basis: "PF_LTM" });
+  });
+
+  test("the fixture parses with parseBookDocument", () => {
+    const doc = document();
+    expect(doc.body.issuers.length).toBeGreaterThanOrEqual(8);
+    expect(
+      new Set(doc.body.issuers.map((issuer) => issuer.displayed.currency)).size,
+    ).toBeGreaterThan(2);
+    expect(doc.body.issuers.some((issuer) => issuer.history.some((e) => e.withdrawn_at))).toBe(
+      true,
+    );
+    expect(doc.body.issuers.filter((issuer) => issuer.displayed.sources_withdrawn)).toHaveLength(1);
+    expect(parseBookDocument(JSON.parse(readFileSync(EMPTY, "utf8"))).body.issuers).toEqual([]);
+  });
+
+  test("a metrics leaf is decimal text or null, never a number", () => {
+    const fixture = raw();
+    fixture.body.issuers[0].displayed.metrics.LTM.revenue = 20322;
+    expect(() => parseBookDocument(fixture)).toThrow(WireShapeError);
+  });
+
+  test("a moved displayed entry is a new analytical identity", () => {
+    const doc = document();
+    const moved: BookDocument = {
+      ...doc,
+      body: {
+        ...doc.body,
+        issuers: doc.body.issuers.map((issuer, index) =>
+          index === 0
+            ? { ...issuer, displayed: { ...issuer.displayed, snapshot_sha256: "f".repeat(64) } }
+            : issuer,
+        ),
+      },
+    };
+    expect(analyticalIdentity("book", moved)).not.toBe(analyticalIdentity("book", doc));
+    expect(analyticalIdentity("book", document())).toBe(analyticalIdentity("book", doc));
+  });
+
+  test("no case event names the book, so it holds no stream", () => {
+    // `tailed` is what `Workspace` asks before opening a per-case SSE tail. A
+    // tail over Book could never usefully fire -- `REFETCHES` maps no event to
+    // it -- and would hold a worker thread and one of the API's 32
+    // concurrency slots for its whole deadline.
+    expect(tailed("book")).toBe(false);
+    expect(tailed("directory")).toBe(false);
+    expect(tailed("analysis")).toBe(true);
+    expect(tailed("committee")).toBe(true);
+  });
+
+  test("URL columns and filters remain editable without losing context", () => {
+    renderBook(
+      document(),
+      "/book/?case=keep&tag=one&tag=two&col=id%3Afiled&col=id%3Afiscal_year_base_fy1&f=set%7Cid%253Aissuer_id%7CCVNA",
+    );
+    expect(rows()).toHaveLength(1);
+    expect(cell("CVNA", "id:filed")).toHaveTextContent(/^Yes$/);
+    expect(cell("CVNA", "id:fiscal_year_base_fy1")).toHaveTextContent(/^2026$/);
+    expect(screen.getByText("1 of 9 issuers")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Columns" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add filter" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Remove filter/ })).toBeVisible();
+    const entry = document().body.issuers[0]!;
+    expect(entry.displayed.actions).toContain("WITHDRAW_BOOK_ENTRY");
+    expect(screen.getByRole("button", { name: "Withdraw Carvana Co." })).toBeVisible();
+    expect(entry.history).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /^History/ })).toBeNull();
+    expect(entry.displayed.limitations).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /^Limited/ })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
+    expect(search().get("case")).toBe("keep");
+    expect(search().getAll("tag")).toEqual(["one", "two"]);
+    expect(search().getAll("f")).toEqual([]);
+    expect(rows()).toHaveLength(9);
+  });
+
+  test("a URL money range waits for a native currency", () => {
+    renderBook(document(), "/book/?f=range%7Cm%253Arevenue%7C1000000%7C");
+    expect(rows()).toHaveLength(9);
+    expect(screen.getByText(/choose a currency to compare/i)).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Currency"), { target: { value: "JPY" } });
+    expect(rows().map((row) => row.getAttribute("data-issuer"))).toEqual(["PFL"]);
+    expect(cell("PFL", "id:currency")).toHaveTextContent(/^JPY$/);
   });
 
   test("a set editor applies served values and refuses an empty selection", () => {
@@ -481,29 +584,6 @@ describe("the book", () => {
     expect(rows()).toHaveLength(9);
   });
 
-  test("the column vocabulary names every column once", () => {
-    const units = document().body.metric_catalogue;
-    expect(IDENTIFIERS).toHaveLength(Object.keys(IDENTIFIER_LABELS).length);
-    expect(BASES.map((basis) => BASIS_LABELS[basis])).toEqual([
-      "LTM",
-      "PF LTM",
-      "Base FY1",
-      "Downside FY1",
-    ]);
-    expect(columnLabel("id:moodys", units)).toBe("Moody's");
-    expect(columnLabel("m:revenue", units)).toBe("Total revenue");
-    expect(columnLabel("m:revenue@BASE_FY1", units)).toBe("Total revenue · Base FY1");
-    expect(unitOf("m:revenue", units)?.unit).toBe("MONEY");
-    expect(unitOf("id:sector", units)).toBeUndefined();
-    expect(unitLookup(units)("m:revenue@PF_LTM")?.label).toBe("Total revenue");
-    expect(unitLookup(units)("id:unit")).toBeUndefined();
-    expect(columnLabel("id:unit", units)).toBe("Unit");
-    expect(columnLabel("id:fiscal_year_base_fy1", units)).toBe("Fiscal year · Base FY1");
-    expect(agencyOf("id:sp")).toBe("sp");
-    expect(agencyOf("id:sp_outlook")).toBeNull();
-    expect(metricOf("m:revenue@PF_LTM", "LTM")).toEqual({ lineId: "revenue", basis: "PF_LTM" });
-  });
-
   test("the served fixture is the declared v2 shape: issuers and the metric catalogue", () => {
     const doc = document();
     expect(doc.body.issuers.map((issuer) => issuer.issuer_key)).toEqual([
@@ -526,12 +606,6 @@ describe("the book", () => {
     const cvna = doc.body.issuers[0]!.displayed;
     expect(cvna.fiscal_years).toEqual({ BASE_FY1: "2026", DOWNSIDE_FY1: "2026" });
     expect(Object.keys(cvna.metrics)).toEqual(["LTM", "BASE_FY1", "PF_LTM", "DOWNSIDE_FY1"]);
-  });
-
-  test("a metrics leaf is decimal text or null, never a number", () => {
-    const fixture = raw();
-    fixture.body.issuers[0].displayed.metrics.LTM.revenue = 20322;
-    expect(() => parseBookDocument(fixture)).toThrow(WireShapeError);
   });
 
   test("each issuer is one row: its displayed entry's name, period, sector and composite", () => {
@@ -584,33 +658,5 @@ describe("the book", () => {
       expect(revenue).not.toHaveTextContent("Not stated");
       expect(within(revenue).getByTitle("0")).toBeVisible();
     }
-  });
-
-  test("a moved displayed entry is a new analytical identity", () => {
-    const doc = document();
-    const moved: BookDocument = {
-      ...doc,
-      body: {
-        ...doc.body,
-        issuers: doc.body.issuers.map((issuer, index) =>
-          index === 0
-            ? { ...issuer, displayed: { ...issuer.displayed, snapshot_sha256: "f".repeat(64) } }
-            : issuer,
-        ),
-      },
-    };
-    expect(analyticalIdentity("book", moved)).not.toBe(analyticalIdentity("book", doc));
-    expect(analyticalIdentity("book", document())).toBe(analyticalIdentity("book", doc));
-  });
-
-  test("no case event names the book, so it holds no stream", () => {
-    // `tailed` is what `Workspace` asks before opening a per-case SSE tail. A
-    // tail over Book could never usefully fire -- `REFETCHES` maps no event to
-    // it -- and would hold a worker thread and one of the API's 32
-    // concurrency slots for its whole deadline.
-    expect(tailed("book")).toBe(false);
-    expect(tailed("directory")).toBe(false);
-    expect(tailed("analysis")).toBe(true);
-    expect(tailed("committee")).toBe(true);
   });
 });
