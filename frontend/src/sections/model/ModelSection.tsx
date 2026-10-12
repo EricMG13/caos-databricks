@@ -2,13 +2,17 @@
 // server strings: this view deliberately performs no model arithmetic or
 // evidence navigation beyond the passport a cell opens. The credit model is the
 // grid (`ModelGrid`); the accepted CP-CF forecast follows it.
+import { useCallback } from "react";
 import { LineChart, type ChartSeries } from "@/charts";
+import { fetchSection } from "@/app/transport";
+import { useDocumentRefetch } from "@/app/useDocumentRefetch";
 import { NoteRows } from "@/ds/atoms";
 import type { ModelDocument } from "@/wire/v1";
 import { displayDecimal } from "@/ds/format";
 import { Digest } from "@/ds/Digest";
 import { useSearchParams } from "react-router";
 import { ChartStrip } from "./ChartStrip";
+import { AddToBook } from "./AddToBook";
 import { ModelGrid } from "./ModelGrid";
 
 type Forecast = NonNullable<ModelDocument["body"]["forecast"]>;
@@ -128,7 +132,16 @@ type ModelBody = ModelDocument["body"];
     at, the unrealised add-backs switch, and the model's limitations. The
     limitations stand on their own: a document whose CP-1 could not be read has
     them and an accepted forecast but no line. */
-function ModelHeader({ body }: { body: ModelBody }) {
+function ModelHeader({
+  body,
+  addToBook,
+  onAdded,
+}: {
+  body: ModelBody;
+  /** Whether the document offers Add to Book (`chrome.actions`). */
+  addToBook: boolean;
+  onAdded: () => void;
+}) {
   const [params, setParams] = useSearchParams();
   const excluded = params.get("exclude_unrealised") === "1";
   const setExcluded = (on: boolean) =>
@@ -154,6 +167,20 @@ function ModelHeader({ body }: { body: ModelBody }) {
             {body.rate_deck ? `rate deck ${body.rate_deck.as_of}` : "no rate deck"}
           </span>
         ) : null}
+        {/* Offered by the server to a writer on a complete default view, and
+            drawn only with the digest it binds and the run's subject. */}
+        {addToBook && body.snapshot_sha256 && body.subject && body.displayed_run_id ? (
+          <span className="ml-auto">
+            <AddToBook
+              caseId={body.case_id}
+              runId={body.displayed_run_id}
+              digest={body.snapshot_sha256}
+              issuerId={body.subject.issuer_id}
+              issuerName={body.subject.issuer_name}
+              onAdded={onAdded}
+            />
+          </span>
+        ) : null}
       </header>
       <div className="pb">
         {hasModel ? (
@@ -174,11 +201,48 @@ function ModelHeader({ body }: { body: ModelBody }) {
   );
 }
 
-export function ModelSection({ document }: { document: ModelDocument; tab: string | null }) {
+/** A `ModelBody` is the only enabled-section body carrying a rate deck. */
+function isModelDocument(document: { body: object }): document is ModelDocument {
+  return "rate_deck" in document.body;
+}
+
+export function ModelSection({
+  document: served,
+}: {
+  document: ModelDocument;
+  tab: string | null;
+}) {
+  const { live: document, failed, refetch } = useDocumentRefetch(served);
+  const [params] = useSearchParams();
+  const excludeUnrealised = params.get("exclude_unrealised");
   const { body } = document;
+  const caseId = body.case_id;
+  const runId = body.displayed_run_id;
+  // The entry exists now and the offer is gone: read the Model again, once.
+  const reread = useCallback(
+    () =>
+      void refetch(async () => {
+        const status = await fetchSection("model", {
+          case: caseId,
+          run: runId,
+          excludeUnrealised,
+        });
+        return "document" in status && isModelDocument(status.document) ? status.document : null;
+      }),
+    [refetch, caseId, runId, excludeUnrealised],
+  );
   const credit = (
     <>
-      <ModelHeader body={body} />
+      <ModelHeader
+        body={body}
+        addToBook={document.chrome.actions.some((view) => view.action === "ADD_TO_BOOK")}
+        onAdded={reread}
+      />
+      {failed ? (
+        <p className="note warn" role="alert" data-model-refresh-failed>
+          The entry was added, but the Model could not be read again. Reload to see it.
+        </p>
+      ) : null}
       {body.lines.length ? (
         <section className="pnl" data-model-lines>
           <div className="pb flush">
