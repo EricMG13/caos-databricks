@@ -16,7 +16,7 @@
     "lint": "eslint --max-warnings=0 . && prettier --check . && node scripts/check-vocabulary.mjs && node scripts/check-tested.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --mode demo",
-    "a11y": "node scripts/a11y-axe.mjs",
+    "a11y": "node --test tests/scripts/a11y-navigation.test.mjs && node scripts/a11y-axe.mjs",
     "test:workbench": "playwright test"
   },
   "dependencies": {

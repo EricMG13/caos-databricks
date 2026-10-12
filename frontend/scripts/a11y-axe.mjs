@@ -13,6 +13,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, firefox, webkit } from "playwright";
 import { summarizeAxeViolations } from "./axe-results.mjs";
+import { gotoWithInternalErrorRetry } from "./a11y-navigation.mjs";
 import { ENGINES, LOADING, ROUTES, SETTLED, VIEWPORTS } from "./fixture-routes.mjs";
 
 const require = createRequire(import.meta.url);
@@ -182,7 +183,10 @@ function layoutFails(layout) {
 
 async function scan(page, route, viewport) {
   await page.setViewportSize(viewport);
-  await page.goto(BASE + route, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  await gotoWithInternalErrorRetry(page, BASE + route, {
+    waitUntil: "domcontentloaded",
+    timeout: 30_000,
+  });
   try {
     await page.locator("main#body").waitFor({ state: "attached", timeout: 15_000 });
     await page.locator(LOADING).waitFor({ state: "detached", timeout: 15_000 });
