@@ -792,6 +792,40 @@
     max-width: 28rem;
   }
 
+  table.book-grid {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  table.book-grid thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--table-head);
+  }
+  table.book-grid thead th:first-child {
+    z-index: 3;
+  }
+  table.book-grid tbody th.wrap {
+    min-width: 14rem;
+    max-width: 17rem;
+    height: auto;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--card);
+    font: 400 0.875rem var(--font-sans);
+    color: var(--foreground);
+    text-align: left;
+    white-space: normal;
+  }
+  table.book-grid .na,
+  table.book-grid .cu {
+    color: var(--muted-foreground);
+    font-size: 0.6875rem;
+    font-style: normal;
+  }
+
   /* ---- the Model grid: two sticky header rows, a pinned label column, bands,
      debt ranks, and the tints for pro forma, Base, Downside and a refinanced
      maturity. The header height is a class's custom property, not a style. ---- */
