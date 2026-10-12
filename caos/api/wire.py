@@ -36,6 +36,7 @@ from pydantic import (
 from pydantic.json_schema import models_json_schema
 
 from caos.api.identity import GlobalRole
+from caos.book.classification import OUTLOOKS
 from caos.calculators.credit_model.frame import Basis, Case, ColumnKind, Reason
 from caos.calculators.credit_model.layout import LineKind
 from caos.calculators.credit_model.layout import Unit as LineUnit
@@ -2059,9 +2060,11 @@ class RateDeckView(BaseModel):
 # vocabularies are `caos.book.classification`'s, judged by the command.
 CLASSIFICATION_CHARS = 64
 RATING_CHARS = 8
+OUTLOOK_CHARS = max(len(outlook) for outlook in OUTLOOKS)
 WITHDRAWAL_NOTE_CHARS = 1000
 ClassificationText = Annotated[str, Field(max_length=CLASSIFICATION_CHARS)]
 Rating = Annotated[str, Field(max_length=RATING_CHARS)]
+Outlook = Annotated[str, Field(max_length=OUTLOOK_CHARS)]
 
 
 class AddToBook(BaseModel):
@@ -2077,11 +2080,11 @@ class AddToBook(BaseModel):
     industry_group: ClassificationText | None
     domicile: Annotated[str, Field(max_length=2)]
     moodys: Rating | None
-    moodys_outlook: Rating | None
+    moodys_outlook: Outlook | None
     sp: Rating | None
-    sp_outlook: Rating | None
+    sp_outlook: Outlook | None
     fitch: Rating | None
-    fitch_outlook: Rating | None
+    fitch_outlook: Outlook | None
 
 
 class BookEntryAdded(BaseModel):
