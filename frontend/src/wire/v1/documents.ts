@@ -626,6 +626,7 @@ const RateDeckRefView = object({
   as_of: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
 });
 const ModelBody = object({
+  // The digest of the accepted artifacts shown: what Add to Book binds.
   snapshot_sha256: nullable(hash),
   case_id: uuid,
   latest_run_id: nullable(uuid),
@@ -644,6 +645,9 @@ const ModelBody = object({
 });
 const ModelDocument = sectionDocument(ModelBody);
 
+// Book, `/api/v1/book`: the desk-wide Book, one row per issuer from the
+// stored book entries. No case in its body, so it is the one section document
+// beside Directory's that answers for no single case.
 const LINE_UNITS = ["MONEY", "PERCENT", "MULTIPLE", "DAYS", "COUNT", "RATE", "KPI"] as const;
 const BookMetricView = object({ line_id: modelText, label: modelText, unit: enumOf(LINE_UNITS) });
 const issuerKey = string({ max: 128 });

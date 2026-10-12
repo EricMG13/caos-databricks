@@ -978,6 +978,8 @@ class AnalysisBody(BaseModel):
     model_config = _CLOSED
 
     case_id: UUID
+    # None on a read under the desk-wide grant (spec B9): the case's other
+    # runs stay member-only, so a granted read names none of them.
     latest_run_id: UUID | None
     displayed_run_id: UUID | None
     subject: RunSubjectView | None
@@ -1155,8 +1157,9 @@ class ModelBody(BaseModel):
     subject: RunSubjectView | None
     # What Add to Book binds (invariant 5): the digest of the accepted
     # artifacts this body shows and every figure an entry stores of it
-    # (`caos.store.book.snapshot_sha256`). None with no grid served, and in
-    # the view that excludes unrealised add-backs.
+    # (`caos.store.book.snapshot_sha256`). None with no grid served, in
+    # the view that excludes unrealised add-backs, and on a read under the
+    # desk-wide grant (spec B9), which offers no Add to Book.
     snapshot_sha256: Sha256 | None
     currency: ModelText | None
     unit: ModelText | None
