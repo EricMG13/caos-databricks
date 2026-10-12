@@ -3,9 +3,10 @@
 // naming the snapshot digest, and the command each control posts.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
+import { shortDigest } from "@/ds/format";
 import {
   AGENCIES,
   GICS_SECTORS,
@@ -18,6 +19,7 @@ import { Announcer } from "@/states/Announcer";
 import { parseModelDocument, type ModelDocument } from "@/wire/v1";
 
 const DIGEST = "d".repeat(64);
+const RUN = "00000000-0000-4000-8000-0000000000a1";
 
 const fixture = (name: string) =>
   JSON.parse(readFileSync(resolve(process.cwd(), "fixtures", name), "utf8"));
@@ -68,6 +70,8 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
 function renderModel(doc: ModelDocument) {
   return render(
     <MemoryRouter initialEntries={["/model/"]}>
@@ -87,6 +91,7 @@ async function openDialog() {
 }
 
 const value = (el: HTMLElement) => (el as HTMLSelectElement | HTMLInputElement).value;
+const choose = (el: HTMLElement, to: string) => fireEvent.change(el, { target: { value: to } });
 
 describe("Add to Book", () => {
   test("pre-fills from the issuer's previous entry", async () => {
@@ -106,6 +111,211 @@ describe("Add to Book", () => {
     expect(value(dialog.getByLabelText("S&P outlook"))).toBe("POSITIVE");
     expect(value(dialog.getByLabelText("Fitch rating"))).toBe("");
     expect(dialog.getByLabelText("Fitch outlook")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  test("starts blank for an issuer the Book does not hold", async () => {
+    answers = (call) =>
+      call.url === "/api/v1/book" ? { status: 200, body: fixture("book.json") } : null;
+    renderModel(offered("NEWCO"));
+    const dialog = await openDialog();
+    expect(value(dialog.getByLabelText("Sector"))).toBe("");
+    expect(value(dialog.getByLabelText(/Domicile/))).toBe("");
+  });
+
+  test("says so, and starts blank, when the Book cannot be read", async () => {
+    renderModel(offered("CVNA"));
+    const dialog = await openDialog();
+    expect(dialog.getByText(/could not be read/)).toBeInTheDocument();
+    expect(value(dialog.getByLabelText("Sector"))).toBe("");
+  });
+
+  test("industry groups follow the chosen sector", async () => {
+    renderModel(offered("NEWCO"));
+    const dialog = await openDialog();
+    const group = dialog.getByLabelText("Industry group");
+    expect(group).toHaveAttribute("aria-disabled", "true");
+    choose(dialog.getByLabelText("Sector"), "Financials");
+    expect(
+      within(group)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["No industry group", "Banks", "Financial Services", "Insurance"]);
+    choose(group, "Banks");
+    choose(dialog.getByLabelText("Sector"), "Energy");
+    // A group belongs to its sector: another sector clears it.
+    expect(value(group)).toBe("");
+    expect(
+      within(group)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["No industry group", "Energy"]);
+  });
+
+  test("an outlook needs a rating", async () => {
+    renderModel(offered("NEWCO"));
+    const dialog = await openDialog();
+    const outlook = dialog.getByLabelText("S&P outlook");
+    expect(outlook).toHaveAttribute("aria-disabled", "true");
+    // A change to a rated-less outlook is ignored.
+    choose(outlook, "STABLE");
+    expect(value(outlook)).toBe("");
+    expect(dialog.getAllByText("An outlook needs a rating.")).toHaveLength(3);
+    choose(dialog.getByLabelText("S&P rating"), "BB+");
+    expect(outlook).not.toHaveAttribute("aria-disabled");
+    choose(outlook, "WATCH_NEG");
+    expect(value(outlook)).toBe("WATCH_NEG");
+    // Taking the rating away takes its outlook with it.
+    choose(dialog.getByLabelText("S&P rating"), "");
+    expect(outlook).toHaveAttribute("aria-disabled", "true");
+    expect(value(outlook)).toBe("");
+    // Each agency's own scale.
+    const moodys = within(dialog.getByLabelText("Moody's rating")).getAllByRole("option");
+    expect(moodys.map((o) => o.textContent)).toContain("Baa3");
+    expect(moodys.map((o) => o.textContent)).not.toContain("BBB-");
+  });
+
+  test("refuses inline until the sector and domicile are stated", async () => {
+    renderModel(offered("NEWCO"));
+    const dialog = await openDialog();
+    const add = dialog.getByRole("button", { name: "Add Carvana Co. to the Book" });
+    expect(add).toHaveAttribute("aria-disabled", "true");
+    fireEvent.blur(dialog.getByLabelText("Sector"));
+    expect(dialog.getByText("Choose a sector.")).toBeInTheDocument();
+    fireEvent.change(dialog.getByLabelText(/Domicile/), { target: { value: "g1b" } });
+    // Upper-cased, letters only, two of them.
+    expect(value(dialog.getByLabelText(/Domicile/))).toBe("GB");
+    choose(dialog.getByLabelText("Sector"), "Energy");
+    expect(add).not.toHaveAttribute("aria-disabled");
+  });
+
+  test("confirms with the snapshot digest and posts the classification", async () => {
+    answers = (call) => {
+      if (call.method === "POST")
+        return { status: 201, body: { entry_id: "00000000-0000-4000-8000-0000000000f1" } };
+      if (call.url.startsWith("/api/v1/cases/"))
+        return { status: 200, body: fixture("model.json") };
+      return null;
+    };
+    renderModel(offered("NEWCO"));
+    const dialog = await openDialog();
+    choose(dialog.getByLabelText("Sector"), "Energy");
+    choose(dialog.getByLabelText("Industry group"), "Energy");
+    fireEvent.change(dialog.getByLabelText(/Domicile/), { target: { value: "gb" } });
+    choose(dialog.getByLabelText("Moody's rating"), "Ba2");
+    choose(dialog.getByLabelText("Moody's outlook"), "STABLE");
+    choose(dialog.getByLabelText("Fitch rating"), "BB-");
+    fireEvent.click(dialog.getByRole("button", { name: "Add Carvana Co. to the Book" }));
+    const sentence = dialog.getByRole("group", { name: "Confirm Add to Book" });
+    expect(sentence).toHaveTextContent(`sha256:${shortDigest(DIGEST)}`);
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+    fireEvent.click(dialog.getByRole("button", { name: "Confirm Add to Book" }));
+    await settle();
+    const [post] = calls.filter((c) => c.method === "POST");
+    expect(post!.url).toBe(
+      "/api/v1/cases/00000000-0000-4000-8000-000000000001/runs/" + RUN + "/book-entry",
+    );
+    expect(post!.key).toMatch(/^[0-9a-f-]{36}$/);
+    expect(post!.body).toEqual({
+      snapshot_sha256: DIGEST,
+      sector: "Energy",
+      industry_group: "Energy",
+      domicile: "GB",
+      moodys: "Ba2",
+      moodys_outlook: "STABLE",
+      sp: null,
+      sp_outlook: null,
+      fitch: "BB-",
+      fitch_outlook: null,
+    });
+    // The outcome is said in the dialog; the Model is read again on closing it.
+    expect(dialog.getByText(/is in the Book/)).toBeInTheDocument();
+    expect(calls.filter((c) => c.url.includes("/model"))).toHaveLength(0);
+    fireEvent.click(dialog.getByRole("button", { name: /^Close/ }));
+    await waitFor(() => expect(calls.filter((c) => c.url.includes("/model"))).toHaveLength(1));
+  });
+
+  test("shows a refusal as it came and sends nothing else", async () => {
+    answers = (call) =>
+      call.method === "POST"
+        ? {
+            status: 409,
+            body: { code: "COMMAND_EXPECTATION_STALE", clears: "the snapshot is read again" },
+          }
+        : null;
+    renderModel(offered("NEWCO"));
+    const dialog = await openDialog();
+    choose(dialog.getByLabelText("Sector"), "Utilities");
+    fireEvent.change(dialog.getByLabelText(/Domicile/), { target: { value: "FR" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Add Carvana Co. to the Book" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Confirm Add to Book" }));
+    await settle();
+    expect(await dialog.findByRole("alert")).toHaveTextContent("COMMAND_EXPECTATION_STALE");
+  });
+
+  test("ties each blurred field's error to the field", async () => {
+    renderModel(offered("NEWCO"));
+    const dialog = await openDialog();
+    const sector = dialog.getByLabelText("Sector");
+    const domicile = dialog.getByLabelText(/Domicile/);
+    fireEvent.blur(sector);
+    fireEvent.blur(domicile);
+    const hint = (field: HTMLElement) =>
+      document.getElementById(field.getAttribute("aria-describedby") ?? "")?.textContent;
+    expect(hint(sector)).toBe("Choose a sector.");
+    expect(hint(domicile)).toBe("Two letters, for example GB.");
+  });
+
+  test("names the focus guards a screen reader can land on", async () => {
+    renderModel(offered("NEWCO"));
+    await openDialog();
+    const guards = [...document.querySelectorAll("[data-base-ui-focus-guard]")];
+    expect(guards.length).toBeGreaterThan(0);
+    for (const guard of guards) expect(guard).toHaveAttribute("aria-label", "Edge of the dialog");
+  });
+
+  test("a close while the add is in flight still reads the Model again once it lands", async () => {
+    let land: () => void = () => undefined;
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method ?? "GET", body: null, key: null });
+      if (init?.method === "POST") {
+        await new Promise<void>((resolve) => (land = resolve));
+        return new Response(JSON.stringify({ entry_id: "00000000-0000-4000-8000-0000000000f1" }), {
+          status: 201,
+        });
+      }
+      return new Response(JSON.stringify(fixture("model.json")), { status: 200 });
+    });
+    renderModel(offered("NEWCO"));
+    const dialog = await openDialog();
+    choose(dialog.getByLabelText("Sector"), "Energy");
+    fireEvent.change(dialog.getByLabelText(/Domicile/), { target: { value: "GB" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Add Carvana Co. to the Book" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Confirm Add to Book" }));
+    await settle();
+    fireEvent.click(dialog.getByRole("button", { name: /^Close/ }));
+    await settle();
+    expect(calls.filter((c) => c.url.includes("/model"))).toHaveLength(0);
+    land();
+    await waitFor(() => expect(calls.filter((c) => c.url.includes("/model"))).toHaveLength(1));
+  });
+
+  test("says so when the Model cannot be read again after an add", async () => {
+    answers = (call) =>
+      call.method === "POST"
+        ? { status: 201, body: { entry_id: "00000000-0000-4000-8000-0000000000f1" } }
+        : null;
+    renderModel(offered("NEWCO"));
+    const dialog = await openDialog();
+    choose(dialog.getByLabelText("Sector"), "Energy");
+    fireEvent.change(dialog.getByLabelText(/Domicile/), { target: { value: "GB" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Add Carvana Co. to the Book" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Confirm Add to Book" }));
+    await settle();
+    expect(document.querySelector("[data-model-refresh-failed]")).toBeNull();
+    fireEvent.click(dialog.getByRole("button", { name: /^Close/ }));
+    await waitFor(() =>
+      expect(document.querySelector("[data-model-refresh-failed]")).not.toBeNull(),
+    );
   });
 
   test("offers nothing where the document does not", () => {
