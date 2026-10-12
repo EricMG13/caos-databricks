@@ -29,7 +29,12 @@ import {
   type DirectoryDocument,
   type UploadDocument,
 } from "@/wire/v1";
-import { STATE_ROUTES, armedRoute, sectionRoute } from "../../scripts/fixture-routes.mjs";
+import {
+  STATE_ROUTES,
+  armedRoute,
+  dialogRoute,
+  sectionRoute,
+} from "../../scripts/fixture-routes.mjs";
 
 const load = (path: string): unknown =>
   JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
@@ -379,5 +384,15 @@ describe("the a11y matrix measures every confirmed act available (DF-9)", () => 
     expect(STATE_ROUTES).toContain(armed);
     expect(new URL(armed, "http://localhost").searchParams.get("arm")).toBe("SIGN_OPINION");
     expect(new URL(armed, "http://localhost").searchParams.get("fixture")).toBe("acts");
+  });
+
+  test("test_the_matrix_routes_the_add_to_book_dialog_and_the_withdraw_panel", () => {
+    const add = dialogRoute("model", "add-to-book", "acts");
+    const withdraw = dialogRoute("book", "withdraw");
+    expect(STATE_ROUTES).toContain(add);
+    expect(STATE_ROUTES).toContain(withdraw);
+    expect(new URL(add, "http://localhost").searchParams.get("dialog")).toBe("add-to-book");
+    expect(new URL(add, "http://localhost").searchParams.get("fixture")).toBe("acts");
+    expect(new URL(withdraw, "http://localhost").searchParams.get("dialog")).toBe("withdraw");
   });
 });

@@ -91,6 +91,33 @@ function advancedAnalysis(raw: string): string {
   return JSON.stringify(doc);
 }
 
+/** The `granted` fixture: the analysis a desk-wide Book grant reads (spec B9).
+    No standing, no other run, and the subject titled by the issuer's name, never
+    the case's title (Task 4's ruling). Derived, so the fixture cannot drift. */
+function grantedAnalysis(raw: string): string {
+  const doc = JSON.parse(raw);
+  doc.chrome.served_role = { global_role: "READER", standing: null };
+  doc.body.latest_run_id = null;
+  doc.chrome.subject.title = doc.body.subject.issuer_name;
+  return JSON.stringify(doc);
+}
+
+/** The Model's `acts` state: a complete default view the server offers Add to
+    Book on (a digest, the run's subject, the action), derived from `model.json`
+    so the two cannot drift. */
+function offeredModel(raw: string): string {
+  const doc = JSON.parse(raw);
+  doc.chrome.actions = [{ action: "ADD_TO_BOOK", refusal: null }];
+  doc.body.snapshot_sha256 = "d".repeat(64);
+  doc.body.subject = {
+    issuer_id: "CVNA",
+    issuer_name: "Carvana Co.",
+    reporting_period: "FY2025",
+    analysis_date: "2026-09-08",
+  };
+  return JSON.stringify(doc);
+}
+
 async function readJson(path: string): Promise<string | null> {
   try {
     return await readFile(`${FIXTURES}${path}`, "utf8");
@@ -125,11 +152,25 @@ async function serveSection(section: string, fixture: string | null, res: Server
       : section === "committee"
         ? "committee-v1.json"
         : `${section}.json`;
-  if (fixture && !STREAM_FIXTURES.has(fixture)) path = `states/${section}.${fixture}.json`;
+  const granted = section === "analysis" && fixture === "granted";
+  const offered = section === "model" && fixture === "acts";
+  if (granted) path = "analysis.json";
+  else if (offered) path = "model.json";
+  else if (fixture && !STREAM_FIXTURES.has(fixture)) path = `states/${section}.${fixture}.json`;
   else if (section === "run" && runFrame > 0) path = `run/frames/${runFrame}.json`;
   const body = await readJson(path);
   if (body === null) return send(res, 404, "{}");
-  send(res, 200, section === "analysis" && staleAdvanced ? advancedAnalysis(body) : body);
+  send(
+    res,
+    200,
+    granted
+      ? grantedAnalysis(body)
+      : offered
+        ? offeredModel(body)
+        : section === "analysis" && staleAdvanced
+          ? advancedAnalysis(body)
+          : body,
+  );
 }
 
 /** Fixtures that drive the event stream, not a document state of their own. */
