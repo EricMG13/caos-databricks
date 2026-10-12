@@ -966,3 +966,78 @@ def test_the_hook_types_to_install_may_only_be_the_default(tmp_path: Path) -> No
     assert "default_install_hook_types" not in text
     config.write_text("default_install_hook_types: [pre-commit]\n" + text)
     assert check_gate_config._hook_problems(root) == []
+
+
+@pytest.mark.parametrize(
+    "job,key,value",
+    [
+        ("test-shards", "strategy", {"matrix": {"shard": [0, 1, 2]}}),
+        ("test-shards", "continue-on-error", True),
+        ("test", "needs", []),
+        ("test", "if", "success()"),
+        ("frontend", "needs", ["frontend-checks"]),
+        ("frontend-a11y", "if", False),
+        ("frontend-workbench", "continue-on-error", True),
+    ],
+)
+def test_parallel_ci_controls_cannot_drop_or_ignore_a_gate(
+    tmp_path: Path, job: str, key: str, value: object
+) -> None:
+    root = _tree(tmp_path)
+    ci = root / ".github/workflows/ci.yml"
+    ci_file = check_gate_config._ci_file(ci.read_text())
+    assert ci_file is not None
+    jobs = check_gate_config._map(ci_file["jobs"])
+    check_gate_config._map(jobs[job])[key] = value
+    ci.write_text(json.dumps(ci_file))
+    assert any(
+        f"parallel job {job} is not as pinned" in problem
+        for problem in check_gate_config.configuration_problems(root)
+    )
+
+
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ("coverage report --fail-under=80", "coverage report --fail-under=0"),
+        ("include-hidden-files: true", "include-hidden-files: false"),
+        ("if-no-files-found: error", "if-no-files-found: warn"),
+        ('test "$SHARDS_RESULT" = success', 'test "$SHARDS_RESULT" != failure'),
+        ('test "$A11Y_RESULT" = success', 'test "$A11Y_RESULT" != failure'),
+        ('--cov-report= "${files[@]}"', "--cov-report= tests/test_gates.py"),
+    ],
+)
+def test_parallel_ci_data_and_verdict_cannot_be_weakened(
+    tmp_path: Path, before: str, after: str
+) -> None:
+    root = _tree(tmp_path)
+    ci = root / ".github/workflows/ci.yml"
+    text = ci.read_text()
+    assert before in text
+    ci.write_text(text.replace(before, after, 1))
+    assert any(
+        "parallel job" in problem
+        for problem in check_gate_config.configuration_problems(root)
+    )
+
+
+def test_parallel_jobs_are_required_even_if_their_commands_move(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    ci = root / ".github/workflows/ci.yml"
+    ci_file = check_gate_config._ci_file(ci.read_text())
+    assert ci_file is not None
+    jobs = check_gate_config._map(ci_file["jobs"])
+    jobs["unused-browser"] = jobs.pop("frontend-a11y")
+    ci.write_text(json.dumps(ci_file))
+    assert any(
+        "parallel job frontend-a11y is not as pinned" in problem
+        for problem in check_gate_config.configuration_problems(root)
+    )
+
+
+def test_parallel_job_unserialisable_yaml_fails_closed() -> None:
+    ci_file = check_gate_config._ci_file("jobs:\n  test:\n    date: 2026-10-12\n")
+    assert ci_file is not None
+    assert "ci: parallel job test is not a JSON mapping" in (
+        check_gate_config._parallel_job_problems(ci_file)
+    )

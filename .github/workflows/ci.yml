@@ -74,7 +74,46 @@ jobs:
       - run: uv sync --locked --all-groups
       - run: uv run mypy caos scripts tests
 
+  test-shards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    services:
+      postgres:
+        # Digest-pinned; a tag alone is not a pin. postgres:17-alpine.
+        image: postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+        env: {POSTGRES_PASSWORD: caos, POSTGRES_DB: caos}
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-retries 10
+        ports: ["5432:5432"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {fetch-depth: 0}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with: {version: "0.12.5", enable-cache: true}
+      - run: uv sync --locked --all-groups
+      - run: |
+          uv run python scripts/ci_tests.py shard "$SHARD" > "$RUNNER_TEMP/test-files"
+          mapfile -d '' files < "$RUNNER_TEMP/test-files"
+          COVERAGE_FILE=".coverage.shard-$SHARD" uv run pytest -n auto -m "not live_provider" --max-worker-restart=0 -o faulthandler_timeout=600 -ra --durations=25 --cov-fail-under=0 --cov-report= "${files[@]}"
+        env:
+          SHARD: ${{ matrix.shard }}
+          CAOS_TEST_POSTGRES_URL: postgresql://postgres:caos@localhost:5432/caos
+          CAOS_REQUIRE_POSTGRES: "1"
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: coverage-${{ matrix.shard }}
+          path: .coverage.shard-*
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
   test:
+    needs: [test-shards]
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 60
     services:
@@ -91,14 +130,19 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with: {version: "0.12.5", enable-cache: true}
       - run: uv sync --locked --all-groups
-      # A stuck test prints its stack after ten minutes, and a worker that dies
-      # fails the session rather than waiting on a replacement (the 60-minute
-      # hangs on 653dc9c and c37733e printed dots only).
-      - run: uv run pytest -n auto -m "not live_provider" --max-worker-restart=0 -o faulthandler_timeout=600 -ra --durations=25
+      - run: test "$SHARDS_RESULT" = success
         env:
-          CAOS_TEST_POSTGRES_URL: postgresql://postgres:caos@localhost:5432/caos
-          # A store suite that skipped is not a store suite that passed.
-          CAOS_REQUIRE_POSTGRES: "1"
+          SHARDS_RESULT: ${{ needs.test-shards.result }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: coverage-*
+          path: coverage-shards
+      - run: |
+          uv run python scripts/ci_tests.py coverage coverage-shards > "$RUNNER_TEMP/coverage-files"
+          mapfile -d '' files < "$RUNNER_TEMP/coverage-files"
+          uv run coverage combine --keep "${files[@]}"
+          uv run coverage report --fail-under=80
+          uv run coverage xml -o coverage.xml
       - run: uv run python scripts/scan_floors.py coverage.xml --cobertura
       - run: uv run pytest --no-cov tests/test_postgres_races.py
         env:
@@ -246,7 +290,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
 
-  frontend:
+  frontend-checks:
     # Every step runs from the root and names frontend/ itself: a job-level
     # `defaults.run.working-directory` is a default every gate in the job
     # would inherit, and check_gate_config refuses one (review 4, W2).
@@ -288,10 +332,53 @@ jobs:
           done
       - run: npm --prefix frontend run build:demo
       - run: npx --prefix frontend --no-install jscpd --threshold 3 --min-lines 10 --ignore "**/node_modules/**,**/dist/**,**/dist-demo/**" caos scripts icm frontend/src
+
+  frontend-a11y:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci --ignore-scripts
+      - run: npm --prefix frontend run build:demo
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('frontend/package-lock.json') }}
       - run: frontend/node_modules/.bin/playwright install --with-deps
       - run: npm --prefix frontend run a11y
+
+  frontend-workbench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci --ignore-scripts
+      - run: npm --prefix frontend run build:demo
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('frontend/package-lock.json') }}
+      - run: frontend/node_modules/.bin/playwright install --with-deps
       - run: npm --prefix frontend run test:workbench
+
+  frontend:
+    needs: [frontend-checks, frontend-a11y, frontend-workbench]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "$CHECKS_RESULT" = success && test "$A11Y_RESULT" = success && test "$WORKBENCH_RESULT" = success
+        env:
+          CHECKS_RESULT: ${{ needs.frontend-checks.result }}
+          A11Y_RESULT: ${{ needs.frontend-a11y.result }}
+          WORKBENCH_RESULT: ${{ needs.frontend-workbench.result }}
