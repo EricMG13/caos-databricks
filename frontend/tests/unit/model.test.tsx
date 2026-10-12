@@ -19,7 +19,7 @@ import {
   toggled,
 } from "@/sections/model/grid";
 import { sectionUrl } from "@/app/transport";
-import { parseBookDocument } from "@/wire/v1";
+import { parseAnalysisDocument } from "@/wire/v1";
 import { ModelSection, forecastSeries } from "@/sections/model/ModelSection";
 import { parseModelDocument, type ModelDocument } from "@/wire/v1";
 
@@ -442,10 +442,10 @@ describe("the credit workbook grid", { timeout: 30_000 }, () => {
   });
 
   test("a source with a citation opens as a chip, and projected interest names its rate and deck", () => {
-    const book = parseBookDocument(
-      JSON.parse(readFileSync(resolve(process.cwd(), "fixtures", "book.json"), "utf8")),
+    const analysis = parseAnalysisDocument(
+      JSON.parse(readFileSync(resolve(process.cwd(), "fixtures", "analysis.json"), "utf8")),
     );
-    const citation = book.body.rows[0]!.periods[0]!.cells[0]!.passport.citations[0]!;
+    const citation = analysis.body.handoffs.flatMap((handoff) => handoff.source_facts)[0]!;
     const base = fixture();
     const fy25 = indexOfColumn(base.body, "FY:FY2025");
     const lines = base.body.lines.map((line) =>

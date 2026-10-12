@@ -37,6 +37,7 @@ import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
+from functools import cache
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -60,6 +61,7 @@ from caos.api.wire import (
     MODEL_SOURCES_MAX,
     AnalysisBody,
     AnalysisDocument,
+    BookMetricView,
     CitationView,
     HandoffView,
     ModelBody,
@@ -83,7 +85,7 @@ from caos.calculators.credit_model.assemble import (
     reconciliation_faults,
 )
 from caos.calculators.credit_model.frame import Cell, Column, SourceRef
-from caos.calculators.credit_model.layout import Line
+from caos.calculators.credit_model.layout import Line, layout
 from caos.calculators.credit_model.projection import RateDeck
 from caos.graph.route import MODEL_MODULE
 from caos.methodology.bundle import Bundle
@@ -643,15 +645,30 @@ def book_bases(columns: Sequence[Column]) -> dict[str, tuple[int, int | None]]:
     return found
 
 
+def _book_line(line_id: str) -> bool:
+    """Whether the Book stores the line: a `metric:` line or a `BOOK_LINES`."""
+    return line_id.startswith(_METRIC) or line_id in BOOK_LINES
+
+
+@cache
+def book_catalogue() -> tuple[BookMetricView, ...]:
+    """The lines `book_metrics` stores, as the Model's layout defines them:
+    in its order, with its labels and units (spec B12's column chooser).
+    None of them is a register's row, so the layout over registers with no
+    rows and no columns draws every one. Pure."""
+    empty = Cp1Registers((), (), (), (), (), (), (), "", "")
+    return tuple(
+        BookMetricView(line_id=line.line_id, label=line.label, unit=line.unit)
+        for line in layout(empty, (), {}, exclude_unrealised=False, deck_as_of=None)
+        if _book_line(line.line_id)
+    )
+
+
 def book_metrics(model: CreditModel) -> dict[str, dict[str, str | None]]:
     """`{basis: {line_id: figure}}` for every `metric:` line and each of
     `BOOK_LINES`, each figure as this read serves that cell (spec B10), and
     a projected basis' `fiscal_year`."""
-    lines = [
-        line
-        for line in model.lines
-        if line.line_id.startswith(_METRIC) or line.line_id in BOOK_LINES
-    ]
+    lines = [line for line in model.lines if _book_line(line.line_id)]
     metrics: dict[str, dict[str, str | None]] = {}
     for basis, (index, year) in book_bases(model.columns).items():
         figures = {line.line_id: served_value(line.cells[index]) for line in lines}

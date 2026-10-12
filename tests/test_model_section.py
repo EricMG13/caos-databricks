@@ -44,6 +44,7 @@ from caos.calculators.credit_model.layout import BANDS
 from caos.calculators.credit_model.projection import RateDeckYear
 from caos.graph.route import ResolvedRoute, resolve_route
 from caos.methodology import tables
+from caos.methodology.forecast import forecast_inputs
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.methodology.model_inputs import cp1_registers
 from caos.methodology.vendor import VendorContract
@@ -1257,3 +1258,29 @@ def test_model_malformed_or_anonymous_opens_no_connection(
     assert client.get(_path(harness)).status_code == 401
     for path in (_path(harness, "bad"), "/api/v1/cases/bad/model"):
         assert client.get(path, headers=_as(UUID(int=1))).status_code == 404
+
+
+def test_the_accepted_forecast_is_re_derived_with_its_request_and_bindings(
+    harness: _Harness,
+) -> None:
+    """`accepted_forecast` re-derives the accepted CP-CF record the Model
+    keeps for comparison, and `forecast_inputs` reads the accepted request
+    and the owner bindings behind it from the same bytes."""
+    _complete(harness)
+    analysis = analysis_read.read_analysis(
+        Actor(harness.approver, GlobalRole.ANALYST),
+        harness.case_id,
+        None,
+        Standing.APPROVER,
+        harness.conn,
+        harness.blobs,
+        harness.bundle,
+    ).body
+    forecast = model_read.accepted_forecast(harness.conn, analysis)
+    harness.conn.rollback()
+    accepted = next(h for h in analysis.handoffs if h.module_id == "CP-CF")
+    assert forecast is not None
+    assert forecast.record_sha256 == accepted.record_sha256
+    request, bindings = forecast_inputs(accepted.model_analysis.encode("utf-8"))
+    assert request["drivers"][0]["ebitda"] == "100"
+    assert bindings["/drivers/0/ebitda"]["module_id"] == "CP-2G"
