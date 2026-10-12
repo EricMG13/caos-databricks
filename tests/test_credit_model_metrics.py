@@ -4,6 +4,7 @@ cash flow and liquidity ratios, margins and like-period growth."""
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 from decimal import Decimal, localcontext
 
 import pytest
@@ -18,6 +19,7 @@ from credit_model_fixture import (
 from caos.calculators.credit_model._cells import (
     CONTEXT,
     OTHER_FOOTING,
+    UNSPANNED,
     Footings,
     refs,
 )
@@ -35,7 +37,8 @@ from caos.calculators.credit_model.statements import (
     pro_forma_column,
     statement_frame,
 )
-from caos.methodology.model_inputs import Cp1Registers
+from caos.methodology.model_inputs import Cp1Registers, cp1_registers
+from caos.methodology.tables import HandoffTable, TableCell
 
 _CORPORATE = frozenset({"corporate_eliminations"})
 _LEVERAGE = (
@@ -833,3 +836,412 @@ def test_fy_growth_refuses_unequal_durations(
         )
     assert out["bu_growth:corp"] == Cell(None, "NOT_APPLICABLE")
     assert out["revenue"] == frame["FY:B"]["revenue"]
+
+
+@pytest.mark.parametrize(
+    ("current_days", "prior_days"),
+    [(365, 366), (364, 371), (371, 364), (275, 275), (457, 457)],
+)
+def test_fy_growth_accepts_equivalent_durations(
+    current_days: int, prior_days: int
+) -> None:
+    current = replace(_fy("FY:B", "2025-12-31", "2025"), days=current_days)
+    prior = replace(_fy("FY:A", "2024-12-31", "2024"), days=prior_days)
+    frame = {"FY:B": _cells(revenue="110"), "FY:A": _cells(revenue="100")}
+    assert metric_frame((current, prior), frame, {})["FY:B"][
+        "revenue_growth"
+    ].value == Decimal("0.1")
+
+
+@pytest.mark.parametrize("unknown", ["current", "prior"])
+@pytest.mark.parametrize("days", [None, 0, -1, 290])
+def test_fy_growth_refuses_an_unknown_duration(unknown: str, days: int | None) -> None:
+    current = _fy("FY:B", "2025-12-31", "2025")
+    prior = _fy("FY:A", "2024-12-31", "2024")
+    if unknown == "current":
+        current = replace(current, days=days)
+    else:
+        prior = replace(prior, days=days)
+    frame = {"FY:B": _cells(revenue="110"), "FY:A": _cells(revenue="100")}
+    assert metric_frame((current, prior), frame, {})["FY:B"]["revenue_growth"] == Cell(
+        None, "COMPONENT_MISSING", note="fiscal year duration unknown (FY:B vs FY:A)"
+    )
+
+
+def test_ltm_growth_does_not_compare_its_fallback_quarters_duration() -> None:
+    ltm = replace(_fy("LTM:B", "2025-12-31", "2025"), kind="LTM")
+    quarter = replace(_fy("Q:A", "2024-12-31", "2024"), kind="QUARTER", days=92)
+    frame = {"LTM:B": _cells(revenue="120"), "Q:A": _cells(revenue="30")}
+    ending = {"Q:A": _cells(revenue="100")}
+    assert metric_frame((ltm, quarter), frame, ending)["LTM:B"][
+        "revenue_growth"
+    ].value == Decimal("0.2")
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "days", "why"),
+    [
+        ("2025-04-01", "2025-12-31", 275, "short fiscal year (FY2025)"),
+        ("2024-10-01", "2025-12-31", 457, "long fiscal year (FY2025)"),
+        (None, "2025-12-31", None, UNSPANNED),
+        ("2025-01-01", None, 365, UNSPANNED),
+    ],
+)
+def test_invalid_base_preserves_structural_projected_reported_leverage(
+    start: str | None,
+    end: str | None,
+    days: int | None,
+    why: str,
+) -> None:
+    regs = example_registers()
+    regs = replace(
+        regs,
+        periods=tuple(
+            replace(p, start_date=start, end_date=end, day_count=days)
+            if p.period_id == "FY2025"
+            else p
+            for p in regs.periods
+        ),
+    )
+    columns, frame, ltm_ending = _model(regs)
+    result = metric_frame(columns, frame, ltm_ending, corporate=_CORPORATE)
+    for column in (c for c in columns if c.kind == "PROJECTED"):
+        cells = result[column.column_id]
+        assert cells["ebitda"] == Cell(None, "NOT_PROJECTED")
+        for name in ("total_leverage_reported", "net_leverage_reported"):
+            cell = cells[f"metric:{name}"]
+            assert cell.value is None and cell.reason == "NOT_PROJECTED", (
+                name,
+                column.column_id,
+            )
+            assert cell.note == f"projection base: {why}"
+        for name in ("total_leverage_adjusted", "net_leverage_adjusted"):
+            assert cells[f"metric:{name}"] == Cell(
+                None, "COMPONENT_MISSING", note=f"projection base: {why}"
+            )
+
+
+@pytest.mark.parametrize("projected", [False, True])
+def test_reported_leverage_respects_supplied_frame_and_formula_order(
+    projected: bool,
+) -> None:
+    column = _fy("FY:A", "2025-12-31")
+    if projected:
+        column = replace(column, kind="PROJECTED", case="BASE")
+    cells = _cells(total_debt="500", cash_closing="100", ebitda="100")
+    out = metric_frame((column,), {column.column_id: cells}, {})[column.column_id]
+    assert out["metric:total_leverage_reported"].value == 5
+    assert out["metric:net_leverage_reported"].value == 4
+    cells["ebitda"] = Cell(Decimal(0))
+    out = metric_frame((column,), {column.column_id: cells}, {})[column.column_id]
+    for name in ("total_leverage_reported", "net_leverage_reported"):
+        assert out[f"metric:{name}"] == Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")
+    cells["total_debt"] = Cell(None, "COMPONENT_MISSING", note="debt unavailable")
+    cells["ebitda"] = Cell(None, "NOT_STATED", note="EBITDA not stated")
+    out = metric_frame((column,), {column.column_id: cells}, {})[column.column_id]
+    for name in ("total_leverage_reported", "net_leverage_reported"):
+        assert out[f"metric:{name}"] == Cell(
+            None,
+            "COMPONENT_MISSING",
+            note="debt unavailable; EBITDA not stated",
+        )
+    if not projected:
+        cells["ebitda"] = Cell(None, "NOT_PROJECTED")
+        out = metric_frame((column,), {column.column_id: cells}, {})[column.column_id]
+        assert out["metric:total_leverage_reported"] == Cell(
+            None, "COMPONENT_MISSING", note="debt unavailable"
+        )
+
+
+_FiscalSpan = tuple[str, str | None]
+
+
+def _fiscal_registers(prior: _FiscalSpan, current: _FiscalSpan) -> Cp1Registers:
+    """Real parser inputs: consecutive FYs with reported income and segment X."""
+    periods: list[dict[str, str | int | None]] = []
+    accounts: list[dict[str, str | int | None]] = []
+    segments: list[dict[str, str | int | None]] = []
+    for offset, (start, end) in enumerate((prior, current)):
+        year = 2024 + offset
+        period_id = f"FY{year}"
+        days = (
+            None
+            if end is None
+            else (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
+        )
+        periods.append(
+            dict(
+                period_id=period_id,
+                fiscal_year=f"FY{year}",
+                fiscal_quarter=None,
+                period_type="FY",
+                start_date=start,
+                end_date=end,
+                day_count=days,
+                currency="USD",
+                unit="MILLIONS",
+                component_period_ids=None,
+            )
+        )
+        for metric, amount in (
+            ("revenue", 100 + 10 * offset),
+            ("cogs", -50 - 5 * offset),
+            ("opex_including_da", -40 - 4 * offset),
+            ("depreciation_amortization", -10 - offset),
+        ):
+            accounts.append(
+                dict(
+                    metric_id=metric,
+                    period_id=period_id,
+                    value=amount,
+                    calculation_status="REPORTED",
+                    source_id="S1",
+                    source_locator="p1",
+                )
+            )
+        segments.append(
+            dict(
+                segment_id="x",
+                segment_name="X",
+                segment_type="OPERATING_SEGMENT",
+                display_priority=1,
+                period_id=period_id,
+                revenue=100 + 10 * offset,
+                source_id="S1",
+                source_locator="p1",
+            )
+        )
+
+    def table(name: str, rows: list[dict[str, str | int | None]]) -> HandoffTable:
+        columns = tuple(rows[0])
+        numeric = {"day_count", "value", "revenue", "display_priority"}
+        return HandoffTable(
+            name,
+            columns,
+            tuple(
+                tuple(
+                    TableCell(
+                        "null" if row[key] is None else str(row[key]),
+                        str(row[key])
+                        if row[key] is not None and key in numeric
+                        else None,
+                    )
+                    for key in columns
+                )
+                for row in rows
+            ),
+        )
+
+    return cp1_registers(
+        (
+            table("cp1.model_period_register", periods),
+            table("cp1.model_account_register", accounts),
+            table("cp1.segment_revenue_schedule", segments),
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("prior_span", "current_span", "why"),
+    [
+        (
+            ("2024-04-01", "2025-03-31"),
+            ("2025-04-01", "2025-12-31"),
+            "durations differ",
+        ),
+        (
+            ("2023-10-02", "2024-09-30"),
+            ("2024-10-01", "2025-12-31"),
+            "durations differ",
+        ),
+        (("2024-01-01", "2024-12-31"), ("2025-01-01", None), "duration unknown"),
+        (("2024-01-01", None), ("2025-01-01", "2025-12-31"), "duration unknown"),
+    ],
+)
+def test_consecutive_fy_growth_explains_shifted_or_missing_ends(
+    prior_span: _FiscalSpan, current_span: _FiscalSpan, why: str
+) -> None:
+    regs = _fiscal_registers(prior_span, current_span)
+    columns = historical_columns(regs)
+    frame = statement_frame(account_frame(regs, columns), columns, regs)
+    result = metric_frame(columns, frame, {}, footings=column_footings(regs, columns))
+    note = f"fiscal year {why} (FY:FY2025 vs FY:FY2024)"
+    missing = Cell(None, "COMPONENT_MISSING", note=note)
+    for key in ("revenue_growth", "adjusted_ebitda_growth", "bu_growth:x"):
+        assert result["FY:FY2025"][key] == missing
+        assert result["FY:FY2024"][key] == Cell(None, "NOT_APPLICABLE")
+    assert result["FY:FY2025"]["revenue"] == frame["FY:FY2025"]["revenue"]
+    model = credit_model(ModelInputs(regs, None, (), (), None))
+    index = [c.column_id for c in model.columns].index("FY:FY2025")
+    for key in ("revenue_growth", "adjusted_ebitda_growth", "bu_growth:x"):
+        assert (
+            next(line for line in model.lines if line.line_id == key).cells[index]
+            == missing
+        )
+    assert any(note in limitation for limitation in model.limitations)
+
+
+@pytest.mark.parametrize(
+    ("prior_span", "current_span"),
+    [
+        (("2024-01-01", "2024-12-31"), ("2025-01-01", "2025-12-31")),
+        (("2024-01-01", "2024-09-30"), ("2024-10-01", "2025-06-30")),
+        (("2023-10-01", "2024-12-31"), ("2025-01-01", "2026-03-31")),
+        (("2023-12-31", "2024-12-28"), ("2024-12-29", "2026-01-03")),
+    ],
+)
+def test_consecutive_fy_growth_accepts_equivalent_shifted_spans(
+    prior_span: _FiscalSpan, current_span: _FiscalSpan
+) -> None:
+    regs = _fiscal_registers(prior_span, current_span)
+    columns = historical_columns(regs)
+    frame = statement_frame(account_frame(regs, columns), columns, regs)
+    out = metric_frame(columns, frame, {})["FY:FY2025"]
+    for key in ("revenue_growth", "adjusted_ebitda_growth", "bu_growth:x"):
+        assert out[key].value == Decimal("0.1")
+        assert out[key].note is None
+
+
+def test_leap_fy_growth_accepts_the_calendar_slack_boundary() -> None:
+    regs = _fiscal_registers(("2024-01-01", "2024-12-24"), ("2025-01-01", "2025-12-31"))
+    columns = historical_columns(regs)
+    fiscal = {c.fiscal_year: c for c in columns if c.kind == "FY"}
+    assert fiscal["FY2024"].days == 359
+    assert fiscal["FY2025"].days == 365
+    frame = statement_frame(account_frame(regs, columns), columns, regs)
+    out = metric_frame(columns, frame, {}, footings=column_footings(regs, columns))[
+        "FY:FY2025"
+    ]
+    model = credit_model(ModelInputs(regs, None, (), (), None))
+    index = [c.column_id for c in model.columns].index("FY:FY2025")
+    for key in ("revenue_growth", "adjusted_ebitda_growth", "bu_growth:x"):
+        assert out[key].value == Decimal("0.1")
+        assert out[key].note is None
+        assert (
+            next(line for line in model.lines if line.line_id == key).cells[index]
+            == out[key]
+        )
+
+
+@pytest.mark.parametrize("case", ["BASE", "DOWNSIDE"])
+@pytest.mark.parametrize(
+    ("current_days", "prior_days", "why"),
+    [
+        (275, 365, "durations differ"),
+        (365, 275, "durations differ"),
+        (290, 365, "duration unknown"),
+        (365, 290, "duration unknown"),
+        (365, 366, None),
+    ],
+)
+def test_projected_growth_checks_both_same_case_durations(
+    case: str, current_days: int, prior_days: int, why: str | None
+) -> None:
+    request = example_request()
+    for period in request["periods"]:
+        if period["case"] == case and period["fiscal_year"] in {"2026", "2027"}:
+            period["days"] = str(
+                current_days if period["fiscal_year"] == "2027" else prior_days
+            )
+    regs = example_registers()
+    history_columns = historical_columns(regs)
+    columns, frame = projection(
+        ProjectionInputs(
+            regs=regs,
+            request=request,
+            growth=example_growth(),
+            slots=example_slots(),
+            deck=example_deck(),
+            history=statement_frame(
+                account_frame(regs, history_columns), history_columns, regs
+            ),
+        )
+    )
+    # Both competing priors precede the selected case's prior: its own case
+    # still takes priority over the other case and the annual historical FY.
+    historical = _fy("FY:FY2026", "2026-12-31", "2026")
+    frame[historical.column_id] = _cells(
+        revenue="1", adjusted_ebitda="1", **{"bu:las_vegas": "1"}
+    )
+    ordered = (
+        historical,
+        *(c for c in columns if c.case != case),
+        *(c for c in columns if c.case == case),
+    )
+    current_id, prior_id = f"{case}:2027", f"{case}:2026"
+    out = metric_frame(ordered, frame, {}, corporate=_CORPORATE)[current_id]
+    for key, source in (
+        ("revenue_growth", "revenue"),
+        ("adjusted_ebitda_growth", "adjusted_ebitda"),
+        ("bu_growth:las_vegas", "bu:las_vegas"),
+    ):
+        if why is None:
+            assert out[key].value == _rise(
+                _v(frame[current_id], source), _v(frame[prior_id], source)
+            )
+            assert out[key].note is None
+        else:
+            assert out[key] == Cell(
+                None,
+                "COMPONENT_MISSING",
+                note=f"fiscal year {why} ({current_id} vs {prior_id})",
+            )
+    assert out["bu_growth:corporate_eliminations"] == Cell(None, "NOT_APPLICABLE")
+    assert out["revenue"] == frame[current_id]["revenue"]
+
+
+def test_growth_visits_operating_units_after_the_corporate_unit() -> None:
+    columns, frame, ltm_ending = _model()
+    own = frame["FY:FY2025"]
+    frame["FY:FY2025"] = {
+        "bu:corporate_eliminations": own["bu:corporate_eliminations"],
+        **{
+            key: cell for key, cell in own.items() if key != "bu:corporate_eliminations"
+        },
+    }
+    out = metric_frame(columns, frame, ltm_ending, corporate=_CORPORATE)["FY:FY2025"]
+    assert out["bu_growth:corporate_eliminations"] == Cell(None, "NOT_APPLICABLE")
+    operating = [
+        key
+        for key in own
+        if key.startswith("bu:") and key != "bu:corporate_eliminations"
+    ]
+    assert operating
+    for key in operating:
+        growth_key = f"bu_growth:{key.removeprefix('bu:')}"
+        assert out[growth_key].value == _rise(_v(own, key), _v(frame["FY:FY2024"], key))
+
+
+def test_consecutive_fy_prior_preserves_precedence_and_refusal_priority() -> None:
+    current = replace(_fy("FY:B", "2025-12-31", "FY2025"), days=275)
+    prior = _fy("FY:A", "2025-03-31", "FY2024")
+    fallback = _fy("FY:X", "2024-12-31", "FYX")
+    projected = replace(prior, column_id="BASE:2024", kind="PROJECTED", case="BASE")
+    frame = {
+        current.column_id: _cells(
+            revenue="110", adjusted_ebitda="22", **{"bu:corp": "5"}
+        ),
+        prior.column_id: _cells(
+            revenue="100", adjusted_ebitda="20", **{"bu:corp": "4"}
+        ),
+        fallback.column_id: _cells(revenue="1"),
+        projected.column_id: _cells(revenue="1"),
+    }
+    columns = (fallback, projected, current, prior)
+    out = metric_frame(columns, frame, {}, corporate=frozenset({"corp"}))[
+        current.column_id
+    ]
+    assert out["revenue_growth"] == Cell(
+        None, "COMPONENT_MISSING", note="fiscal year durations differ (FY:B vs FY:A)"
+    )
+    assert out["bu_growth:corp"] == Cell(None, "NOT_APPLICABLE")
+    apart = Footings(
+        columns={current.column_id: ("a", None), prior.column_id: ("b", None)}
+    )
+    out = metric_frame(columns, frame, {}, footings=apart)[current.column_id]
+    assert out["revenue_growth"] == _OTHER
+    out = metric_frame((current, projected), frame, {})[current.column_id]
+    assert out["revenue_growth"] == Cell(None, "NOT_APPLICABLE")
+    skipped = replace(prior, fiscal_year="FY2023", end_date="2023-12-31")
+    out = metric_frame((current, skipped), frame, {})[current.column_id]
+    assert out["revenue_growth"] == Cell(None, "NOT_APPLICABLE")
