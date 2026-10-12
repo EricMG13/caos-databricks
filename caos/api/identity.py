@@ -515,7 +515,11 @@ def scim_me(authorization: str) -> WorkspaceUser:
     exchange = _Exchange(
         address, authorization, time.monotonic() + SCIM_DEADLINE_SECONDS
     )
-    threading.Thread(target=exchange.run, name="caos-scim", daemon=True).start()
+    try:
+        threading.Thread(target=exchange.run, name="caos-scim", daemon=True).start()
+    except RuntimeError:
+        _EXCHANGES.release()
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE) from None
     exchange.done.wait(SCIM_DEADLINE_SECONDS)
     answer = exchange.answer
     if answer is None:
