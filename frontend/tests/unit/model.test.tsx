@@ -1,19 +1,23 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
+import { ModelCellButton, ModelGrid } from "@/sections/model/ModelGrid";
 import {
   GROUP_IDS,
   columnGroups,
   groupList,
   groupOf,
   hiddenLine,
+  passportOfCell,
   refinanced,
   shownCell,
   tintOf,
   toggled,
 } from "@/sections/model/grid";
+import { sectionUrl } from "@/app/transport";
+import { parseBookDocument } from "@/wire/v1";
 import { ModelSection, forecastSeries } from "@/sections/model/ModelSection";
 import { parseModelDocument, type ModelDocument } from "@/wire/v1";
 
@@ -40,6 +44,12 @@ function renderModel(document: ModelDocument, url = "/model/") {
       </EvidenceProvider>
     </MemoryRouter>,
   );
+}
+
+function indexOfColumn(body: ModelDocument["body"], columnId: string): number {
+  const index = body.columns.findIndex((column) => column.column_id === columnId);
+  expect(index).toBeGreaterThanOrEqual(0);
+  return index;
 }
 
 function cellOf(container: HTMLElement, line: string, column: string): HTMLElement {
@@ -328,6 +338,48 @@ describe("the credit workbook grid", { timeout: 30_000 }, () => {
     expect(container.querySelector('[data-line="fac:rcf"]')).not.toBeNull();
   });
 
+  test("renders band headers that collapse their rows", () => {
+    const { container } = renderModel(fixture());
+    const band = within(container).getByRole("button", { name: /Revenue by business unit/ });
+    expect(band).toHaveAttribute("aria-expanded", "true");
+    expect(container.querySelector('[data-line="revenue"]')).not.toBeNull();
+    fireEvent.click(band);
+    expect(band).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelector('[data-line="revenue"]')).toBeNull();
+    expect(container.querySelector('[data-line="cogs"]')).not.toBeNull();
+    fireEvent.click(band);
+    expect(container.querySelector('[data-line="revenue"]')).not.toBeNull();
+  });
+
+  test("collapsing a column group writes mcols to the URL", () => {
+    const { container } = renderModel(fixture());
+    const region = screen.getByRole("region", { name: "Model grid" });
+    expect(region).toHaveAttribute("tabindex", "0");
+    // Ten quarters are served; the default window shows the last four.
+    expect(cellOf(container, "revenue", "Q:Q2_2026")).not.toBeNull();
+    expect(cellOf(container, "revenue", "Q:Q1_2025")).toBeNull();
+    const quarters = within(region).getByRole("button", { name: /^▾ Quarters/ });
+    fireEvent.click(quarters);
+    expect(container.querySelector("[data-search]")).toHaveTextContent("?mcols=quarters");
+    expect(cellOf(container, "revenue", "Q:Q2_2026")).toBeNull();
+    expect(within(region).getByRole("button", { name: /^▸ Quarters \(10\)/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    // Opening it again takes it back out of the URL; older history is asked for.
+    fireEvent.click(within(region).getByRole("button", { name: /Quarters/ }));
+    expect(container.querySelector("[data-search]")).toHaveTextContent(/^$/);
+    fireEvent.click(within(region).getByRole("button", { name: "all" }));
+    expect(container.querySelector("[data-search]")).toHaveTextContent("?mall=quarters");
+    expect(cellOf(container, "revenue", "Q:Q1_2024")).not.toBeNull();
+  });
+
+  test("opens with the groups the URL names collapsed", () => {
+    const { container } = renderModel(fixture(), "/model/?mcols=base,downside");
+    expect(cellOf(container, "revenue", "BASE:2026")).toBeNull();
+    expect(cellOf(container, "revenue", "FY:FY2025")).not.toBeNull();
+  });
+
   test("formats money in brackets and multiples with x", () => {
     const { container } = renderModel(fixture());
     // Outflows in brackets, whole units, the exact decimal as the title.
@@ -341,6 +393,120 @@ describe("the credit workbook grid", { timeout: 30_000 }, () => {
     expect(cellOf(container, "metric:gross_margin", "FY:FY2025")).toHaveTextContent(/^58\.0%$/);
     expect(cellOf(container, "reference_rate", "BASE:2026")).toHaveTextContent(/^3\.80%$/);
     expect(cellOf(container, "dso", "FY:FY2024")).toHaveTextContent(/^\d+$/);
+  });
+
+  test("shows n.p., n.a. and n.s. with the reason in the title", () => {
+    const { lines } = fixture().body;
+    const line = lines.find((entry) => entry.line_id === "dso")!;
+    const cell = (reason: NonNullable<(typeof line.cells)[number]["reason"]>) => ({
+      ...line.cells[0]!,
+      value: null,
+      reason,
+    });
+    expect(shownCell(line, cell("NOT_PROJECTED"))).toEqual({
+      text: "n.p.",
+      title: "Not projected",
+      figure: false,
+    });
+    expect(shownCell(line, cell("NOT_APPLICABLE")).text).toBe("n.a.");
+    expect(shownCell(line, cell("NOT_SOURCED")).text).toBe("n.s.");
+    expect(shownCell(line, cell("COMPONENT_MISSING")).text).toBe("n.s.");
+    expect(shownCell(line, cell("NOT_STATED")).text).toBe("n.s.");
+    expect(shownCell(line, cell("ZERO_OR_NEGATIVE_DENOMINATOR")).text).toBe("n.a.");
+    expect(shownCell(line, { ...line.cells[0]!, value: null, reason: null }).title).toBe(
+      "No figure served",
+    );
+    const { container } = renderModel(fixture());
+    const marker = cellOf(container, "dso", "BASE:2026");
+    expect(marker).toHaveTextContent("n.p.");
+    expect(marker).toHaveAttribute("title", "Not projected");
+  });
+
+  test("a cell opens the passport with its stated value and sources", () => {
+    const { container } = renderModel(fixture());
+    fireEvent.click(cellOf(container, "bu:las_vegas", "PYTD:H1_2025"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("Stated in the sources");
+    expect(dialog).toHaveTextContent("Sources: ");
+    expect(dialog).toHaveTextContent("PYTD H1 25");
+  });
+
+  test("a source with a citation opens as a chip, and projected interest names its rate and deck", () => {
+    const book = parseBookDocument(
+      JSON.parse(readFileSync(resolve(process.cwd(), "fixtures", "book.json"), "utf8")),
+    );
+    const citation = book.body.rows[0]!.periods[0]!.cells[0]!.passport.citations[0]!;
+    const base = fixture();
+    const fy25 = indexOfColumn(base.body, "FY:FY2025");
+    const lines = base.body.lines.map((line) =>
+      line.line_id === "revenue"
+        ? {
+            ...line,
+            cells: line.cells.map((cell, index) =>
+              index === fy25
+                ? {
+                    ...cell,
+                    stated: "1001",
+                    note: "stated total differs",
+                    sources: [{ source_id: "S1", source_locator: "10-K p.4", citation }],
+                  }
+                : cell,
+            ),
+          }
+        : line,
+    );
+    const document = parseModelDocument({ ...base, body: { ...base.body, lines } });
+    const { container } = renderModel(document);
+    fireEvent.click(cellOf(container, "revenue", "FY:FY2025"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("Stated in the sources: 1001");
+    expect(dialog).toHaveTextContent("stated total differs");
+    expect(dialog).toHaveTextContent(`${citation.filename} p.${citation.page}`);
+    const { body } = base;
+    const column = body.columns.findIndex((entry) => entry.column_id === "BASE:2026");
+    const interest = body.lines.find((line) => line.line_id === "cash_interest")!;
+    const passport = passportOfCell({
+      body,
+      line: interest,
+      column: body.columns[column]!,
+      cell: interest.cells[column]!,
+      index: column,
+      observedAt: base.observed_at,
+    });
+    expect(passport.derivation).toContain(
+      "Weighted-average rate 6.12%, rate deck as of 2026-10-01",
+    );
+    expect(passport.scenario).toBe("BASE");
+    expect(passport.unit).toBe("USD MILLIONS");
+    const bare = passportOfCell({
+      body: { ...body, rate_deck: null },
+      line: interest,
+      column: body.columns[column]!,
+      cell: interest.cells[column]!,
+      index: column,
+      observedAt: base.observed_at,
+    });
+    expect(bare.derivation).toContain("no rate deck");
+  });
+
+  test("the debt band shows facility terms in their own columns", () => {
+    const { container } = renderModel(fixture());
+    const terms = (line: string) =>
+      [...container.querySelectorAll(`[data-line="${line}"] td[data-term]`)].map(
+        (element) => element.textContent,
+      );
+    expect(terms("fac:tlb")).toEqual(["SOFR", "+275 bp", "0.50%", "2030-02-28", "24 p.a."]);
+    // Outside the debt band the five columns are there and empty.
+    expect(terms("revenue")).toEqual(["", "", "", "", ""]);
+    const heading = container.querySelector("thead th.terms")!;
+    expect(heading).toHaveTextContent("Facility terms");
+    expect(heading).toHaveAttribute("colspan", "5");
+    // A rank opens with an 8px spacer row and its own heading row.
+    const rank = [...container.querySelectorAll("tr.rank")].find((row) =>
+      row.textContent?.includes("Senior secured"),
+    )!;
+    expect(rank.previousElementSibling).toHaveClass("gap");
+    expect(container.querySelectorAll("tr.rank").length).toBeGreaterThan(2);
   });
 
   test("tints the pro forma, Base and Downside columns and a refinanced facility cell", () => {
@@ -363,6 +529,58 @@ describe("the credit workbook grid", { timeout: 30_000 }, () => {
     expect(tintOf(columns.find((column) => column.kind === "FY")!)).toBeNull();
     expect(tintOf(columns.find((column) => column.case === "BASE")!)).toBe("base");
     expect(tintOf(columns.find((column) => column.case === "DOWNSIDE")!)).toBe("down");
+  });
+
+  test("two header rows sit on the grid's own sticky classes with a pinned first column", () => {
+    const { container } = renderModel(fixture());
+    const table = container.querySelector("table")!;
+    expect(table).toHaveClass("tbl", "dense", "pin-first", "model-grid");
+    expect(table.querySelectorAll("thead tr")).toHaveLength(2);
+    expect(table.closest(".tscroll")).toHaveAttribute("role", "region");
+    expect(table.closest(".tscroll")!.querySelector("[style]")).toBeNull();
+  });
+
+  test("shows the header: unit, rate deck and the unrealised add-backs switch", () => {
+    const { container } = renderModel(fixture());
+    expect(container.querySelector("[data-model-unit]")).toHaveTextContent("USD millions");
+    expect(container.querySelector("[data-model-deck]")).toHaveTextContent("rate deck 2026-10-01");
+    const box = screen.getByRole("checkbox", { name: /Exclude unrealised add-backs/ });
+    expect(box).not.toBeChecked();
+    fireEvent.click(box);
+    expect(container.querySelector("[data-search]")).toHaveTextContent("?exclude_unrealised=1");
+    expect(screen.getByRole("checkbox", { name: /Exclude unrealised/ })).toBeChecked();
+    fireEvent.click(box);
+    expect(container.querySelector("[data-search]")).toHaveTextContent(/^$/);
+    const bare = fixture();
+    const none = parseModelDocument({ ...bare, body: { ...bare.body, rate_deck: null } });
+    const { container: other } = renderModel(none);
+    expect(other.querySelector("[data-model-deck]")).toHaveTextContent("no rate deck");
+  });
+
+  test("the unrealised switch reaches the model read and no other", () => {
+    expect(sectionUrl("model", { case: "c", excludeUnrealised: "1" })).toBe(
+      "/api/v1/cases/c/model?exclude_unrealised=1",
+    );
+    expect(sectionUrl("model", { case: "c", excludeUnrealised: "yes" })).toBe(
+      "/api/v1/cases/c/model",
+    );
+    expect(sectionUrl("analysis", { case: "c", excludeUnrealised: "1" })).toBe(
+      "/api/v1/cases/c/analysis",
+    );
+  });
+
+  test("limitations render without any line, beside the accepted forecast", () => {
+    const { container } = renderModel(
+      model({ limitations: ["CP-1 tables could not be read"], currency: null }),
+    );
+    expect(container.querySelector("[data-model-limitations]")).toHaveTextContent(
+      "CP-1 tables could not be read",
+    );
+    expect(container.querySelector("[data-model-grid]")).toBeNull();
+    expect(container).toHaveTextContent("Accepted forecast");
+    expect(container.querySelector("[data-model-strip]")).toBeNull();
+    // No model: no switch to flip.
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
   test("column groups: names, trimming and the URL list", () => {
@@ -394,6 +612,25 @@ describe("the credit workbook grid", { timeout: 30_000 }, () => {
     expect([...groupList(null)]).toEqual([]);
     expect(toggled(new Set(["fy"]), "quarters")).toBe("quarters,fy");
     expect(toggled(new Set(["fy"]), "fy")).toBe("");
+  });
+
+  test("a cell button and the grid stand alone", () => {
+    const body = fixture().body;
+    const line = body.lines.find((entry) => entry.line_id === "revenue")!;
+    const { container } = render(
+      <MemoryRouter>
+        <EvidenceProvider>
+          <ModelCellButton
+            body={body}
+            line={line}
+            index={indexOfColumn(body, "FY:FY2025")}
+            observedAt="2026-10-10T00:00:00Z"
+          />
+          <ModelGrid body={body} observedAt="2026-10-10T00:00:00Z" />
+        </EvidenceProvider>
+      </MemoryRouter>,
+    );
+    expect(container.querySelector("button.cellbtn")).toHaveAccessibleName(/Total revenue · FY25/);
   });
 
   test("a negative percent and rate keep their minus; money that rounds to zero has no bracket", () => {

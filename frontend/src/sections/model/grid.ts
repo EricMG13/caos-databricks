@@ -4,7 +4,9 @@
 // are only re-spelled here (digit moves and rounding on the digits), never
 // computed on.
 import { displayDecimal, hundredfold } from "@/ds/format";
+import type { Citation, Passport } from "@/wire";
 import type { ModelDocument } from "@/wire/v1";
+import { citationOf } from "@/sections/book/passport";
 
 type Body = ModelDocument["body"];
 export type ModelLine = Body["lines"][number];
@@ -181,4 +183,67 @@ export function toggled(list: ReadonlySet<GroupId>, id: GroupId): string {
   const next = new Set(list);
   if (!next.delete(id)) next.add(id);
   return GROUP_IDS.filter((entry) => next.has(entry)).join(",");
+}
+
+// ---- the passport ----
+
+export interface PassportInput {
+  body: Body;
+  line: ModelLine;
+  column: ModelColumn;
+  cell: ModelCell;
+  /** The line's column position, for the rate it was priced at. */
+  index: number;
+  observedAt: string;
+}
+
+/** What opens when a cell is pressed: its value and the basis it stands on,
+    the figure the sources state where that is not the one served, the note,
+    and the sources (a citation opens the evidence). A projected interest
+    figure also names the weighted-average rate and the deck it came from. */
+export function passportOfCell(input: PassportInput): Passport {
+  const { body, line, column, cell, index } = input;
+  const shown = shownCell(line, cell);
+  const derivation: string[] = [];
+  if (cell.stated !== null) derivation.push(`Stated in the sources: ${cell.stated}`);
+  if (cell.note !== null) derivation.push(cell.note);
+  if (line.line_id === "cash_interest" && column.kind === "PROJECTED") {
+    const rate = body.lines.find((entry) => entry.line_id === "wa_rate")?.cells[index];
+    if (rate?.value) {
+      derivation.push(
+        `Weighted-average rate ${displayDecimal(hundredfold(rate.value), 2)}%, ${
+          body.rate_deck ? `rate deck as of ${body.rate_deck.as_of}` : "no rate deck"
+        }`,
+      );
+    }
+  }
+  const located = cell.sources.filter((source) => source.citation === null);
+  if (located.length) {
+    derivation.push(
+      `Sources: ${located.map((source) => `${source.source_id} ${source.source_locator}`).join("; ")}`,
+    );
+  }
+  const citations: Citation[] = cell.sources.flatMap((source) =>
+    source.citation ? [citationOf(source.citation, input.observedAt)] : [],
+  );
+  return {
+    label: `${line.label} · ${column.label}`,
+    value: shown.text,
+    unit:
+      line.unit === "MONEY" && body.currency ? `${body.currency} ${body.unit ?? ""}`.trim() : null,
+    definition: cell.reason
+      ? shown.title
+      : `${line.kind.toLowerCase()} · exact value ${shown.title}`,
+    period: column.end_date ?? column.label,
+    scenario: column.case ?? "Actual",
+    reporting_period: column.fiscal_year,
+    computed_at: input.observedAt,
+    snapshot: body.displayed_run_id ?? "",
+    method: cell.basis ?? "Not computed",
+    derivation: derivation.length ? derivation.join(". ") : "Read from the credit model",
+    citations,
+    supporting_research: [],
+    driver: null,
+    deviation: null,
+  };
 }
