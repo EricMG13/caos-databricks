@@ -20,6 +20,7 @@ import pytest
 from command_fixtures import command_headers, member
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from psycopg.errors import CheckViolation
 from test_analysis_section import _as, client
 from test_execution_freshness import _Harness
 from test_forecast_route import harness, route
@@ -52,6 +53,7 @@ from caos.store.book import (
     EntrySubject,
     NewEntry,
     Withdrawal,
+    WithdrawalReason,
     accepted_artifacts,
     entry_in_case,
     entry_of_run,
@@ -672,8 +674,14 @@ def test_a_served_value_is_plain_or_withheld_past_the_wire_bound() -> None:
     assert model_read.served_value(Cell(Decimal("9" * 65))) is None
 
 
+@pytest.mark.parametrize(
+    ("reason", "note"),
+    [("ADDED_IN_ERROR", None), ("OTHER", "The analyst withdrew this entry.")],
+)
 def test_the_store_inserts_an_entry_live_and_withdraws_it_once(
     case: tuple[StoreConnection, UUID],
+    reason: WithdrawalReason,
+    note: str | None,
 ) -> None:
     conn, case_id = case
     run_id = start_run(conn, case_id)
@@ -718,7 +726,18 @@ def test_the_store_inserts_an_entry_live_and_withdraws_it_once(
         ["no rate deck: BASE:2026"],
     )
     conn.rollback()
-    withdrawal = Withdrawal(entry_id, adder, "ADDED_IN_ERROR", None)
+    for invalid_note in (None, "", " \t\n"):
+        with pytest.raises(CheckViolation):
+            conn.execute(
+                "UPDATE book_entries SET withdrawn_at = now(), withdrawn_by = %s,"
+                " withdrawal_reason = 'OTHER', withdrawal_note = %s"
+                " WHERE entry_id = %s",
+                (adder, invalid_note, entry_id),
+            )
+        conn.rollback()
+        assert entry_of_run(conn, run_id) == live
+        conn.rollback()
+    withdrawal = Withdrawal(entry_id, adder, reason, note)
     assert withdraw_entry(conn, withdrawal) is True
     conn.commit()
     assert withdraw_entry(conn, withdrawal) is False
