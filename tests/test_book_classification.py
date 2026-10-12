@@ -151,3 +151,33 @@ def test_composite_is_one_of_the_inputs_for_any_ratings(notches: list[int]) -> N
     assert composite in notches
     assert min(notches) <= composite <= max(notches)
     assert composite_notch(list(reversed(notches))) == composite
+
+
+def test_the_frontends_dialog_vocabularies_are_these() -> None:
+    """The Add to Book dialog offers the words written out in
+    `frontend/src/sections/book/classification.ts`; the sectors, groups,
+    outlooks and withdrawal reasons there are these, in this order."""
+    from pathlib import Path
+
+    from caos.store.book import WITHDRAWAL_REASONS
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "frontend/src/sections/book/classification.ts"
+    ).read_text(encoding="utf-8")
+    words: list[str] = []
+    for sector, groups in GICS_SECTORS.items():
+        words.extend((sector, *groups))
+    words.extend(OUTLOOKS)
+    words.extend(WITHDRAWAL_REASONS)
+    at = 0
+    for word in words:
+        # Multi-word sectors are quoted keys; single words may be bare keys.
+        found = [
+            source.find(f'"{word}"', at),
+            source.find(f"  {word}:", at),
+            source.find(f'["{word}"', at),
+        ]
+        index = min((i for i in found if i >= 0), default=-1)
+        assert index >= at, word
+        at = index
