@@ -28,6 +28,11 @@ deck, the currency and unit, the book metrics and the limitations); with
 unrealised add-backs excluded, or with no grid, it carries none. `model_grid`
 and `entry_figures` are how that command assembles and stores the same model
 (spec B10).
+
+A caller without standing reads the model of a run with a live book entry
+when the request names it (`deps.visible_run`, spec B9), read-only: Analysis'
+chrome with no standing and no actions, and no snapshot digest, so the
+document offers nothing an Add to Book could bind.
 """
 
 from __future__ import annotations
@@ -51,7 +56,8 @@ from caos.api.deps import (
     Methodology,
     RunQuery,
     Store,
-    VisibleCase,
+    VisibleRun,
+    granted,
 )
 from caos.api.reads import analysis
 from caos.api.reads.analysis import AnalysisQuery, read_analysis_without_tables
@@ -173,14 +179,24 @@ def read_model(  # noqa: PLR0913 -- authenticated case/run before dependencies
     case_id: CasePath,
     run: RunQuery,
     exclude_unrealised: ExcludeUnrealised,
-    standing: VisibleCase,
+    standing: VisibleRun,
     conn: Store,
     blobs: Blobs,
     bundle: Methodology,
 ) -> ModelDocument:
-    analysis = read_analysis_without_tables(
-        AnalysisQuery(actor, case_id, run, standing, conn, blobs, bundle)
-    )
+    query = AnalysisQuery(actor, case_id, run, standing, conn, blobs, bundle)
+    document = _model_document(query, exclude_unrealised=exclude_unrealised)
+    if not granted(standing):
+        return document
+    # Read-only (spec B9): the digest exists only for an Add to Book to bind.
+    read_only = document.body.model_copy(update={"snapshot_sha256": None})
+    return document.model_copy(update={"body": read_only})
+
+
+def _model_document(query: AnalysisQuery, *, exclude_unrealised: bool) -> ModelDocument:
+    """The Model document for `query`, as a member reads it."""
+    conn, bundle = query.conn, query.bundle
+    analysis = read_analysis_without_tables(query)
     body = analysis.body
     forecast = accepted_forecast(conn, body)
     accepted = accepted_cp1(body)

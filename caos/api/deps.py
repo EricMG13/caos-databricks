@@ -27,15 +27,27 @@ connection. `visible_case` is the one round trip this module makes: the
 caller's live standing on the path's case, refused as a private
 `CASE_NOT_FOUND` below the reading floor, so an unknown case and a case the
 caller may not read are one answer.
+
+`visible_run` is the one exception to member-only reading (spec B9): the
+caller's standing, or -- for a caller without it, on a request whose `run`
+query names the case's run with a live book entry -- the desk-wide `Grant`.
+Evaluated per request, at the instant of the read: a withdrawal committed
+after it revokes the grant from the next read on. It never reaches a read
+without `run`, another run of the case, or any route but the two that
+declare it (Analysis, Model); the evidence page applies the same rule in its
+own row. A caller it does not reach gets `readable`'s private
+`CASE_NOT_FOUND`, the answer a stranger gets for an unknown case.
 """
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
+from enum import StrEnum
 from functools import cache
 from os import environ
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, TypeIs
 from uuid import UUID
 
 import psycopg
@@ -48,10 +60,14 @@ from caos.blobs import BlobStore
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, connect, interrupted
+from caos.store.book import entry_run
 from caos.store.lakebase import store_url
 from caos.store.members import Standing, satisfies, standing_of
 
-IO_BUDGET = 1  # `visible_case`: the caller's standing on the case
+# `visible_case`: the caller's standing on the case; `visible_run` adds the
+# live-entry lookup, only for a caller without standing who names a run.
+GRANT_IO = 1
+IO_BUDGET = 1 + GRANT_IO
 # N35's remainder: this module's own dependencies read no blob -- `visible_case`
 # is a store row, and `blob_store`/`request_blobs` construct the handle a
 # route reads with, never reading through it themselves.
@@ -240,13 +256,43 @@ def revision_query(revision: str | None = None) -> UUID:
     return parse_uuid(revision or "", RefusalCode.DELIVERABLE_NOT_FOUND)
 
 
+class Grant(StrEnum):
+    """A read the caller holds without standing on the case. Closed: a live
+    book entry for the run the request names is the only one (spec B9), and
+    it is read-only -- served with no standing and no actions."""
+
+    BOOK = "BOOK"
+
+
+def granted(visibility: Standing | Grant) -> TypeIs[Grant]:
+    """Whether `visibility` is a desk-wide grant rather than standing: the
+    one test the granted reads branch on, whatever members `Grant` gains."""
+    return isinstance(visibility, Grant)
+
+
+def reads(standing: Standing | None) -> bool:
+    """Whether `standing` is live standing at or above `READ_REQUIRES`."""
+    return standing is not None and satisfies(standing, READ_REQUIRES)
+
+
+def book_grant(case_id: UUID, run_id: UUID, user_id: UUID) -> Grant:
+    """The desk-wide grant, logged by case, run and user and nothing else:
+    a granted read is no audit-chain event (the chain is per case and reads
+    write nothing), so this line is its record."""
+    print(
+        f"book_entry_read case={case_id} run={run_id} user={user_id}",
+        file=sys.stderr,
+    )
+    return Grant.BOOK
+
+
 def readable(standing: Standing | None) -> Standing:
     """The one visibility rule: live standing at or above `READ_REQUIRES`, or
     the private `CASE_NOT_FOUND` a stranger, a revoked member and an unknown
     case all get. `visible_case` applies it to a standing read on its own; a
     read that folds the membership join into its projection row applies it to
     the standing that row carries."""
-    if standing is None or not satisfies(standing, READ_REQUIRES):
+    if standing is None or not reads(standing):
         raise Refusal(RefusalCode.CASE_NOT_FOUND)
     return standing
 
@@ -261,6 +307,26 @@ def visible_case(actor: Caller, case_id: CasePath, conn: Store) -> Standing:
     return readable(standing_of(conn, case_id=case_id, user_id=actor.user_id))
 
 
+def visible_run(
+    actor: Caller, case_id: CasePath, run: RunQuery, conn: Store
+) -> Standing | Grant:
+    """The caller's live standing on the path's case, or the desk-wide
+    `Grant.BOOK` when the caller has none and `run` names the case's run with
+    a live book entry; else `readable`'s `CASE_NOT_FOUND`. One query for a
+    member, two for anyone else naming a run.
+
+    Its sub-dependencies keep `visible_case`'s order -- identity, the path,
+    the run query, then the store -- so a malformed run is refused before a
+    connection opens, as before.
+    """
+    standing = standing_of(conn, case_id=case_id, user_id=actor.user_id)
+    if reads(standing):
+        return readable(standing)
+    if run is not None and entry_run(conn, case_id, run):
+        return book_grant(case_id, run, actor.user_id)
+    raise Refusal(RefusalCode.CASE_NOT_FOUND)
+
+
 CasePath = Annotated[UUID, Depends(case_path)]
 RunPath = Annotated[UUID, Depends(run_path)]
 SourcePath = Annotated[UUID, Depends(source_path)]
@@ -269,3 +335,4 @@ MemberPath = Annotated[UUID, Depends(member_path)]
 RunQuery = Annotated[UUID | None, Depends(run_query)]
 RevisionQuery = Annotated[UUID, Depends(revision_query)]
 VisibleCase = Annotated[Standing, Depends(visible_case)]
+VisibleRun = Annotated[Standing | Grant, Depends(visible_run)]
