@@ -238,6 +238,33 @@ describe("the book", () => {
     expect(search().getAll("f")).toEqual([]);
   });
 
+  test("history lists earlier entries including withdrawn ones", () => {
+    const doc = document();
+    renderBook(doc);
+    const vmo2 = doc.body.issuers[2]!;
+    expect(screen.queryByText("DATA_ERROR")).toBeNull();
+    const toggle = screen.getByRole("button", { name: /^History \(1\).*Virgin Media O2/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const history = document_().querySelector<HTMLElement>('[data-history="VMO2"]')!;
+    const earlier = vmo2.history[0]!;
+    expect(history).toHaveTextContent(earlier.analysis_date);
+    expect(history).toHaveTextContent(earlier.reporting_period);
+    expect(history).toHaveTextContent(earlier.route);
+    expect(history).toHaveTextContent("Withdrawn");
+    expect(history).toHaveTextContent("Data error");
+    expect(history).not.toHaveTextContent("DATA_ERROR");
+    // An issuer with no earlier entry has no history control.
+    expect(screen.queryByRole("button", { name: /^History.*Northgate/ })).toBeNull();
+    // A limitation stored with an entry is reachable from its row.
+    const mrg = document_().querySelector<HTMLElement>('tr[data-issuer="MRG"]')!;
+    fireEvent.click(within(mrg).getByRole("button", { name: /^Limited/ }));
+    expect(document_().querySelector('[data-limitations="MRG"]')).toHaveTextContent(
+      "interim period annualised by the host",
+    );
+  });
+
   test("links open the entry run's analysis and model", () => {
     const doc = document();
     renderBook(doc);
@@ -328,7 +355,13 @@ describe("the book", () => {
     expect(screen.getByRole("button", { name: "Columns" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Add filter" })).toBeVisible();
     expect(screen.getByRole("button", { name: /^Remove filter/ })).toBeVisible();
-    expect(screen.queryByRole("button", { name: /^History|^Limited|^Withdraw/ })).toBeNull();
+    const entry = document().body.issuers[0]!;
+    expect(entry.displayed.actions).toContain("WITHDRAW_BOOK_ENTRY");
+    expect(screen.getByRole("button", { name: "Withdraw Carvana Co." })).toBeVisible();
+    expect(entry.history).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /^History/ })).toBeNull();
+    expect(entry.displayed.limitations).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /^Limited/ })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
     expect(search().get("case")).toBe("keep");
     expect(search().getAll("tag")).toEqual(["one", "two"]);

@@ -5,13 +5,19 @@
 // composes a view and grants nothing: every field is read from the document,
 // figures are re-spelled the way the Model grid spells them and never computed
 // on, and nothing here derives, compares or judges an entry.
-import { memo, useCallback, useEffect, useId, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { fetchSection } from "@/app/transport";
+import { useDocumentRefetch } from "@/app/useDocumentRefetch";
 import type { BookDocument } from "@/wire/v1";
 import { spelled } from "@/sections/model/grid";
+import { ColumnChooser } from "./ColumnChooser";
+import { FilterBar } from "./FilterBar";
+import { IssuerHistory } from "./IssuerHistory";
 import { BASES, BASIS_LABELS, columnLabel, unitLookup, type Unit } from "./columns";
 import { applyView, cellOf, metricOf, type BookIssuer } from "./filter";
+import { canWithdraw } from "./WithdrawEntry";
 import {
   DEFAULT_VIEW,
   fromParams,
@@ -20,9 +26,6 @@ import {
   type BookView,
   type ColumnKey,
 } from "./view";
-
-import { ColumnChooser } from "./ColumnChooser";
-import { FilterBar } from "./FilterBar";
 
 const VIEW_KEYS = ["basis", "col", "f", "sort", "cur"] as const;
 const STORAGE_KEY = "caos.book.view";
@@ -136,40 +139,85 @@ const IssuerRow = memo(function IssuerRow({
   issuer,
   view,
   unitFor,
+  open,
+  detailId,
+  onToggle,
+  onWithdraw,
 }: {
   issuer: BookIssuer;
   view: BookView;
   unitFor: (column: ColumnKey) => Unit | undefined;
+  open: boolean;
+  detailId: string;
+  onToggle: (key: string) => void;
+  onWithdraw: (key: string) => void;
 }) {
   const entry = issuer.displayed;
   const query = `?case=${encodeURIComponent(entry.case_id)}&run=${encodeURIComponent(entry.run_id)}`;
+  const earlier = issuer.history.length;
+  const limited = entry.limitations.length;
   return (
     <tr data-issuer={issuer.issuer_key} data-entry={entry.entry_id}>
-      {view.columns.map((column) => {
-        if (column === "id:issuer_name")
-          return (
-            <th key={column} scope="row" className="l wrap" data-column={column}>
-              <Link to={`/analysis/${query}`}>{entry.issuer_name}</Link>
-              <div className="book-acts">
-                {entry.filed ? <span className="pill">Filed</span> : null}
-                {entry.sources_withdrawn ? (
-                  <span className="pill warn">Sources withdrawn</span>
-                ) : null}
-                <Link to={`/model/${query}`} aria-label={`Open model for ${entry.issuer_name}`}>
-                  Open model
-                </Link>
-              </div>
-            </th>
-          );
-        const metric = column.startsWith("m:");
-        return (
+      {view.columns.map((column) =>
+        column === "id:issuer_name" ? (
+          <th key={column} scope="row" className="l wrap" data-column={column}>
+            <Link to={`/analysis/${query}`}>{entry.issuer_name}</Link>
+            <div className="book-acts">
+              {entry.filed ? <span className="pill">Filed</span> : null}
+              {entry.sources_withdrawn ? (
+                <span className="pill warn">Sources withdrawn</span>
+              ) : null}
+              <Link to={`/model/${query}`} aria-label={`Open model for ${entry.issuer_name}`}>
+                Open model
+              </Link>
+              {earlier > 0 ? (
+                <button
+                  type="button"
+                  className="book-link"
+                  aria-expanded={open}
+                  aria-controls={detailId}
+                  aria-label={`History (${earlier}) for ${entry.issuer_name}`}
+                  onClick={() => onToggle(issuer.issuer_key)}
+                >
+                  History ({earlier})
+                </button>
+              ) : null}
+              {canWithdraw(entry) ? (
+                <button
+                  type="button"
+                  className="book-link"
+                  aria-expanded={open}
+                  aria-controls={detailId}
+                  aria-label={`Withdraw ${entry.issuer_name}`}
+                  onClick={() => onWithdraw(issuer.issuer_key)}
+                >
+                  Withdraw
+                </button>
+              ) : null}
+              {limited > 0 ? (
+                <button
+                  type="button"
+                  className="book-link"
+                  aria-expanded={open}
+                  aria-controls={detailId}
+                  aria-label={`Limited (${limited}) for ${entry.issuer_name}`}
+                  onClick={() => onToggle(issuer.issuer_key)}
+                >
+                  Limited
+                </button>
+              ) : null}
+            </div>
+          </th>
+        ) : (
           <td
             key={column}
             data-column={column}
-            className={metric ? "num" : "l"}
-            aria-description={metric ? yearOf(issuer, column, view.basis) : undefined}
+            className={column.startsWith("m:") ? "num" : "l"}
+            aria-description={
+              column.startsWith("m:") ? yearOf(issuer, column, view.basis) : undefined
+            }
           >
-            {metric ? (
+            {column.startsWith("m:") ? (
               <MetricCell
                 issuer={issuer}
                 column={column}
@@ -180,17 +228,32 @@ const IssuerRow = memo(function IssuerRow({
               <IdentifierCell issuer={issuer} column={column} />
             )}
           </td>
-        );
-      })}
+        ),
+      )}
     </tr>
   );
 });
 
+/** A `BookBody` is the only enabled-section body carrying `issuers`. */
+function isBookDocument(document: { body: object }): document is BookDocument {
+  return "issuers" in document.body;
+}
+
+/** The Book, read again after a withdrawal: a plain GET through the one
+    transport, kept only if it answers a Book. */
+async function readBook(): Promise<BookDocument | null> {
+  const status = await fetchSection("book", {});
+  return "document" in status && isBookDocument(status.document) ? status.document : null;
+}
+
 export function BookSection({ document }: { document: BookDocument; tab: string | null }) {
-  const { issuers, metric_catalogue: units } = document.body;
+  const { live, failed, refetch } = useDocumentRefetch(document);
+  const { issuers, metric_catalogue: units } = live.body;
+  const reread = useCallback(() => void refetch(readBook), [refetch]);
   const [params, setParams] = useSearchParams();
   const view = useMemo(() => fromParams(params), [params]);
   const [chooser, setChooser] = useState(false);
+  const [openRows, setOpenRows] = useState<ReadonlySet<string>>(new Set());
   const ids = useId();
 
   const update = (next: BookView) => {
@@ -232,6 +295,36 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
   const needsCurrency =
     (view.sort !== null && money(view.sort.column)) ||
     view.filters.some((filter) => filter.kind === "range" && money(filter.column));
+  const toggleRow = useCallback(
+    (key: string) =>
+      setOpenRows((current) => {
+        const next = new Set(current);
+        if (!next.delete(key)) next.add(key);
+        return next;
+      }),
+    [],
+  );
+
+  // The row's Withdraw opens the disclosure, never closes it, and the panel it
+  // opens takes focus once it is drawn.
+  const withdrawing = useRef<string | null>(null);
+  const openForWithdrawal = useCallback((key: string) => {
+    setOpenRows((current) => new Set(current).add(key));
+    withdrawing.current = key;
+  }, []);
+  useEffect(() => {
+    const key = withdrawing.current;
+    if (key === null) return;
+    withdrawing.current = null;
+    const row = [...globalThis.document.querySelectorAll<HTMLElement>("[data-issuer]")].find(
+      (candidate) => candidate.dataset.issuer === key,
+    );
+    const panel = row?.closest("tbody")?.querySelector<HTMLElement>("[data-withdraw-displayed]");
+    // Placed below the sticky header, then focused where it already is.
+    panel?.scrollIntoView?.({ block: "start" });
+    panel?.focus({ preventScroll: true });
+  }, [openRows]);
+
   return (
     <div className="col" data-book-v2>
       <section className="pnl">
@@ -325,17 +418,42 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
                 ))}
               </tr>
             </thead>
-            {kept.map((issuer) => (
-              <tbody key={issuer.issuer_key}>
-                <IssuerRow issuer={issuer} view={view} unitFor={unitFor} />
-              </tbody>
-            ))}
+            {kept.map((issuer, index) => {
+              const open = openRows.has(issuer.issuer_key);
+              const detailId = `${ids}-detail-${index}`;
+              return (
+                <tbody key={issuer.issuer_key}>
+                  <IssuerRow
+                    issuer={issuer}
+                    view={view}
+                    unitFor={unitFor}
+                    open={open}
+                    detailId={detailId}
+                    onToggle={toggleRow}
+                    onWithdraw={openForWithdrawal}
+                  />
+                  {open ? (
+                    <IssuerHistory
+                      issuer={issuer}
+                      id={detailId}
+                      span={view.columns.length}
+                      onWithdrawn={reread}
+                    />
+                  ) : null}
+                </tbody>
+              );
+            })}
           </table>
         </div>
         <footer className="pb book-foot">
           {issuers.length === 0 ? <p className="note">No issuers in the Book.</p> : null}
           {issuers.length > 0 && kept.length === 0 ? (
             <p className="note">No issuer matches this view.</p>
+          ) : null}
+          {failed ? (
+            <p className="note warn" role="alert" data-book-refresh-failed>
+              The entry was withdrawn, but the Book could not be read again. Reload to see it.
+            </p>
           ) : null}
           <p className="note" data-book-count>
             {`${kept.length} of ${issuers.length} issuers`}

@@ -832,6 +832,11 @@
     font-weight: 500;
     color: var(--muted-foreground);
   }
+  /* Scrolled to from the row's Withdraw: below the sticky header (h-14), not
+     under it. */
+  [data-withdraw-displayed] {
+    scroll-margin-top: 4.5rem;
+  }
   .book-withdraw {
     display: grid;
     gap: 0.5rem;
@@ -917,6 +922,29 @@
   .pill.warn {
     border-color: color-mix(in oklab, var(--warning) 55%, transparent);
     color: var(--warning);
+  }
+  table.book-grid tr.book-detail > td {
+    padding: 0;
+    white-space: normal;
+  }
+  .book-detail-body {
+    position: sticky;
+    left: 0;
+    display: grid;
+    gap: 0.75rem;
+    max-width: min(48rem, 100%);
+    padding: 0.75rem;
+    font: 400 0.875rem var(--font-sans);
+  }
+  .book-detail-body h3 {
+    margin: 0 0 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+  .book-detail-body ul {
+    margin: 0;
+    padding-left: 1.25rem;
   }
   .book-foot {
     display: grid;

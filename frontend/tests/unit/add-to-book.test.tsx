@@ -7,6 +7,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { MemoryRouter } from "react-router";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
 import { shortDigest } from "@/ds/format";
+import { BookSection } from "@/sections/book/BookSection";
 import {
   AGENCIES,
   GICS_SECTORS,
@@ -14,15 +15,25 @@ import {
   WITHDRAWAL_NOTE_MAX,
   WITHDRAWAL_REASONS,
 } from "@/sections/book/classification";
+import { canWithdraw } from "@/sections/book/WithdrawEntry";
 import { ModelSection } from "@/sections/model/ModelSection";
 import { Announcer } from "@/states/Announcer";
-import { parseModelDocument, type ModelDocument } from "@/wire/v1";
+import {
+  parseBookDocument,
+  parseModelDocument,
+  type BookDocument,
+  type ModelDocument,
+} from "@/wire/v1";
 
 const DIGEST = "d".repeat(64);
 const RUN = "00000000-0000-4000-8000-0000000000a1";
 
 const fixture = (name: string) =>
   JSON.parse(readFileSync(resolve(process.cwd(), "fixtures", name), "utf8"));
+
+function book(): BookDocument {
+  return parseBookDocument(fixture("book.json"));
+}
 
 /** The Model fixture as a writer reads a complete default view: the digest an
     add binds, the run's subject and `ADD_TO_BOOK` in the chrome. */
@@ -325,6 +336,16 @@ describe("Add to Book", () => {
   });
 });
 
+function renderBook(doc: BookDocument) {
+  return render(
+    <MemoryRouter initialEntries={["/book/"]}>
+      <Announcer>
+        <BookSection document={doc} tab={null} />
+      </Announcer>
+    </MemoryRouter>,
+  );
+}
+
 describe("the dialogs' vocabularies", () => {
   test("are the words the server checks, in order", () => {
     expect(Object.keys(GICS_SECTORS)).toContain("Energy");
@@ -345,5 +366,103 @@ describe("the dialogs' vocabularies", () => {
       "OTHER",
     ]);
     expect(WITHDRAWAL_NOTE_MAX).toBe(1000);
+  });
+});
+
+describe("Withdraw", () => {
+  test("is offered only on an entry the Book says this viewer may withdraw", () => {
+    const [first, second] = book().body.issuers;
+    expect(canWithdraw(first!.displayed)).toBe(true);
+    expect(canWithdraw(second!.displayed)).toBe(false);
+    renderBook(book());
+    expect(screen.getByRole("button", { name: "Withdraw Carvana Co." })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Withdraw Caesars Entertainment, Inc." }),
+    ).toBeNull();
+  });
+
+  test("withdraw requires a note for Other", async () => {
+    const doc = book();
+    const entry = doc.body.issuers[0]!.displayed;
+    answers = (call) =>
+      call.method === "POST"
+        ? { status: 200, body: { entry_id: entry.entry_id } }
+        : call.url === "/api/v1/book"
+          ? { status: 200, body: fixture("book.json") }
+          : null;
+    renderBook(doc);
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw Carvana Co." }));
+    const panel = within(document.querySelector<HTMLElement>("[data-withdraw-displayed]")!);
+    const withdraw = panel.getByRole("button", { name: /^Withdraw entry/ });
+    // No reason, no withdrawal.
+    expect(withdraw).toHaveAttribute("aria-disabled", "true");
+    choose(panel.getByLabelText(/Reason for withdrawing/), "OTHER");
+    expect(withdraw).toHaveAttribute("aria-disabled", "true");
+    expect(panel.getByLabelText(/Note \(required\)/)).toBeInTheDocument();
+    fireEvent.change(panel.getByLabelText(/Note/), { target: { value: "  Wrong issuer id " } });
+    expect(withdraw).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(withdraw);
+    expect(panel.getByRole("group", { name: "Confirm Withdraw entry" })).toHaveTextContent(
+      `sha256:${shortDigest(entry.snapshot_sha256)}`,
+    );
+    fireEvent.click(panel.getByRole("button", { name: "Confirm Withdraw entry" }));
+    await settle();
+    const [post] = calls.filter((c) => c.method === "POST");
+    // The entry's own stored digest, on the entry's own case.
+    expect(post!.url).toBe(
+      `/api/v1/cases/${entry.case_id}/book-entries/${entry.entry_id}/withdrawal`,
+    );
+    expect(post!.body).toEqual({
+      snapshot_sha256: entry.snapshot_sha256,
+      reason: "OTHER",
+      note: "Wrong issuer id",
+    });
+    await waitFor(() => expect(calls.filter((c) => c.url === "/api/v1/book")).toHaveLength(1));
+  });
+
+  test("marks the blank note an Other withdrawal needs, and says why", () => {
+    renderBook(book());
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw Carvana Co." }));
+    const panel = within(document.querySelector<HTMLElement>("[data-withdraw-displayed]")!);
+    const note = panel.getByLabelText(/Note/);
+    expect(note).not.toHaveAttribute("aria-invalid");
+    choose(panel.getByLabelText(/Reason for withdrawing/), "OTHER");
+    expect(note).toHaveAttribute("aria-invalid", "true");
+    expect(document.getElementById(note.getAttribute("aria-describedby") ?? "")).toHaveTextContent(
+      "A note is required for Other.",
+    );
+    fireEvent.change(note, { target: { value: "x" } });
+    expect(note).not.toHaveAttribute("aria-invalid");
+  });
+
+  test("the row's Withdraw opens the panel, never closes it, and moves focus to it", () => {
+    renderBook(book());
+    const button = screen.getByRole("button", { name: "Withdraw Carvana Co." });
+    fireEvent.click(button);
+    const panel = document.querySelector<HTMLElement>("[data-withdraw-displayed]")!;
+    expect(document.activeElement).toBe(panel);
+    (document.activeElement as HTMLElement).blur();
+    fireEvent.click(button);
+    expect(document.querySelector("[data-withdraw-displayed]")).toBe(panel);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(document.activeElement).toBe(panel);
+  });
+
+  test("a reason other than Other sends no note when none is written", async () => {
+    const entry = book().body.issuers[0]!.displayed;
+    answers = (call) =>
+      call.method === "POST" ? { status: 200, body: { entry_id: entry.entry_id } } : null;
+    renderBook(book());
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw Carvana Co." }));
+    const panel = within(document.querySelector<HTMLElement>("[data-withdraw-displayed]")!);
+    choose(panel.getByLabelText(/Reason for withdrawing/), "DATA_ERROR");
+    fireEvent.click(panel.getByRole("button", { name: /^Withdraw entry/ }));
+    fireEvent.click(panel.getByRole("button", { name: "Confirm Withdraw entry" }));
+    await settle();
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({
+      snapshot_sha256: entry.snapshot_sha256,
+      reason: "DATA_ERROR",
+      note: null,
+    });
   });
 });
