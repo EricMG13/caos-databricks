@@ -1,8 +1,11 @@
-"""The Book over real accepted CP-CF projections: cells, passports, visibility.
+"""The Book read v2 over stored book entries (Plan 3 Task 3; spec B1, B2, B4,
+B7, B8, B15).
 
-Portfolio-scoped, so it names no case in its path and reads only the cases the
-caller holds live standing on. Every cell is a value the accepted, re-derived
-projection already carries; this reader computes no figure of its own.
+Desk-wide: every signed-in viewer sees every issuer, standing or none. An
+issuer's row is its newest live entry by `(analysis_date, added_at,
+entry_seq)`; every other entry of the issuer, withdrawn ones included, is its
+history, newest first. The read computes no figure: each entry serves what
+the Add to Book command stored.
 """
 
 from __future__ import annotations
@@ -11,18 +14,22 @@ from datetime import date
 from uuid import UUID, uuid4
 
 import pytest
-from command_fixtures import member
+from command_fixtures import command_headers, member
 from fastapi.testclient import TestClient
 from test_analysis_section import _as, _CountingConnection, _serving
 from test_book_entries import CLASSIFIED, added, client, harness, route
 from test_execution_freshness import _Harness
-from test_model_section import _complete
 
 from caos.api.app import app, store_connection
-from caos.api.identity import Actor, GlobalRole
 from caos.api.reads import book as book_read
 from caos.api.reads import model as model_read
-from caos.api.wire import BookDocument, BookEntryView, BookIssuerView, BookMetricView
+from caos.api.wire import (
+    BookDocument,
+    BookEntryView,
+    BookIssuerView,
+    BookMetricView,
+    SectionNote,
+)
 from caos.boundary_text import BoundaryText
 from caos.store.book import (
     Classification,
@@ -73,6 +80,43 @@ def _book(client: TestClient, harness: _Harness, user: UUID) -> BookDocument:
     harness.conn.rollback()
     assert response.status_code == 200, response.json()
     return BookDocument.model_validate(response.json())
+
+
+def _entry(
+    harness: _Harness,
+    issuer_id: str,
+    analysis_date: str,
+    *,
+    case_id: UUID | None = None,
+    run_id: UUID | None = None,
+) -> UUID:
+    """A stored entry for a new run of `case_id` (the harness's case by
+    default), committed: what the Add command writes, written directly."""
+    conn = harness.conn
+    case = case_id or harness.case_id
+    run = run_id or start_run(conn, case)
+    entry_id = uuid4()
+    insert_entry(
+        conn,
+        NewEntry(
+            entry_id=entry_id,
+            case_id=case,
+            run_id=run,
+            subject=EntrySubject(
+                issuer_id=issuer_id,
+                issuer_name=f"{issuer_id.strip()} Holdings",
+                reporting_period="FY2026",
+                analysis_date=analysis_date,
+                route="FULL_CREDIT_32/RELATIVE_VALUE",
+            ),
+            classification=STATED,
+            snapshot_sha256="c" * 64,
+            figures=FIGURES,
+            added_by=harness.approver,
+        ),
+    )
+    conn.commit()
+    return entry_id
 
 
 def _issuer(document: BookDocument, key: str) -> BookIssuerView:
@@ -164,81 +208,8 @@ def test_every_viewer_sees_every_issuer(
     }
 
 
-def test_the_book_reads_within_its_declared_io_budget(
-    client: TestClient, harness: _Harness
-) -> None:
-    """The store's `now()` and one query over every entry: constant in the
-    issuers and entries served, and no blob."""
-    for issuer, day in (("ACME", "03-31"), ("ACME", "06-30"), ("ZETA", "06-30")):
-        _entry(harness, issuer, f"2026-{day}")
-    counter = _CountingConnection(harness.conn)
-    app.dependency_overrides[store_connection] = _serving(counter)
-    response = client.get(PATH, headers=_as(uuid4()))
-    harness.conn.rollback()
-    assert response.status_code == 200, response.json()
-    assert len(response.json()["body"]["issuers"]) == 2
-    assert counter.executed == book_read.IO_BUDGET == 2
-    assert not hasattr(book_read, "BLOB_BUDGET")
-
-
-@pytest.mark.parametrize("path", [PATH, f"{PATH}?case=x"])
-def test_the_book_refuses_an_anonymous_request(client: TestClient, path: str) -> None:
-    assert client.get(path).status_code == 401
-
-
-def _entry(
-    harness: _Harness,
-    issuer_id: str,
-    analysis_date: str,
-    *,
-    case_id: UUID | None = None,
-    run_id: UUID | None = None,
-) -> UUID:
-    """A stored entry for a new run of `case_id` (the harness's case by
-    default), committed: what the Add command writes, written directly."""
-    conn = harness.conn
-    case = case_id or harness.case_id
-    run = run_id or start_run(conn, case)
-    entry_id = uuid4()
-    insert_entry(
-        conn,
-        NewEntry(
-            entry_id=entry_id,
-            case_id=case,
-            run_id=run,
-            subject=EntrySubject(
-                issuer_id=issuer_id,
-                issuer_name=f"{issuer_id.strip()} Holdings",
-                reporting_period="FY2026",
-                analysis_date=analysis_date,
-                route="FULL_CREDIT_32/RELATIVE_VALUE",
-            ),
-            classification=STATED,
-            snapshot_sha256="c" * 64,
-            figures=FIGURES,
-            added_by=harness.approver,
-        ),
-    )
-    conn.commit()
-    return entry_id
-
-
-def _prepared(
-    harness: _Harness, user: UUID, role: GlobalRole = GlobalRole.ANALYST
-) -> tuple[list[BookIssuerView], bool]:
-    issuers, truncated = book_read._issuers(harness.conn, Actor(user, role))
-    harness.conn.rollback()
-    return issuers, truncated
-
-
-def _prepared_issuer(harness: _Harness, key: str) -> BookIssuerView:
-    issuers, _ = _prepared(harness, uuid4())
-    [issuer] = [issuer for issuer in issuers if issuer.issuer_key == key]
-    return issuer
-
-
 def test_an_issuers_row_is_its_newest_live_entry_by_analysis_date(
-    harness: _Harness,
+    client: TestClient, harness: _Harness
 ) -> None:
     """Spec B1, B4: one row per issuer key, whatever the spelling; the newest
     analysis date displays, then the later add, and the rest are history,
@@ -249,7 +220,7 @@ def test_an_issuers_row_is_its_newest_live_entry_by_analysis_date(
     # Added last, but analysed earliest: it never displays.
     december = _entry(harness, "ACME", "2025-12-31")
 
-    [issuer] = _prepared(harness, uuid4())[0]
+    [issuer] = _book(client, harness, uuid4()).body.issuers
     assert issuer.issuer_key == "ACME"
     assert issuer.displayed.entry_id == june_later
     assert issuer.displayed.issuer_id == " Acme"
@@ -275,39 +246,45 @@ def test_an_issuers_row_is_its_newest_live_entry_by_analysis_date(
 
 
 def test_issuers_past_the_bound_are_cut_and_said_so(
-    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for issuer in ("ALPHA", "BRAVO", "CHARLIE"):
         _entry(harness, issuer, "2026-06-30")
     monkeypatch.setattr(book_read, "BOOK_ISSUERS_MAX", 2)
-    issuers, truncated = _prepared(harness, uuid4())
-    assert [i.issuer_key for i in issuers] == ["ALPHA", "BRAVO"]
-    assert truncated is True
+    document = _book(client, harness, uuid4())
+    assert [i.issuer_key for i in document.body.issuers] == ["ALPHA", "BRAVO"]
+    assert (document.status, document.notes) == (
+        "partial",
+        [SectionNote.LIST_TRUNCATED],
+    )
 
 
 def test_history_past_the_bound_is_cut_and_said_so(
-    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(book_read, "BOOK_HISTORY_MAX", 1)
     newest = _entry(harness, "ACME", "2026-06-30")
     middle = _entry(harness, "ACME", "2026-03-31")
-    issuers, truncated = _prepared(harness, uuid4())
-    [issuer] = issuers
+    document = _book(client, harness, uuid4())
+    [issuer] = document.body.issuers
     assert (issuer.displayed.entry_id, [e.entry_id for e in issuer.history]) == (
         newest,
         [middle],
     )
-    assert truncated is False
+    assert (document.status, document.notes) == ("complete", [])
 
     _entry(harness, "ACME", "2025-12-31")
-    issuers, truncated = _prepared(harness, uuid4())
-    [issuer] = issuers
+    document = _book(client, harness, uuid4())
+    [issuer] = document.body.issuers
     assert [entry.entry_id for entry in issuer.history] == [middle]
-    assert truncated is True
+    assert (document.status, document.notes) == (
+        "partial",
+        [SectionNote.LIST_TRUNCATED],
+    )
 
 
 def test_a_withdrawn_entry_moves_to_history_and_the_previous_one_displays(
-    harness: _Harness,
+    client: TestClient, harness: _Harness
 ) -> None:
     """Spec B7: withdrawn, never deleted; the previous live entry is the row
     again, and an issuer with no live entry has no row."""
@@ -320,7 +297,7 @@ def test_a_withdrawn_entry_moves_to_history_and_the_previous_one_displays(
     harness.conn.commit()
     assert withdrawn
 
-    [issuer] = _prepared(harness, uuid4())[0]
+    [issuer] = _book(client, harness, uuid4()).body.issuers
     assert issuer.displayed.entry_id == older
     [history] = issuer.history
     assert history.entry_id == newer
@@ -334,11 +311,13 @@ def test_a_withdrawn_entry_moves_to_history_and_the_previous_one_displays(
         harness.conn, Withdrawal(older, harness.approver, "DATA_ERROR", None)
     )
     harness.conn.commit()
-    issuers, truncated = _prepared(harness, uuid4())
-    assert (issuers, truncated) == ([], False)
+    document = _book(client, harness, uuid4())
+    assert (document.body.issuers, document.observed_empty) == ([], True)
 
 
-def test_the_filed_badge_follows_the_deliverable_publication(harness: _Harness) -> None:
+def test_the_filed_badge_follows_the_deliverable_publication(
+    client: TestClient, harness: _Harness
+) -> None:
     """Spec B4: Filed once the run's deliverable is filed, not when it is
     saved or frozen."""
     conn = harness.conn
@@ -348,8 +327,9 @@ def test_the_filed_badge_follows_the_deliverable_publication(harness: _Harness) 
     _entry(harness, "ZETA", "2026-06-30")
 
     def filed() -> bool:
-        assert _prepared_issuer(harness, "ZETA").displayed.filed is False
-        return _prepared_issuer(harness, "ACME").displayed.filed
+        document = _book(client, harness, uuid4())
+        assert _issuer(document, "ZETA").displayed.filed is False
+        return _issuer(document, "ACME").displayed.filed
 
     revision = uuid4()
     conn.execute(
@@ -376,7 +356,9 @@ def test_the_filed_badge_follows_the_deliverable_publication(harness: _Harness) 
     assert filed() is True
 
 
-def test_a_withdrawn_pinned_source_flags_the_entry(harness: _Harness) -> None:
+def test_a_withdrawn_pinned_source_flags_the_entry(
+    client: TestClient, harness: _Harness
+) -> None:
     """Spec B8: a source pinned to the entry's run and withdrawn from the case
     flags the entry; the entry itself is not withdrawn."""
     pinned = _entry(harness, "ACME", "2026-06-30", run_id=harness.run_id)
@@ -384,10 +366,10 @@ def test_a_withdrawn_pinned_source_flags_the_entry(harness: _Harness) -> None:
     unpinned = _entry(harness, "ZETA", "2026-06-30")
 
     def flags() -> dict[UUID, bool]:
-        issuers, _ = _prepared(harness, uuid4())
+        document = _book(client, harness, uuid4())
         return {
             issuer.displayed.entry_id: issuer.displayed.sources_withdrawn
-            for issuer in issuers
+            for issuer in document.body.issuers
         }
 
     assert flags() == {pinned: False, unpinned: False}
@@ -399,61 +381,62 @@ def test_a_withdrawn_pinned_source_flags_the_entry(harness: _Harness) -> None:
     )
     harness.conn.commit()
     assert flags() == {pinned: True, unpinned: False}
-    acme = _prepared_issuer(harness, "ACME")
+    acme = _issuer(_book(client, harness, uuid4()), "ACME")
     assert acme.displayed.withdrawn_at is None
 
 
-def test_prepared_entry_actions_follow_live_case_standing_and_global_role(
-    harness: _Harness,
+def test_the_book_reads_within_its_declared_io_budget(
+    client: TestClient, harness: _Harness
 ) -> None:
-    older = _entry(harness, "ACME", "2026-03-31")
-    newer = _entry(harness, "ACME", "2026-06-30")
-    writer = member(harness.conn, harness.case_id)
+    """The store's `now()` and one query over every entry: constant in the
+    issuers and entries served, and no blob."""
+    for issuer, day in (("ACME", "03-31"), ("ACME", "06-30"), ("ZETA", "06-30")):
+        _entry(harness, issuer, f"2026-{day}")
+    counter = _CountingConnection(harness.conn)
+    app.dependency_overrides[store_connection] = _serving(counter)
+    response = client.get(PATH, headers=_as(uuid4()))
+    harness.conn.rollback()
+    assert response.status_code == 200, response.json()
+    assert len(response.json()["body"]["issuers"]) == 2
+    assert counter.executed == book_read.IO_BUDGET == 2
+    assert not hasattr(book_read, "BLOB_BUDGET")
+
+
+@pytest.mark.parametrize("path", [PATH, f"{PATH}?case=x"])
+def test_the_book_refuses_an_anonymous_request(client: TestClient, path: str) -> None:
+    assert client.get(path).status_code == 401
+
+
+def test_an_entry_offers_withdraw_only_to_a_writer_member_of_its_case(
+    added: tuple[UUID, str, UUID], client: TestClient, harness: _Harness
+) -> None:
+    """Ruling: `actions` on a live entry names WITHDRAW_BOOK_ENTRY for a
+    WRITER-or-above member of the entry's case with a global role that may
+    write; a READER member, a stranger and a withdrawn entry get none."""
+    entry_id, digest, writer = added
     reader = member(harness.conn, harness.case_id, Standing.READER)
 
-    def actions(user: UUID, role: GlobalRole = GlobalRole.ANALYST) -> list[str]:
-        [issuer], _ = _prepared(harness, user, role)
-        return [str(action) for action in issuer.displayed.actions]
+    def actions(user: UUID, role: str = "ANALYST") -> list[str]:
+        response = client.get(PATH, headers=_as(user, role))
+        harness.conn.rollback()
+        document = BookDocument.model_validate(response.json())
+        return [str(a) for a in _issuer(document, "ACME").displayed.actions]
 
     assert actions(writer) == ["WITHDRAW_BOOK_ENTRY"]
     assert actions(harness.approver) == ["WITHDRAW_BOOK_ENTRY"]
     assert actions(reader) == []
-    assert actions(writer, GlobalRole.READER) == []
+    assert actions(writer, "READER") == []
     assert actions(uuid4()) == []
-    assert withdraw_entry(harness.conn, Withdrawal(newer, writer, "DATA_ERROR", None))
-    harness.conn.commit()
-    [issuer], _ = _prepared(harness, writer)
-    assert issuer.displayed.entry_id == older
-    assert issuer.displayed.actions == ["WITHDRAW_BOOK_ENTRY"]
-    assert issuer.history[0].entry_id == newer
-    assert issuer.history[0].actions == []
-
-
-def test_book_catalogue_matches_the_model_lines_and_stored_entry_metrics(
-    client: TestClient,
-    harness: _Harness,
-) -> None:
-    _complete(harness)
-    _entry(harness, "ACME", "2026-06-30", run_id=harness.run_id)
-    response = client.get(
-        f"/api/v1/cases/{harness.case_id}/model?run={harness.run_id}",
-        headers=_as(harness.approver),
+    body = {"snapshot_sha256": digest, "reason": "DATA_ERROR", "note": None}
+    answer = client.post(
+        f"/api/v1/cases/{harness.case_id}/book-entries/{entry_id}/withdrawal",
+        headers=command_headers(writer),
+        json=body,
     )
     harness.conn.rollback()
-    assert response.status_code == 200
-    catalogue = model_read.book_catalogue()
-    selected = [
-        line
-        for line in response.json()["body"]["lines"]
-        if line["line_id"].startswith("metric:")
-        or line["line_id"] in model_read.BOOK_LINES
-    ]
-    assert [(m.line_id, m.label, m.unit) for m in catalogue] == [
-        (line["line_id"], line["label"], line["unit"]) for line in selected
-    ]
-    entry = _prepared_issuer(harness, "ACME").displayed
-    assert set(entry.metrics["LTM"]) <= {m.line_id for m in catalogue}
-    assert {(m.line_id, m.label, m.unit) for m in catalogue} >= {
-        ("revenue", "Total revenue", "MONEY"),
-        ("metric:net_leverage_adjusted", "Net leverage, adjusted EBITDA", "MULTIPLE"),
-    }
+    assert answer.status_code == 200, answer.text
+    document = BookDocument.model_validate(
+        client.get(PATH, headers=_as(writer, "ANALYST")).json()
+    )
+    harness.conn.rollback()
+    assert document.body.issuers == []
