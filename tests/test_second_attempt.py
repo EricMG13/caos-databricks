@@ -25,7 +25,18 @@ from typing import Any, cast
 from uuid import UUID
 
 import pytest
-from canonical_fixtures import QUOTE, CanonicalCompletions, fields_from_prompt
+from canonical_fixtures import (
+    CATALOG,
+    CONTRACT,
+    QUOTE,
+    CanonicalCompletions,
+    fields_from_prompt,
+    handoff_markdown,
+    identity,
+    skill,
+    wire,
+    with_markers,
+)
 from conftest import approve_run, priced
 from test_canonical_execution import _node, harness, route
 from test_execution_freshness import _Harness
@@ -49,6 +60,7 @@ from caos.methodology.handoff import (
     capped,
     carried_answer,
     feedback_lines,
+    parse_response,
     readiness_set_line,
     retry_feedback,
 )
@@ -72,6 +84,7 @@ __all__ = ["harness", "route"]
 SECOND = "--- SECOND ATTEMPT"
 REFUSED = "--- REFUSED ANSWER"
 VENDOR_LINE = "validate_handoff: a MATERIAL finding requires qa_status Restricted"
+KEPT = "host register check: the refused answer holds"
 
 
 def _module(prompt: str) -> str:
@@ -214,6 +227,47 @@ def test_a_refused_answer_gets_one_second_attempt_that_carries_what_failed(
     )
     # Two attempts, each reserved; one refused, one accepted.
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_a_retry_carrying_the_answer_names_every_register_it_must_keep(
+    harness: _Harness,
+) -> None:
+    """F496, qualify run b0b6fd10 CP-4: a repair told one fault fixed it and
+    dropped registers no line named. The retry that carries the refused answer
+    now names every required register that answer had, beside the fault."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_with_fixture_marker)) is None
+    second = " ".join(answers.prompts[1].split())
+    marker = "completeness_check: validation_warnings declares the fixture marker"
+    assert marker in second and REFUSED in second
+    assert (
+        "host register check: the refused answer holds 10 of the 10 required"
+        " registers, `P3`, `P5`, `T1`, `T2`, `T3`, `T4`, `T5`, `T6`, `T7` and"
+        " `T8`; keep every one, with all its rows, unchanged except where"
+        " another line names a fault"
+    ) in second
+
+
+@pytest.mark.parametrize("count", [MAX_FEEDBACK_MESSAGES, MAX_FEEDBACK_MESSAGES + 3])
+def test_the_keep_line_takes_no_check_slot(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch, count: int
+) -> None:
+    """R44: the cap counts checks; the keep-line is a fact beside them. At
+    exactly `MAX_FEEDBACK_MESSAGES` faults (CP-4 #2's count) every fault is
+    still shown, and past it the same capped tail as without the line."""
+    faults = tuple(f"check line {n:02d}" for n in range(1, count + 1))
+
+    def lines(*_args: object, **_kwargs: object) -> tuple[str, ...]:
+        return faults
+
+    monkeypatch.setattr(canonical, "feedback_lines", lines)
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_with_fixture_marker)) is None
+    second = answers.prompts[1]
+    assert KEPT in second and REFUSED in second
+    shown = capped(faults)  # what the same faults show with no keep-line
+    assert all(line in second for line in shown)
+    assert not [line for line in faults if line in second and line not in shown]
 
 
 def test_a_second_refusal_gets_a_retry_told_of_the_attempt_before_it(
@@ -1345,6 +1399,76 @@ def test_retry_feedback_says_why_a_body_is_not_the_transport(
     assert shape.startswith("host transport check: the answer is not the JSON object")
 
 
+def _repeating(markdown: bytes) -> str:
+    """CP-2 #2 of qualify run b0b6fd10: the transport whole, its citations
+    3 and 4 copies of 1 and 2, each named by a marker."""
+    cited = [
+        {"source_id": str(UUID(int=1)), "page": page, "matched_text": QUOTE}
+        for page in (1, 2)
+    ]
+    return wire(with_markers(markdown, 4), cited + cited)
+
+
+def test_a_repeated_citation_is_named_as_one_and_its_answer_carried() -> None:
+    """CP-2 #2 (qualify run b0b6fd10): the model fixed dangling markers by
+    appending copies of earlier citations. The host refused the repeat, then
+    told the retry the answer was not the JSON object with only its two keys
+    -- false for that body -- and carried nothing, so the next attempt began
+    from scratch. The retry is now told which citations repeat which, and
+    gets the answer back to correct."""
+    gate = identity("CP-0")
+    body = _repeating(handoff_markdown(gate))
+    with pytest.raises(Refusal) as refused:
+        parse_response(body)
+    assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
+    lines = feedback_lines(CONTRACT, CATALOG, gate, body, skill=skill("CP-0"))
+    assert lines[0] == (
+        "host citation check: citation 3 repeats citation 1 and citation 4"
+        " repeats citation 2, the same source_id, page and matched_text; list"
+        " each citation once, cite a repeated passage again by the marker of its"
+        " first place, and renumber every marker after a citation you remove"
+    )
+    assert not any("not the JSON object" in line for line in lines)
+    assert carried_answer(body) == body
+
+
+def test_the_repeat_line_stays_within_the_line_limit() -> None:
+    """R45: past what one line holds, the repeats are counted, never cut."""
+    gate = identity("CP-0")
+    cited = [
+        {"source_id": str(UUID(int=1)), "page": page, "matched_text": QUOTE}
+        for page in range(1, 201)
+    ]
+    body = wire(with_markers(handoff_markdown(gate), 400), cited + cited)
+    lines = feedback_lines(CONTRACT, CATALOG, gate, body, skill=skill("CP-0"))
+    line = lines[0]
+    assert line.startswith("host citation check: citation 201 repeats citation 1, ")
+    assert len(line) <= MAX_FEEDBACK_CHARS
+    named = line.count(" repeats citation ")
+    assert 0 < named < 200 and f" and {200 - named} more, " in line
+
+
+def _with_a_repeated_citation(body: str) -> str:
+    """The same answer listing its first citation twice, the copy named."""
+    wire_body = json.loads(body)
+    wire_body["citations"].append(wire_body["citations"][0])
+    count = len(wire_body["citations"])
+    wire_body["canonical_markdown"] += f"\nAs cited [C{count}].\n"
+    return json.dumps(wire_body)
+
+
+def test_a_retry_after_a_repeated_citation_carries_the_answer(
+    harness: _Harness,
+) -> None:
+    answers = CanonicalCompletions(harness.source_id)
+    flawed = _Flawed(answers, flaw=_with_a_repeated_citation)
+    assert _run(harness, flawed) is None
+    second = " ".join(answers.prompts[1].split())
+    assert "host citation check: citation 2 repeats citation 1," in second
+    assert REFUSED in second and "not the JSON object" not in second
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
 def test_retry_feedback_names_at_most_the_first_twenty_failed_citations(
     harness: _Harness,
 ) -> None:
@@ -1830,6 +1954,8 @@ def test_a_retry_too_large_to_carry_its_answer_asks_from_the_beginning(
     assert _run(harness, heavy) is None
     second = answers.prompts[1]
     assert VENDOR_LINE in second and REFUSED not in second
+    # R45: no keep-line beside an answer that is not there (fix round 1).
+    assert KEPT not in second
     assert second.endswith(
         FROM_THE_BEGINNING + f"--- END SECOND ATTEMPT {_tag(second)} ---\n"
     )
@@ -2070,6 +2196,7 @@ def test_a_retry_the_ceiling_cannot_pay_to_carry_is_sent_plain(
     assert len(cp0) == 2
     second = cp0[1]
     assert VENDOR_LINE in second and REFUSED not in second
+    assert KEPT not in second  # R45: priced and sent without it alike
     assert second.endswith(
         FROM_THE_BEGINNING + f"--- END SECOND ATTEMPT {_tag(second)} ---\n"
     )
