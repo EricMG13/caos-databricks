@@ -24,6 +24,7 @@ import type { Box, ChartSeries, Plot, PlotKit, SeriesChartProps } from "./types"
 
 const AXIS_BAND = 22;
 const EDGE = 8;
+const END_ROOM = 64; // the most width the end labels may take beside the plot
 const TOP = 8;
 const POINT = 4; // a point is 8px across
 const APART = VALUE_SIZE + 1; // end labels nearer than this would collide
@@ -82,9 +83,14 @@ function layoutOf(spec: LineSpec, width: number): Layout {
     return [{ cell: last, y: axis.at(toNumber(last.value)), text: formatDecimal(last.value) }];
   });
   const heights = ends.map((end) => end.y).sort((a, b) => a - b);
-  const apart = heights.every((y, at) => at === 0 || y - (heights[at - 1] ?? y) >= APART);
-  const room =
-    apart && ends.length ? Math.max(...ends.map((end) => textWidth(end.text, VALUE_SIZE))) + 10 : 0;
+  const wide = ends.length
+    ? Math.max(...ends.map((end) => textWidth(end.text, VALUE_SIZE))) + 10
+    : 0;
+  // A served value can run to dozens of digits; an end label that would take
+  // more than END_ROOM of the width is left to the legend and the readout.
+  const apart =
+    wide <= END_ROOM && heights.every((y, at) => at === 0 || y - (heights[at - 1] ?? y) >= APART);
+  const room = apart && ends.length ? wide : 0;
   const area = { x: left, y: TOP, width: width - EDGE - room - left, height: bottom - TOP };
   const step = area.width / Math.max(1, spec.categories.length);
   return {

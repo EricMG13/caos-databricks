@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
+import { ChartStrip } from "@/sections/model/ChartStrip";
 import { ModelCellButton, ModelGrid } from "@/sections/model/ModelGrid";
 import {
   GROUP_IDS,
@@ -13,6 +14,7 @@ import {
   passportOfCell,
   refinanced,
   shownCell,
+  stripCharts,
   tintOf,
   toggled,
 } from "@/sections/model/grid";
@@ -326,6 +328,13 @@ describe("the host's forecast, drawn", () => {
 });
 
 describe("the credit workbook grid", { timeout: 30_000 }, () => {
+  test("the fixture parses with parseModelDocument", () => {
+    const document = fixture();
+    expect(document.body.columns).toHaveLength(23);
+    expect(document.body.lines.length).toBeGreaterThan(100);
+    expect(document.body.rate_deck?.as_of).toBe("2026-10-01");
+  });
+
   test("hides a line whose cells are all zero or null unless it is a facility", () => {
     const { lines } = fixture().body;
     const line = (id: string) => lines.find((entry) => entry.line_id === id)!;
@@ -583,6 +592,39 @@ describe("the credit workbook grid", { timeout: 30_000 }, () => {
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
+  test("draws three charts from the same cells: history as Actual, two projected cases", () => {
+    const body = fixture().body;
+    const charts = stripCharts(body);
+    expect(charts.map((chart) => chart.key)).toEqual([
+      "metric:net_leverage_adjusted",
+      "metric:interest_coverage_adjusted",
+      "liquidity",
+    ]);
+    const [leverage, , liquidity] = charts;
+    expect(leverage!.categories).toEqual([
+      "FY23",
+      "FY24",
+      "FY25",
+      "LTM Q2 26",
+      "FY26E",
+      "FY27E",
+      "FY28E",
+    ]);
+    expect(leverage!.series.map((series) => series.label)).toEqual([
+      "Actual",
+      "Base case",
+      "Downside case",
+    ]);
+    expect(leverage!.unit).toBe("multiple");
+    expect(liquidity!.unit).toBe("USD MILLIONS");
+    // A cell with no figure is a gap with its reason.
+    expect(leverage!.series[1]!.data[0]).toEqual({ value: null, reason: "not projected" });
+    const { container } = render(<ChartStrip body={body} />);
+    expect(container.querySelectorAll("[data-strip-chart]")).toHaveLength(3);
+    const empty = render(<ChartStrip body={{ ...body, lines: [] }} />);
+    expect(empty.container.querySelector("[data-model-strip]")).toBeNull();
+  });
+
   test("column groups: names, trimming and the URL list", () => {
     const { columns } = fixture().body;
     expect(GROUP_IDS).toEqual(["quarters", "ytd", "fy", "ltm", "pf", "base", "downside"]);
@@ -657,5 +699,34 @@ describe("the credit workbook grid", { timeout: 30_000 }, () => {
     expect(read("PERCENT", "0.12350")).toBe("12.4%");
     expect(read("KPI", "90.95", "PERCENT")).toBe("91.0%");
     expect(read("DAYS", "9.5")).toBe("10");
+  });
+
+  test("a marker's accessible name carries its reason; rows and columns are scoped headers", () => {
+    const { container } = renderModel(fixture());
+    const marker = cellOf(container, "dso", "BASE:2026");
+    expect(marker).toHaveAccessibleName("DSO · FY26E · n.p. (not projected)");
+    expect(cellOf(container, "revenue", "FY:FY2025")).toHaveAccessibleName(
+      /^Total revenue · FY25 · [\d,]+$/,
+    );
+    const rowHead = container.querySelector('[data-line="revenue"] > th')!;
+    expect(rowHead).toHaveAttribute("scope", "row");
+    expect(rowHead).toHaveClass("lab");
+    const heads = [...container.querySelectorAll("thead th")];
+    expect(
+      heads.every(
+        (head) => (head.textContent ?? "").trim() !== "" || head.hasAttribute("aria-label"),
+      ),
+    ).toBe(true);
+    expect(container.querySelector("tr.p th:not(:first-child)")).toHaveAttribute("scope", "col");
+    expect(container.querySelector("tr.g th.lab")).toHaveTextContent("Line");
+  });
+
+  test("LTM and PF-LTM collapse independently", () => {
+    const { container } = renderModel(fixture(), "/model/?mcols=pf");
+    expect(cellOf(container, "revenue", "LTM:LTM_Q2_2026")).not.toBeNull();
+    expect(cellOf(container, "revenue", "PF:LTM_Q2_2026")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^▸ PF-LTM/ }));
+    expect(container.querySelector("[data-search]")).toHaveTextContent(/^$/);
+    expect(cellOf(container, "revenue", "PF:LTM_Q2_2026")).not.toBeNull();
   });
 });

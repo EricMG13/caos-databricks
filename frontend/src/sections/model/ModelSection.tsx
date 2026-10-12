@@ -8,6 +8,7 @@ import type { ModelDocument } from "@/wire/v1";
 import { displayDecimal } from "@/ds/format";
 import { Digest } from "@/ds/Digest";
 import { useSearchParams } from "react-router";
+import { ChartStrip } from "./ChartStrip";
 import { ModelGrid } from "./ModelGrid";
 
 type Forecast = NonNullable<ModelDocument["body"]["forecast"]>;
@@ -185,6 +186,7 @@ export function ModelSection({ document }: { document: ModelDocument; tab: strin
           </div>
         </section>
       ) : null}
+      {body.lines.length ? <ChartStrip body={body} /> : null}
     </>
   );
   const forecast = body.forecast;
