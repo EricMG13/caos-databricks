@@ -5,7 +5,7 @@
 // composes a view and grants nothing: every field is read from the document,
 // figures are re-spelled the way the Model grid spells them and never computed
 // on, and nothing here derives, compares or judges an entry.
-import { memo, useCallback, useEffect, useId, useMemo } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import type { BookDocument } from "@/wire/v1";
@@ -20,6 +20,9 @@ import {
   type BookView,
   type ColumnKey,
 } from "./view";
+
+import { ColumnChooser } from "./ColumnChooser";
+import { FilterBar } from "./FilterBar";
 
 const VIEW_KEYS = ["basis", "col", "f", "sort", "cur"] as const;
 const STORAGE_KEY = "caos.book.view";
@@ -187,6 +190,7 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
   const { issuers, metric_catalogue: units } = document.body;
   const [params, setParams] = useSearchParams();
   const view = useMemo(() => fromParams(params), [params]);
+  const [chooser, setChooser] = useState(false);
   const ids = useId();
 
   const update = (next: BookView) => {
@@ -249,6 +253,15 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
               </label>
             ))}
           </fieldset>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-expanded={chooser}
+            onClick={() => setChooser(!chooser)}
+          >
+            Columns
+          </Button>
           {needsCurrency ? (
             <label className="fld">
               Currency
@@ -267,7 +280,22 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
             Reset view
           </Button>
         </div>
+        {chooser ? (
+          <div className="pb">
+            <ColumnChooser
+              view={view}
+              units={units}
+              onChange={(columns) => update({ ...view, columns })}
+            />
+          </div>
+        ) : null}
         <div className="pb">
+          <FilterBar
+            view={view}
+            units={units}
+            issuers={issuers}
+            onChange={(filters) => update({ ...view, filters })}
+          />
           {needsCurrency && effective.currency === null ? (
             <p className="fld-hint">
               Amounts are native to each issuer: choose a currency to compare them. No conversion is

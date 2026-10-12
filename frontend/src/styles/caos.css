@@ -787,6 +787,27 @@
     font-weight: 500;
     color: var(--muted-foreground);
   }
+  .book-chooser {
+    display: grid;
+    gap: 1rem;
+    max-height: 20rem;
+    overflow: auto;
+  }
+  .book-group .book-metric {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    width: 100%;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .book-filters,
+  .book-editor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.5rem 1rem;
+  }
   /* The Add to Book dialog and the Withdraw control: native fields in a
      label, one agency to a fieldset, a rating beside its outlook. */
   .book-form {
@@ -817,6 +838,13 @@
     max-width: 28rem;
   }
 
+  .book-x {
+    all: unset;
+    cursor: pointer;
+    min-width: 24px;
+    min-height: 24px;
+    text-align: center;
+  }
   .book-x:focus-visible,
   .book-link:focus-visible,
   .book-sort:focus-visible {
