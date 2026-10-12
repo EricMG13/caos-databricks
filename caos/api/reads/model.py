@@ -616,7 +616,7 @@ def _base_year(columns: Sequence[Column], first: int) -> int:
     return last or first - 1
 
 
-def _book_bases(columns: Sequence[Column]) -> dict[str, tuple[int, int | None]]:
+def book_bases(columns: Sequence[Column]) -> dict[str, tuple[int, int | None]]:
     """Each stored basis, its column and, for a projected one, its fiscal
     year: the first LTM, the PF-LTM, and `<CASE>_FY<n>` for the projected
     year n years after the base year, n in 1-3 (fix round 1, L2). A missing
@@ -653,7 +653,7 @@ def book_metrics(model: CreditModel) -> dict[str, dict[str, str | None]]:
         if line.line_id.startswith(_METRIC) or line.line_id in BOOK_LINES
     ]
     metrics: dict[str, dict[str, str | None]] = {}
-    for basis, (index, year) in _book_bases(model.columns).items():
+    for basis, (index, year) in book_bases(model.columns).items():
         figures = {line.line_id: served_value(line.cells[index]) for line in lines}
         if year is not None:
             figures[FISCAL_YEAR] = str(year)
