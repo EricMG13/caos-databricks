@@ -142,6 +142,7 @@ test("Model is closed and binds the displayed run independently of latest", () =
       displayed_run_status: "COMPLETE",
       currency: null,
       unit: null,
+      snapshot_sha256: null,
       exclude_unrealised: false,
       rate_deck: null,
       columns: [],

@@ -92,6 +92,7 @@ describe("what a name refetches and what a view is", () => {
       displayed_run_status: "COMPLETE",
       currency: null,
       unit: null,
+      snapshot_sha256: null,
       exclude_unrealised: false,
       rate_deck: null,
       columns: [],

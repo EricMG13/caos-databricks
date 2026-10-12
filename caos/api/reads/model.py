@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Annotated, Any
@@ -87,12 +87,14 @@ from caos.methodology.model_inputs import (
     SlotAllocation,
     cp1_registers,
     division_growth,
+    fiscal_year_number,
     slot_allocation,
 )
 from caos.methodology.tables import FIGURE_CHARS, HandoffTable, handoff_tables
 from caos.methodology.vendor import cached_contract
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+from caos.store.book import EntryFigures, snapshot_sha256
 from caos.store.rate_decks import deck_for_run
 from caos.store.source_sets import pinned_live_sources
 
@@ -298,6 +300,13 @@ def _decimal(value: Decimal | None) -> str | None:
     return None if value is None else f"{value:f}"
 
 
+def _served_value(cell: Cell) -> str | None:
+    """The cell's figure exactly as this read serves it: plain notation, or
+    None where it has none or is withheld past the wire's bound. The Book
+    stores each metric this way, so its entry is the Model (spec B10)."""
+    return _decimal(cell.value) if _servable(cell) else None
+
+
 def _cell(cell: Cell, citations: Mapping[int, CitationView]) -> ModelCellView:
     """The cell on the wire; one whose figure runs past `DecimalText` is
     withheld as `NOT_APPLICABLE`, noted, its sources kept."""
@@ -429,6 +438,11 @@ def _body(
     deck = served.deck if model.rate_deck_id is not None else None
     return ModelBody(
         **body.model_dump(include=set(_RUN_FIELDS)),
+        snapshot_sha256=None
+        if served.inputs.exclude_unrealised
+        else _entry_snapshot(
+            ((h.route_node_id, h.artifact_sha256) for h in body.handoffs), served
+        ),
         currency=model.currency,
         unit=model.unit,
         exclude_unrealised=served.inputs.exclude_unrealised,
@@ -452,6 +466,7 @@ def _empty(
     unreadable. The accepted CP-CF record is still served."""
     return ModelBody(
         **body.model_dump(include=set(_RUN_FIELDS)),
+        snapshot_sha256=None,
         currency=None,
         unit=None,
         exclude_unrealised=exclude,
@@ -461,6 +476,103 @@ def _empty(
         limitations=limitations,
         forecast=forecast,
     )
+
+
+def _entry_figures(served: _Served) -> EntryFigures:
+    """Every figure an entry stores of the served model: the deck the run
+    pinned (fix round 2, N2: the pin, so a run without CP-CF names it too),
+    the model's currency and unit, its book metrics and the limitations
+    this read serves (N3)."""
+    model = served.model
+    return EntryFigures(
+        rate_deck_id=None if served.deck is None else served.deck.deck_id,
+        currency=model.currency,
+        unit=model.unit,
+        metrics=_book_metrics(model),
+        limitations=tuple(_limitations(served)),
+    )
+
+
+def _entry_snapshot(artifacts: Iterable[tuple[str, str]], served: _Served) -> str:
+    """The digest an Add to Book binds (invariant 5): the accepted artifacts
+    and `_entry_figures` -- served by the default view only, since the entry
+    stores the default add-backs, and recomputed by the add under the case
+    lock."""
+    return snapshot_sha256(artifacts, _entry_figures(served))
+
+
+# The Book's metric set (spec M5, B11): every `metric:` line and these, each
+# basis the LTM, the PF-LTM and FY+1 to FY+3 of each case, keyed by the
+# offset from the model's base year with that year stored beside the lines.
+BOOK_LINES = frozenset(
+    {
+        "revenue",
+        "adjusted_ebitda",
+        "total_debt",
+        "net_debt",
+        "liquidity",
+        "fcf",
+        "ffo",
+        "cash_closing",
+        "lease_adjusted_net_debt",
+    }
+)
+_METRIC = "metric:"
+PROJECTED_YEARS = 3
+FISCAL_YEAR = "fiscal_year"
+
+
+def _base_year(columns: Sequence[Column], first: int) -> int:
+    """The projection's base year: the last historical FY, else the year
+    before the first projected one (`projection._context`'s rule)."""
+    fiscal = [column for column in columns if column.kind == "FY"]
+    last = fiscal_year_number(fiscal[-1].fiscal_year) if fiscal else None
+    return last or first - 1
+
+
+def _book_bases(columns: Sequence[Column]) -> dict[str, tuple[int, int | None]]:
+    """Each stored basis, its column and, for a projected one, its fiscal
+    year: the first LTM, the PF-LTM, and `<CASE>_FY<n>` for the projected
+    year n years after the base year, n in 1-3 (fix round 1, L2). A missing
+    offset is omitted, never filled by the next year along."""
+    indexed = list(enumerate(columns))
+    found: dict[str, tuple[int, int | None]] = {}
+    for kind in ("LTM", "PF_LTM"):
+        index = next((i for i, column in indexed if column.kind == kind), None)
+        if index is not None:
+            found[kind] = (index, None)
+    placed = [
+        (i, column.case, year)
+        for i, column in indexed
+        if column.kind == "PROJECTED"
+        and (year := fiscal_year_number(column.fiscal_year)) is not None
+    ]
+    if not placed:
+        return found
+    base = _base_year(columns, min(year for _i, _case, year in placed))
+    for index, case, year in placed:
+        basis = f"{case}_FY{year - base}"
+        if 1 <= year - base <= PROJECTED_YEARS and basis not in found:
+            found[basis] = (index, year)
+    return found
+
+
+def _book_metrics(model: CreditModel) -> dict[str, dict[str, str | None]]:
+    """`{basis: {line_id: figure}}` for every `metric:` line and each of
+    `BOOK_LINES`, each figure as this read serves that cell (spec B10), and
+    a projected basis' `fiscal_year`."""
+    lines = [
+        line
+        for line in model.lines
+        if line.line_id.startswith(_METRIC) or line.line_id in BOOK_LINES
+    ]
+    metrics: dict[str, dict[str, str | None]] = {}
+    for basis, (index, year) in _book_bases(model.columns).items():
+        figures = {line.line_id: _served_value(line.cells[index]) for line in lines}
+        if year is not None:
+            figures[FISCAL_YEAR] = str(year)
+        metrics[basis] = figures
+    return metrics
 
 
 def _document(

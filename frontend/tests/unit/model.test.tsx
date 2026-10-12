@@ -65,6 +65,7 @@ function model(overrides: Record<string, unknown> = {}): ModelDocument {
     displayed_run_id: RUN,
     displayed_run_status: "COMPLETE",
     subject: null,
+    snapshot_sha256: null,
     currency: null,
     unit: null,
     exclude_unrealised: false,
