@@ -161,17 +161,18 @@ const RateDeckSaved = object({ deck_id: uuid });
 // note `OTHER` requires.
 const classification = string({ max: 64 });
 const rating = string({ max: 8 });
+const outlook = string({ max: 10 });
 const AddToBook = object({
   snapshot_sha256: hash,
   sector: classification,
   industry_group: nullable(classification),
   domicile: string({ max: 2 }),
   moodys: nullable(rating),
-  moodys_outlook: nullable(rating),
+  moodys_outlook: nullable(outlook),
   sp: nullable(rating),
-  sp_outlook: nullable(rating),
+  sp_outlook: nullable(outlook),
   fitch: nullable(rating),
-  fitch_outlook: nullable(rating),
+  fitch_outlook: nullable(outlook),
 });
 const BookEntryAdded = object({ entry_id: uuid });
 const WithdrawBookEntry = object({
