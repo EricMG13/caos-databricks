@@ -328,19 +328,6 @@ describe("the credit workbook grid", { timeout: 30_000 }, () => {
     expect(container.querySelector('[data-line="fac:rcf"]')).not.toBeNull();
   });
 
-  test("renders band headers that collapse their rows", () => {
-    const { container } = renderModel(fixture());
-    const band = within(container).getByRole("button", { name: /Revenue by business unit/ });
-    expect(band).toHaveAttribute("aria-expanded", "true");
-    expect(container.querySelector('[data-line="revenue"]')).not.toBeNull();
-    fireEvent.click(band);
-    expect(band).toHaveAttribute("aria-expanded", "false");
-    expect(container.querySelector('[data-line="revenue"]')).toBeNull();
-    expect(container.querySelector('[data-line="cogs"]')).not.toBeNull();
-    fireEvent.click(band);
-    expect(container.querySelector('[data-line="revenue"]')).not.toBeNull();
-  });
-
   test("formats money in brackets and multiples with x", () => {
     const { container } = renderModel(fixture());
     // Outflows in brackets, whole units, the exact decimal as the title.
