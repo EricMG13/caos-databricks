@@ -154,6 +154,35 @@ describe("Model v1", () => {
     expect(screen.queryByText("123.45")).toBeNull();
   });
 
+  test.each([
+    ["CP-1 model tables unreadable", true],
+    ["CP-1 model tables unreadable", false],
+    ["model exceeds the grid bounds", true],
+    ["model exceeds the grid bounds", false],
+  ])("renders empty-grid limitation %s with forecast %s", (limitation, hasForecast) => {
+    const source = model();
+    const document = parseModelDocument({
+      ...source,
+      status: "partial",
+      body: {
+        ...source.body,
+        limitations: [limitation],
+        forecast: hasForecast ? source.body.forecast : null,
+      },
+    });
+    const { container } = renderModel(document);
+    expect(container.querySelector("[data-model-limitations]")).toHaveTextContent(limitation);
+    expect(container.querySelector("[data-model-lines]")).toBeNull();
+    if (hasForecast) {
+      expect(container).toHaveTextContent("Accepted forecast");
+      expect(container).toHaveTextContent("123.45");
+    } else {
+      expect(container.querySelector("[data-model-unavailable]")).toHaveTextContent(
+        "No accepted CP-CF forecast",
+      );
+    }
+  });
+
   test("test_an_absent_forecast_says_whether_the_run_can_still_produce_one", () => {
     // "No accepted forecast" reads as "not yet" on a run that has ended.
     const { container } = renderModel(model({ forecast: null, displayed_run_status: "BLOCKED" }));
