@@ -762,6 +762,31 @@
     color: var(--warning);
   }
 
+  /* ---- the Book: toolbar, chooser, filters, the issuer table and its
+     disclosure rows. Sticky headers as the Model grid's. ---- */
+  .book-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+  }
+  .book-basis,
+  .book-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .book-basis legend,
+  .book-group legend {
+    padding: 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
   /* The Add to Book dialog and the Withdraw control: native fields in a
      label, one agency to a fieldset, a rating beside its outlook. */
   .book-form {
@@ -792,6 +817,16 @@
     max-width: 28rem;
   }
 
+  .book-x:focus-visible,
+  .book-link:focus-visible,
+  .book-sort:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .book-scroll {
+    max-height: 75vh;
+    overflow: auto;
+  }
   table.book-grid {
     width: max-content;
     min-width: 100%;
@@ -819,11 +854,45 @@
     text-align: left;
     white-space: normal;
   }
+  .book-sort,
+  .book-link {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    min-height: 24px;
+    padding-inline: 0.25rem;
+  }
+  table.book-grid tbody th a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+  }
+  .book-link {
+    color: var(--primary);
+    text-decoration: underline;
+  }
+  .book-acts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
   table.book-grid .na,
   table.book-grid .cu {
     color: var(--muted-foreground);
     font-size: 0.6875rem;
     font-style: normal;
+  }
+
+  .pill.warn {
+    border-color: color-mix(in oklab, var(--warning) 55%, transparent);
+    color: var(--warning);
+  }
+  .book-foot {
+    display: grid;
+    gap: 0.25rem;
   }
 
   /* ---- the Model grid: two sticky header rows, a pinned label column, bands,
@@ -1126,6 +1195,14 @@
     flex: none;
     width: 1rem;
     height: 1rem;
+    margin: 0;
+    accent-color: var(--primary);
+  }
+  /* A radio is 13px by default, under WCAG 2.2's 24px target size. */
+  .fopt input[type="radio"] {
+    flex: none;
+    width: 1.5rem;
+    height: 1.5rem;
     margin: 0;
     accent-color: var(--primary);
   }
