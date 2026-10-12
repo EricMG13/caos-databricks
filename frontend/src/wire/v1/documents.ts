@@ -223,6 +223,9 @@ const RefusalCode = enumOf([
   "STORE_UNAVAILABLE",
   "IDENTITY_UNAVAILABLE",
   "STREAM_LIMIT_REACHED",
+  "RUN_NOT_COMPLETE_FOR_BOOK",
+  "BOOK_ENTRY_NOT_FOUND",
+  "BOOK_ENTRY_ALREADY_WITHDRAWN",
 ]);
 const RunSummary = object({
   run_id: uuid,
@@ -620,6 +623,7 @@ const RateDeckRefView = object({
   as_of: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
 });
 const ModelBody = object({
+  snapshot_sha256: nullable(hash),
   case_id: uuid,
   latest_run_id: nullable(uuid),
   displayed_run_id: nullable(uuid),

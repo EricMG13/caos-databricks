@@ -155,10 +155,40 @@ const SaveRateDeck = object({
   rates: array(V1_SHAPES.RateDeckRateView, 20),
 });
 const RateDeckSaved = object({ deck_id: uuid });
+// Plan 3 Task 2: add a COMPLETE run to the Book, bound to the snapshot digest
+// the Model showed, with the analyst-stated classification (the server judges
+// it against its own vocabularies); withdraw an entry with a reason, and a
+// note `OTHER` requires.
+const classification = string({ max: 64 });
+const rating = string({ max: 8 });
+// The longest agency outlook, DEVELOPING; the server judges its word.
+const outlook = string({ max: 10 });
+const AddToBook = object({
+  snapshot_sha256: hash,
+  sector: classification,
+  industry_group: nullable(classification),
+  domicile: string({ max: 2 }),
+  moodys: nullable(rating),
+  moodys_outlook: nullable(outlook),
+  sp: nullable(rating),
+  sp_outlook: nullable(outlook),
+  fitch: nullable(rating),
+  fitch_outlook: nullable(outlook),
+});
+const BookEntryAdded = object({ entry_id: uuid });
+const WithdrawBookEntry = object({
+  snapshot_sha256: hash,
+  reason: enumOf(["ADDED_IN_ERROR", "DATA_ERROR", "SUPERSEDED_SOURCES", "OTHER"] as const),
+  note: nullable(string({ max: 1000 })),
+});
+const BookEntryWithdrawn = object({ entry_id: uuid });
 
 /** Every command model `schema.json` declares, under its backend name. */
 export const V1_COMMAND_SHAPES = {
+  AddToBook,
   ApproveGate,
+  BookEntryAdded,
+  BookEntryWithdrawn,
   CancelRun,
   DeliverableFiled,
   DeliverableFrozen,
@@ -193,6 +223,7 @@ export const V1_COMMAND_SHAPES = {
   SourcesAdmitted,
   StartRun,
   VerdictRecorded,
+  WithdrawBookEntry,
 };
 
 export type CreateCase = Infer<typeof CreateCase>;

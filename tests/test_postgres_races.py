@@ -2113,6 +2113,102 @@ def test_a_run_start_queued_behind_a_waiting_save_gives_up_typed(
         assert deck_for_run(other, run_id) is not None
 
 
+def test_two_concurrent_adds_of_one_run_leave_one_entry(
+    empty_database: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two writers add one complete run to the Book at once, each under its
+    own key and connection. The case lock orders them: the second finds the
+    first's live entry and is refused stale, so one entry is written and the
+    case chain holds one BOOK_ENTRY_ADDED."""
+    import inspect
+    from types import SimpleNamespace
+    from typing import cast
+
+    from test_execution_freshness import _Harness
+    from test_forecast_route import harness
+    from test_forecast_route import route as forecast_route
+    from test_model_section import _complete
+
+    from caos.api.commands import book as book_command
+    from caos.api.identity import Actor, GlobalRole
+    from caos.api.reads.model import read_model
+    from caos.api.wire import AddToBook
+    from caos.store.audit import audit_trail, verify_chain
+    from caos.store.members import Standing, grant
+
+    make_route = cast(
+        Callable[[pytest.MonkeyPatch, object], ResolvedRoute],
+        inspect.unwrap(forecast_route),
+    )
+    make_harness = cast(
+        Callable[[tuple[StoreConnection, UUID], Path, ResolvedRoute], _Harness],
+        inspect.unwrap(harness),
+    )
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        case_id = create_case(conn, BoundaryText.of("Issuer"))
+        conn.commit()
+        held = make_harness(
+            (conn, case_id), tmp_path, make_route(monkeypatch, SimpleNamespace())
+        )
+        _complete(held)
+        writers = [uuid4(), uuid4()]
+        for writer in writers:
+            grant(conn, case_id=case_id, user_id=writer, standing=Standing.WRITER)
+        conn.commit()
+        # The digest the Model read serves the analyst who adds.
+        shown = read_model(
+            Actor(writers[0], GlobalRole.ANALYST),
+            case_id,
+            held.run_id,
+            False,
+            Standing.WRITER,
+            conn,
+            held.blobs.remembering(),
+            held.bundle,
+        )
+        assert shown.body.snapshot_sha256 is not None
+        body = AddToBook(
+            snapshot_sha256=shown.body.snapshot_sha256,
+            sector="Energy",
+            industry_group=None,
+            domicile="US",
+            moodys=None,
+            moodys_outlook=None,
+            sp="BB",
+            sp_outlook="STABLE",
+            fitch=None,
+            fitch_outlook=None,
+        )
+        conn.commit()
+        barrier = Barrier(2)
+
+        def add(writer: UUID) -> str:
+            with connect(empty_database) as other:
+                asked = book_command.Asked(
+                    Actor(writer, GlobalRole.ANALYST), uuid4(), case_id, Standing.WRITER
+                )
+                stores = book_command.Stores(
+                    other, held.blobs.remembering(), held.bundle
+                )
+                barrier.wait(10)
+                try:
+                    answer = book_command.add_to_book(asked, held.run_id, body, stores)
+                except Refusal as refused:
+                    return refused.code.value
+                return str(answer.status_code)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = sorted(pool.map(add, writers))
+        assert outcomes == ["201", "COMMAND_EXPECTATION_STALE"]
+        assert conn.execute(
+            "SELECT count(*) FROM book_entries WHERE run_id = %s", (held.run_id,)
+        ).fetchone() == (1,)
+        actions = [entry.action for entry in audit_trail(conn, case_id)]
+        assert actions.count("BOOK_ENTRY_ADDED") == 1
+        assert verify_chain(conn, case_id)
+
+
 @pytest.mark.parametrize(("caller", "pin_ms"), [("250ms", 5000), ("10s", 300)])
 def test_the_pin_bound_only_ever_tightens_the_callers(
     empty_database: str, monkeypatch: pytest.MonkeyPatch, caller: str, pin_ms: int

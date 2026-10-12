@@ -20,13 +20,21 @@ model; unreadable or withheld CP-2G drivers hold the business units flat;
 a model past the grid's bounds serves the record without a grid; and a cell
 whose figure runs past the wire's 64 characters is withheld. Each is a
 stated limitation and a log line with no figure.
+
+In its default view the body carries the snapshot digest Add to Book is
+bound to (invariant 5; `caos.store.book.snapshot_sha256`): the handoffs it
+shows and every figure an entry stores of it (`entry_figures`: the pinned
+deck, the currency and unit, the book metrics and the limitations); with
+unrealised add-backs excluded, or with no grid, it carries none. `model_grid`
+and `entry_figures` are how that command assembles and stores the same model
+(spec B10).
 """
 
 from __future__ import annotations
 
 import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Annotated, Any
@@ -87,12 +95,14 @@ from caos.methodology.model_inputs import (
     SlotAllocation,
     cp1_registers,
     division_growth,
+    fiscal_year_number,
     slot_allocation,
 )
 from caos.methodology.tables import FIGURE_CHARS, HandoffTable, handoff_tables
 from caos.methodology.vendor import cached_contract
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+from caos.store.book import EntryFigures, snapshot_sha256
 from caos.store.rate_decks import deck_for_run
 from caos.store.source_sets import pinned_live_sources
 
@@ -171,40 +181,118 @@ def read_model(  # noqa: PLR0913 -- authenticated case/run before dependencies
     )
     body = analysis.body
     forecast = accepted_forecast(conn, body)
-    cp1 = _accepted(body, _CP1)
-    if cp1 is None or body.displayed_run_id is None:
+    accepted = accepted_cp1(body)
+    if accepted is None:
         pending = _empty(body, forecast, exclude_unrealised, [])
         return _document(analysis, pending, pending=True)
     if forecast is None:
-        _require_live_sources(conn, body)
-    where = _Where(case_id, body.displayed_run_id)
+        require_live_sources(conn, body)
+    grid = model_grid(conn, bundle, accepted, exclude_unrealised=exclude_unrealised)
+    if isinstance(grid, NoGrid):
+        empty = _empty(body, forecast, exclude_unrealised, [grid.limitation])
+        return _document(analysis, empty, pending=False)
+    served = replace(grid, forecast=forecast)
+    return _document(
+        analysis, _body(body, served, _citations(accepted.cp1)), pending=False
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class AcceptedCp1:
+    """A displayed run whose CP-1 is accepted: the Analysis body read for it,
+    CP-1's handoff and the run."""
+
+    body: AnalysisBody
+    cp1: HandoffView
+    run_id: UUID
+
+
+def accepted_cp1(body: AnalysisBody) -> AcceptedCp1 | None:
+    """The displayed run with its accepted CP-1, or None before CP-1 is
+    accepted or with no run displayed (spec M1)."""
+    cp1 = _accepted(body, _CP1)
+    if cp1 is None or body.displayed_run_id is None:
+        return None
+    return AcceptedCp1(body, cp1, body.displayed_run_id)
+
+
+@dataclass(frozen=True, slots=True)
+class RunModel:
+    """The credit model's inputs for one run, the deck the run pinned, and
+    the read's own limitations of them (CP-2G growth unavailable)."""
+
+    inputs: ModelInputs
+    deck: RateDeck | None
+    noted: tuple[str, ...]
+
+
+def run_model(
+    conn: StoreConnection,
+    bundle: Bundle,
+    accepted: AcceptedCp1,
+    *,
+    exclude_unrealised: bool,
+) -> RunModel | None:
+    """The inputs `credit_model` takes for the run, assembled the one way the
+    Model section and the Book's Add to Book both read them (spec B10): CP-1's
+    registers and slots, CP-2G's growth, CP-CF's accepted request and the
+    run's pinned deck. None, logged, where CP-1's model tables are
+    unreadable; the deck is then not read."""
+    where = _Where(accepted.body.case_id, accepted.run_id)
     try:
-        registers, slots = _cp1_inputs(bundle, cp1)
+        registers, slots = _cp1_inputs(bundle, accepted.cp1)
     except Refusal as refusal:
         _unreadable(where, _CP1, refusal)
-        unread = _empty(body, forecast, exclude_unrealised, [CP1_UNREADABLE])
-        return _document(analysis, unread, pending=False)
-    growth, noted = _growth(body, bundle, where)
-    deck = deck_for_run(conn, body.displayed_run_id)
+        return None
+    growth, noted = _growth(accepted.body, bundle, where)
+    deck = deck_for_run(conn, accepted.run_id)
     inputs = ModelInputs(
         registers=registers,
-        request=_request(body),
+        request=_request(accepted.body),
         growth=growth,
         slots=slots,
         deck=deck,
         exclude_unrealised=exclude_unrealised,
     )
-    model = credit_model(inputs)
+    return RunModel(inputs, deck, noted)
+
+
+@dataclass(frozen=True, slots=True)
+class NoGrid:
+    """The Model serves no grid for the run, and says why: CP-1's model
+    tables unreadable, or a model past the grid's bounds."""
+
+    limitation: str
+
+
+def model_grid(
+    conn: StoreConnection,
+    bundle: Bundle,
+    accepted: AcceptedCp1,
+    *,
+    exclude_unrealised: bool,
+) -> ServedModel | NoGrid:
+    """The grid the Model serves for the run, or why it serves none: the one
+    check the read and Add to Book share (fix round 1, M2), so the Book never
+    stores a figure the Model withheld. Each `NoGrid` is logged by case and
+    run, never with a figure; the served model's open bridges and figures
+    too large to serve are counted and logged as the read always has."""
+    where = _Where(accepted.body.case_id, accepted.run_id)
+    built = run_model(conn, bundle, accepted, exclude_unrealised=exclude_unrealised)
+    if built is None:
+        return NoGrid(CP1_UNREADABLE)
+    model = credit_model(built.inputs)
     if len(model.columns) > MODEL_COLUMNS_MAX or len(model.lines) > MODEL_LINES_MAX:
         print(
             f"model_grid_oversize case={where.case_id} run={where.run_id}"
             f" columns={len(model.columns)} lines={len(model.lines)}",
             file=sys.stderr,
         )
-        oversize = _empty(body, forecast, exclude_unrealised, [GRID_OVERSIZE])
-        return _document(analysis, oversize, pending=False)
-    served = _served(where, _Served(inputs, model, (), forecast, deck, noted, 0))
-    return _document(analysis, _body(body, served, _citations(cp1)), pending=False)
+        return NoGrid(GRID_OVERSIZE)
+    return _served(
+        where,
+        ServedModel(built.inputs, model, (), None, built.deck, built.noted, 0),
+    )
 
 
 def _accepted(body: AnalysisBody, module_id: str) -> HandoffView | None:
@@ -298,6 +386,13 @@ def _decimal(value: Decimal | None) -> str | None:
     return None if value is None else f"{value:f}"
 
 
+def served_value(cell: Cell) -> str | None:
+    """The cell's figure exactly as this read serves it: plain notation, or
+    None where it has none or is withheld past the wire's bound. The Book
+    stores each metric this way, so its entry is the Model (spec B10)."""
+    return _decimal(cell.value) if _servable(cell) else None
+
+
 def _cell(cell: Cell, citations: Mapping[int, CitationView]) -> ModelCellView:
     """The cell on the wire; one whose figure runs past `DecimalText` is
     withheld as `NOT_APPLICABLE`, noted, its sources kept."""
@@ -357,7 +452,7 @@ def _line(line: Line, citations: Mapping[int, CitationView]) -> ModelLineView:
 
 
 @dataclass(frozen=True, slots=True)
-class _Served:
+class ServedModel:
     """What the model read adds to Analysis' body: the inputs and the model
     of them, its open bridges, the accepted CP-CF record and the deck."""
 
@@ -379,7 +474,7 @@ def _servable(cell: Cell) -> bool:
     )
 
 
-def _served(where: _Where, served: _Served) -> _Served:
+def _served(where: _Where, served: ServedModel) -> ServedModel:
     """The model's open bridges and its cells too large to serve, each
     counted and logged by case and run, never with a figure."""
     model = served.model
@@ -400,7 +495,7 @@ def _served(where: _Where, served: _Served) -> _Served:
     return replace(served, faults=faults, unservable=unservable)
 
 
-def _limitations(served: _Served) -> list[str]:
+def served_limitations(served: ServedModel) -> list[str]:
     """The model's own; the PIK limitation where a facility's coupon names
     PIK; a cell past its sources bound; then each open bridge."""
     model = served.model
@@ -422,13 +517,18 @@ def _limitations(served: _Served) -> list[str]:
 
 
 def _body(
-    body: AnalysisBody, served: _Served, citations: Mapping[int, CitationView]
+    body: AnalysisBody, served: ServedModel, citations: Mapping[int, CitationView]
 ) -> ModelBody:
     """The model on the wire, 1:1 (`read_model` has checked its bounds)."""
     model = served.model
     deck = served.deck if model.rate_deck_id is not None else None
     return ModelBody(
         **body.model_dump(include=set(_RUN_FIELDS)),
+        snapshot_sha256=None
+        if served.inputs.exclude_unrealised
+        else entry_snapshot(
+            ((h.route_node_id, h.artifact_sha256) for h in body.handoffs), served
+        ),
         currency=model.currency,
         unit=model.unit,
         exclude_unrealised=served.inputs.exclude_unrealised,
@@ -437,7 +537,7 @@ def _body(
         else RateDeckRefView(deck_id=UUID(deck.deck_id), as_of=deck.as_of),
         columns=[_column(column) for column in model.columns],
         lines=[_line(line, citations) for line in model.lines],
-        limitations=_limitations(served),
+        limitations=served_limitations(served),
         forecast=served.forecast,
     )
 
@@ -452,6 +552,7 @@ def _empty(
     unreadable. The accepted CP-CF record is still served."""
     return ModelBody(
         **body.model_dump(include=set(_RUN_FIELDS)),
+        snapshot_sha256=None,
         currency=None,
         unit=None,
         exclude_unrealised=exclude,
@@ -461,6 +562,103 @@ def _empty(
         limitations=limitations,
         forecast=forecast,
     )
+
+
+def entry_figures(served: ServedModel) -> EntryFigures:
+    """Every figure an entry stores of the served model: the deck the run
+    pinned (fix round 2, N2: the pin, so a run without CP-CF names it too),
+    the model's currency and unit, its book metrics and the limitations
+    this read serves (N3)."""
+    model = served.model
+    return EntryFigures(
+        rate_deck_id=None if served.deck is None else served.deck.deck_id,
+        currency=model.currency,
+        unit=model.unit,
+        metrics=book_metrics(model),
+        limitations=tuple(served_limitations(served)),
+    )
+
+
+def entry_snapshot(artifacts: Iterable[tuple[str, str]], served: ServedModel) -> str:
+    """The digest an Add to Book binds (invariant 5): the accepted artifacts
+    and `entry_figures` -- served by the default view only, since the entry
+    stores the default add-backs, and recomputed by the add under the case
+    lock."""
+    return snapshot_sha256(artifacts, entry_figures(served))
+
+
+# The Book's metric set (spec M5, B11): every `metric:` line and these, each
+# basis the LTM, the PF-LTM and FY+1 to FY+3 of each case, keyed by the
+# offset from the model's base year with that year stored beside the lines.
+BOOK_LINES = frozenset(
+    {
+        "revenue",
+        "adjusted_ebitda",
+        "total_debt",
+        "net_debt",
+        "liquidity",
+        "fcf",
+        "ffo",
+        "cash_closing",
+        "lease_adjusted_net_debt",
+    }
+)
+_METRIC = "metric:"
+PROJECTED_YEARS = 3
+FISCAL_YEAR = "fiscal_year"
+
+
+def _base_year(columns: Sequence[Column], first: int) -> int:
+    """The projection's base year: the last historical FY, else the year
+    before the first projected one (`projection._context`'s rule)."""
+    fiscal = [column for column in columns if column.kind == "FY"]
+    last = fiscal_year_number(fiscal[-1].fiscal_year) if fiscal else None
+    return last or first - 1
+
+
+def book_bases(columns: Sequence[Column]) -> dict[str, tuple[int, int | None]]:
+    """Each stored basis, its column and, for a projected one, its fiscal
+    year: the first LTM, the PF-LTM, and `<CASE>_FY<n>` for the projected
+    year n years after the base year, n in 1-3 (fix round 1, L2). A missing
+    offset is omitted, never filled by the next year along."""
+    indexed = list(enumerate(columns))
+    found: dict[str, tuple[int, int | None]] = {}
+    for kind in ("LTM", "PF_LTM"):
+        index = next((i for i, column in indexed if column.kind == kind), None)
+        if index is not None:
+            found[kind] = (index, None)
+    placed = [
+        (i, column.case, year)
+        for i, column in indexed
+        if column.kind == "PROJECTED"
+        and (year := fiscal_year_number(column.fiscal_year)) is not None
+    ]
+    if not placed:
+        return found
+    base = _base_year(columns, min(year for _i, _case, year in placed))
+    for index, case, year in placed:
+        basis = f"{case}_FY{year - base}"
+        if 1 <= year - base <= PROJECTED_YEARS and basis not in found:
+            found[basis] = (index, year)
+    return found
+
+
+def book_metrics(model: CreditModel) -> dict[str, dict[str, str | None]]:
+    """`{basis: {line_id: figure}}` for every `metric:` line and each of
+    `BOOK_LINES`, each figure as this read serves that cell (spec B10), and
+    a projected basis' `fiscal_year`."""
+    lines = [
+        line
+        for line in model.lines
+        if line.line_id.startswith(_METRIC) or line.line_id in BOOK_LINES
+    ]
+    metrics: dict[str, dict[str, str | None]] = {}
+    for basis, (index, year) in book_bases(model.columns).items():
+        figures = {line.line_id: served_value(line.cells[index]) for line in lines}
+        if year is not None:
+            figures[FISCAL_YEAR] = str(year)
+        metrics[basis] = figures
+    return metrics
 
 
 def _document(
@@ -483,7 +681,7 @@ def _document(
     )
 
 
-def _require_live_sources(conn: StoreConnection, body: AnalysisBody) -> None:
+def require_live_sources(conn: StoreConnection, body: AnalysisBody) -> None:
     """Every accepted handoff's citations still name a live source pinned to
     the run, or `ARTIFACT_RECORD_MISMATCH` (spec B8). One round trip."""
     if body.displayed_run_id is None:
@@ -505,7 +703,7 @@ def accepted_forecast(
     accepted = _accepted(body, MODEL_MODULE)
     if accepted is None or body.displayed_run_id is None:
         return None
-    _require_live_sources(conn, body)
+    require_live_sources(conn, body)
     result = forecast_projection(accepted.model_analysis.encode("utf-8"))
     return ModelForecast(
         **accepted.model_dump(

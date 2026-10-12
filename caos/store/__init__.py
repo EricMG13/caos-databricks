@@ -264,6 +264,10 @@ MIGRATIONS = (
         "0050_rate_decks",
         Path(__file__).with_name("0050_rate_decks.sql").read_text(encoding="utf-8"),
     ),
+    (
+        "0051_book_entries",
+        Path(__file__).with_name("0051_book_entries.sql").read_text(encoding="utf-8"),
+    ),
 )
 
 # DL-1: the store's own schema, beside LangGraph's `caos_graph`
