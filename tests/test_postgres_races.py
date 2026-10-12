@@ -1951,6 +1951,38 @@ def _deck_rows(rate: str) -> tuple[RateDeckYear, ...]:
     return (RateDeckYear("SOFR", 1, Decimal(rate), Decimal("0.0450")),)
 
 
+def _await_queued(observer: StoreConnection, *pids: int) -> None:
+    """Wait until every session in `pids` is queued for the save lock at once:
+    each has asked for it and not been granted it (`pg_locks`, one reading),
+    so each has read its bound and taken its place in the queue."""
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        row = observer.execute(
+            "SELECT count(DISTINCT pid) FROM pg_catalog.pg_locks"
+            " WHERE locktype = 'advisory' AND NOT granted AND pid = ANY(%s)"
+            " AND classid = %s::integer::oid AND objid = 0 AND objsubid = 2",
+            (list(pids), rate_decks.SAVE_LOCK),
+        ).fetchone()
+        if row == (len(pids),):
+            return
+        time.sleep(0.01)
+    pytest.fail("a session never queued for the save lock")
+
+
+def _timed_save(saver: StoreConnection, caller: str | None) -> tuple[str, float]:
+    """One save on `saver` under the caller's `lock_timeout` (None: the
+    session's own), as its outcome -- the refusal's code or SAVED -- and how
+    long it took."""
+    if caller is not None:
+        saver.execute(f"SET LOCAL lock_timeout = '{caller}'")
+    began = time.monotonic()
+    try:
+        save_deck(saver, uuid4(), date(2026, 10, 1), _deck_rows("0.03"))
+    except Refusal as refused:
+        return refused.code.value, time.monotonic() - began
+    return "SAVED", time.monotonic() - began
+
+
 def test_two_deck_saves_are_stamped_in_commit_order(empty_database: str) -> None:
     """ "Latest" moves only forward: a save that began first and committed
     last is still the latest deck.
@@ -2073,10 +2105,12 @@ def test_a_run_start_queued_behind_a_waiting_save_gives_up_typed(
 ) -> None:
     """A run unit held open (its pin holds the save lock shared) makes a save
     wait; every later pin queues behind that save. The pin's wait is bounded
-    (`PIN_LOCK_TIMEOUT_MS`), so a run start on another case is refused
+    (`LOCK_TIMEOUT_MS`), so a run start on another case is refused
     `STORE_UNAVAILABLE` -- retryable -- rather than queued for as long as the
-    first unit stays open; and the bound does not outlive the wait."""
-    monkeypatch.setattr(rate_decks, "PIN_LOCK_TIMEOUT_MS", 300)
+    first unit stays open; and the bound does not outlive the wait. The save
+    is given a long bound (read when its wait begins) so it is still queued
+    when the pin's short one runs out."""
+    monkeypatch.setattr(rate_decks, "LOCK_TIMEOUT_MS", 30_000)
     with (
         connect(empty_database) as holder,
         connect(empty_database) as saver,
@@ -2094,8 +2128,8 @@ def test_a_run_start_queued_behind_a_waiting_save_gives_up_typed(
                 lambda: save_deck(saver, uuid4(), date(2026, 10, 1), _deck_rows("0.03"))
             )
             try:
-                with pytest.raises(TimeoutError):
-                    saving.result(0.5)
+                _await_queued(holder, saver.info.backend_pid)
+                monkeypatch.setattr(rate_decks, "LOCK_TIMEOUT_MS", 300)
                 with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
                     start_run(other, second)
                 other.rollback()
@@ -2215,8 +2249,10 @@ def test_the_pin_bound_only_ever_tightens_the_callers(
 ) -> None:
     """A caller's tighter `lock_timeout` stands (refused near 250 ms, not
     after the pin's 5 s); a looser one is tightened to the pin's bound. Either
-    way the caller's own setting is what is left after a pin that succeeds."""
-    monkeypatch.setattr(rate_decks, "PIN_LOCK_TIMEOUT_MS", pin_ms)
+    way the caller's own setting is what is left after a pin that succeeds.
+    The save queued ahead of the pin waits under a long bound, read when its
+    wait begins."""
+    monkeypatch.setattr(rate_decks, "LOCK_TIMEOUT_MS", 30_000)
     with (
         connect(empty_database) as holder,
         connect(empty_database) as saver,
@@ -2232,8 +2268,8 @@ def test_the_pin_bound_only_ever_tightens_the_callers(
                 lambda: save_deck(saver, uuid4(), date(2026, 10, 1), _deck_rows("0.03"))
             )
             try:
-                with pytest.raises(TimeoutError):
-                    saving.result(0.5)
+                _await_queued(holder, saver.info.backend_pid)
+                monkeypatch.setattr(rate_decks, "LOCK_TIMEOUT_MS", pin_ms)
                 other.execute(f"SET LOCAL lock_timeout = '{caller}'")
                 began = time.monotonic()
                 with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
@@ -2248,4 +2284,141 @@ def test_the_pin_bound_only_ever_tightens_the_callers(
         other.execute(f"SET LOCAL lock_timeout = '{caller}'")
         start_run(other, second)
         assert other.execute("SHOW lock_timeout").fetchone() == (caller,)
+        other.rollback()
+
+
+# (the caller's own bound, the module's, the wait the tighter of them makes)
+_SAVE_BOUNDS = [(None, 300, 300), ("10s", 300, 300), ("200ms", 5000, 200)]
+
+
+@pytest.mark.parametrize(("caller", "bound_ms", "waits_ms"), _SAVE_BOUNDS)
+def test_a_save_queued_behind_a_run_unit_gives_up_typed(
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caller: str | None,
+    bound_ms: int,
+    waits_ms: int,
+) -> None:
+    """A run unit held open holds the save lock shared (its pin). A save
+    waiting for it exclusively queues every later pin behind it, so an
+    unbounded wait holds every run start for as long as that one unit stays
+    open. The save's wait is bounded as the pin's is (`LOCK_TIMEOUT_MS`,
+    or the caller's tighter bound, which stands): it waits the bound, is
+    refused `STORE_UNAVAILABLE` -- retryable -- having written nothing, and
+    the run unit commits unaffected. A save that waits past the bound fails
+    here rather than hanging: the holder is released whatever was asserted."""
+    monkeypatch.setattr(rate_decks, "LOCK_TIMEOUT_MS", bound_ms)
+    with connect(empty_database) as holder, connect(empty_database) as saver:
+        apply_schema(holder)
+        case_id = create_case(holder, BoundaryText.of("Issuer"))
+        holder.commit()
+        before = saver.execute("SHOW lock_timeout").fetchone()
+        saver.rollback()
+        run_id = start_run(holder, case_id)  # holds the save lock shared
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            saving = pool.submit(_timed_save, saver, caller)
+            try:
+                outcome, waited = saving.result(3)
+            finally:
+                holder.commit()
+        assert outcome == "STORE_UNAVAILABLE"
+        assert waits_ms / 1000 <= waited < 2, waited
+        saver.rollback()
+
+        # The refused save wrote nothing; the run committed with its pin
+        # (none: there was no deck), and the unqueued save then succeeds,
+        # leaving the unit's own bound as it was.
+        assert holder.execute("SELECT count(*) FROM rate_decks").fetchone() == (0,)
+        assert deck_for_run(holder, run_id) is None
+        holder.rollback()
+        deck = save_deck(saver, uuid4(), date(2026, 10, 1), _deck_rows("0.03"))
+        assert saver.execute("SHOW lock_timeout").fetchone() == before
+        saver.commit()
+        latest = latest_deck(saver)
+        assert latest is not None and latest.deck_id == str(deck)
+        saver.rollback()
+
+
+@pytest.mark.parametrize("table", ["rate_decks", "rate_deck_rates"])
+@pytest.mark.parametrize("bounds", _SAVE_BOUNDS)
+def test_a_save_held_by_a_table_lock_gives_up_typed(
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    table: str,
+    bounds: tuple[str | None, int, int],
+) -> None:
+    """A save holds the save lock exclusively from its lock to its unit's end,
+    so a save held at its writes -- by a table lock a migration or an
+    operator holds -- holds every run start behind it. The save's bound stays
+    in force through its last statement: held at either write it waits the
+    bound and is refused `STORE_UNAVAILABLE` -- retryable -- and its unit,
+    rolled back, has written nothing. A save that waits past the bound fails
+    here rather than hanging: the holder is released whatever was asserted."""
+    caller, bound_ms, waits_ms = bounds
+    monkeypatch.setattr(rate_decks, "LOCK_TIMEOUT_MS", bound_ms)
+    with connect(empty_database) as holder, connect(empty_database) as saver:
+        apply_schema(holder)
+        holder.commit()
+        before = saver.execute("SHOW lock_timeout").fetchone()
+        saver.rollback()
+        holder.execute(f"LOCK TABLE {table} IN SHARE MODE")
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            saving = pool.submit(_timed_save, saver, caller)
+            try:
+                outcome, waited = saving.result(3)
+            finally:
+                holder.rollback()
+        assert outcome == "STORE_UNAVAILABLE"
+        assert waits_ms / 1000 <= waited < 2, waited
+        saver.rollback()
+
+        assert saver.execute("SHOW lock_timeout").fetchone() == before
+        written = saver.execute(
+            "SELECT (SELECT count(*) FROM rate_decks),"
+            " (SELECT count(*) FROM rate_deck_rates)"
+        ).fetchone()
+        assert written == (0, 0)
+        saver.rollback()
+
+
+def test_a_pin_queued_behind_a_waiting_save_is_granted_when_the_save_gives_up(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One run unit held open holds a save, and the pins queued behind it,
+    for about one bound -- not for as long as it stays open. When the queued
+    save gives up, the pin behind it is granted (shared, beside the holder's
+    shared) and its run starts while the holder is still open. The pin is
+    given a long bound (read when its wait begins), so it is granted, not
+    refused, after the save's short one runs out."""
+    monkeypatch.setattr(rate_decks, "LOCK_TIMEOUT_MS", 2000)
+    with (
+        connect(empty_database) as holder,
+        connect(empty_database) as saver,
+        connect(empty_database) as other,
+    ):
+        apply_schema(holder)
+        first = create_case(holder, BoundaryText.of("one"))
+        second = create_case(holder, BoundaryText.of("two"))
+        holder.commit()
+        start_run(holder, first)  # holds the save lock shared, uncommitted
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            saving = pool.submit(_timed_save, saver, None)
+            try:
+                _await_queued(holder, saver.info.backend_pid)
+                monkeypatch.setattr(rate_decks, "LOCK_TIMEOUT_MS", 30_000)
+                starting = pool.submit(start_run, other, second)
+                # Both waiting at once: the pin is queued behind the save.
+                _await_queued(holder, saver.info.backend_pid, other.info.backend_pid)
+                outcome, _waited = saving.result(10)
+                # Granted with the holder still open: the save giving up
+                # released the queue, not the holder's commit.
+                run_id = starting.result(10)
+            finally:
+                holder.commit()
+        assert outcome == "STORE_UNAVAILABLE"
+        saver.rollback()
+        other.commit()
+        assert deck_for_run(other, run_id) is None
         other.rollback()
