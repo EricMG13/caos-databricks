@@ -9,7 +9,11 @@
 // never reached the server). Nothing parsed here is cast — every receipt is
 // narrowed by its matching v1 parser.
 import type {
+  AddToBook,
   ApproveGate,
+  BookEntryAdded,
+  BookEntryWithdrawn,
+  WithdrawBookEntry,
   DeliverableFiled,
   DeliverableFrozen,
   OpinionSigned,
@@ -34,6 +38,8 @@ import type {
 } from "@/wire/v1";
 import {
   WireShapeError,
+  parseBookEntryAdded,
+  parseBookEntryWithdrawn,
   parseCaseCreated,
   parseGateApproved,
   parseGatePreviewDocument,
@@ -364,4 +370,28 @@ export function saveRateDeck(
   intent: Intent = newIntent(),
 ): Promise<CommandResult<RateDeckSaved>> {
   return jsonCommand(intent, "/api/v1/rate-decks", request, parseRateDeckSaved);
+}
+
+/** Add a COMPLETE run to the Book, bound to the snapshot digest the Model
+    served (invariant 5) with the analyst-stated classification; the server
+    judges every word of it again at commit. */
+export function addToBook(
+  caseId: string,
+  runId: string,
+  request: AddToBook,
+  intent: Intent = newIntent(),
+): Promise<CommandResult<BookEntryAdded>> {
+  return jsonCommand(intent, `${runPath(caseId, runId)}/book-entry`, request, parseBookEntryAdded);
+}
+
+/** Withdraw one entry, never delete it: bound to the entry's own stored
+    digest (the one the Book served on it), not the Model's. */
+export function withdrawBookEntry(
+  caseId: string,
+  entryId: string,
+  request: WithdrawBookEntry,
+  intent: Intent = newIntent(),
+): Promise<CommandResult<BookEntryWithdrawn>> {
+  const url = `${casePath(caseId)}/book-entries/${encodeURIComponent(entryId)}/withdrawal`;
+  return jsonCommand(intent, url, request, parseBookEntryWithdrawn);
 }

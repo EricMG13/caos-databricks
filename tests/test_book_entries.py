@@ -35,6 +35,7 @@ from test_run_commands import _Counting
 from caos.api.app import app, store_connection
 from caos.api.commands import book as book_command
 from caos.api.identity import Actor, GlobalRole
+from caos.api.reads import analysis as analysis_read
 from caos.api.reads import model as model_read
 from caos.api.wire import (
     CLEARS,
@@ -755,11 +756,14 @@ def test_add_and_withdraw_meet_their_declared_budgets(
     digest = _model(client, harness)["snapshot_sha256"]
     model_measured = counted.executed
     assert model_measured <= model_read.IO_BUDGET
+    # This reader is offered nothing, so the read paid no lookup of the run's
+    # entry (`ENTRY_IO`, a writer's): the add pays the read as it stands.
+    assert model_measured <= model_read.READ_IO
     counted.executed = 0
     answer = _add(client, harness, writer, {**CLASSIFIED, "snapshot_sha256": digest})
     assert answer.status_code == 201, answer.text
     assert counted.executed == book_command.ADD_FIXED_IO + model_measured
-    assert book_command.ADD_IO == book_command.ADD_FIXED_IO + model_read.IO_BUDGET
+    assert book_command.ADD_IO == book_command.ADD_FIXED_IO + model_read.READ_IO
     counted.executed = 0
     entry_id = answer.json()["entry_id"]
     body = {"snapshot_sha256": digest, "reason": "ADDED_IN_ERROR", "note": None}
@@ -1388,3 +1392,91 @@ def test_a_calculator_that_moves_the_currency_unit_or_limitations_is_stale(
         RefusalCode.COMMAND_EXPECTATION_STALE,
     )
     assert _entries(conn, harness.run_id) == 0
+
+
+def _offered(
+    client: TestClient,
+    harness: _Harness,
+    user: UUID,
+    *,
+    role: str = "ANALYST",
+    query: str = "",
+) -> list[str]:
+    """The Model read's `chrome.actions` names for `user` holding `role`."""
+    response = client.get(
+        f"/api/v1/cases/{harness.case_id}/model?run={harness.run_id}{query}",
+        headers=_as(user, role),
+    )
+    harness.conn.rollback()
+    assert response.status_code == 200, response.text
+    return [view["action"] for view in response.json()["chrome"]["actions"]]
+
+
+def test_the_model_offers_add_to_book_only_where_an_add_would_be_judged(
+    client: TestClient, harness: _Harness
+) -> None:
+    """Ruling: WRITER+ members, a COMPLETE run with an accepted CP-1, no
+    entry, the default view -- and no one else."""
+    conn = harness.conn
+    writer = member(conn, harness.case_id, Standing.WRITER)
+    # The run has not run: nothing to add.
+    assert _offered(client, harness, writer) == []
+    _complete(harness)
+    reader = member(conn, harness.case_id, Standing.READER)
+    assert _offered(client, harness, writer) == ["ADD_TO_BOOK"]
+    assert _offered(client, harness, harness.approver) == ["ADD_TO_BOOK"]
+    assert _offered(client, harness, reader) == []
+    # A writer-standing member whose global role may not write.
+    assert _offered(client, harness, writer, role="READER") == []
+    # Not the view the entry would store.
+    assert _offered(client, harness, writer, query="&exclude_unrealised=1") == []
+
+
+def test_the_model_offers_no_add_where_the_run_pins_no_issuer_subject(
+    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit L1: the command refuses a run with no issuer subject, so the read
+    does not offer the add (a format-1 pin from before migration 0011)."""
+    _complete(harness)
+    writer = member(harness.conn, harness.case_id, Standing.WRITER)
+    assert _offered(client, harness, writer) == ["ADD_TO_BOOK"]
+    monkeypatch.setattr(analysis_read, "_subject", lambda *_args: None)
+    assert _offered(client, harness, writer) == []
+
+
+def test_the_model_offers_no_add_once_the_run_has_an_entry(
+    added: tuple[UUID, str, UUID], client: TestClient, harness: _Harness
+) -> None:
+    """A live entry, and a withdrawn one (one entry per run, for good)."""
+    entry_id, digest, writer = added
+    assert _offered(client, harness, writer) == []
+    body = {"snapshot_sha256": digest, "reason": "DATA_ERROR", "note": None}
+    assert _withdraw(client, harness, writer, entry_id, body).status_code == 200
+    assert _offered(client, harness, writer) == []
+
+
+def test_a_granted_model_read_is_offered_no_add(
+    added: tuple[UUID, str, UUID], client: TestClient, harness: _Harness
+) -> None:
+    """The desk-wide grant is read-only: no standing, no actions."""
+    assert _offered(client, harness, uuid4(), role="ANALYST") == []
+
+
+def test_the_offer_costs_a_writers_model_read_one_lookup_within_its_budget(
+    client: TestClient, harness: _Harness
+) -> None:
+    """The run's entry is looked up only where an add could be offered: a
+    reader of the same document pays the read alone."""
+    _complete(harness)
+    counted = _Counting(harness.conn)
+    app.dependency_overrides[store_connection] = lambda: counted
+    path = f"/api/v1/cases/{harness.case_id}/model?run={harness.run_id}"
+    paid = []
+    for role in ("READER", "ANALYST"):
+        counted.executed = 0
+        answer = client.get(path, headers=_as(harness.approver, role))
+        harness.conn.rollback()
+        assert answer.status_code == 200, answer.text
+        paid.append(counted.executed)
+    assert paid[1] == paid[0] + model_read.ENTRY_IO
+    assert paid[0] <= model_read.READ_IO and paid[1] <= model_read.IO_BUDGET

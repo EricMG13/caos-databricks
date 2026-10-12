@@ -19,6 +19,7 @@ import {
   type Chrome,
   type RailEntry,
   type Ribbon,
+  type Section,
   type Tab,
   type Verdict,
 } from "@/wire";
@@ -43,12 +44,33 @@ const SERVED: RailEntry[] = ENABLED_SECTIONS.map((section) => ({
   state: "Served",
 }));
 
-/** Rail entries with every disabled section marked unavailable. */
-export function markDisabled(entries: readonly RailEntry[] | null): RailEntry[] {
-  const kept = (entries ?? []).filter((entry) => isEnabledSection(entry.section));
-  const disabled = SECTIONS.filter((section) => !isEnabledSection(section)).map(
-    (section): RailEntry => ({ section, count: null, state: "Unavailable" }),
-  );
+/** The sections that read one case and are for its members alone. */
+export const CASE_SECTIONS: readonly Section[] = [
+  "upload",
+  "run",
+  "analysis",
+  "model",
+  "report",
+  "committee",
+];
+
+/** Rail entries with every disabled section marked unavailable. Under a
+    desk-wide Book grant (`readOnlyAt` names the one case section the grant
+    reads) every other case section is marked so too: the reader is no member
+    of the case, so nothing there is for them to open. */
+export function markDisabled(
+  entries: readonly RailEntry[] | null,
+  readOnlyAt: Section | null = null,
+): RailEntry[] {
+  const closed = (section: Section) =>
+    !isEnabledSection(section) ||
+    (readOnlyAt !== null && section !== readOnlyAt && CASE_SECTIONS.includes(section));
+  const kept = (entries ?? []).filter((entry) => !closed(entry.section));
+  const disabled = SECTIONS.filter(closed).map((section): RailEntry => ({
+    section,
+    count: null,
+    state: "Unavailable",
+  }));
   return [...kept, ...disabled];
 }
 

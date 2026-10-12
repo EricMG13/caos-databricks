@@ -19,25 +19,16 @@ const REVISION = "00000000-0000-4000-8000-0000000000c3";
 const DISPLAYED = "00000000-0000-4000-8000-0000000000a1";
 const analysis = () => json("../../fixtures/analysis.json");
 const otherCase = () => JSON.parse(text("../../fixtures/analysis.json").replaceAll(CASE, OTHER));
-const model = () => ({
-  chrome: {
-    subject: { case_id: CASE, title: "Issuer" },
-    served_role: { global_role: "READER", standing: "READER" },
-    actions: [],
-  },
-  body: {
-    case_id: CASE,
-    latest_run_id: RUN,
-    displayed_run_id: RUN,
-    subject: null,
-    forecast: null,
-    unavailable_reason: "NO_ACCEPTED_FORECAST",
-  },
-  observed_at: "2026-09-14T10:00:00Z",
-  observed_empty: false,
-  status: "complete",
-  notes: [],
-});
+// The fixture as a writer reads a run whose model is not built: no lines.
+const model = () => {
+  const served = json("../../fixtures/model.json");
+  const body = served["body"] as Record<string, unknown>;
+  body["lines"] = [];
+  body["columns"] = [];
+  body["displayed_run_id"] = RUN;
+  body["latest_run_id"] = RUN;
+  return served;
+};
 const report = () => ({
   chrome: {
     subject: { case_id: CASE, title: "Issuer" },
@@ -270,17 +261,20 @@ describe("the workspace under its event tail", () => {
   });
 
   test("test_names_arriving_mid_flight_cause_exactly_one_more_fetch", async () => {
-    // The address names the run, so the tail is open before the first read
-    // answers and names can arrive while it is in flight.
+    // The tail opens on the first document, which says whose read this is
+    // (a desk-wide grant opens none); names then arrive while a refetch is
+    // in flight.
     await mount("analysis", `/analysis/?case=${CASE}&run=${DISPLAYED}&tab=rn-cp-0`);
+    expect(FakeSource.all).toHaveLength(0);
+    await answer(0, analysis());
     await fire("handoff_accepted");
     await fire("run_terminal");
     await fire("sources_changed");
-    expect(sent).toHaveLength(1);
-    await answer(0, analysis());
     expect(sent).toHaveLength(2);
     await answer(1, analysis());
-    expect(sent).toHaveLength(2);
+    expect(sent).toHaveLength(3);
+    await answer(2, analysis());
+    expect(sent).toHaveLength(3);
   });
 
   test("test_a_reconnect_refetches_the_visible_documents", async () => {
@@ -370,11 +364,11 @@ describe("the workspace under its event tail", () => {
       `/analysis/?case=${CASE}&run=${DISPLAYED}&tab=rn-cp-0`,
     );
     const first = sent[0]!;
-    const firstTail = FakeSource.all[0]!;
     act(() => fireEvent.click(container.querySelector("[data-switch]")!));
     await settle();
     expect(first.signal?.aborted).toBe(true);
-    expect(firstTail.closed).toBe(true);
+    // The left case's first read never answered, so no tail was ever opened.
+    expect(FakeSource.all).toHaveLength(0);
     const other = otherCase();
     other.body.handoffs[0].confidence_score = 7;
     await answer(1, other);
