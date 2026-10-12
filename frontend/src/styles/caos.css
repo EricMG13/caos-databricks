@@ -3130,3 +3130,8 @@
   line-height: 1.4;
   color: var(--destructive);
 }
+
+.model-grid .grpbtn,
+.model-grid .bandbtn {
+  min-height: 24px;
+}
