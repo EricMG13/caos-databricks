@@ -512,6 +512,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         ).split()
     ),
     wire.BookEntryAdded: frozenset({"entry_id"}),
+    wire.WithdrawBookEntry: frozenset({"snapshot_sha256", "reason", "note"}),
+    wire.BookEntryWithdrawn: frozenset({"entry_id"}),
 }
 
 REQUESTS: tuple[type[BaseModel], ...] = (
@@ -532,6 +534,7 @@ REQUESTS: tuple[type[BaseModel], ...] = (
     FileDeliverable,
     wire.SaveRateDeck,
     wire.AddToBook,
+    wire.WithdrawBookEntry,
 )
 
 # What `frontend/src/wire/v1/shape.ts` can express. `title` and `description`
@@ -870,7 +873,7 @@ def test_every_section_router_declares_its_store_budget() -> None:
 
 def test_v1_command_models_are_closed_bounded_and_in_the_committed_schema() -> None:
     assert set(REQUESTS) <= set(V1_COMMANDS)
-    assert len(V1_COMMANDS) == len(set(V1_COMMANDS)) == 34
+    assert len(V1_COMMANDS) == len(set(V1_COMMANDS)) == 36
     defs = json.loads(COMMITTED.read_text(encoding="utf-8"))["$defs"]
     for model in V1_COMMANDS:
         assert model.__name__ in defs, model.__name__

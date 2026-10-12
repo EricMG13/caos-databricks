@@ -62,6 +62,7 @@ STREAM_NAMES: Mapping[str, EventName | None] = MappingProxyType(
         # The Book is desk-wide, not a case section: a case stream has no
         # section to refetch for an entry added or withdrawn.
         "BOOK_ENTRY_ADDED": None,
+        "BOOK_ENTRY_WITHDRAWN": None,
     }
 )
 

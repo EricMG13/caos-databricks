@@ -94,6 +94,7 @@ def test_every_run_event_and_audit_action_maps_to_one_stream_name_or_is_declared
         "STANDING_GRANTED",
         "STANDING_REVOKED",
         "BOOK_ENTRY_ADDED",
+        "BOOK_ENTRY_WITHDRAWN",
     ):
         assert STREAM_NAMES[silent] is None
     with pytest.raises(TypeError):

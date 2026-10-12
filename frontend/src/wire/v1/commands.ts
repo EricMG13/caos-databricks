@@ -155,8 +155,6 @@ const SaveRateDeck = object({
   rates: array(V1_SHAPES.RateDeckRateView, 20),
 });
 const RateDeckSaved = object({ deck_id: uuid });
-
-/** Every command model `schema.json` declares, under its backend name. */
 // Plan 3 Task 2: add a COMPLETE run to the Book, bound to the snapshot digest
 // the Model showed, with the analyst-stated classification (the server judges
 // it against its own vocabularies); withdraw an entry with a reason, and a
@@ -176,8 +174,19 @@ const AddToBook = object({
   fitch_outlook: nullable(rating),
 });
 const BookEntryAdded = object({ entry_id: uuid });
+const WithdrawBookEntry = object({
+  snapshot_sha256: hash,
+  reason: enumOf(["ADDED_IN_ERROR", "DATA_ERROR", "SUPERSEDED_SOURCES", "OTHER"] as const),
+  note: nullable(string({ max: 1000 })),
+});
+const BookEntryWithdrawn = object({ entry_id: uuid });
+
+/** Every command model `schema.json` declares, under its backend name. */
 export const V1_COMMAND_SHAPES = {
+  AddToBook,
   ApproveGate,
+  BookEntryAdded,
+  BookEntryWithdrawn,
   CancelRun,
   DeliverableFiled,
   DeliverableFrozen,
@@ -203,8 +212,6 @@ export const V1_COMMAND_SHAPES = {
   GatePreviewDocument,
   PinRunInput,
   RateDeckSaved,
-  AddToBook,
-  BookEntryAdded,
   RetryRun,
   RunCreated,
   RunInputPinned,
@@ -214,6 +221,7 @@ export const V1_COMMAND_SHAPES = {
   SourcesAdmitted,
   StartRun,
   VerdictRecorded,
+  WithdrawBookEntry,
 };
 
 export type CreateCase = Infer<typeof CreateCase>;

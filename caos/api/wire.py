@@ -58,6 +58,7 @@ from caos.methodology.tables import (
 )
 from caos.pricing import MAX_MODEL_CHOICES
 from caos.refusals import RefusalCode
+from caos.store.book import WithdrawalReason
 from caos.store.gates import Gate, GateState
 from caos.store.members import Standing
 
@@ -2092,6 +2093,25 @@ class BookEntryAdded(BaseModel):
     entry_id: UUID
 
 
+class WithdrawBookEntry(BaseModel):
+    """Withdraw an entry, never delete it (spec B7): bound to the entry's
+    snapshot digest, with a reason, and a note that `OTHER` requires."""
+
+    model_config = _CLOSED
+
+    snapshot_sha256: Sha256
+    reason: WithdrawalReason
+    note: Annotated[str, Field(max_length=WITHDRAWAL_NOTE_CHARS)] | None
+
+
+class BookEntryWithdrawn(BaseModel):
+    """The receipt for a withdrawn entry."""
+
+    model_config = _CLOSED
+
+    entry_id: UUID
+
+
 V1_COMMANDS: tuple[type[BaseModel], ...] = (
     CreateCase,
     CaseCreated,
@@ -2127,6 +2147,8 @@ V1_COMMANDS: tuple[type[BaseModel], ...] = (
     RateDeckSaved,
     AddToBook,
     BookEntryAdded,
+    WithdrawBookEntry,
+    BookEntryWithdrawn,
 )
 
 
