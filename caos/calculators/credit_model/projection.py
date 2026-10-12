@@ -45,7 +45,9 @@ base". A
 facility's rate is its fixed coupon, the deck's reference rate for the case
 and year offset (floor applied) plus its spread, or the implied rate: LTM
 cash interest over the average of the LTM's opening and closing total debt
-(none, with the opening's note, where the LTM's opening stack is incomplete).
+(none, with the opening's note, where the LTM's opening stack is incomplete;
+noted "facility history incomplete" where the opening is CP-1's stated
+total for that reason, as is a facility priced at it).
 The year offset counts from the last historical FY (FY+1 is the year after);
 a year past the deck holds its last rate, a year the deck skips the year
 before it, each noted, and a reference rate the deck lacks is implied.
@@ -93,11 +95,13 @@ from caos.calculators.credit_model._cells import (
 from caos.calculators.credit_model.debt import (
     EXCLUDES_FOREIGN,
     EXCLUDES_UNALLOCATED,
+    HISTORY_INCOMPLETE,
     SECURED_RANKS,
     carried,
     facility_keys,
     is_operating_lease,
     left_out,
+    notes_of,
     payment_rank,
 )
 from caos.calculators.credit_model.frame import Case, Cell, Column, Frame
@@ -258,34 +262,44 @@ def facility_rate(
     deck: RateDeck | None,
     case: Case,
     offset: int,
-    implied: Decimal | None,
+    implied: Cell,
 ) -> tuple[Decimal | None, str | None]:
     """The facility's all-in rate as a decimal, and the note when it is not
     its own terms': a `FIXED` coupon (percent) / 100, noted "coupon read as
     a fraction" where `model_inputs` read it so; a `FLOATING` rate on a
     deck reference rate, `max(deck rate, floor) + spread`, noted where the
     deck year is held ("last deck rate held flat", "deck year missing");
-    else `implied`, noted "implied rate", "no rate deck", "reference rate
-    not in deck", "deck year missing" (none that early) or "term out of
-    range" (a term outside CP-1's value set or its range)."""
+    else the `implied` rate's figure, noted "implied rate", "no rate deck",
+    "reference rate not in deck", "deck year missing" (none that early) or
+    "term out of range" (a term outside CP-1's value set or its range), then
+    with the implied rate's own note where it has a figure ("facility
+    history incomplete"; without one, its reason is the weighted rate's)."""
     with localcontext(CONTEXT):
         if not _rate_terms_in_range(row):
-            return implied, OUT_OF_RANGE
+            return _fallback(implied, OUT_OF_RANGE)
         if row.rate_type == "FIXED" and row.fixed_rate is not None:
             note = COUPON_AS_FRACTION if row.coupon_as_fraction else None
             return row.fixed_rate / _PERCENT, note
         floating = row.rate_type == "FLOATING" and row.reference_rate in _DECK_RATES
         if not floating or row.spread_bps is None:
-            return implied, IMPLIED
+            return _fallback(implied, IMPLIED)
         if deck is None:
-            return implied, NO_DECK
+            return _fallback(implied, NO_DECK)
         note = _deck_note(deck, row.reference_rate, offset)
         reference = rate_for(deck, row.reference_rate, case, offset)
         if reference is None:
-            return implied, note
+            return _fallback(implied, note)
         if row.floor_bps is not None:
             reference = max(reference, row.floor_bps / _BPS)
         return reference + row.spread_bps / _BPS, note
+
+
+def _fallback(implied: Cell, note: str | None) -> tuple[Decimal | None, str | None]:
+    """The implied rate's figure, noted why it is used, then with its own
+    note where it has a figure."""
+    if implied.value is None:
+        return None, note
+    return implied.value, join_notes((note, implied.note))
 
 
 @dataclass(frozen=True, slots=True)
@@ -478,7 +492,7 @@ def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
             paid = max(Decimal(0), min(amount, opening))
             closing = opening - paid
         rate, rate_note = facility_rate(
-            row, ctx.deck, period.case, period.year - ctx.base_year, ctx.implied.value
+            row, ctx.deck, period.case, period.year - ctx.base_year, ctx.implied
         )
         refinanced = REFINANCED if _matures_in(ctx, row, period.year) else None
         note = join_notes((rate_note, amortisation_note, refinanced))
@@ -527,13 +541,15 @@ def _reference_rate(ctx: _Context, period: _Period) -> Cell:
 
 
 def _unweighted(implied: Cell, base: Cell) -> Cell:
-    """The rate with no facility weight: the implied rate, noted, on a
-    positive base (debt CP-CF issued onto facilities at nil), else none."""
+    """The rate with no facility weight: the implied rate, noted (with its
+    own note), on a positive base (debt CP-CF issued onto facilities at
+    nil), else none."""
     if base.value is None or base.value <= 0:
         return Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")
     if implied.value is None:
         return Cell(None, implied.reason, note=implied.note)
-    return Cell(implied.value, basis="CALCULATED", note=NO_MIX)
+    note = join_notes((NO_MIX, implied.note))
+    return Cell(implied.value, basis="CALCULATED", note=note)
 
 
 @dataclass(frozen=True, slots=True)
@@ -762,8 +778,10 @@ def _opening_cell(cell: Cell) -> Cell:
 
 def _implied(cells: Mapping[str, Cell]) -> Cell:
     """LTM cash interest over the average of the LTM's opening and closing
-    total debt; `COMPONENT_MISSING` without a figure, with the missing
-    inputs' notes (the opening's "opening stack incomplete"), and
+    total debt, noted `HISTORY_INCOMPLETE` where the opening is
+    (`debt_frame`: CP-1's stated total, a facility's history missing);
+    `COMPONENT_MISSING` without a figure, with the missing inputs' notes
+    (the opening's "opening stack incomplete"), and
     `ZERO_OR_NEGATIVE_DENOMINATOR` with an average <= 0."""
     parts = [
         cells.get(key, ABSENT)
@@ -776,7 +794,8 @@ def _implied(cells: Mapping[str, Cell]) -> Cell:
     average = (opening + closing) / 2
     if average <= 0:
         return Cell(None, "ZERO_OR_NEGATIVE_DENOMINATOR")
-    return Cell(-interest / average)  # read for its value only
+    history = HISTORY_INCOMPLETE in notes_of(parts[1].note)
+    return Cell(-interest / average, note=HISTORY_INCOMPLETE if history else None)
 
 
 def _anchor_rows(
