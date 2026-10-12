@@ -14,6 +14,14 @@ is listed as pending with its recomputed state and makes the document partial;
 on a run a validated Blocked verdict ended, `blocked_by` names which of those
 nodes answered, because a Blocked verdict accepts nothing (§68).
 A run of another case, an unknown and a malformed run are one `RUN_NOT_FOUND`.
+
+A caller without standing reads a run with a live book entry when the request
+names it (`deps.visible_run`, spec B9), read-only: no standing and no actions
+in the chrome, and no id of the case's other runs (`latest_run_id` withheld).
+The case title is member-only too: a granted read's subject is titled with
+the entry's issuer name, which the Book already shows the desk, read in the
+case row -- an entry withdrawn since the grant leaves none, and the read is
+then the stranger's `CASE_NOT_FOUND`.
 """
 
 from __future__ import annotations
@@ -26,14 +34,17 @@ from uuid import UUID
 from fastapi import APIRouter
 
 from caos.api.deps import (
+    GRANT_IO,
     IDENTITY_FIRST,
     Blobs,
     Caller,
     CasePath,
+    Grant,
     Methodology,
     RunQuery,
     Store,
-    VisibleCase,
+    VisibleRun,
+    granted,
 )
 from caos.api.identity import Actor
 from caos.api.wire import (
@@ -108,6 +119,8 @@ from caos.store.source_sets import cited_source_ids
 # route's CP-CF included (`tests/test_analysis_section.py`,
 # `tests/test_model_section.py`).
 FIXED_IO = 7
+# And, for a caller reading under the desk-wide grant, the live-entry lookup
+# `deps.visible_run` makes once the caller holds no standing (`GRANT_IO`).
 PER_HANDOFF_IO = 10
 MODEL_PROOFS_IO = 42
 LONGEST_ROUTE_NODES = 20
@@ -116,6 +129,7 @@ LONGEST_ROUTE_NODES = 20
 BLOCKED_QUOTES_IO = 1
 IO_BUDGET = (
     FIXED_IO
+    + GRANT_IO
     + LONGEST_ROUTE_NODES * PER_HANDOFF_IO
     + MODEL_PROOFS_IO
     + BLOCKED_QUOTES_IO
@@ -147,12 +161,14 @@ class AnalysisQuery:
     case, then the store's three handles -- the seven values `read_analysis`
     takes as FastAPI dependencies, carried as one parameter so Model and Book
     (`read_analysis_without_tables`) can ask for the same document without a
-    call whose argument count this module's own ceiling would refuse."""
+    call whose argument count this module's own ceiling would refuse.
+    `standing` is the caller's, or `Grant.BOOK` for a read under the
+    desk-wide grant."""
 
     actor: Actor
     case_id: UUID
     run: UUID | None
-    standing: Standing
+    standing: Standing | Grant
     conn: StoreConnection
     blobs: BlobStore
     bundle: Bundle
@@ -167,7 +183,7 @@ def read_analysis(  # noqa: PLR0913 -- identity, path, query, then the stores
     actor: Caller,
     case_id: CasePath,
     run: RunQuery,
-    standing: VisibleCase,
+    standing: VisibleRun,
     conn: Store,
     blobs: Blobs,
     bundle: Methodology,
@@ -179,31 +195,41 @@ def read_analysis(  # noqa: PLR0913 -- identity, path, query, then the stores
 
 
 def read_analysis_without_tables(query: AnalysisQuery) -> AnalysisDocument:
-    """The document Model and Book each read (N58): every accepted handoff's
+    """The document Model and Add to Book read (N58): every accepted handoff's
     Markdown and source facts, without deriving the tagged tables neither
-    keeps -- `ModelBody` excludes `handoffs` outright and `BookResearch`
-    carries no `tables` field, so the derivation those two readers used to
-    pay for was computed only to be dropped."""
+    keeps -- `ModelBody` excludes `handoffs` outright, so the derivation was
+    computed only to be dropped."""
     return _analysis_document(query, with_tables=False)
 
 
 def _case_row(
-    conn: StoreConnection, case_id: UUID, run: UUID | None
+    conn: StoreConnection, case_id: UUID, run: UUID | None, *, as_granted: bool
 ) -> tuple[str, Any, UUID | None, UUID | None]:
-    """The case's title and `now()`, its latest run, and the run this request
-    displays -- `run` when pinned, else the latest. A case row that is gone
-    is `CASE_NOT_FOUND`; a pinned run of another case is `RUN_NOT_FOUND`."""
+    """The subject's title and `now()`, the case's latest run, and the run
+    this request displays -- `run` when pinned, else the latest. The title is
+    the case's for a member and, `as_granted`, the issuer name of the pinned
+    run's live entry. A case row that is gone, and a granted read whose entry
+    is gone, are `CASE_NOT_FOUND`; a pinned run of another case is
+    `RUN_NOT_FOUND`."""
     row = conn.execute(
         "SELECT title, now(),"
         " (SELECT run_id FROM runs WHERE case_id = c.case_id"
         "  ORDER BY created_at DESC, run_id DESC LIMIT 1),"
-        " EXISTS (SELECT 1 FROM runs WHERE run_id = %s::uuid AND case_id = c.case_id)"
+        " EXISTS (SELECT 1 FROM runs WHERE run_id = %s::uuid AND case_id = c.case_id),"
+        " (SELECT issuer_name FROM book_entries WHERE run_id = %s::uuid"
+        "  AND case_id = c.case_id AND withdrawn_at IS NULL)"
         " FROM cases c WHERE c.case_id = %s",
-        (run, case_id),
+        (run, run, case_id),
     ).fetchone()
     if row is None:  # standing on a case row that is gone: still not readable
         raise Refusal(RefusalCode.CASE_NOT_FOUND)
-    title, observed_at, latest, owned = row
+    title, observed_at, latest, owned, issuer = row
+    if as_granted:
+        # Withdrawn since the grant: the stranger's answer, never the case's
+        # title in the issuer's place.
+        if issuer is None:
+            raise Refusal(RefusalCode.CASE_NOT_FOUND)
+        title = issuer
     if run is not None and not owned:
         raise Refusal(RefusalCode.RUN_NOT_FOUND)
     return title, observed_at, latest, run if run is not None else latest
@@ -235,7 +261,10 @@ def _displayed_status(
 
 def _analysis_document(query: AnalysisQuery, *, with_tables: bool) -> AnalysisDocument:
     conn = query.conn
-    title, observed_at, latest, displayed = _case_row(conn, query.case_id, query.run)
+    as_granted = granted(query.standing)
+    title, observed_at, latest, displayed = _case_row(
+        conn, query.case_id, query.run, as_granted=as_granted
+    )
     handoffs: list[HandoffView] = []
     pending: list[PendingNode] = []
     subject: RunSubjectView | None = None
@@ -258,17 +287,22 @@ def _analysis_document(query: AnalysisQuery, *, with_tables: bool) -> AnalysisDo
         if displayed_status == "BLOCKED" and blocking is not None:
             handles = _Handles(conn, query.blobs, query.bundle)
             blocked_by = _blocked_by(route, blocking, handles, displayed)
+    # A read under the desk-wide grant holds no standing to serve.
+    standing = None if granted(query.standing) else query.standing
     return AnalysisDocument(
         chrome=Chrome(
             subject=Subject(case_id=query.case_id, title=title),
             served_role=ServedRole(
-                global_role=query.actor.role, standing=query.standing
+                global_role=query.actor.role,
+                standing=standing,
             ),
             actions=[],
         ),
         body=AnalysisBody(
             case_id=query.case_id,
-            latest_run_id=latest,
+            # The case's other runs stay member-only: a granted read names
+            # none of them, not even the latest.
+            latest_run_id=None if as_granted else latest,
             displayed_run_id=displayed,
             subject=subject,
             displayed_run_status=displayed_status,

@@ -1142,7 +1142,9 @@ def test_every_section_read_depends_on_the_shared_dependencies() -> None:
     The parsers (`case_path`, `run_query`, `revision_query`) and `visible_case`
     are `caos.api.deps`'s too, so a route that took a copy would show here.
     `visible_case` opens the store, and stays behind identity by its own
-    sub-dependencies whatever position a route gives it.
+    sub-dependencies whatever position a route gives it. Analysis and Model
+    declare `visible_run` in its place, the one dependency that may answer
+    the desk-wide grant (spec B9); every other route stays member-only.
     """
     routes = {
         route.path: route
@@ -1211,7 +1213,7 @@ def test_every_section_read_depends_on_the_shared_dependencies() -> None:
         actor_from_request,
         deps.case_path,
         deps.run_query,
-        deps.visible_case,
+        deps.visible_run,
         store_connection,
         deps.request_blobs,
         methodology_bundle,
@@ -1223,7 +1225,7 @@ def test_every_section_read_depends_on_the_shared_dependencies() -> None:
         deps.case_path,
         deps.run_query,
         model_read.exclude_unrealised_query,
-        deps.visible_case,
+        deps.visible_run,
         store_connection,
         deps.request_blobs,
         methodology_bundle,

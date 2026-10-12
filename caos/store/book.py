@@ -235,3 +235,16 @@ def withdraw_entry(conn: StoreConnection, withdrawal: Withdrawal) -> bool:
         ),
     )
     return cursor.rowcount == 1
+
+
+def entry_run(conn: StoreConnection, case_id: UUID, run_id: UUID) -> bool:
+    """Whether `run_id` is `case_id`'s run with a live (unwithdrawn) entry:
+    the one fact the desk-wide read grant rests on (spec B9). Read at the
+    instant of the request, with no lock -- a withdrawal committed after it
+    revokes the grant from the next read on. One round trip."""
+    row = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM book_entries WHERE case_id = %s"
+        " AND run_id = %s AND withdrawn_at IS NULL)",
+        (case_id, run_id),
+    ).fetchone()
+    return row is not None and bool(row[0])

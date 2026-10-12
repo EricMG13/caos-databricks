@@ -26,6 +26,7 @@ from test_loop_charges import ESTIMATE
 
 from caos.api import app as app_module
 from caos.api.app import app, blob_store, methodology_bundle, store_connection
+from caos.api.deps import GRANT_IO
 from caos.api.identity import ROLE_HEADER, TRUST_SWITCH, TRUSTED
 from caos.api.reads import analysis as analysis_read
 from caos.api.wire import CLEARS, AnalysisDocument
@@ -534,8 +535,11 @@ def test_the_analysis_request_path_declares_its_store_budget(
         if _resolves(profile, pathway, extensions)
     )
     assert longest == analysis_read.LONGEST_ROUTE_NODES
+    # A read under the desk-wide grant pays one live-entry lookup more
+    # (`tests/test_book_grant.py` measures it).
     assert analysis_read.IO_BUDGET == (
         analysis_read.FIXED_IO
+        + GRANT_IO
         + longest * per_handoff
         + analysis_read.MODEL_PROOFS_IO
         + analysis_read.BLOCKED_QUOTES_IO

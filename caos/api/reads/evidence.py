@@ -10,6 +10,14 @@ the same 404 `PAGE_NOT_AVAILABLE` with no text. Not a section document, so
 no chrome; never cached. Standing and the page's rows are read in one read
 unit, which `read_page` ends before the document is read and its frame
 extracted, so no transaction is held across the extraction.
+
+A caller without standing reads a page of a run with a live book entry (spec
+B9, `deps.visible_run`'s rule, folded into the same row): the entry is read
+at the instant of the read, so a withdrawal revokes it from the next read on.
+No stored index says which sources an entry's accepted artifacts cite, so the
+bound is the one `read_page` already holds every reader to -- the run's
+pinned, live sources (the task's ruling, for a `Dn`); a source the run never
+pinned is the `PAGE_NOT_AVAILABLE` a member gets too.
 """
 
 from __future__ import annotations
@@ -25,15 +33,18 @@ from caos.api.deps import (
     CasePath,
     RunPath,
     Store,
+    book_grant,
     parse_uuid,
     readable,
+    reads,
 )
 from caos.api.wire import PAGE_MAX, PageDocument, SectionNote
 from caos.evidence import page as page_read
 from caos.refusals import Refusal, RefusalCode
 from caos.store.members import Standing
 
-# Standing, `now()` and the run's ownership in one row; then the page itself.
+# Standing, `now()`, the run's ownership and its live book entry in one row;
+# then the page itself.
 IO_BUDGET = 1 + page_read.IO_BUDGET
 # N35's remainder: `read_page` downloads the pinned document once
 # (`page.py`'s own `_document`), remembered so a second read of the same
@@ -62,18 +73,25 @@ def read_evidence_page(  # noqa: PLR0913 -- identity, three ids and a page, stor
     the store. The source and page are read only once the run is visible.
 
     The membership join is folded into the one row that also carries the
-    clock and the run's ownership, so visibility costs no round trip of its
-    own; the rule applied to it is `deps.readable`'s."""
+    clock, the run's ownership and the run's live book entry
+    (`caos.store.book.entry_run`'s predicate), so visibility costs no round
+    trip of its own; the rule applied to it is `deps.visible_run`'s."""
     row = conn.execute(
         "SELECT m.standing, now(),"
-        " EXISTS (SELECT 1 FROM runs r WHERE r.run_id = %s AND r.case_id = c.case_id)"
+        " EXISTS (SELECT 1 FROM runs r WHERE r.run_id = %s AND r.case_id = c.case_id),"
+        " EXISTS (SELECT 1 FROM book_entries b WHERE b.case_id = c.case_id"
+        " AND b.run_id = %s AND b.withdrawn_at IS NULL)"
         " FROM cases c LEFT JOIN case_members m ON m.case_id = c.case_id"
         " AND m.user_id = %s AND m.revoked_at IS NULL WHERE c.case_id = %s",
-        (run_id, actor.user_id, case_id),
+        (run_id, run_id, actor.user_id, case_id),
     ).fetchone()
     if row is None:  # no such case: the same private answer as no standing
         raise Refusal(RefusalCode.CASE_NOT_FOUND)
-    readable(None if row[0] is None else Standing(row[0]))
+    standing = None if row[0] is None else Standing(row[0])
+    if not reads(standing) and row[3]:
+        book_grant(case_id, run_id, actor.user_id)
+    else:
+        readable(standing)
     if not row[2]:
         raise Refusal(RefusalCode.RUN_NOT_FOUND)
     read = page_read.read_page(

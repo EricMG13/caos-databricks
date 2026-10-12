@@ -33,6 +33,7 @@ from test_execution_freshness import _Harness
 from test_forecast_route import ForecastCompletions, harness, request_data
 from test_forecast_route import route as forecast_route
 
+from caos.api import deps
 from caos.api.app import app, store_connection
 from caos.api.identity import Actor, GlobalRole
 from caos.api.reads import analysis as analysis_read
@@ -1217,7 +1218,8 @@ def test_the_model_reads_within_its_declared_io_budget(
         harness.conn.rollback()
         assert response.status_code == 404
         assert response.json()["code"] == "CASE_NOT_FOUND"
-        assert counter.executed == 1  # only live standing, no case data
+        # Live standing, then whether the named run has a live book entry.
+        assert counter.executed == 1 + deps.GRANT_IO
     from caos.api.reads import analysis, model
 
     # The forecast route's ten handoffs, CP-CF's owner proofs among them, the
