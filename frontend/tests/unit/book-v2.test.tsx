@@ -2,6 +2,17 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen, within } from "@testing-library/react";
 import { BookSection } from "@/sections/book/BookSection";
+import {
+  BASES,
+  BASIS_LABELS,
+  IDENTIFIERS,
+  IDENTIFIER_LABELS,
+  agencyOf,
+  columnLabel,
+  unitLookup,
+  unitOf,
+} from "@/sections/book/columns";
+import { metricOf } from "@/sections/book/filter";
 import { analyticalIdentity, tailed } from "@/app/authority";
 import { WireShapeError, parseBookDocument, type BookDocument } from "@/wire/v1";
 
@@ -16,6 +27,29 @@ function document(): BookDocument {
 }
 
 describe("the book", () => {
+  test("the column vocabulary names every column once", () => {
+    const units = document().body.metric_catalogue;
+    expect(IDENTIFIERS).toHaveLength(Object.keys(IDENTIFIER_LABELS).length);
+    expect(BASES.map((basis) => BASIS_LABELS[basis])).toEqual([
+      "LTM",
+      "PF LTM",
+      "Base FY1",
+      "Downside FY1",
+    ]);
+    expect(columnLabel("id:moodys", units)).toBe("Moody's");
+    expect(columnLabel("m:revenue", units)).toBe("Total revenue");
+    expect(columnLabel("m:revenue@BASE_FY1", units)).toBe("Total revenue · Base FY1");
+    expect(unitOf("m:revenue", units)?.unit).toBe("MONEY");
+    expect(unitOf("id:sector", units)).toBeUndefined();
+    expect(unitLookup(units)("m:revenue@PF_LTM")?.label).toBe("Total revenue");
+    expect(unitLookup(units)("id:unit")).toBeUndefined();
+    expect(columnLabel("id:unit", units)).toBe("Unit");
+    expect(columnLabel("id:fiscal_year_base_fy1", units)).toBe("Fiscal year · Base FY1");
+    expect(agencyOf("id:sp")).toBe("sp");
+    expect(agencyOf("id:sp_outlook")).toBeNull();
+    expect(metricOf("m:revenue@PF_LTM", "LTM")).toEqual({ lineId: "revenue", basis: "PF_LTM" });
+  });
+
   test("the served fixture is the declared v2 shape: issuers and the metric catalogue", () => {
     const doc = document();
     expect(doc.body.issuers.map((issuer) => issuer.issuer_key)).toEqual([
@@ -68,6 +102,35 @@ describe("the book", () => {
     const vmo2 = doc.body.issuers[2]!;
     expect(vmo2.history[0]!.withdrawal_reason).toBe("DATA_ERROR");
     expect(table.querySelector(`[data-entry="${vmo2.history[0]!.entry_id}"]`)).toBeNull();
+  });
+
+  test("LTM revenue is served decimal text, spelled with its currency and unit", () => {
+    render(<BookSection document={document()} tab={null} />);
+    const table = screen.getByRole("table", { name: "Issuers in the Book" });
+    expect(within(table).getByRole("columnheader", { name: "Total revenue · LTM" })).toBeVisible();
+    const row = table.querySelector('[data-issuer="CVNA"]')!;
+    const cells = within(row as HTMLElement).getAllByRole("cell");
+    expect(cells[3]).toHaveTextContent("USD");
+    expect(cells[4]).toHaveTextContent("MILLIONS");
+    expect(cells[5]).toHaveTextContent("20,322");
+    expect(within(cells[5]!).getByTitle("20322")).toBeVisible();
+    expect(cells[5]).not.toHaveAttribute("aria-description");
+  });
+
+  test.each([null, "0"])("LTM revenue %s preserves missing values and zero", (value) => {
+    const fixture = raw();
+    fixture.body.issuers[0].displayed.metrics.LTM.revenue = value;
+    render(<BookSection document={parseBookDocument(fixture)} tab={null} />);
+    const row = screen.getByRole("table").querySelector('[data-issuer="CVNA"]')!;
+    const cell = within(row as HTMLElement).getAllByRole("cell")[5]!;
+    if (value === null) {
+      expect(cell).toHaveTextContent("Not stated");
+      expect(cell).not.toHaveTextContent("0");
+    } else {
+      expect(cell).toHaveTextContent("0");
+      expect(cell).not.toHaveTextContent("Not stated");
+      expect(within(cell).getByTitle("0")).toBeVisible();
+    }
   });
 
   test("a moved displayed entry is a new analytical identity", () => {

@@ -46,7 +46,7 @@ export interface ShownCell {
 /** Money in brackets when negative, no sign anywhere else it would be read
     twice: PERCENT and RATE are fractions the host wrote (0.2034 reads 20.3%),
     a MULTIPLE is read with an `x`. */
-function spelled(line: ModelLine, value: string): string {
+export function spelled(line: Pick<ModelLine, "unit" | "unit_label">, value: string): string {
   switch (line.unit) {
     case "MONEY": {
       const text = displayDecimal(value, 0);

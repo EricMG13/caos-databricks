@@ -14,6 +14,7 @@ import {
   passportOfCell,
   refinanced,
   shownCell,
+  spelled,
   stripCharts,
   tintOf,
   toggled,
@@ -329,6 +330,11 @@ describe("the host's forecast, drawn", () => {
 });
 
 describe("the credit workbook grid", { timeout: 30_000 }, () => {
+  test("spelled reads exact decimal text using the metric's unit", () => {
+    expect(spelled({ unit: "MONEY", unit_label: null }, "-1234.5")).toBe("(1,235)");
+    expect(spelled({ unit: "PERCENT", unit_label: null }, "0.2034")).toBe("20.3%");
+    expect(spelled({ unit: "MULTIPLE", unit_label: null }, "1.54")).toBe("1.5x");
+  });
   test("the fixture parses with parseModelDocument", () => {
     const document = fixture();
     expect(document.body.columns).toHaveLength(23);
