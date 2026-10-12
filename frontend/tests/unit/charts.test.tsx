@@ -324,6 +324,35 @@ describe("a line chart", () => {
     ).toBeInTheDocument();
   });
 
+  test("draws an end label that fits and leaves a long served value to the legend and readout", () => {
+    const LONG = "0.0297029702970297029702970297029702970";
+    const one = (last: string) => (
+      <LineChart
+        title="Margin"
+        summary="One series."
+        categories={quarters}
+        series={[
+          {
+            key: "margin",
+            label: "Margin",
+            origin: "host",
+            data: [{ value: "1.5" }, { value: "2.25" }, { value: "3.125" }, { value: last }],
+          },
+        ]}
+      />
+    );
+    const short = render(one("4.375"));
+    expect(plotOf(short.container)).toHaveTextContent("4.375");
+    short.unmount();
+    const long = render(one(LONG));
+    const plot = plotOf(long.container);
+    expect(plot).not.toHaveTextContent(LONG);
+    const points = [...plot.querySelectorAll("circle.chart-point")];
+    expect(points).toHaveLength(4);
+    for (const point of points) expect(numberOf(point, "cx")).toBeGreaterThanOrEqual(0);
+    expect(screen.getByRole("button", { name: new RegExp(LONG) })).toBeInTheDocument();
+  });
+
   test("reads out every series at the period a point stands on", () => {
     const { container } = render(
       <LineChart

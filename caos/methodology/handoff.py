@@ -935,6 +935,14 @@ def _requested(item: object) -> Citation:
 
 
 def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
+    parsed = _wire(body)
+    if _repeats(parsed[2]):
+        raise ValueError  # the same citation twice is not two citations
+    return parsed
+
+
+def _wire(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
+    """`_transport` but for its one rule across citations, no repeat."""
     if len(body) > MAX_TRANSPORT_CHARS:
         raise ValueError
     wire = _closed(strict_json(body), WIRE_KEYS)
@@ -945,9 +953,20 @@ def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
         raise ValueError
     # A lone surrogate survives `json.loads` and fails here, inside the guard.
     requested = tuple(_requested(c) for c in citations)
-    if len(frozenset(requested)) != len(requested):
-        raise ValueError  # the same citation twice is not two citations
     return text.encode("utf-8"), text, requested
+
+
+def _repeats(citations: Sequence[Citation]) -> list[tuple[int, int]]:
+    """(place, first place) for each citation equal to an earlier one, both
+    1-based, in the list's order."""
+    first: dict[Citation, int] = {}
+    repeats = []
+    for n, citation in enumerate(citations, 1):
+        if citation in first:
+            repeats.append((n, first[citation]))
+        else:
+            first[citation] = n
+    return repeats
 
 
 # D107: the body names a citation by its 1-based place in the list, `[C3]`,
@@ -1060,8 +1079,10 @@ def carried_answer(body: str) -> str | None:
     """The refused answer a guided retry carries back to be corrected (D104):
     the stored body as it crosses `BoundaryText`, or None when it is not the
     transport (N50), holds text no reader can see, or will not cross -- then
-    the retry asks for the whole answer again, as before. Like the checks'
-    lines it goes into that one request only, never a log, refusal or row."""
+    the retry asks for the whole answer again, as before. An answer refused
+    only for a repeated citation is the transport otherwise, and is carried
+    (qualify run b0b6fd10, CP-2). Like the checks' lines it goes into that
+    one request only, never a log, refusal or row."""
     parsed, _reason = _transport_or_reason(body)
     if parsed is None or hides_text(body):
         return None
@@ -1089,6 +1110,7 @@ def feedback_lines(
     markdown, text, citations = parsed
     checked = _checked(contract, catalog, identity, markdown)
     host = (
+        reason,  # a repeated citation, or empty
         _text_line(markdown),
         _uncrossed_line(citations),
         _dangling_line(text, len(citations)),
@@ -1311,6 +1333,56 @@ def _absent_ids_line(
                 " in the answer"
             )
     return None
+
+
+def kept_registers_line(
+    contract: VendorContract, module_id: str, body: str, skill: bytes
+) -> str | None:
+    """Name the required registers the carried answer holds, in contract order.
+
+    Missing profiles or unreadable register locations contribute no keep line;
+    unrelated locator failures still surface. The line preserves the largest
+    prefix fitting MAX_FEEDBACK_CHARS and counts the remaining held IDs.
+    """
+    markdown = answer_markdown(body)
+    if markdown is None or not skill or module_id == MODEL_MODULE:
+        return None
+    checker = contract.completeness_check
+    try:
+        loaded = checker.load_contract(skill.decode("utf-8"), module_id)
+        found = checker.find_registers(
+            markdown.decode("utf-8"),
+            loaded["registers"],
+            loaded.get("retired_registers", ()),
+        )
+    except (KeyError, ValueError):
+        return None
+    required = loaded["registers"]
+    kept = [register for register in required if register in found]
+    if not kept:
+        return None
+    for shown in range(len(kept), 0, -1):
+        line = _kept_text(kept, shown, len(required))
+        if len(line) <= MAX_FEEDBACK_CHARS:
+            return line
+    return None
+
+
+def _kept_text(kept: Sequence[str], shown: int, required: int) -> str:
+    """`kept_registers_line`'s text naming the first `shown` IDs."""
+    names = [f"`{register}`" for register in kept[:shown]]
+    if rest := len(kept) - shown:
+        named = ", ".join(names) + f" and {rest} more"
+    else:
+        named = " and ".join(
+            [", ".join(names[:-1]), names[-1]] if names[:-1] else names
+        )
+    noun = "register" if required == 1 else "registers"
+    return (
+        f"host register check: the refused answer holds {len(kept)} of the"
+        f" {required} required {noun}, {named}; keep every one, with all its"
+        " rows, unchanged except where another line names a fault"
+    )
 
 
 def _writes_id(text: str, register: str) -> bool:
@@ -1546,17 +1618,50 @@ def _quoted(cell: str) -> str | None:
 def _transport_or_reason(
     body: str,
 ) -> tuple[tuple[bytes, str, tuple[Citation, ...]] | None, str]:
-    """The transport, or the host's reason it is not one (N50)."""
+    """Parse the repair transport, or return the host's fixed reason (N50).
+
+    Duplicate citations get repair feedback and a carried answer; strict
+    acceptance still refuses them. No caught exception text is quoted.
+    """
     with suppress(Exception):  # any failure is named below, never quoted
-        return _transport(body), ""
+        parsed = _wire(body)
+        repeats = _repeats(parsed[2])
+        return parsed, _repeated_line(repeats)
     try:
-        json.loads(body)  # only to name why, in the parser's own words
+        json.loads(body)  # diagnostic only; _wire remains the strict parser
     except json.JSONDecodeError as bad:
         hint = _ESCAPES if bad.msg.startswith("Invalid control character") else ""
         return None, _TRANSPORT_JSON.format(bad.msg) + hint
     except (RecursionError, ValueError):
         pass
     return None, _TRANSPORT_SHAPE
+
+
+def _repeated_line(repeats: Sequence[tuple[int, int]]) -> str:
+    """Which citations repeat which, by place, never quoted; empty for none.
+    As many pairs as `MAX_FEEDBACK_CHARS` holds (R45), the rest counted."""
+    for shown in range(len(repeats), 0, -1):
+        line = _repeat_text(repeats, shown)
+        if len(line) <= MAX_FEEDBACK_CHARS:
+            return line
+    return ""
+
+
+def _repeat_text(repeats: Sequence[tuple[int, int]], shown: int) -> str:
+    """`_repeated_line`'s text naming the first `shown` pairs."""
+    pairs = [f"citation {n} repeats citation {first}" for n, first in repeats[:shown]]
+    if rest := len(repeats) - shown:
+        named = ", ".join(pairs) + f" and {rest} more"
+    else:
+        named = " and ".join(
+            [", ".join(pairs[:-1]), pairs[-1]] if pairs[:-1] else pairs
+        )
+    return (
+        f"host citation check: {named}, the same source_id, page and"
+        " matched_text; list each citation once, cite a repeated passage again"
+        " by the marker of its first place, and renumber every marker after a"
+        " citation you remove"
+    )
 
 
 def _uncrossed_line(citations: Sequence[Citation]) -> str | None:

@@ -27,8 +27,8 @@ from caos.api.deps import IDENTITY_FIRST, Blobs, Caller, Methodology, Store
 from caos.api.identity import Actor
 from caos.api.reads.analysis import AnalysisQuery, read_analysis_without_tables
 from caos.api.reads.model import BLOB_BUDGET as MODEL_BLOBS
+from caos.api.reads.model import DECK_IO, accepted_forecast
 from caos.api.reads.model import IO_BUDGET as MODEL_IO
-from caos.api.reads.model import accepted_forecast
 from caos.api.wire import (
     BOOK_CASES_MAX,
     BOOK_PERIODS_MAX,
@@ -62,11 +62,12 @@ from caos.store.members import CaseListing, cases_for_member
 # The store's `now()` and the one listing query, then per credit exactly what
 # the Model section pays -- it is the same Analysis read and the same
 # live-source pin -- less the `visible_case` query the Model route makes and
-# this one does not, because standing comes from the listing. Linear in the
+# this one does not, because standing comes from the listing, and less the
+# rate deck the Model's credit model reads and the book does not. Linear in the
 # credits served, which `BOOK_CASES_MAX` bounds. Measured per credit in
 # `tests/test_book_section.py`.
 FIXED_IO = 2
-PER_ROW_IO = MODEL_IO - 1
+PER_ROW_IO = MODEL_IO - DECK_IO - 1
 IO_BUDGET = FIXED_IO + BOOK_CASES_MAX * PER_ROW_IO
 # Each credit's Analysis blobs, once each: the request's store remembers what
 # it verified, so no record is downloaded twice within a credit (ED-7).

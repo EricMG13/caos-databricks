@@ -669,6 +669,31 @@ def test_a_host_http_client_will_not_use_is_a_typed_refusal(
 _HANG_GUARD_SECONDS = 30.0
 
 
+@pytest.mark.parametrize("fails_at", ("construction", "start"))
+def test_scim_worker_start_failure_restores_the_slot(
+    platform: None, monkeypatch: pytest.MonkeyPatch, fails_at: str
+) -> None:
+    monkeypatch.setenv(identity.HOST_ENV, "https://caos.cloud.databricks.com")
+    slots = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(identity, "_EXCHANGES", slots)
+
+    def fail() -> None:
+        detail = "private worker startup details"
+        raise RuntimeError(detail)
+
+    def worker(**_kwargs: object) -> SimpleNamespace:
+        if fails_at == "construction":
+            fail()
+        return SimpleNamespace(start=fail)
+
+    monkeypatch.setattr(threading, "Thread", worker)
+    with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$") as refused:
+        scim_me("Bearer tok")
+    assert refused.value.__suppress_context__
+    assert slots.acquire(blocking=False), "startup failure must return its slot"
+    assert not slots.acquire(blocking=False), "return the slot exactly once"
+
+
 class _Trickle:
     """The `drip` token's pace, and the clock its lookup reads.
 

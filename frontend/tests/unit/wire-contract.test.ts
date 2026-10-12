@@ -140,9 +140,15 @@ test("Model is closed and binds the displayed run independently of latest", () =
       displayed_run_id: RUN,
       subject: null,
       displayed_run_status: "COMPLETE",
-      blocked_by: null,
+      snapshot_sha256: null,
+      currency: null,
+      unit: null,
+      exclude_unrealised: false,
+      rate_deck: null,
+      columns: [],
+      lines: [],
+      limitations: [],
       forecast: null,
-      unavailable_reason: "NO_ACCEPTED_FORECAST",
     },
     observed_at: AT,
     observed_empty: true,
@@ -596,6 +602,11 @@ describe("the v1 wire contract", () => {
       // Plan 2 Task 1: the global rate deck.
       "SaveRateDeck",
       "RateDeckSaved",
+      // Plan 3 Task 2: Add to Book and Withdraw.
+      "AddToBook",
+      "BookEntryAdded",
+      "WithdrawBookEntry",
+      "BookEntryWithdrawn",
     ];
     expect(Object.keys(V1_COMMAND_SHAPES).sort()).toEqual([...commands].sort());
     const shapes = new Map(Object.entries(V1_COMMAND_SHAPES));

@@ -227,16 +227,11 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     wire.RateDeckRefView: frozenset({"deck_id", "as_of"}),
     wire.ModelBody: frozenset(
-        {
-            "case_id",
-            "latest_run_id",
-            "displayed_run_id",
-            "subject",
-            "displayed_run_status",
-            "blocked_by",
-            "forecast",
-            "unavailable_reason",
-        }
+        (
+            "case_id latest_run_id displayed_run_id displayed_run_status subject"
+            " snapshot_sha256 currency unit exclude_unrealised rate_deck columns"
+            " lines limitations forecast"
+        ).split()
     ),
     wire.ModelDocument: ENVELOPE,
     RefusalBody: frozenset({"code", "clears"}),
@@ -509,6 +504,16 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.SaveRateDeck: frozenset({"as_of", "rates"}),
     wire.RateDeckSaved: frozenset({"deck_id"}),
     wire.RateDeckView: frozenset({"deck_id", "as_of", "saved_at", "rates"}),
+    # Plan 3 Task 2: Add to Book and Withdraw, and their receipts.
+    wire.AddToBook: frozenset(
+        (
+            "snapshot_sha256 sector industry_group domicile moodys moodys_outlook"
+            " sp sp_outlook fitch fitch_outlook"
+        ).split()
+    ),
+    wire.BookEntryAdded: frozenset({"entry_id"}),
+    wire.WithdrawBookEntry: frozenset({"snapshot_sha256", "reason", "note"}),
+    wire.BookEntryWithdrawn: frozenset({"entry_id"}),
 }
 
 REQUESTS: tuple[type[BaseModel], ...] = (
@@ -528,6 +533,8 @@ REQUESTS: tuple[type[BaseModel], ...] = (
     FreezeDeliverable,
     FileDeliverable,
     wire.SaveRateDeck,
+    wire.AddToBook,
+    wire.WithdrawBookEntry,
 )
 
 # What `frontend/src/wire/v1/shape.ts` can express. `title` and `description`
@@ -866,7 +873,7 @@ def test_every_section_router_declares_its_store_budget() -> None:
 
 def test_v1_command_models_are_closed_bounded_and_in_the_committed_schema() -> None:
     assert set(REQUESTS) <= set(V1_COMMANDS)
-    assert len(V1_COMMANDS) == len(set(V1_COMMANDS)) == 32
+    assert len(V1_COMMANDS) == len(set(V1_COMMANDS)) == 36
     defs = json.loads(COMMITTED.read_text(encoding="utf-8"))["$defs"]
     for model in V1_COMMANDS:
         assert model.__name__ in defs, model.__name__

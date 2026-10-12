@@ -31,10 +31,12 @@ from pydantic import (
     Field,
     StrictBool,
     TypeAdapter,
+    model_validator,
 )
 from pydantic.json_schema import models_json_schema
 
 from caos.api.identity import GlobalRole
+from caos.book.classification import OUTLOOKS
 from caos.calculators.credit_model.frame import Basis, Case, ColumnKind, Reason
 from caos.calculators.credit_model.layout import LineKind
 from caos.calculators.credit_model.layout import Unit as LineUnit
@@ -57,6 +59,7 @@ from caos.methodology.tables import (
 )
 from caos.pricing import MAX_MODEL_CHOICES
 from caos.refusals import RefusalCode
+from caos.store.book import WithdrawalReason
 from caos.store.gates import Gate, GateState
 from caos.store.members import Standing
 
@@ -346,6 +349,14 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.STORE_NOT_CONFIGURED: "An operator must configure the store.",
     _C.STORE_UNAVAILABLE: "Retry when the store answers.",
     _C.IDENTITY_UNAVAILABLE: "Retry when the workspace answers.",
+    _C.RUN_NOT_COMPLETE_FOR_BOOK: (
+        "Add a COMPLETE run of this case with CP-1 accepted, an issuer subject"
+        " and a Model that shows its grid."
+    ),
+    _C.BOOK_ENTRY_NOT_FOUND: "Name a book entry of this case.",
+    _C.BOOK_ENTRY_ALREADY_WITHDRAWN: (
+        "Nothing; the entry is withdrawn for good. Add a newer run instead."
+    ),
 }
 
 
@@ -1033,10 +1044,14 @@ class ModelForecast(BaseModel):
 
 # The credit model (Plan 2): CP-1's registers as the host's calculator lays
 # them out (`caos.calculators.credit_model`). Its text is CP-1's cell text or
-# a host label built on it, so it is bounded by a cell and a host prefix.
+# a host label built on it, so it is bounded by a cell and a host prefix; a
+# limitation lists the columns a note is on, so it is bounded by them.
 MODEL_COLUMNS_MAX = 64
+MODEL_LINES_MAX = 400
 MODEL_SOURCES_MAX = 8
 MODEL_TEXT_CHARS = 2 * CELL_CHARS
+MODEL_LIMITATIONS_MAX = 2048
+MODEL_LIMITATION_CHARS = MODEL_TEXT_CHARS + MODEL_COLUMNS_MAX * (MODEL_TEXT_CHARS + 2)
 ModelText = Annotated[str, Field(max_length=MODEL_TEXT_CHARS)]
 
 
@@ -1122,24 +1137,40 @@ class RateDeckRefView(BaseModel):
 
 
 class ModelBody(BaseModel):
-    """The accepted forecast, or why there is none.
-
-    `unavailable_reason` says there is no accepted forecast; the two fields
-    beside it say whether one is still coming. A body that carried neither
-    answered "not yet" to a run that had ended, which is the same blindness
-    Analysis carried until `blocked_by` joined it.
-    """
+    """The credit model of the displayed run's accepted CP-1, with CP-2G and
+    CP-CF's projections where the route ran them, or empty before CP-1 is
+    accepted (spec M1). `forecast` is the accepted CP-CF record, kept for
+    comparison. Every line has exactly one cell per column."""
 
     model_config = _CLOSED
 
     case_id: UUID
     latest_run_id: UUID | None
     displayed_run_id: UUID | None
-    subject: RunSubjectView | None
     displayed_run_status: RunStatus | None
-    blocked_by: BlockedByView | None
+    subject: RunSubjectView | None
+    # What Add to Book binds (invariant 5): the digest of the accepted
+    # artifacts this body shows and every figure an entry stores of it
+    # (`caos.store.book.snapshot_sha256`). None with no grid served, and in
+    # the view that excludes unrealised add-backs.
+    snapshot_sha256: Sha256 | None
+    currency: ModelText | None
+    unit: ModelText | None
+    exclude_unrealised: StrictBool
+    rate_deck: RateDeckRefView | None
+    columns: Annotated[list[ModelColumnView], Field(max_length=MODEL_COLUMNS_MAX)]
+    lines: Annotated[list[ModelLineView], Field(max_length=MODEL_LINES_MAX)]
+    limitations: Annotated[
+        list[Annotated[str, Field(max_length=MODEL_LIMITATION_CHARS)]],
+        Field(max_length=MODEL_LIMITATIONS_MAX),
+    ]
     forecast: ModelForecast | None
-    unavailable_reason: Literal["NO_ACCEPTED_FORECAST"] | None
+
+    @model_validator(mode="after")
+    def _one_cell_per_column(self) -> ModelBody:
+        if any(len(line.cells) != len(self.columns) for line in self.lines):
+            raise ValueError  # a line with a cell too many or too few
+        return self
 
 
 class BookColumn(BaseModel):
@@ -2026,6 +2057,65 @@ class RateDeckView(BaseModel):
     rates: Annotated[list[RateDeckRateView], Field(max_length=RATE_DECK_ROWS_MAX)]
 
 
+# Plan 3 Task 2: an analyst-stated classification field (spec B5). The
+# vocabularies are `caos.book.classification`'s, judged by the command.
+CLASSIFICATION_CHARS = 64
+RATING_CHARS = 8
+# The longest agency outlook is DEVELOPING; the command judges its word.
+OUTLOOK_CHARS = max(len(outlook) for outlook in OUTLOOKS)
+WITHDRAWAL_NOTE_CHARS = 1000
+ClassificationText = Annotated[str, Field(max_length=CLASSIFICATION_CHARS)]
+Rating = Annotated[str, Field(max_length=RATING_CHARS)]
+Outlook = Annotated[str, Field(max_length=OUTLOOK_CHARS)]
+
+
+class AddToBook(BaseModel):
+    """Add a COMPLETE run with CP-1 accepted to the Book (spec B3, B5): the
+    snapshot digest of the accepted artifacts the actor reviewed (invariant
+    5) and the analyst-stated classification. The subject, the metrics, the
+    adder and the time are the host's, never fields."""
+
+    model_config = _CLOSED
+
+    snapshot_sha256: Sha256
+    sector: ClassificationText
+    industry_group: ClassificationText | None
+    domicile: Annotated[str, Field(max_length=2)]
+    moodys: Rating | None
+    moodys_outlook: Outlook | None
+    sp: Rating | None
+    sp_outlook: Outlook | None
+    fitch: Rating | None
+    fitch_outlook: Outlook | None
+
+
+class BookEntryAdded(BaseModel):
+    """The receipt for an added entry."""
+
+    model_config = _CLOSED
+
+    entry_id: UUID
+
+
+class WithdrawBookEntry(BaseModel):
+    """Withdraw an entry, never delete it (spec B7): bound to the entry's
+    snapshot digest, with a reason, and a note that `OTHER` requires."""
+
+    model_config = _CLOSED
+
+    snapshot_sha256: Sha256
+    reason: WithdrawalReason
+    note: Annotated[str, Field(max_length=WITHDRAWAL_NOTE_CHARS)] | None
+
+
+class BookEntryWithdrawn(BaseModel):
+    """The receipt for a withdrawn entry."""
+
+    model_config = _CLOSED
+
+    entry_id: UUID
+
+
 V1_COMMANDS: tuple[type[BaseModel], ...] = (
     CreateCase,
     CaseCreated,
@@ -2059,6 +2149,10 @@ V1_COMMANDS: tuple[type[BaseModel], ...] = (
     DeliverableFiled,
     SaveRateDeck,
     RateDeckSaved,
+    AddToBook,
+    BookEntryAdded,
+    WithdrawBookEntry,
+    BookEntryWithdrawn,
 )
 
 

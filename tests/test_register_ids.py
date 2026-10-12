@@ -15,11 +15,17 @@ import json
 from dataclasses import replace
 from uuid import UUID
 
-from canonical_fixtures import BUNDLE, CONTRACT, identity
+import pytest
+from canonical_fixtures import BUNDLE, CONTRACT, handoff_markdown, identity, skill, wire
 
+from caos.methodology import handoff
 from caos.methodology.bundle import assemble_authority
 from caos.methodology.executor import SKILL
-from caos.methodology.handoff import feedback_lines
+from caos.methodology.handoff import (
+    MAX_FEEDBACK_CHARS,
+    feedback_lines,
+    kept_registers_line,
+)
 from caos.methodology.vendor import catalog
 
 
@@ -56,3 +62,66 @@ def test_an_id_ending_a_sentence_or_in_emphasis_is_written() -> None:
     # punctuation around the ID still write it; only `T4.10` does not.
     text = _every_register_but("T4.1") + "The bridge ties to **T4.1**, see T4.1.\n"
     assert _register_lines(text) == []
+
+
+def _kept(module_id: str, markdown: bytes) -> str | None:
+    """The keep-line a guided retry of `module_id` carries for this answer."""
+    body = wire(
+        markdown, [{"source_id": str(UUID(int=1)), "page": 1, "matched_text": "x"}]
+    )
+    return kept_registers_line(CONTRACT, module_id, body, skill(module_id))
+
+
+def _answer(module_id: str, omit_register: str | None = None) -> bytes:
+    """A handoff writing every register of `module_id` but `omit_register`."""
+    ident = replace(identity("CP-0"), module_id=module_id)
+    fields = {"module_id": module_id}
+    return handoff_markdown(ident, fields=fields, omit_register=omit_register)
+
+
+def test_a_carried_answer_is_told_every_register_it_must_keep() -> None:
+    """CP-4 live (F496, qualify run b0b6fd10): each repair fixed the fault it
+    was told and dropped whole register blocks it was not told about (14, then
+    8 registers). The retry now names the required registers the refused
+    answer carried, in the contract's order, and says they all come back."""
+    markdown = _answer("CP-1", omit_register="T4.2")
+    registers = list(
+        CONTRACT.completeness_check.load_contract(skill("CP-1").decode(), "CP-1")[
+            "registers"
+        ]
+    )
+    kept = [register for register in registers if register != "T4.2"]
+    named = ", ".join(f"`{register}`" for register in kept[:-1])
+    assert _kept("CP-1", markdown) == (
+        f"host register check: the refused answer holds {len(kept)} of the"
+        f" {len(registers)} required registers, {named} and `{kept[-1]}`; keep"
+        " every one, with all its rows, unchanged except where another line"
+        " names a fault"
+    )
+
+
+def test_the_keep_line_names_every_register_of_the_largest_modules() -> None:
+    """R40: CP-4 requires the most registers (31) and CP-1A the longest list
+    as written (22 snake_case IDs); a refused answer holding all of them gets
+    every one named, within the line limit."""
+    for module_id, count in (("CP-4", 31), ("CP-1A", 22)):
+        line = _kept(module_id, _answer(module_id))
+        assert line is not None
+        assert f"holds {count} of the {count} required registers" in line
+        assert line.count("`") == 2 * count and " more;" not in line
+        assert len(line) <= MAX_FEEDBACK_CHARS
+
+
+def test_past_the_line_limit_the_rest_are_counted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(handoff, "MAX_FEEDBACK_CHARS", 300)
+    line = _kept("CP-4", _answer("CP-4"))
+    assert line is not None and len(line) <= 300
+    named = line.count("`") // 2
+    assert 0 < named < 31 and f" and {31 - named} more;" in line
+
+
+def test_an_answer_with_no_register_gets_no_keep_line() -> None:
+    markdown = b"---\nmodule_id: CP-1\n---\n\n## Analysis\n\nNo tables.\n"
+    assert _kept("CP-1", markdown) is None

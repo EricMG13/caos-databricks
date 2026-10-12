@@ -78,7 +78,7 @@ def test_the_frontend_job_runs_the_two_security_tests_that_need_a_real_build() -
     never ran pytest, so neither test ever ran anywhere. CAOS_REQUIRE_NODE
     turns a skip there into a failure."""
     jobs = _jobs(CI_YAML.read_text(encoding="utf-8"))
-    frontend = jobs["frontend"]
+    frontend = jobs["frontend-checks"]
     assert "CAOS_REQUIRE_NODE" in frontend
     assert (
         "tests/test_frontend_modes.py::"

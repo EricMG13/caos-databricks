@@ -1125,6 +1125,11 @@ def test_the_surface_is_exactly_the_routes_it_declares(
         "/api/v1/cases/{case_id}/revisions/{revision_id}/package": (
             "read_deliverable_package"
         ),
+        # Plan 3 Task 2: Add to Book and Withdraw, WRITER+ on the case.
+        "/api/v1/cases/{case_id}/runs/{run_id}/book-entry": "add_to_book",
+        "/api/v1/cases/{case_id}/book-entries/{entry_id}/withdrawal": (
+            "withdraw_book_entry"
+        ),
     }
 
 
@@ -1216,10 +1221,18 @@ def test_every_section_read_depends_on_the_shared_dependencies() -> None:
         deps.request_blobs,
         methodology_bundle,
     ]
-    assert (
-        calls["/api/v1/cases/{case_id}/model"]
-        == calls["/api/v1/cases/{case_id}/analysis"]
-    )
+    # The Model's one query of its own, `exclude_unrealised`, is parsed with
+    # the run's, before the case's visibility opens the store.
+    assert calls["/api/v1/cases/{case_id}/model"] == [
+        actor_from_request,
+        deps.case_path,
+        deps.run_query,
+        model_read.exclude_unrealised_query,
+        deps.visible_case,
+        store_connection,
+        deps.request_blobs,
+        methodology_bundle,
+    ]
     committee_dependencies = [
         actor_from_request,
         deps.case_path,

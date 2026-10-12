@@ -983,7 +983,6 @@ CI_GATES = (
     "uv run complexipy caos scripts icm --max-complexity-allowed 15",
     "uv run pre-commit run --all-files --show-diff-on-failure",
     "uv run mypy caos scripts tests",
-    PYTEST_GATE,
     "uv run python scripts/scan_floors.py coverage.xml --cobertura",
     RACES_GATE,
     "uv run python scripts/scan_floors.py bandit.json --no-parse-errors "
@@ -1054,8 +1053,43 @@ _POSTGRES = {
 # way in too: `SKIP` skips pre-commit hooks, `PYTEST_ADDOPTS` narrows the
 # suite, and the races suite without `CAOS_REQUIRE_POSTGRES` skips whole.
 CI_STEPS: dict[tuple[str, ...], dict[str, str]] = {
+    (
+        'uv run python scripts/ci_tests.py shard "$SHARD" > "$RUNNER_TEMP/test-files"',
+        "mapfile -d '' files < \"$RUNNER_TEMP/test-files\"",
+        (
+            'COVERAGE_FILE=".coverage.shard-$SHARD" uv run pytest -n auto -m "not '
+            'live_provider" --max-worker-restart=0 -o faulthandler_timeout=600 '
+            '-ra --durations=25 --cov-fail-under=0 --cov-report= "${files[@]}"'
+        ),
+    ): {
+        "SHARD": "${{ matrix.shard }}",
+        "CAOS_TEST_POSTGRES_URL": "postgresql://postgres:caos@localhost:5432/caos",
+        "CAOS_REQUIRE_POSTGRES": "1",
+    },
+    ('test "$SHARDS_RESULT" = success',): {
+        "SHARDS_RESULT": "${{ needs.test-shards.result }}"
+    },
+    (
+        (
+            "uv run python scripts/ci_tests.py coverage coverage-shards > "
+            '"$RUNNER_TEMP/coverage-files"'
+        ),
+        "mapfile -d '' files < \"$RUNNER_TEMP/coverage-files\"",
+        'uv run coverage combine --keep "${files[@]}"',
+        "uv run coverage report --fail-under=80",
+        "uv run coverage xml -o coverage.xml",
+    ): {},
+    (
+        (
+            'test "$CHECKS_RESULT" = success && test "$A11Y_RESULT" = success && '
+            'test "$WORKBENCH_RESULT" = success'
+        ),
+    ): {
+        "CHECKS_RESULT": "${{ needs.frontend-checks.result }}",
+        "A11Y_RESULT": "${{ needs.frontend-a11y.result }}",
+        "WORKBENCH_RESULT": "${{ needs.frontend-workbench.result }}",
+    },
     **{(gate,): {} for gate in CI_GATES},
-    (PYTEST_GATE,): _POSTGRES,
     (RACES_GATE,): _POSTGRES,
     (SHIPPED_BOOT,): {"CAOS_TEST_POSTGRES_URL": _POSTGRES["CAOS_TEST_POSTGRES_URL"]},
     BASELINE_SCRIPT: {
@@ -1083,6 +1117,20 @@ _CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 _SETUP_UV = "astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7"
 _SETUP_NODE = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
 CI_ACTIONS: tuple[dict[object, object], ...] = (
+    {
+        "uses": "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f",
+        "with": {
+            "name": "coverage-${{ matrix.shard }}",
+            "path": ".coverage.shard-*",
+            "include-hidden-files": True,
+            "if-no-files-found": "error",
+            "retention-days": 1,
+        },
+    },
+    {
+        "uses": "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
+        "with": {"pattern": "coverage-*", "path": "coverage-shards"},
+    },
     {"uses": _CHECKOUT},
     {"uses": _CHECKOUT, "with": {"fetch-depth": 0}},
     {"uses": _SETUP_UV, "with": {"version": "0.12.5", "enable-cache": True}},
@@ -1124,6 +1172,22 @@ CI_TOP_FREE = frozenset({"name", "concurrency", "jobs"})
 # A job's own keys: `defaults`, `env`, `continue-on-error`, `container`,
 # `strategy` and `needs` each change how, where or whether its gates run.
 JOB_KEYS = frozenset({"runs-on", "timeout-minutes", "services", "steps", "if"})
+# These jobs carry cross-job gate contracts: all four data files, final
+# coverage/races, and a required success status over every frontend job.
+# Pin the whole parsed jobs so strategy/needs/always cannot disable a gate.
+# Deliberate changes update these hashes after reviewing the workflow diff.
+CI_PARALLEL_JOBS = {
+    "test-shards": "9bb821fc047b9e80dc51f9e0868a666262e2b5bc1306a9ca59a8f29b66499c74",
+    "test": "6aa3eaf40e78967d3fa312e4665c7033dd415bc2fc0d8faf574882c701e76f9a",
+    "frontend-checks": (
+        "5e3dee3c5f88eb0414710dc1751bb8607a5b1d7f0e7e2466d97595891fa585cf"
+    ),
+    "frontend-a11y": "83461599c1ad91e514fb1d7b4a510f445a188fe123149b80113893dd6170ad2d",
+    "frontend-workbench": (
+        "887cc6b26ef366f94fae6c3d48f6f25254cbc69d2cb2a1daa9d8171ad6a23068"
+    ),
+    "frontend": "f7bc9dc48458e68c4a41d3d9183ca9374b7c660147c1c9dc895662059382c4e2",
+}
 RUNS_ON = "ubuntu-latest"
 # A step's own keys: `if`, `continue-on-error`, `working-directory` and
 # `shell` each change whether, where or how its script runs.
@@ -1254,6 +1318,27 @@ def _script_problems(job: str, run: str, given: dict[object, object]) -> list[st
     return problems
 
 
+def _parallel_job_problems(ci_file: dict[object, object]) -> list[str]:
+    """Every parallel job's exact controls and gate placement remain pinned."""
+    jobs = _map(ci_file.get("jobs"))
+    problems = []
+    for name, expected in CI_PARALLEL_JOBS.items():
+        try:
+            canonical = json.dumps(
+                jobs.get(name),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+        except (TypeError, ValueError):
+            problems.append(f"ci: parallel job {name} is not a JSON mapping")
+            continue
+        actual = sha256(canonical.encode()).hexdigest()
+        if actual != expected:
+            problems.append(f"ci: parallel job {name} is not as pinned ({actual})")
+    return problems
+
+
 def _ci_problems(root: Path) -> list[str]:
     """`ci.yml` read as Actions reads it (W2, W3, N3): the workflow's own
     keys, each job's, and each step against the pins, then every pinned
@@ -1262,10 +1347,11 @@ def _ci_problems(root: Path) -> list[str]:
     ci_file = _ci_file(ci_text)
     if ci_file is None:
         return ["ci: .github/workflows/ci.yml is missing or not a mapping"]
-    problems = _ci_top_problems(ci_file)
+    problems = _ci_top_problems(ci_file) + _parallel_job_problems(ci_file)
     present: set[tuple[str, ...]] = set()
     for name, job in _jobs(ci_file):
-        problems += _job_problems(name, job)
+        if name not in CI_PARALLEL_JOBS:
+            problems += _job_problems(name, job)
         for step in _seq(job.get("steps")):
             problems += _step_problems(name, _map(step))
             run = _map(step).get("run")

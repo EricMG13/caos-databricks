@@ -98,6 +98,7 @@ from caos.methodology.handoff import (
     capped,
     carried_answer,
     feedback_lines,
+    kept_registers_line,
     markers,
     parse_response,
     readiness_set_line,
@@ -715,6 +716,8 @@ class _Context:
     feedback: tuple[str, ...] = ()
     # The refused answer that retry is asked to correct (D104), or None.
     refused_answer: str | None = None
+    # The registers that answer holds and must keep (F631), or None.
+    kept: str | None = None
     # Each direct upstream's unverified citations (D106), whose markers the
     # register names as unlocated (D107).
     unverified: dict[str, tuple[UnverifiedCitation, ...]] = field(default_factory=dict)
@@ -954,10 +957,15 @@ def _prompt_context(
     with suppress(Refusal):  # an attempt from before ordinals: this identity
         identity = replace(identity, ordinal=attempt_ordinal(conn, refused))
     lines = feedback_lines(contract, pathways, identity, body, skill=skill)
-    feedback = capped([line for line in host if line] + list(lines))
+    faults = [line for line in host if line] + list(lines)
     # The answer rides only beside its checks (D104): with none, no block.
-    answer = carried_answer(body) if feedback else None
-    return replace(context, feedback=feedback, refused_answer=answer)
+    answer = carried_answer(body) if faults else None
+    # Beside a carried answer, the registers it must keep (F631); never
+    # alone, which would ask for no change. `_prompt` places it.
+    kept = answer and kept_registers_line(contract, assignment.module_id, body, skill)
+    return replace(
+        context, feedback=capped(faults), refused_answer=answer, kept=kept or None
+    )
 
 
 def _demand_faults(
@@ -1582,10 +1590,21 @@ def _prompt(
         route=assignment.route,
         source_set=context.source_set,
         page_maps=context.selection.page_maps,
-        retry_feedback=context.feedback,
+        retry_feedback=_retry_lines(context),
         refused_answer=context.refused_answer,
         pack_tag=context.measured_tag or evidence_tag(context.pin or context.delivered),
     )
+
+
+def _retry_lines(context: _Context) -> tuple[str, ...]:
+    """The retry's lines: the keep-line first, outside the check cap (R44:
+    the cap counts checks, and the keep-line is a fact bounded at
+    `MAX_FEEDBACK_CHARS`), then the capped checks. Only beside the answer it
+    speaks of: a retry `_sent_prompt` sends without the answer asks for the
+    whole answer again, and drops it (R45), priced and sent alike."""
+    if context.kept and context.refused_answer is not None:
+        return (context.kept, *context.feedback)
+    return context.feedback
 
 
 def _sent_prompt(

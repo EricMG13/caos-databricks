@@ -223,6 +223,9 @@ const RefusalCode = enumOf([
   "STORE_UNAVAILABLE",
   "IDENTITY_UNAVAILABLE",
   "STREAM_LIMIT_REACHED",
+  "RUN_NOT_COMPLETE_FOR_BOOK",
+  "BOOK_ENTRY_NOT_FOUND",
+  "BOOK_ENTRY_ALREADY_WITHDRAWN",
 ]);
 const RunSummary = object({
   run_id: uuid,
@@ -556,15 +559,85 @@ const ModelForecast = object({
   perimeter: text,
   periods: array(ModelPeriod, 240),
 });
+// Plan 2: the credit model of the run's accepted CP-1, laid out by the host
+// calculator. Every figure is the server's exact decimal string, null with a
+// reason where there is none; the browser performs no arithmetic. Text is
+// CP-1's cell text or a host label on it (two cells' worth); a limitation
+// lists the columns its note is on.
+const MODEL_TEXT = 8192;
+const modelText = string({ max: MODEL_TEXT });
+const modelDecimal = string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" });
+const ModelSourceView = object({
+  source_id: modelText,
+  source_locator: modelText,
+  // The CP-1 citation the cell's `[C<n>]` marker names (D107), else null.
+  citation: nullable(CitationView),
+});
+const ModelCellView = object({
+  value: nullable(modelDecimal),
+  reason: nullable(
+    enumOf([
+      "NOT_PROJECTED",
+      "NOT_APPLICABLE",
+      "NOT_SOURCED",
+      "COMPONENT_MISSING",
+      "ZERO_OR_NEGATIVE_DENOMINATOR",
+      "NOT_STATED",
+    ]),
+  ),
+  basis: nullable(enumOf(["REPORTED", "CALCULATED", "PRO_FORMA", "PROJECTED", "DRIVER"])),
+  stated: nullable(modelDecimal),
+  note: nullable(modelText),
+  sources: array(ModelSourceView, 8),
+});
+const ModelColumnView = object({
+  column_id: modelText,
+  kind: enumOf(["QUARTER", "PYTD", "YTD", "FY", "LTM", "PF_LTM", "PROJECTED"]),
+  label: modelText,
+  period_id: nullable(modelText),
+  fiscal_year: modelText,
+  end_date: nullable(modelText),
+  days: nullable(int()),
+  case: nullable(enumOf(["BASE", "DOWNSIDE"])),
+});
+const ModelTermsView = object({
+  reference_rate: modelText,
+  spread_or_coupon: modelText,
+  floor: modelText,
+  maturity: modelText,
+  amortisation: modelText,
+});
+const ModelLineView = object({
+  line_id: modelText,
+  band: modelText,
+  label: modelText,
+  kind: enumOf(["ACCOUNT", "SUBTOTAL", "RATIO", "MEMO", "PF", "GROWTH"]),
+  unit: enumOf(["MONEY", "PERCENT", "MULTIPLE", "DAYS", "COUNT", "RATE", "KPI"]),
+  unit_label: nullable(modelText),
+  rank: nullable(modelText),
+  terms: nullable(ModelTermsView),
+  cells: array(ModelCellView, 64),
+});
+const RateDeckRefView = object({
+  deck_id: uuid,
+  as_of: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+});
 const ModelBody = object({
+  snapshot_sha256: nullable(hash),
   case_id: uuid,
   latest_run_id: nullable(uuid),
   displayed_run_id: nullable(uuid),
-  subject: nullable(RunSubjectView),
   displayed_run_status: nullable(enumOf(RUN_STATUSES)),
-  blocked_by: nullable(BlockedByView),
+  subject: nullable(RunSubjectView),
+  currency: nullable(modelText),
+  unit: nullable(modelText),
+  exclude_unrealised: bool,
+  rate_deck: nullable(RateDeckRefView),
+  columns: array(ModelColumnView, 64),
+  lines: array(ModelLineView, 400),
+  limitations: array(string({ max: MODEL_TEXT + 64 * (MODEL_TEXT + 2) }), 2048),
+  // The accepted CP-CF record, kept for comparison.
   forecast: nullable(ModelForecast),
-  unavailable_reason: nullable(literal("NO_ACCEPTED_FORECAST")),
 });
 const ModelDocument = sectionDocument(ModelBody);
 
@@ -837,6 +910,12 @@ export const V1_SHAPES = {
   ModelValue,
   ModelPeriod,
   ModelForecast,
+  ModelSourceView,
+  ModelCellView,
+  ModelColumnView,
+  ModelTermsView,
+  ModelLineView,
+  RateDeckRefView,
   ModelBody,
   ModelDocument,
   BookColumn,
@@ -915,6 +994,9 @@ export type UploadDocument = Infer<typeof UploadDocument>;
 export type RunSectionDocument = Infer<typeof RunSectionDocument>;
 export type AnalysisDocument = Infer<typeof AnalysisDocument>;
 export type ModelDocument = Infer<typeof ModelDocument>;
+export type ModelLineView = Infer<typeof ModelLineView>;
+export type ModelColumnView = Infer<typeof ModelColumnView>;
+export type ModelCellView = Infer<typeof ModelCellView>;
 export type BookDocument = Infer<typeof BookDocument>;
 export type BookRow = Infer<typeof BookRow>;
 export type BookCell = Infer<typeof BookCell>;

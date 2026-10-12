@@ -206,6 +206,12 @@ class RefusalCode(StrEnum):
     # request later, with nobody doing anything in between, plausibly succeeds,
     # because a watcher only has to close a tab.
     STREAM_LIMIT_REACHED = "STREAM_LIMIT_REACHED"
+    # Plan 3 Task 2: a run joins the Book only COMPLETE, with CP-1 accepted
+    # and a pinned issuer subject (spec B1, B3).
+    RUN_NOT_COMPLETE_FOR_BOOK = "RUN_NOT_COMPLETE_FOR_BOOK"
+    BOOK_ENTRY_NOT_FOUND = "BOOK_ENTRY_NOT_FOUND"
+    # A withdrawal is final, and a run has one entry for good (spec B7).
+    BOOK_ENTRY_ALREADY_WITHDRAWN = "BOOK_ENTRY_ALREADY_WITHDRAWN"
 
 
 class Refusal(Exception):
