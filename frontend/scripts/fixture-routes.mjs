@@ -74,6 +74,17 @@ export function armedRoute(section, action) {
   return `${sectionRoute(section, "acts")}&arm=${action}`;
 }
 
+/** A page with a dialog or panel opened before the a11y gate scans (`dialog`):
+    the Add to Book dialog on the Model, the Withdraw panel on the Book. The
+    page itself ignores the parameter.
+    @param {string} section
+    @param {"add-to-book" | "withdraw"} dialog
+    @param {string | null} [fixture] */
+export function dialogRoute(section, dialog, fixture = null) {
+  const route = sectionRoute(section, fixture);
+  return `${route}${route.includes("?") ? "&" : "?"}dialog=${dialog}`;
+}
+
 export const STATE_ROUTES = [
   sectionRoute("directory", "observed-empty"),
   sectionRoute("book", "observed-empty"),
@@ -94,6 +105,11 @@ export const STATE_ROUTES = [
   sectionRoute("report", "acts"),
   armedRoute("report", "SIGN_OPINION"),
   armedRoute("upload", "WITHDRAW_SOURCE"),
+  // Spec B3, B5, B7: the Add to Book dialog (a Model the server offers it on)
+  // and the Withdraw panel (a Book entry the viewer may withdraw), each opened
+  // before the scan, at 320 px too.
+  dialogRoute("model", "add-to-book", "acts"),
+  dialogRoute("book", "withdraw"),
   // Analysis opens on its conclusion, which carries no table, so a module's
   // figures were never scanned: CP-1's charts, and N56's comparator,
   // add-back validation, division growth and catalyst list.

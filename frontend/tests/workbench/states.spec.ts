@@ -61,3 +61,27 @@ test("a stale view holds its figures until Reload", async ({ page }) => {
   await expect(stale).toHaveCount(0);
   await expect(figure).toHaveText(/^12 /);
 });
+
+test("a read under the desk-wide grant asks for nothing a member alone may read", async ({
+  page,
+}) => {
+  // The fixture serves Analysis as the grant does: no standing, no actions, no
+  // id of the case's other runs. The page then opens no event stream and
+  // requests no other section, and draws no mutation control.
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/")) requests.push(`${request.method()} ${path}`);
+  });
+  await page.goto(`/analysis/?case=${CASE}&fixture=granted&tab=rn-cp-0`);
+  await expect(page.locator("[data-handoff]").first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Add to Book|Withdraw|Start|Retry|Cancel/ }),
+  ).toHaveCount(0);
+  // Let any stream the page might open show itself.
+  await page.waitForTimeout(1_000);
+  expect(
+    requests.filter((request) => /\/(events|run|report|committee|revisions)\b/.test(request)),
+  ).toEqual([]);
+  expect(requests.filter((request) => request.startsWith("POST"))).toEqual([]);
+});

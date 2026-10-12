@@ -182,3 +182,18 @@ test("on a wide desk screen the summary stops at its reading measure", async ({ 
   expect(measure.headline).toBeLessThanOrEqual(limit);
   expect(measure.cells).toBeLessThanOrEqual(limit);
 });
+
+test("the Book reads the desk, not a case: one table under its header and one nav", async ({
+  page,
+}) => {
+  const requests = apiRequests(page);
+  await page.goto("/book/");
+  await expect(page.locator("main#body [data-surface-state='loading']")).toHaveCount(0);
+  await expect(page.getByRole("banner").getByRole("heading", { level: 1 })).toHaveText("Book");
+  await expect(page.locator("nav")).toHaveCount(1);
+  await expect(page.getByRole("table", { name: "Issuers in the Book" })).toBeAttached();
+  await expect(page.locator("[data-book-count]")).toHaveText(/^\d+ of \d+ issuers$/);
+  // The desk-wide document is the only section read; no case is named.
+  expect(requests.filter((path) => path.startsWith("/api/v1/cases/"))).toEqual([]);
+  expect(requests).toContain("/api/v1/book");
+});
