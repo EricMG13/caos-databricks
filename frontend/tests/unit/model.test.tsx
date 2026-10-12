@@ -104,6 +104,36 @@ describe("Model v1", () => {
     expect(screen.queryByText("123.45")).toBeNull();
   });
 
+  test.each([
+    ["CP-1 model tables unreadable", true],
+    ["CP-1 model tables unreadable", false],
+    ["model exceeds the grid bounds", true],
+    ["model exceeds the grid bounds", false],
+  ])("renders empty-grid limitation %s with forecast %s", (limitation, hasForecast) => {
+    const source = model();
+    const document = parseModelDocument({
+      ...source,
+      status: "partial",
+      body: {
+        ...source.body,
+        limitations: [limitation],
+        forecast: hasForecast ? source.body.forecast : null,
+      },
+    });
+    const { container } = render(<ModelSection document={document} tab={null} />);
+    expect(container.querySelector("[data-model-limitations]")).toHaveTextContent(limitation);
+    expect(container.querySelector("[aria-label='Credit model lines']")).toBeNull();
+    expect(container.querySelector("[data-model-lines] .tag")).toBeNull();
+    if (hasForecast) {
+      expect(container).toHaveTextContent("Accepted forecast");
+      expect(container).toHaveTextContent("123.45");
+    } else {
+      expect(container.querySelector("[data-model-unavailable]")).toHaveTextContent(
+        "No accepted CP-CF forecast",
+      );
+    }
+  });
+
   test("renders the credit model's lines as server strings, a gap where a cell has none", () => {
     const cell = (value: string | null) => ({
       value,

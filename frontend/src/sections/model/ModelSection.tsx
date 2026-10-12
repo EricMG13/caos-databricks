@@ -125,42 +125,46 @@ type ModelBody = ModelDocument["body"];
     server's figure rounded for reading (its exact decimal is the title), or
     a dash with the reason as the title. */
 function CreditModelTable({ body }: { body: ModelBody }) {
-  if (!body.lines.length) return null;
+  if (!body.lines.length && !body.limitations.length) return null;
   return (
     <section className="pnl" data-model-lines>
       <header>
         <h2>Credit model</h2>
-        <span className="tag">
-          {body.currency} · {body.unit}
-        </span>
+        {body.lines.length > 0 && (
+          <span className="tag">
+            {body.currency} · {body.unit}
+          </span>
+        )}
       </header>
-      <div className="pb flush scroll" tabIndex={0} role="region" aria-label="Credit model lines">
-        <table className="dense">
-          <thead>
-            <tr>
-              <th className="l">Line</th>
-              {body.columns.map((column) => (
-                <th key={column.column_id}>{column.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {body.lines.map((line) => (
-              <tr key={line.line_id}>
-                <td className="l">{line.label}</td>
-                {line.cells.map((cell, index) => (
-                  <td
-                    key={body.columns[index]?.column_id ?? index}
-                    title={cell.value ?? cell.reason ?? undefined}
-                  >
-                    {cell.value !== null ? displayDecimal(cell.value) : "—"}
-                  </td>
+      {body.lines.length > 0 && (
+        <div className="pb flush scroll" tabIndex={0} role="region" aria-label="Credit model lines">
+          <table className="dense">
+            <thead>
+              <tr>
+                <th className="l">Line</th>
+                {body.columns.map((column) => (
+                  <th key={column.column_id}>{column.label}</th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {body.lines.map((line) => (
+                <tr key={line.line_id}>
+                  <td className="l">{line.label}</td>
+                  {line.cells.map((cell, index) => (
+                    <td
+                      key={body.columns[index]?.column_id ?? index}
+                      title={cell.value ?? cell.reason ?? undefined}
+                    >
+                      {cell.value !== null ? displayDecimal(cell.value) : "—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <div className="pb">
         <dl className="kv">
           <NoteRows label="Model limitations" values={body.limitations} data-model-limitations />
