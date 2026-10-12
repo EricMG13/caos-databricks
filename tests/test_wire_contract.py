@@ -229,7 +229,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.ModelBody: frozenset(
         (
             "case_id latest_run_id displayed_run_id displayed_run_status subject"
-            " currency unit exclude_unrealised rate_deck columns lines limitations"
+            " snapshot_sha256 currency unit exclude_unrealised rate_deck"
+            " columns lines limitations"
             " forecast"
         ).split()
     ),
