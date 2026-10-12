@@ -411,8 +411,8 @@ def test_growth_compares_like_periods() -> None:
     assert ltm["bu_growth:corporate_eliminations"] == na
 
 
-def test_growth_takes_a_like_period_within_a_week_of_a_year_earlier() -> None:
-    now = _fy("FY:B", "2025-12-31", "FY2025")
+def test_unlabelled_fy_growth_keeps_the_date_window_fallback() -> None:
+    now = _fy("FY:B", "2025-12-31", "FYX")
     cells = {"FY:B": _cells(revenue="110", adjusted_ebitda="0")}
     for end, found in (
         ("2024-12-24", True),  # 372 days
@@ -799,3 +799,37 @@ def test_column_footings_read_every_period_a_column_is_built_on() -> None:
         ),
     )
     assert column_footings(anchored, columns).anchor == (None, "q")
+
+
+@pytest.mark.parametrize(
+    ("current_days", "prior_days"), [(275, 366), (365, 275), (457, 366), (365, 457)]
+)
+@pytest.mark.parametrize("projected", [False, True])
+def test_fy_growth_refuses_unequal_durations(
+    current_days: int,
+    prior_days: int,
+    projected: bool,
+) -> None:
+    current = replace(_fy("FY:B", "2025-12-31", "2025"), days=current_days)
+    if projected:
+        current = replace(current, kind="PROJECTED", case="BASE")
+    prior = replace(_fy("FY:A", "2024-12-31", "2024"), days=prior_days)
+    frame = {
+        "FY:B": _cells(
+            revenue="110", adjusted_ebitda="22", **{"bu:x": "55", "bu:corp": "5"}
+        ),
+        "FY:A": _cells(
+            revenue="100", adjusted_ebitda="20", **{"bu:x": "50", "bu:corp": "4"}
+        ),
+    }
+    out = metric_frame((current, prior), frame, {}, corporate=frozenset({"corp"}))[
+        "FY:B"
+    ]
+    for key in ("revenue_growth", "adjusted_ebitda_growth", "bu_growth:x"):
+        assert out[key] == Cell(
+            None,
+            "COMPONENT_MISSING",
+            note="fiscal year durations differ (FY:B vs FY:A)",
+        )
+    assert out["bu_growth:corp"] == Cell(None, "NOT_APPLICABLE")
+    assert out["revenue"] == frame["FY:B"]["revenue"]

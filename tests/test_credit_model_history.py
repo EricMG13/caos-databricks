@@ -25,6 +25,7 @@ from caos.calculators.credit_model._cells import (
     UNSPANNED,
     Footing,
     anchor_period,
+    odd_year,
     off_footing,
     treated_as_zero,
 )
@@ -3879,3 +3880,8 @@ def test_a_53_week_year_with_its_extra_week_in_q1_resolves_its_ltm() -> None:
     )
     quarterly = _frame(quarters)
     assert quarterly["LTM:LTM_Q2_2026"]["acct:revenue"].value == 11654
+
+
+def test_odd_year_names_the_fiscal_year_and_whether_it_is_short_or_long() -> None:
+    assert odd_year("FY2025", True) == "short fiscal year (FY2025)"
+    assert odd_year("FY2025", False) == "long fiscal year (FY2025)"

@@ -1148,6 +1148,100 @@ def test_the_bases_are_keyed_by_their_offset_from_the_base_year() -> None:
     assert set(model_read.book_bases(bare)) == {"DOWNSIDE_FY1", "DOWNSIDE_FY2"}
 
 
+@pytest.mark.parametrize("reverse_periods", [False, True])
+@pytest.mark.parametrize("latest_label", ["2025", "FY2024/25"])
+@pytest.mark.parametrize(
+    ("span", "why"),
+    [
+        ((None, None, None), "components do not span the period"),
+        (("2024-01-01", "2024-06-30", "182"), "short fiscal year (FY2025)"),
+    ],
+)
+def test_book_years_follow_the_latest_label_when_history_displays_it_first(
+    reverse_periods: bool,
+    latest_label: str,
+    span: tuple[str | None, str | None, str | None],
+    why: str,
+) -> None:
+    """Publicly parsed FY2025 is the base even before dated FY2024 in the
+    historical display. Withheld figures still retain all six Book years."""
+    from credit_model_fixture import example_request
+    from test_forecast_handoff import forecast_markdown
+    from test_model_inputs import NULL, PERIOD_COLUMNS, _period, _with_periods, cell
+
+    from caos.methodology.forecast import forecast_inputs, forecast_projection
+    from caos.methodology.model_inputs import cp1_registers
+
+    start, end, days = span
+    rows = []
+    for period_id, year, first, last, count in (
+        ("FY2024", "2024", "2024-01-01", "2024-12-31", "366"),
+        ("FY2025", latest_label, start, end, days),
+    ):
+        row = list(_period(period_id, "FY", year, None))
+        for name, text in (
+            ("start_date", first),
+            ("end_date", last),
+            ("day_count", count),
+        ):
+            row[PERIOD_COLUMNS.index(name)] = NULL if text is None else cell(text)
+        rows.append(tuple(row))
+    regs = cp1_registers(_with_periods(*(reversed(rows) if reverse_periods else rows)))
+    raw = forecast_markdown(example_request())
+    projection = forecast_projection(raw)
+    request, _bindings = forecast_inputs(raw)
+    assert projection["status"] == "complete"
+    inputs = ModelInputs(regs, request, (), (), None)
+    model = credit_model(inputs)
+    assert [c.period_id for c in model.columns if c.kind == "FY"] == [
+        "FY2025",
+        "FY2024",
+    ]
+    projected = [c.column_id for c in model.columns if c.kind == "PROJECTED"]
+    assert projected == [
+        "BASE:2026",
+        "BASE:2027",
+        "BASE:2028",
+        "DOWNSIDE:2026",
+        "DOWNSIDE:2027",
+        "DOWNSIDE:2028",
+    ]
+    served = model_read.ServedModel(inputs, model, (), None, None, (), 0)
+    figures = model_read.entry_figures(served)
+    expected = {
+        "BASE_FY1": "2026",
+        "BASE_FY2": "2027",
+        "BASE_FY3": "2028",
+        "DOWNSIDE_FY1": "2026",
+        "DOWNSIDE_FY2": "2027",
+        "DOWNSIDE_FY3": "2028",
+    }
+    assert {
+        basis: metrics["fiscal_year"]
+        for basis, metrics in figures.metrics.items()
+        if "fiscal_year" in metrics
+    } == expected
+    note = f"projection base: {why}"
+    assert any(note in limitation for limitation in figures.limitations)
+    for basis in expected:
+        assert all(
+            value is None
+            for key, value in figures.metrics[basis].items()
+            if key != "fiscal_year"
+        )
+    for index, column in enumerate(model.columns):
+        if column.kind == "PROJECTED":
+            for line in model.lines:
+                if line.line_id in {"revenue", "adjusted_ebitda", "total_debt"}:
+                    projected_cell = line.cells[index]
+                    assert (projected_cell.value, projected_cell.reason) == (
+                        None,
+                        "COMPONENT_MISSING",
+                    )
+                    assert note in (projected_cell.note or "")
+    assert model_read.entry_snapshot((), served) == snapshot_sha256((), figures)
+
+
 def test_an_other_withdrawal_needs_a_note_a_reader_can_see(
     added: tuple[UUID, str, UUID], client: TestClient, harness: _Harness
 ) -> None:

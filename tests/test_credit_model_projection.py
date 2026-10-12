@@ -23,7 +23,7 @@ from caos.calculators.cash_flow import cash_flow_forecast
 from caos.calculators.credit_model import projection as projection_module
 from caos.calculators.credit_model._cells import CONTEXT, UNSPANNED
 from caos.calculators.credit_model.assemble import ModelInputs, credit_model
-from caos.calculators.credit_model.debt import HISTORY_INCOMPLETE
+from caos.calculators.credit_model.debt import COUPON_AS_FRACTION, HISTORY_INCOMPLETE
 from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.calculators.credit_model.history import account_frame, historical_columns
 from caos.calculators.credit_model.projection import (
@@ -910,7 +910,9 @@ def test_a_fiscal_year_ending_in_september_projects_to_september() -> None:
     regs = replace(
         regs,
         periods=tuple(
-            replace(p, end_date="2025-09-30") if p.period_id == "FY2025" else p
+            replace(p, start_date="2024-10-01", end_date="2025-09-30")
+            if p.period_id == "FY2025"
+            else p
             for p in regs.periods
         ),
     )
@@ -1114,6 +1116,13 @@ def test_debt_cp_cf_issues_on_no_facility_mix_bears_the_implied_rate() -> None:
     assert second["cash_interest"].value == CONTEXT.minus(
         CONTEXT.multiply(_IMPLIED, Decimal(4178))
     )
+    # The no-mix note reaches the rate, not the interest: that carries the
+    # base's own note, as before the coupon reading.
+    for column in ("BASE:2027", "BASE:2028"):
+        cells = frame[column]
+        assert (
+            cells["cash_interest"].note == cells["interest_bearing_debt_opening"].note
+        )
     assert second["cash_closing"].value is not None
     assert frame["BASE:2028"]["cash_closing"].value is not None
     # With the implied rate refused too, its reason is carried.
@@ -1177,22 +1186,29 @@ def test_rate_term_bounds_are_inclusive() -> None:
 
 
 @pytest.mark.parametrize(
-    ("written", "expected"),
+    ("written", "text", "expected"),
     [
-        ("0.065", (Decimal("0.065"), "coupon read as a fraction")),
-        ("0", (Decimal(0), None)),
-        ("0.4", (_WRONG_UNIT_IMPLIED, "term out of range")),
-        ("0.5", (Decimal("0.005"), None)),
-        ("30", (Decimal("0.3"), None)),
-        ("30.01", (_WRONG_UNIT_IMPLIED, "term out of range")),
-        ("-0.01", (_WRONG_UNIT_IMPLIED, "term out of range")),
+        ("0.065", "6.5%", (Decimal("0.065"), "coupon read as a fraction")),
+        ("0.250", "0.250%", (Decimal("0.0025"), None)),
+        ("0.065", "Senior notes", (_WRONG_UNIT_IMPLIED, "term out of range")),
+        ("0", "", (Decimal(0), None)),
+        ("0.4", "40%", (_WRONG_UNIT_IMPLIED, "term out of range")),
+        ("0.5", "", (Decimal("0.005"), None)),
+        ("30", "", (Decimal("0.3"), None)),
+        ("30.01", "", (_WRONG_UNIT_IMPLIED, "term out of range")),
+        ("-0.01", "", (_WRONG_UNIT_IMPLIED, "term out of range")),
     ],
 )
 def test_a_coupon_prices_in_percent_as_the_reader_reads_it(
-    written: str, expected: tuple[Decimal, str | None]
+    written: str, text: str, expected: tuple[Decimal, str | None]
 ) -> None:
-    coupon, as_fraction = coupon_percent(Decimal(written))
-    row = replace(_row("ssn29"), fixed_rate=coupon, coupon_as_fraction=as_fraction)
+    coupon, as_fraction, decided = coupon_percent(Decimal(written), text)
+    row = replace(
+        _row("ssn29"),
+        fixed_rate=coupon,
+        coupon_as_fraction=as_fraction,
+        terms_out_of_range=not decided,
+    )
 
     assert facility_rate(row, example_deck(), "BASE", 1, Cell(_WRONG_UNIT_IMPLIED)) == (
         expected
@@ -1222,17 +1238,27 @@ def test_a_coupon_on_a_floating_row_never_moves_its_rate() -> None:
     assert priced[1] is None
 
 
+def _read_coupon(written: str, text: str) -> dict[str, Any]:
+    """ssn29's terms as the reader reads a coupon `written` beside `text`."""
+    coupon, as_fraction, decided = coupon_percent(Decimal(written), text)
+    return {
+        "fixed_rate": coupon,
+        "coupon_as_fraction": as_fraction,
+        "terms_out_of_range": not decided,
+    }
+
+
 def test_a_coupon_read_as_a_fraction_is_noted_on_the_facility() -> None:
-    coupon, as_fraction = coupon_percent(Decimal("0.065"))
-    terms = {"fixed_rate": coupon, "coupon_as_fraction": as_fraction}
+    terms = _read_coupon("0.065", "6.500%")
     first = _frame(_inputs(_terms(example_registers(), "ssn29", terms)))["BASE:2026"]
     stated = _frame(_inputs())["BASE:2026"]
 
-    assert first["fac:ssn29"].note == projection_module.COUPON_AS_FRACTION
-    assert projection_module.COUPON_AS_FRACTION == "coupon read as a fraction"
+    assert first["fac:ssn29"].note == COUPON_AS_FRACTION
+    assert COUPON_AS_FRACTION == "coupon read as a fraction"
     assert first["fac:ssn31"].note is None
     # 6.5%, as the register's 6.500 prices.
-    assert first["cash_interest"] == stated["cash_interest"]
+    assert first["cash_interest"].value == stated["cash_interest"].value
+    assert first["wa_rate"].value == stated["wa_rate"].value
 
 
 def test_terms_in_the_wrong_unit_price_at_the_implied_rate_noted() -> None:

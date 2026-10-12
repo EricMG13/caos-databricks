@@ -32,12 +32,21 @@ fault. A rate term written in the wrong unit (a spread or floor written with
 percent) is kept as read, the row flagged `terms_out_of_range`. A fixed
 coupon is CP-1's decimal percent (`6.500`): 0 is a zero-coupon convertible,
 as stated. On a `FIXED` row, a coupon strictly between 0 and 0.5 written
-without `%` is a decimal fraction written in place of the percent, read
-times 100 (`0.065` is 6.5 percent) and flagged `coupon_as_fraction`; the
-figure read is then in range from 0.5 to 30. The cost: a genuine coupon
-below half a percent written without `%` reads 100 times over, flagged. A
-coupon written with `%` is the percent it states, and on any other row the
-coupon is as written.
+without `%` is either a decimal fraction written in place of the percent
+(`0.065` for 6.500) or a genuine sub-half-percent coupon (`0.250`), and the
+row's `margin_or_coupon` text decides: a percent it shows is a decimal
+figure followed by a marker, `%`, the fullwidth percent sign (U+FF05) or
+"per cent" / "percent" in any letter case (`6.5%`, `6.500 %`, `0.25 per
+cent.`; not "percentage"). A figure with a digit, a point, a comma or a sign
+before it (`16.5%`, `.5%`, `6,5%`, `-6.5%`) shows no percent. A figure equal
+to the coupon times 100 (and none equal to the coupon) reads it times 100, flagged
+`coupon_as_fraction`, the figure read then in range from 0.5 to 30; a figure
+equal to the coupon itself (and none equal to the times-100 figure) reads it
+as stated, unflagged, in range from 0 to 30. Where no text decides (none, no
+percent in it, no figure equal to either, or both readings shown) the coupon
+is kept as written and the row flagged `terms_out_of_range`: the rate is the
+implied rate, noted, never a guess. A coupon written with `%` is the percent
+it states, and on any other row the coupon is as written.
 An account row whose calculation status is Not Available or Not Calculable
 has no value, whatever figure it carries. A period's accounting basis and
 entity perimeter are read as written, and as not stated where null or where
@@ -164,9 +173,19 @@ _ROUNDING = Context(prec=38, rounding=ROUND_HALF_EVEN)
 # a term in the wrong unit.
 _COUPON_RANGE = (Decimal(0), Decimal(30))
 # On a `FIXED` row, a coupon above 0 and below this, written without `%`, is
-# a decimal fraction written in place of the percent, read times 100; read
-# so, it is at least this.
+# a decimal fraction written in place of the percent, or a genuine coupon
+# below half a percent: the row's `margin_or_coupon` text decides. Read as a
+# fraction (times 100), it is at least this.
 _FRACTION_BELOW = Decimal("0.5")
+# A percent the text shows: a decimal figure, optional spaces, then a marker:
+# `%`, the fullwidth percent sign (U+FF05), or "per cent" / "percent" in any
+# letter case (spaces optional between "per" and "cent", a word boundary after
+# "cent": not "percentage"). Not preceded by a digit, a point, a comma or a
+# sign, so ".5%", "16.5 per cent" and "6,5%" show no figure (not "5"), nor does
+# a signed one, "-6.5%": that is no coupon reading.
+_PERCENT_SHOWN = re.compile(
+    r"(?<![\d.,+-])(\d+(?:\.\d+)?)\s*(?:[%\uff05]|per\s*cent\b)", re.IGNORECASE
+)
 _BPS_TERMS = ("spread_bps", "floor_bps")
 MAX_NESTING = 4  # a period's components, theirs, and so on, at most this deep
 _DEBT_ADJUSTMENT = "DEBT ADJUSTMENT"
@@ -262,10 +281,12 @@ class FacilityRow:
     source: SourceRef | None
     # A spread or floor written with `%` or not whole basis points, or a
     # fixed coupon (as read) outside 0-30 percent (0.5-30 read as a
-    # fraction): the terms are not priced.
+    # fraction), or one strictly between 0 and 0.5 that no text decides: the
+    # terms are not priced.
     terms_out_of_range: bool = False
     # The fixed coupon was written as a decimal fraction (strictly between 0
-    # and 0.5) and `fixed_rate` is it times 100.
+    # and 0.5, its `margin_or_coupon` text showing the percent times 100) and
+    # `fixed_rate` is it times 100.
     coupon_as_fraction: bool = False
 
 
@@ -690,15 +711,24 @@ def _non_negative(row: _Row, column: str) -> Decimal | None:
     return value
 
 
-def coupon_percent(written: Decimal) -> tuple[Decimal, bool]:
-    """A fixed coupon in CP-1's percent, and whether it was read as a
-    fraction: a figure strictly between 0 and 0.5 is a decimal fraction
-    written in place of the percent, read times 100 (`0.065` is 6.5); any
-    other figure is as written. `_facility` applies it only to a `FIXED`
-    row's coupon written without `%`."""
-    if 0 < written < _FRACTION_BELOW:
-        return written.scaleb(2, _ROUNDING), True
-    return written, False
+def coupon_percent(written: Decimal, text: str) -> tuple[Decimal, bool, bool]:
+    """A fixed coupon in CP-1's percent, whether it was read as a fraction,
+    and whether the reading is decided. A figure strictly between 0 and 0.5
+    is a decimal fraction written in place of the percent (`0.065` for 6.5)
+    or a genuine coupon (`0.250`): the percents the row's `margin_or_coupon`
+    `text` shows decide. One equal to the figure times 100 and none equal to
+    the figure reads it times 100; one equal to the figure itself and none
+    equal to the times-100 figure reads it as written; otherwise (both, or
+    neither) it is kept as written, undecided. Any other figure is as
+    written, decided. `_facility` applies it only to a `FIXED` row's coupon
+    written without `%`."""
+    if not 0 < written < _FRACTION_BELOW:
+        return written, False, True
+    scaled = written.scaleb(2, _ROUNDING)
+    shown = {Decimal(figure) for figure in _PERCENT_SHOWN.findall(text)}
+    if (scaled in shown) == (written in shown):
+        return written, False, False
+    return (scaled, True, True) if scaled in shown else (written, False, True)
 
 
 def coupon_in_range(coupon: Decimal, *, as_fraction: bool) -> bool:
@@ -709,27 +739,32 @@ def coupon_in_range(coupon: Decimal, *, as_fraction: bool) -> bool:
     return (_FRACTION_BELOW if as_fraction else low) <= coupon <= high
 
 
-def _coupon(row: _Row, rate_type: str) -> tuple[Decimal | None, bool]:
-    """The fixed coupon in percent, and whether it was read as a fraction:
-    only a `FIXED` row's coupon written without `%` is (`coupon_percent`);
-    any other is as written."""
+def _coupon(row: _Row, rate_type: str) -> tuple[Decimal | None, bool, bool]:
+    """The fixed coupon in percent, whether it was read as a fraction, and
+    whether the reading is decided: only a `FIXED` row's coupon written
+    without `%` is read by the row's text (`coupon_percent`); any other is as
+    written."""
     written = _figure(row, "fixed_rate")
     if written is None or rate_type != "FIXED" or "%" in _text(row, "fixed_rate"):
-        return written, False
-    return coupon_percent(written)
+        return written, False, True
+    return coupon_percent(written, _text(row, "margin_or_coupon"))
 
 
-def _out_of_range(row: _Row, coupon: Decimal | None, as_fraction: bool) -> bool:
+def _out_of_range(
+    row: _Row, coupon: Decimal | None, as_fraction: bool, decided: bool
+) -> bool:
     """Whether a rate term is written in the wrong unit: a spread or floor
     with `%` in its text or not whole basis points, or a fixed coupon (as
-    read) out of its range."""
+    read) out of its range or that no text decides."""
     for column in _BPS_TERMS:
         value = _figure(row, column)
         if value is None:
             continue
         if "%" in _text(row, column) or value != value.to_integral_value():
             return True
-    return coupon is not None and not coupon_in_range(coupon, as_fraction=as_fraction)
+    if coupon is None:
+        return False
+    return not decided or not coupon_in_range(coupon, as_fraction=as_fraction)
 
 
 def _facility(row: _Row) -> FacilityRow:
@@ -741,7 +776,7 @@ def _facility(row: _Row) -> FacilityRow:
     if carrying is not None and carrying < 0 and facility_type != _DEBT_ADJUSTMENT:
         raise _malformed()
     rate_type = _rate_term(row, "rate_type", _RATE_TYPES)
-    coupon, as_fraction = _coupon(row, rate_type)
+    coupon, as_fraction, decided = _coupon(row, rate_type)
     return FacilityRow(
         facility_id=_text(row, "facility_id"),
         facility_name=_text(row, "facility_name"),
@@ -763,7 +798,7 @@ def _facility(row: _Row) -> FacilityRow:
         fixed_rate=coupon,
         annual_amortisation=_figure(row, "annual_amortisation"),
         source=_source(row, "carrying_value"),
-        terms_out_of_range=_out_of_range(row, coupon, as_fraction),
+        terms_out_of_range=_out_of_range(row, coupon, as_fraction, decided),
         coupon_as_fraction=as_fraction,
     )
 

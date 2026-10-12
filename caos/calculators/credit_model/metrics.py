@@ -22,7 +22,9 @@ projected column has no cell for (gross profit, the lease cost, EBITDAR) is
 so; any other column's missing key is `NOT_SOURCED`.
 
 A metric with an input that has no figure takes that input's reason, the
-first in formula order; a denominator at or below zero is
+first in formula order. Projected reported leverage remains `NOT_PROJECTED`
+when its reported EBITDA is structurally unprojected, even if debt is missing.
+A denominator at or below zero is
 `ZERO_OR_NEGATIVE_DENOMINATOR`. A metric with a figure carries what its
 inputs leave out ("excludes facility in another currency", "excludes
 unallocated CP-CF movements", `debt.carried`), so leverage on debt without a
@@ -31,11 +33,17 @@ Leverage and coverage are multiples (`x`), the rest decimal fractions shown
 as percent (0.08 is 8%).
 
 Growth compares a quarter with the quarter a year earlier, a YTD with the
-PYTD, an FY with the FY and an LTM with the LTM a year earlier (the column of
-that kind ending within a week of a year before, for 52- and 53-week years;
+PYTD, an FY with its preceding fiscal-year label (else the date-window
+fallback), and an LTM with the LTM a year earlier (the column of that kind
+ending within a week of a year before, for 52- and 53-week years;
 for an LTM without one, the LTM ending the quarter that ends then, from
 `ltm_ending`), and a projection with its case's prior year, else the
-historical FY of that year. Without such a column, and on a PYTD or PF-LTM,
+historical FY of that year. FY-vs-FY and projected-FY growth require known
+equivalent durations, measured from each column's end date and day count
+under history's whole-month/slack rules. Unequal or unknown durations are
+COMPONENT_MISSING with a duration note; equal nonannual FYs may compare.
+Quarter, YTD and LTM comparisons retain their own window semantics.
+Without such a column, and on a PYTD or PF-LTM,
 it is `NOT_APPLICABLE`, as is a `bu_growth:` for a corporate or eliminations
 segment (`corporate`). Against a prior on another footing it is
 `COMPONENT_MISSING`, noted `OTHER_FOOTING`: the prior's footing differs from
@@ -66,7 +74,8 @@ from caos.calculators.credit_model._cells import (
 )
 from caos.calculators.credit_model.debt import carried
 from caos.calculators.credit_model.frame import Cell, Column, Frame
-from caos.methodology.model_inputs import fiscal_year_number
+from caos.calculators.credit_model.history import _whole_months
+from caos.methodology.model_inputs import fiscal_year_number, iso_date
 
 Unit = Literal["MULTIPLE", "PERCENT"]
 # "twelve": the 12-month basis, not applicable on a PYTD or YTD; "rolling":
@@ -234,7 +243,14 @@ def _metrics(
         denominator = [
             (_get(basis, key, column), sign) for key, sign in metric.denominator
         ]
-        cells[f"metric:{name}"] = _ratio(numerator, denominator)
+        ratio = _ratio(numerator, denominator)
+        if (
+            column.kind == "PROJECTED"
+            and metric.denominator == _EBITDA
+            and denominator[0][0].reason == "NOT_PROJECTED"
+        ):
+            ratio = replace(ratio, reason="NOT_PROJECTED")
+        cells[f"metric:{name}"] = ratio
     return cells
 
 
@@ -261,11 +277,19 @@ def _prior(column: Column, columns: tuple[Column, ...]) -> Column | None:
     """The like period a year earlier, or None."""
     if column.kind == "PROJECTED":
         return _projected_prior(column, columns)
+    if (
+        column.kind == "FY"
+        and (year := fiscal_year_number(column.fiscal_year)) is not None
+    ):
+        prior_year = year - 1
+        for c in columns:
+            if c.kind == "FY" and fiscal_year_number(c.fiscal_year) == prior_year:
+                return c
     like = _LIKE.get(column.kind)
-    return next(
-        (c for c in columns if c.kind == like and _year_before(column, c)),
-        None,
-    )
+    for c in columns:
+        if c.kind == like and _year_before(column, c):
+            return c
+    return None
 
 
 # The like period a year earlier, its cells, and whether it is on another
@@ -309,6 +333,30 @@ def _prior_cells(
     return quarter, ltm_ending[quarter.column_id], apart
 
 
+def _column_months(column: Column) -> int | None:
+    """Whole months under history's slack, from the column's end and days."""
+    end = iso_date(column.end_date)
+    if end is None:
+        return None
+    days = column.days
+    if days is None or days <= 0:
+        return None
+    last = end.toordinal()
+    months = _whole_months((last - days + 1, last))
+    return None if months is None else months[1]
+
+
+def _duration_note(column: Column, before: Column) -> str | None:
+    """FY growth requires known equivalent months; other windows keep their scope."""
+    if column.kind not in {"FY", "PROJECTED"} or before.kind not in {"FY", "PROJECTED"}:
+        return None
+    current, prior = _column_months(column), _column_months(before)
+    pair = f"({column.column_id} vs {before.column_id})"
+    if current is None or prior is None:
+        return f"fiscal year duration unknown {pair}"
+    return None if current == prior else f"fiscal year durations differ {pair}"
+
+
 def _growth(
     column: Column,
     own: Mapping[str, Cell],
@@ -317,21 +365,30 @@ def _growth(
 ) -> dict[str, Cell]:
     """`revenue_growth`, `adjusted_ebitda_growth` and each `bu_growth:`
     against the prior period's cells; `COMPONENT_MISSING`, noted
-    `OTHER_FOOTING`, against a prior on another footing."""
-    segments = [key.removeprefix("bu:") for key in own if key.startswith("bu:")]
-    keys = {
-        **{f"{key}_growth": key for key in _GROWTH},
-        **{f"bu_growth:{segment}": f"bu:{segment}" for segment in segments},
-    }
+    `OTHER_FOOTING`, against a prior on another footing, or with a duration
+    note for unequal/unknown FY durations (`_duration_note`)."""
+    keys = {f"{key}_growth": key for key in _GROWTH}
+    keys.update(
+        {
+            f"bu_growth:{key.removeprefix('bu:')}": key
+            for key in own
+            if key.startswith("bu:")
+        }
+    )
+    if prior is None:
+        return dict.fromkeys(keys, _NOT_APPLICABLE)
+    before, before_cells, apart = prior
+    duration_note = None if apart else _duration_note(column, before)
     cells: dict[str, Cell] = {}
     for growth_key, key in keys.items():
-        segment = key.startswith("bu:") and key.removeprefix("bu:") in corporate
-        if prior is None or segment:
+        if key.startswith("bu:") and key.removeprefix("bu:") in corporate:
             cells[growth_key] = _NOT_APPLICABLE
             continue
-        before, before_cells, apart = prior
         if apart:
             cells[growth_key] = _OTHER_FOOTING
+            continue
+        if duration_note is not None:
+            cells[growth_key] = Cell(None, "COMPONENT_MISSING", note=duration_note)
             continue
         ratio = _ratio(
             ((_get(own, key, column), 1),),
