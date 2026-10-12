@@ -1,10 +1,50 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { render, screen, within } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router";
+import { EvidenceProvider } from "@/evidence/EvidenceContext";
+import {
+  GROUP_IDS,
+  columnGroups,
+  groupList,
+  groupOf,
+  hiddenLine,
+  refinanced,
+  shownCell,
+  tintOf,
+  toggled,
+} from "@/sections/model/grid";
 import { ModelSection, forecastSeries } from "@/sections/model/ModelSection";
 import { parseModelDocument, type ModelDocument } from "@/wire/v1";
 
 const CASE = "00000000-0000-4000-8000-000000000001";
 const RUN = "00000000-0000-4000-8000-0000000000a1";
 const HASH = "a".repeat(64);
+
+const FIXTURE = resolve(process.cwd(), "fixtures", "model.json");
+
+function fixture(): ModelDocument {
+  return parseModelDocument(JSON.parse(readFileSync(FIXTURE, "utf8")));
+}
+
+function Probe() {
+  return <output data-search>{useLocation().search}</output>;
+}
+
+function renderModel(document: ModelDocument, url = "/model/") {
+  return render(
+    <MemoryRouter initialEntries={[url]}>
+      <EvidenceProvider>
+        <ModelSection document={document} tab={null} />
+        <Probe />
+      </EvidenceProvider>
+    </MemoryRouter>,
+  );
+}
+
+function cellOf(container: HTMLElement, line: string, column: string): HTMLElement {
+  return container.querySelector<HTMLElement>(`[data-line="${line}"] [data-cell="${column}"]`)!;
+}
 
 function model(overrides: Record<string, unknown> = {}): ModelDocument {
   const body = {
@@ -68,7 +108,7 @@ function model(overrides: Record<string, unknown> = {}): ModelDocument {
 
 describe("Model v1", () => {
   test("renders the accepted projection as server strings with every explicit limitation", () => {
-    const { container } = render(<ModelSection document={model()} tab={null} />);
+    const { container } = renderModel(model());
     expect(container.querySelector("[data-model-v1]")).toHaveAttribute("data-run", RUN);
     expect(container).toHaveTextContent("CP-CF");
     expect(container).toHaveTextContent(`sha256:${HASH}`);
@@ -89,7 +129,7 @@ describe("Model v1", () => {
       status: "partial",
       notes: ["HANDOFFS_PENDING"],
     });
-    const { container } = render(<ModelSection document={partial} tab={null} />);
+    const { container } = renderModel(partial);
     expect(container).toHaveTextContent("Consolidated <img src=x>");
     expect(container).toHaveTextContent("Hostile <img src=x> warning");
     expect(container.querySelector("img")).toBeNull();
@@ -97,7 +137,7 @@ describe("Model v1", () => {
   });
 
   test("says there is no accepted forecast without projecting a value", () => {
-    const { container } = render(<ModelSection document={model({ forecast: null })} tab={null} />);
+    const { container } = renderModel(model({ forecast: null }));
     expect(container.querySelector("[data-model-unavailable]")).toHaveTextContent(
       "No accepted CP-CF forecast",
     );
@@ -120,10 +160,9 @@ describe("Model v1", () => {
         forecast: hasForecast ? source.body.forecast : null,
       },
     });
-    const { container } = render(<ModelSection document={document} tab={null} />);
+    const { container } = renderModel(document);
     expect(container.querySelector("[data-model-limitations]")).toHaveTextContent(limitation);
-    expect(container.querySelector("[aria-label='Credit model lines']")).toBeNull();
-    expect(container.querySelector("[data-model-lines] .tag")).toBeNull();
+    expect(container.querySelector("[data-model-lines]")).toBeNull();
     if (hasForecast) {
       expect(container).toHaveTextContent("Accepted forecast");
       expect(container).toHaveTextContent("123.45");
@@ -134,75 +173,14 @@ describe("Model v1", () => {
     }
   });
 
-  test("renders the credit model's lines as server strings, a gap where a cell has none", () => {
-    const cell = (value: string | null) => ({
-      value,
-      reason: value === null ? ("NOT_SOURCED" as const) : null,
-      basis: value === null ? null : ("REPORTED" as const),
-      stated: null,
-      note: null,
-      sources: [],
-    });
-    const column = (column_id: string, label: string) => ({
-      column_id,
-      kind: "FY" as const,
-      label,
-      period_id: column_id.slice(3),
-      fiscal_year: column_id.slice(5),
-      end_date: null,
-      days: null,
-      case: null,
-    });
-    const { container } = render(
-      <ModelSection
-        document={model({
-          currency: "USD",
-          unit: "MILLIONS",
-          columns: [column("FY:FY2024", "FY24"), column("FY:FY2025", "FY25")],
-          lines: [
-            {
-              line_id: "revenue",
-              band: "Revenue by business unit",
-              label: "Total revenue",
-              kind: "SUBTOTAL",
-              unit: "MONEY",
-              unit_label: null,
-              rank: null,
-              terms: null,
-              cells: [cell(null), cell("1000")],
-            },
-          ],
-          limitations: ["No projections: this route did not run CP-2G/CP-CF"],
-        })}
-        tab={null}
-      />,
-    );
-    const lines = container.querySelector("[data-model-lines]")!;
-    expect(lines).toHaveTextContent("Total revenue");
-    expect(lines).toHaveTextContent("FY25");
-    expect(within(lines as HTMLElement).getByTitle("1000")).toBeInTheDocument();
-    expect(within(lines as HTMLElement).getByTitle("NOT_SOURCED")).toHaveTextContent("—");
-    expect(container.querySelector("[data-model-limitations]")).toHaveTextContent(
-      "No projections: this route did not run CP-2G/CP-CF",
-    );
-  });
-
   test("test_an_absent_forecast_says_whether_the_run_can_still_produce_one", () => {
     // "No accepted forecast" reads as "not yet" on a run that has ended.
-    const { container } = render(
-      <ModelSection
-        document={model({ forecast: null, displayed_run_status: "BLOCKED" })}
-        tab={null}
-      />,
-    );
+    const { container } = renderModel(model({ forecast: null, displayed_run_status: "BLOCKED" }));
     const note = container.querySelector("[data-model-unavailable]")!;
     expect(note).toHaveTextContent("the run ended BLOCKED");
 
-    const { container: working } = render(
-      <ModelSection
-        document={model({ forecast: null, displayed_run_status: "RUNNING" })}
-        tab={null}
-      />,
+    const { container: working } = renderModel(
+      model({ forecast: null, displayed_run_status: "RUNNING" }),
     );
     expect(working.querySelector("[data-model-unavailable]")).not.toHaveTextContent(
       "the run ended",
@@ -227,7 +205,7 @@ describe("Model v1", () => {
         },
       },
     });
-    render(<ModelSection document={document} tab={null} />);
+    renderModel(document);
     expect(screen.getByText("INPUT_MISSING")).toBeInTheDocument();
   });
 });
@@ -265,7 +243,7 @@ describe("the host's forecast, drawn", () => {
     // carried per line, not the forecast's currency/scale for every chart.
     expect(charts[0]!.unit).toBe("MONEY");
     expect(charts[1]!.unit).toBe("MULTIPLE");
-    const { container } = render(<ModelSection document={model({ forecast: two })} tab={null} />);
+    const { container } = renderModel(model({ forecast: two }));
     expect(container.querySelectorAll("[data-forecast-chart]")).toHaveLength(2);
     // Each mark's accessible name states the value with its own unit label
     // (`@/charts/series.ts` `cellName`/`valueText`): money keeps "USD
@@ -334,5 +312,113 @@ describe("the host's forecast, drawn", () => {
     ]);
     expect(mismatched.every((chart) => chart.series.length === 1)).toBe(true);
     expect(mismatched.map((chart) => chart.title)).toEqual(["cash · Base", "cash · Downside"]);
+  });
+});
+
+describe("the credit workbook grid", { timeout: 30_000 }, () => {
+  test("hides a line whose cells are all zero or null unless it is a facility", () => {
+    const { lines } = fixture().body;
+    const line = (id: string) => lines.find((entry) => entry.line_id === id)!;
+    expect(hiddenLine(line("acquisitions_net"))).toBe(true);
+    expect(hiddenLine(line("revenue"))).toBe(false);
+    // Revolver drawn nowhere: every cell is zero, and it is still a facility.
+    expect(hiddenLine(line("fac:rcf"))).toBe(false);
+    const { container } = renderModel(fixture());
+    expect(container.querySelector('[data-line="acquisitions_net"]')).toBeNull();
+    expect(container.querySelector('[data-line="fac:rcf"]')).not.toBeNull();
+  });
+
+  test("formats money in brackets and multiples with x", () => {
+    const { container } = renderModel(fixture());
+    // Outflows in brackets, whole units, the exact decimal as the title.
+    const interest = cellOf(container, "cash_interest", "FY:FY2025");
+    expect(interest).toHaveTextContent("(870)");
+    expect(interest).toHaveAttribute("title", "-870");
+    expect(cellOf(container, "revenue", "FY:FY2025")).not.toHaveTextContent("(");
+    const leverage = cellOf(container, "metric:net_leverage_adjusted", "PF:LTM_Q2_2026");
+    expect(leverage).toHaveTextContent(/^3\.3x$/);
+    expect(leverage.getAttribute("title")).toMatch(/^3\.327/);
+    expect(cellOf(container, "metric:gross_margin", "FY:FY2025")).toHaveTextContent(/^58\.0%$/);
+    expect(cellOf(container, "reference_rate", "BASE:2026")).toHaveTextContent(/^3\.80%$/);
+    expect(cellOf(container, "dso", "FY:FY2024")).toHaveTextContent(/^\d+$/);
+  });
+
+  test("tints the pro forma, Base and Downside columns and a refinanced facility cell", () => {
+    const { container } = renderModel(fixture());
+    expect(cellOf(container, "revenue", "PF:LTM_Q2_2026").parentElement).toHaveClass("col-pf");
+    expect(cellOf(container, "revenue", "BASE:2026").parentElement).toHaveClass("col-base");
+    expect(cellOf(container, "revenue", "DOWNSIDE:2026").parentElement).toHaveClass("col-down");
+    expect(cellOf(container, "revenue", "FY:FY2025").parentElement).not.toHaveClass("col-base");
+    expect(container.querySelectorAll("td.cell-refi").length).toBeGreaterThan(0);
+    // Only a facility wears the refinanced tint, and only on the host's note.
+    const { lines } = fixture().body;
+    const facility = lines.find((line) => line.line_id === "fac:tlb")!;
+    const revenue = lines.find((line) => line.line_id === "revenue")!;
+    const assumed = { ...facility.cells[0]!, note: "assumed refinanced" };
+    expect(refinanced(facility, assumed)).toBe(true);
+    expect(refinanced(revenue, assumed)).toBe(false);
+    expect(refinanced(facility, facility.cells[0]!)).toBe(false);
+    const { columns } = fixture().body;
+    expect(tintOf(columns.find((column) => column.kind === "PF_LTM")!)).toBe("pf");
+    expect(tintOf(columns.find((column) => column.kind === "FY")!)).toBeNull();
+    expect(tintOf(columns.find((column) => column.case === "BASE")!)).toBe("base");
+    expect(tintOf(columns.find((column) => column.case === "DOWNSIDE")!)).toBe("down");
+  });
+
+  test("column groups: names, trimming and the URL list", () => {
+    const { columns } = fixture().body;
+    expect(GROUP_IDS).toEqual(["quarters", "ytd", "fy", "ltm", "pf", "base", "downside"]);
+    expect(columns.map(groupOf)).toContain("downside");
+    // LTM and PF-LTM are separate groups, so they collapse on their own.
+    const ltm = columns.find((column) => column.kind === "LTM")!;
+    const pf = columns.find((column) => column.kind === "PF_LTM")!;
+    expect([groupOf(ltm), groupOf(pf)]).toEqual(["ltm", "pf"]);
+    const groups = columnGroups(columns, new Set(), new Set());
+    expect(groups.map((group) => group.id)).toEqual([...GROUP_IDS]);
+    expect(groups[0]!.columns).toHaveLength(4);
+    expect(groups[0]!.total).toBe(10);
+    expect(groups[0]!.trimmed).toBe(true);
+    expect(groups[2]!.columns).toHaveLength(3);
+    expect(groups[2]!.trimmed).toBe(false);
+    expect(groups[3]!.columns.map((entry) => entry.column.kind)).toEqual(["LTM"]);
+    expect(groups[4]!.columns.map((entry) => entry.column.kind)).toEqual(["PF_LTM"]);
+    expect(groups[0]!.columns[0]!.column.column_id).toBe("Q:Q3_2025");
+    expect(columnGroups(columns, new Set(), new Set(["quarters"]))[0]!.columns).toHaveLength(10);
+    expect(columnGroups(columns, new Set(["fy"]), new Set())[2]).toMatchObject({
+      collapsed: true,
+      columns: [],
+      total: 3,
+    });
+    expect([...groupList("fy,nonsense,quarters")]).toEqual(["quarters", "fy"]);
+    expect([...groupList("pf,ltm")]).toEqual(["ltm", "pf"]);
+    expect([...groupList(null)]).toEqual([]);
+    expect(toggled(new Set(["fy"]), "quarters")).toBe("quarters,fy");
+    expect(toggled(new Set(["fy"]), "fy")).toBe("");
+  });
+
+  test("a negative percent and rate keep their minus; money that rounds to zero has no bracket", () => {
+    const { lines } = fixture().body;
+    const template = lines.find((entry) => entry.line_id === "dso")!;
+    const read = (unit: typeof template.unit, value: string, label: string | null = null) =>
+      shownCell(
+        { ...template, unit, unit_label: label },
+        { ...template.cells[0]!, value, reason: null },
+      ).text;
+    expect(read("PERCENT", "-0.0512")).toBe("-5.1%");
+    expect(read("RATE", "-0.0125")).toBe("-1.25%");
+    expect(read("MULTIPLE", "-1.04")).toBe("-1.0x");
+    expect(read("MONEY", "-1234.4")).toBe("(1,234)");
+    // A small outflow that rounds to nothing reads 0, not (0).
+    expect(read("MONEY", "-0.4")).toBe("0");
+    expect(read("MONEY", "0.4")).toBe("0");
+    // Half rounds away from zero, on the digits.
+    expect(read("MONEY", "0.5")).toBe("1");
+    expect(read("MONEY", "-0.5")).toBe("(1)");
+    expect(read("MONEY", "2.4999")).toBe("2");
+    expect(read("MULTIPLE", "3.25")).toBe("3.3x");
+    expect(read("PERCENT", "0.12345")).toBe("12.3%");
+    expect(read("PERCENT", "0.12350")).toBe("12.4%");
+    expect(read("KPI", "90.95", "PERCENT")).toBe("91.0%");
+    expect(read("DAYS", "9.5")).toBe("10");
   });
 });
