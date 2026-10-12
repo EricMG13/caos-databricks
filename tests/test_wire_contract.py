@@ -227,16 +227,11 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     wire.RateDeckRefView: frozenset({"deck_id", "as_of"}),
     wire.ModelBody: frozenset(
-        {
-            "case_id",
-            "latest_run_id",
-            "displayed_run_id",
-            "subject",
-            "displayed_run_status",
-            "blocked_by",
-            "forecast",
-            "unavailable_reason",
-        }
+        (
+            "case_id latest_run_id displayed_run_id displayed_run_status subject"
+            " currency unit exclude_unrealised rate_deck columns lines limitations"
+            " forecast"
+        ).split()
     ),
     wire.ModelDocument: ENVELOPE,
     RefusalBody: frozenset({"code", "clears"}),

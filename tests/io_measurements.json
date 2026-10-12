@@ -28,8 +28,8 @@
     "io": 2
   },
   "caos/api/reads/model.py": {
-    "blob": 40,
-    "io": 250
+    "blob": 41,
+    "io": 252
   },
   "caos/api/reads/reports.py": {
     "blob": {

@@ -27,11 +27,12 @@ from test_forecast_route import route as forecast_route
 from caos.api.app import app, store_connection
 from caos.api.identity import Actor, GlobalRole
 from caos.api.reads import analysis as analysis_read
+from caos.api.reads import model as model_read
 from caos.boundary_text import BoundaryText
 from caos.graph.route import ResolvedRoute
 from caos.methodology import tables
 from caos.methodology.handoff import _decoded_record, record_bytes
-from caos.methodology.vendor import VendorContract
+from caos.refusals import Refusal, RefusalCode
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant, revoke
 from caos.store.runs import create_case, start_run
@@ -66,22 +67,18 @@ def route(
     return resolved
 
 
-def _complete(harness: _Harness) -> None:
-    assert (
-        _run_route(
-            harness, _module_provider(harness, ForecastCompletions(harness.source_id))
-        )
-        is None
-    )
+def _complete(harness: _Harness, answers: ForecastCompletions | None = None) -> None:
+    completions = answers or ForecastCompletions(harness.source_id)
+    assert _run_route(harness, _module_provider(harness, completions)) is None
     harness.conn.rollback()
 
 
-def _path(harness: _Harness, run: object = None) -> str:
-    return f"/api/v1/cases/{harness.case_id}/model?run={run or harness.run_id}"
+def _path(harness: _Harness, run: object = None, query: str = "") -> str:
+    return f"/api/v1/cases/{harness.case_id}/model?run={run or harness.run_id}{query}"
 
 
-def _get(client: TestClient, harness: _Harness) -> dict[str, Any]:
-    response = client.get(_path(harness), headers=_as(harness.approver))
+def _get(client: TestClient, harness: _Harness, query: str = "") -> dict[str, Any]:
+    response = client.get(_path(harness, query=query), headers=_as(harness.approver))
     harness.conn.rollback()
     assert response.status_code == 200, response.json()
     return dict(response.json())
@@ -98,7 +95,6 @@ def test_model_reads_only_the_accepted_cp_cf_projection(
     assert body["case_id"] == str(harness.case_id)
     assert body["latest_run_id"] == str(latest)
     assert body["displayed_run_id"] == str(harness.run_id)
-    assert body["unavailable_reason"] is None
     forecast = body["forecast"]
     assert (forecast["currency"], forecast["scale"], forecast["perimeter"]) == (
         "USD",
@@ -143,7 +139,82 @@ def test_model_reads_only_the_accepted_cp_cf_projection(
         )
         == row
     )
-    assert document["status"] == "complete" and document["chrome"]["actions"] == []
+    assert document["status"] == "partial" and document["chrome"]["actions"] == []
+
+
+def test_a_run_without_cp1_is_observed_empty_with_handoffs_pending(
+    client: TestClient, harness: _Harness
+) -> None:
+    """Spec M1: a Model exists once CP-1 is accepted; before that the body is
+    empty and says the handoffs are pending."""
+    document = _get(client, harness)
+    body = document["body"]
+    assert document["observed_empty"] is True
+    assert document["status"] == "partial"
+    assert "HANDOFFS_PENDING" in document["notes"]
+    assert (body["columns"], body["lines"], body["forecast"]) == ([], [], None)
+    assert (body["currency"], body["unit"], body["rate_deck"]) == (None, None, None)
+    # Whether the model is still coming: this run has not ended.
+    assert body["displayed_run_status"] == "RUNNING"
+    foreign_case = create_case(harness.conn, BoundaryText.of("Other case"))
+    foreign_run = start_run(harness.conn, foreign_case)
+    harness.conn.commit()
+    for invalid in (uuid4(), "malformed", foreign_run):
+        response = client.get(_path(harness, invalid), headers=_as(harness.approver))
+        assert response.status_code == 404
+        assert response.json()["code"] == "RUN_NOT_FOUND"
+        harness.conn.rollback()
+
+
+def test_a_malformed_exclude_unrealised_is_refused_before_the_store(
+    client: TestClient, harness: _Harness
+) -> None:
+    def unexpected() -> None:
+        pytest.fail("opened the store before parsing the query")
+
+    app.dependency_overrides[store_connection] = unexpected
+    response = client.get(
+        _path(harness, query="&exclude_unrealised=maybe"),
+        headers=_as(harness.approver),
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "REQUEST_INVALID"
+    assert model_read.exclude_unrealised_query(None) is False
+    assert model_read.exclude_unrealised_query("1") is True
+    with pytest.raises(Refusal) as refused:
+        model_read.exclude_unrealised_query("yes")
+    assert refused.value.code == RefusalCode.REQUEST_INVALID
+
+
+def _unreadable(harness: _Harness, module: str) -> str:
+    return (
+        f"model_tables_unreadable case={harness.case_id} run={harness.run_id}"
+        f" module={module} code=HANDOFF_MALFORMED"
+    )
+
+
+def test_an_older_cp1_without_model_tables_serves_the_forecast_partially(
+    client: TestClient, harness: _Harness, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A CP-1 whose model registers do not parse -- an older run's, written
+    before the CP-1 fork, here the fixture's bounded findings -- does not
+    refuse the Model: the accepted CP-CF forecast is still served, the model
+    is empty, and why is said and logged, never with document text."""
+    _complete(harness, ForecastCompletions(harness.source_id))
+    capsys.readouterr()
+    document = _get(client, harness)
+    body = document["body"]
+    assert document["status"] == "partial"
+    # A forecast is served, so the document is not empty.
+    assert document["observed_empty"] is False
+    assert (body["columns"], body["lines"]) == ([], [])
+    assert body["limitations"] == ["CP-1 model tables unreadable"]
+    assert body["forecast"] is not None
+    assert body["forecast"]["route_node_id"].endswith("CP-CF")
+    assert (body["currency"], body["unit"], body["rate_deck"]) == (None, None, None)
+    logged = capsys.readouterr().err
+    assert _unreadable(harness, "CP-1") in logged
+    assert "issuer-pack" not in logged
 
 
 def test_analysis_labels_the_accepted_cp_cf_projection_as_host_calculation(
@@ -280,33 +351,6 @@ def test_read_analysis_without_tables_matches_read_analysis_but_the_tables(
     assert any(h.registers for h in served.body.handoffs)
 
 
-def test_model_reads_the_analysis_route_without_deriving_its_tables(
-    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """N58: the Model section reads every accepted handoff through
-    `read_analysis_without_tables`, not `read_analysis` -- `ModelBody`
-    excludes `handoffs` outright, so deriving each handoff's tagged tables for
-    this route only ever produced a value the wire then dropped."""
-    _complete(harness)
-    calls: list[None] = []
-
-    def counting(contract: VendorContract, markdown: str) -> tables.HandoffTables:
-        calls.append(None)
-        return tables.handoff_tables(contract, markdown)
-
-    monkeypatch.setattr(analysis_read, "handoff_tables", counting)
-    served = _get(client, harness)
-    assert served["body"]["forecast"] is not None
-    assert calls == []
-
-    analysis_response = client.get(
-        f"/api/v1/cases/{harness.case_id}/analysis", headers=_as(harness.approver)
-    )
-    harness.conn.rollback()
-    assert analysis_response.status_code == 200, analysis_response.json()
-    assert calls  # the direct Analysis read still derives them
-
-
 @pytest.mark.parametrize("change", ["owner", "record", "pin", "source", "blob"])
 def test_model_refuses_missing_or_changed_projection_authority(
     client: TestClient, harness: _Harness, change: str
@@ -366,28 +410,6 @@ def test_model_refuses_missing_or_changed_projection_authority(
         "RUN_INPUT_INVALID",
         "EVIDENCE_NOT_AVAILABLE",
     }
-
-
-def test_model_without_an_accepted_forecast_has_no_computed_values(
-    client: TestClient, harness: _Harness
-) -> None:
-    body = _get(client, harness)["body"]
-    assert body["forecast"] is None
-    assert body["unavailable_reason"] == "NO_ACCEPTED_FORECAST"
-    # "No accepted forecast" is a fact about now, so it travels with the run
-    # state that says whether one is still coming: this run has not ended, and
-    # no verdict has blocked it.
-    assert body["displayed_run_status"] == "RUNNING"
-    assert body["blocked_by"] is None
-    assert _get(client, harness)["status"] == "partial"
-    foreign_case = create_case(harness.conn, BoundaryText.of("Other case"))
-    foreign_run = start_run(harness.conn, foreign_case)
-    harness.conn.commit()
-    for invalid in (uuid4(), "malformed", foreign_run):
-        response = client.get(_path(harness, invalid), headers=_as(harness.approver))
-        assert response.status_code == 404
-        assert response.json()["code"] == "RUN_NOT_FOUND"
-        harness.conn.rollback()
 
 
 def test_model_does_not_substitute_a_refused_provider_forecast(
@@ -468,7 +490,7 @@ def test_model_http_actor_matrix_and_declared_io(
         assert len(downloads) == nodes * analysis.PER_HANDOFF_BLOBS
         assert len(downloads) <= model.BLOB_BUDGET
         assert response.json()["chrome"]["actions"] == []
-    assert model.IO_BUDGET == analysis.IO_BUDGET + model.PIN_IO
+    assert model.IO_BUDGET == analysis.IO_BUDGET + model.PIN_IO + model.DECK_IO
 
 
 def test_model_malformed_or_anonymous_opens_no_connection(

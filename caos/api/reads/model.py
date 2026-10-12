@@ -1,4 +1,26 @@
-"""Model values are projections of the accepted CP-CF pair, never UI calculations."""
+"""The Model section: the credit model of the displayed run's accepted CP-1,
+with CP-2G and CP-CF's projections where the route ran them, on the v1 wire.
+
+Every figure is the host calculator's (`caos.calculators.credit_model`), read
+from the accepted handoffs' tagged tables at request time and served 1:1:
+the columns, the lines in their bands, each cell an exact decimal string or
+the reason it has none, and the limitations the cells note. A projection
+reads the rate deck the run pinned at its creation, never a newer one. A
+CP-1 cell's `[C<n>]` marker resolves to CP-1's own citation (D107).
+
+Before CP-1 is accepted the body is empty and says the handoffs are pending
+(spec M1). The accepted CP-CF record stays beside the model for comparison,
+re-derived as the Book reads it. A source withdrawn from any accepted
+handoff's citations refuses the whole read (spec B8). A bridge the
+calculator's own check finds open does not refuse an assist model: it is a
+visible limitation, and a log line with the case, the run and the count.
+Nor do model tables it cannot use (logged by module and code): unreadable
+CP-1 tables, as an older run's, serve the accepted CP-CF record without a
+model; unreadable or withheld CP-2G drivers hold the business units flat;
+a model past the grid's bounds serves the record without a grid; and a cell
+whose figure runs past the wire's 64 characters is withheld. Each is a
+stated limitation and a log line with no figure.
+"""
 
 from __future__ import annotations
 
@@ -7,10 +29,10 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from decimal import Decimal
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from caos.api.deps import (
     IDENTITY_FIRST,
@@ -25,8 +47,11 @@ from caos.api.deps import (
 from caos.api.reads import analysis
 from caos.api.reads.analysis import AnalysisQuery, read_analysis_without_tables
 from caos.api.wire import (
+    MODEL_COLUMNS_MAX,
+    MODEL_LINES_MAX,
     MODEL_SOURCES_MAX,
     AnalysisBody,
+    AnalysisDocument,
     CitationView,
     HandoffView,
     ModelBody,
@@ -40,10 +65,13 @@ from caos.api.wire import (
     ModelTermsView,
     ModelUnit,
     ModelValue,
+    RateDeckRefView,
+    SectionNote,
 )
 from caos.calculators.credit_model.assemble import (
     CreditModel,
     ModelInputs,
+    credit_model,
     reconciliation_faults,
 )
 from caos.calculators.credit_model.frame import Cell, Column, SourceRef
@@ -65,26 +93,36 @@ from caos.methodology.tables import FIGURE_CHARS, HandoffTable, handoff_tables
 from caos.methodology.vendor import cached_contract
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+from caos.store.rate_decks import deck_for_run
 from caos.store.source_sets import pinned_live_sources
 
-# Analysis' own budget, which this route pays in full before adding to it,
-# plus the live source pin. Derived rather than written out: a literal 150 was
-# Analysis' ten-node forecast route, not the longest route a run can pin
-# (ED-7). Measured on that route by test_model_http_actor_matrix_and_declared_io
-# (194 before each proof's delivered blocks became one read instead of one per
-# block). The blobs are Analysis' and nothing more.
+# Analysis' own budget, which this route pays in full before adding to it;
+# the live-source pin, once, whether the accepted CP-CF record or the model
+# asks for it; and the run's pinned rate deck, read once where CP-1 is
+# accepted. Derived rather than written out: a literal 150 was Analysis'
+# ten-node forecast route, not the longest route a run can pin (ED-7).
+# Measured on that route by test_the_model_reads_within_its_declared_io_budget.
+# The blobs are Analysis' and nothing more: the tables are read from the
+# Markdown Analysis already verified.
 PIN_IO = 1
-IO_BUDGET = analysis.IO_BUDGET + PIN_IO
+DECK_IO = 1
+IO_BUDGET = analysis.IO_BUDGET + PIN_IO + DECK_IO
 BLOB_BUDGET = analysis.BLOB_BUDGET
 router = APIRouter()
 
+_CP1 = "CP-1"
 _CP2G = "CP-2G"
+# Analysis' body fields the model body carries as they are.
+_RUN_FIELDS = frozenset(
+    {"case_id", "latest_run_id", "displayed_run_id", "displayed_run_status", "subject"}
+)
 PIK_LIMITATION = (
     "PIK notes carry only their cash coupon in the rate terms;"
     " PIK interest is not modelled"
 )
 RECONCILIATION = "reconciliation: "
 CP1_UNREADABLE = "CP-1 model tables unreadable"
+GRID_OVERSIZE = "model exceeds the grid bounds"
 # A figure whose plain decimal runs past the wire's `DecimalText`.
 TOO_LARGE = "figure too large to serve"
 WITHHELD = "figures too large to serve were withheld"
@@ -94,6 +132,23 @@ SOURCES_CUT = (
     f" each shows its first {MODEL_SOURCES_MAX}"
 )
 _PIK = re.compile(r"\bPIK\b", re.IGNORECASE)
+# How `exclude_unrealised` may be spelled; anything else is refused.
+_ON = frozenset({"1", "true"})
+_OFF = frozenset({"0", "false"})
+
+
+def exclude_unrealised_query(exclude_unrealised: str | None = None) -> bool:
+    """The `exclude_unrealised` query: `1` or `true` leaves unrealised
+    add-backs out of adjusted EBITDA; absent, `0` or `false` keeps them.
+    Anything else is `REQUEST_INVALID`, answered before the store opens."""
+    if exclude_unrealised is None or exclude_unrealised in _OFF:
+        return False
+    if exclude_unrealised in _ON:
+        return True
+    raise Refusal(RefusalCode.REQUEST_INVALID)
+
+
+ExcludeUnrealised = Annotated[bool, Depends(exclude_unrealised_query)]
 
 
 @router.get(
@@ -105,6 +160,7 @@ def read_model(  # noqa: PLR0913 -- authenticated case/run before dependencies
     actor: Caller,
     case_id: CasePath,
     run: RunQuery,
+    exclude_unrealised: ExcludeUnrealised,
     standing: VisibleCase,
     conn: Store,
     blobs: Blobs,
@@ -115,20 +171,40 @@ def read_model(  # noqa: PLR0913 -- authenticated case/run before dependencies
     )
     body = analysis.body
     forecast = accepted_forecast(conn, body)
-    return ModelDocument(
-        **analysis.model_dump(exclude={"body", "status", "observed_empty"}),
-        body=ModelBody(
-            # The run's own status and the node that ended it travel with the
-            # forecast: "no accepted forecast" is a fact about now, and only
-            # those two say whether one is still coming. They are Analysis'
-            # own fields, unchanged -- this section derives, it does not judge.
-            **body.model_dump(exclude={"handoffs", "pending"}),
-            forecast=forecast,
-            unavailable_reason="NO_ACCEPTED_FORECAST" if forecast is None else None,
-        ),
-        observed_empty=forecast is None,
-        status="partial" if forecast is None else "complete",
+    cp1 = _accepted(body, _CP1)
+    if cp1 is None or body.displayed_run_id is None:
+        pending = _empty(body, forecast, exclude_unrealised, [])
+        return _document(analysis, pending, pending=True)
+    if forecast is None:
+        _require_live_sources(conn, body)
+    where = _Where(case_id, body.displayed_run_id)
+    try:
+        registers, slots = _cp1_inputs(bundle, cp1)
+    except Refusal as refusal:
+        _unreadable(where, _CP1, refusal)
+        unread = _empty(body, forecast, exclude_unrealised, [CP1_UNREADABLE])
+        return _document(analysis, unread, pending=False)
+    growth, noted = _growth(body, bundle, where)
+    deck = deck_for_run(conn, body.displayed_run_id)
+    inputs = ModelInputs(
+        registers=registers,
+        request=_request(body),
+        growth=growth,
+        slots=slots,
+        deck=deck,
+        exclude_unrealised=exclude_unrealised,
     )
+    model = credit_model(inputs)
+    if len(model.columns) > MODEL_COLUMNS_MAX or len(model.lines) > MODEL_LINES_MAX:
+        print(
+            f"model_grid_oversize case={where.case_id} run={where.run_id}"
+            f" columns={len(model.columns)} lines={len(model.lines)}",
+            file=sys.stderr,
+        )
+        oversize = _empty(body, forecast, exclude_unrealised, [GRID_OVERSIZE])
+        return _document(analysis, oversize, pending=False)
+    served = _served(where, _Served(inputs, model, (), forecast, deck, noted, 0))
+    return _document(analysis, _body(body, served, _citations(cp1)), pending=False)
 
 
 def _accepted(body: AnalysisBody, module_id: str) -> HandoffView | None:
@@ -345,6 +421,80 @@ def _limitations(served: _Served) -> list[str]:
     ]
 
 
+def _body(
+    body: AnalysisBody, served: _Served, citations: Mapping[int, CitationView]
+) -> ModelBody:
+    """The model on the wire, 1:1 (`read_model` has checked its bounds)."""
+    model = served.model
+    deck = served.deck if model.rate_deck_id is not None else None
+    return ModelBody(
+        **body.model_dump(include=set(_RUN_FIELDS)),
+        currency=model.currency,
+        unit=model.unit,
+        exclude_unrealised=served.inputs.exclude_unrealised,
+        rate_deck=None
+        if deck is None
+        else RateDeckRefView(deck_id=UUID(deck.deck_id), as_of=deck.as_of),
+        columns=[_column(column) for column in model.columns],
+        lines=[_line(line, citations) for line in model.lines],
+        limitations=_limitations(served),
+        forecast=served.forecast,
+    )
+
+
+def _empty(
+    body: AnalysisBody,
+    forecast: ModelForecast | None,
+    exclude: bool,
+    limitations: list[str],
+) -> ModelBody:
+    """No model: no accepted CP-1 yet (spec M1), or CP-1's model tables
+    unreadable. The accepted CP-CF record is still served."""
+    return ModelBody(
+        **body.model_dump(include=set(_RUN_FIELDS)),
+        currency=None,
+        unit=None,
+        exclude_unrealised=exclude,
+        rate_deck=None,
+        columns=[],
+        lines=[],
+        limitations=limitations,
+        forecast=forecast,
+    )
+
+
+def _document(
+    analysis: AnalysisDocument, body: ModelBody, *, pending: bool
+) -> ModelDocument:
+    """Analysis' envelope around the model: `pending` (no accepted CP-1),
+    its handoffs pending (spec M1). Without a line the document is partial,
+    and observed empty unless it serves the accepted forecast."""
+    notes = list(analysis.notes)
+    if pending and SectionNote.HANDOFFS_PENDING not in notes:
+        notes.append(SectionNote.HANDOFFS_PENDING)
+    empty = not body.lines
+    return ModelDocument(
+        chrome=analysis.chrome,
+        body=body,
+        observed_at=analysis.observed_at,
+        observed_empty=empty and body.forecast is None,
+        status="partial" if notes or empty else "complete",
+        notes=notes,
+    )
+
+
+def _require_live_sources(conn: StoreConnection, body: AnalysisBody) -> None:
+    """Every accepted handoff's citations still name a live source pinned to
+    the run, or `ARTIFACT_RECORD_MISMATCH` (spec B8). One round trip."""
+    if body.displayed_run_id is None:
+        return
+    live = pinned_live_sources(conn, body.displayed_run_id)
+    if any(
+        c.document_sha256 not in live for h in body.handoffs for c in h.source_facts
+    ):
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
+
+
 def accepted_forecast(
     conn: StoreConnection, body: AnalysisBody
 ) -> ModelForecast | None:
@@ -355,11 +505,7 @@ def accepted_forecast(
     accepted = _accepted(body, MODEL_MODULE)
     if accepted is None or body.displayed_run_id is None:
         return None
-    live = pinned_live_sources(conn, body.displayed_run_id)
-    if any(
-        c.document_sha256 not in live for h in body.handoffs for c in h.source_facts
-    ):
-        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
+    _require_live_sources(conn, body)
     result = forecast_projection(accepted.model_analysis.encode("utf-8"))
     return ModelForecast(
         **accepted.model_dump(
