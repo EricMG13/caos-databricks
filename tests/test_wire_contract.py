@@ -169,6 +169,18 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     wire.ReportDocument: ENVELOPE,
     wire.CommitteeDocument: ENVELOPE,
+    wire.BookMetricView: frozenset({"line_id", "label", "unit"}),
+    wire.BookEntryView: frozenset(
+        (
+            "entry_id case_id run_id issuer_key issuer_id issuer_name "
+            "reporting_period analysis_date route filed sources_withdrawn sector "
+            "industry_group domicile moodys moodys_outlook sp sp_outlook fitch "
+            "fitch_outlook composite composite_bucket composite_notch currency unit "
+            "metrics fiscal_years limitations snapshot_sha256 "
+            "added_at withdrawn_at withdrawal_reason withdrawal_note actions"
+        ).split()
+    ),
+    wire.BookIssuerView: frozenset({"issuer_key", "displayed", "history"}),
     wire.BookColumn: frozenset({"key", "label", "unit"}),
     wire.BookResearch: frozenset({"route_node_id", "module_id", "qa_status"}),
     # The ten passport fields, and nothing beside them: a passport
@@ -557,6 +569,8 @@ DSL_KEYWORDS = frozenset(
         "$defs",
         "items",
         "additionalProperties",
+        "maxProperties",
+        "propertyNames",
         "title",
         "description",
     }
@@ -582,7 +596,9 @@ def _schemas(node: object) -> Iterator[dict[str, Any]]:
             if key in {"properties", "$defs"}:
                 for child in value.values():
                     yield from _schemas(child)
-            elif key == "items" or key == "anyOf":
+            elif key in {"items", "anyOf", "propertyNames"}:
+                yield from _schemas(value)
+            elif key == "additionalProperties" and value is not False:
                 yield from _schemas(value)
     elif isinstance(node, list):
         for child in node:
@@ -607,6 +623,38 @@ def test_the_committed_wire_schema_is_the_models_schema() -> None:
         assert model.__name__ in defs
 
 
+def _bounded_record(node: dict[str, Any]) -> bool:
+    """A record: as many entries and as long a key as it declares, and every
+    value one real schema -- never `true`, `{}` or left open."""
+    value = node.get("additionalProperties")
+    names = node.get("propertyNames")
+    return (
+        isinstance(node.get("maxProperties"), int)
+        and isinstance(names, dict)
+        and isinstance(names.get("maxLength"), int)
+        and isinstance(value, dict)
+        and bool(value)
+    )
+
+
+def test_a_record_bounds_its_size_its_keys_and_its_values() -> None:
+    real = {
+        "type": "object",
+        "additionalProperties": {"type": "string", "maxLength": 4},
+        "maxProperties": 8,
+        "propertyNames": {"maxLength": 256},
+    }
+    assert _bounded_record(real)
+    open_values: tuple[object, ...] = (True, {}, None)
+    for value in open_values:
+        assert not _bounded_record({**real, "additionalProperties": value}), value
+    assert not _bounded_record(
+        {k: v for k, v in real.items() if k != "additionalProperties"}
+    )
+    assert not _bounded_record({**real, "maxProperties": None})
+    assert not _bounded_record({**real, "propertyNames": {}})
+
+
 def test_every_v1_model_forbids_undeclared_fields_and_bounds_every_collection() -> None:
     models = _wire_models()
     assert set(models) == set(PINNED), "a wire model the key-set pin does not name"
@@ -618,7 +666,10 @@ def test_every_v1_model_forbids_undeclared_fields_and_bounds_every_collection() 
     checked = 0
     for node in _schemas(schema):
         kind = node.get("type")
-        if kind == "object" or "properties" in node:
+        if kind == "object" and "properties" not in node:
+            assert _bounded_record(node), node
+            checked += 1
+        elif kind == "object" or "properties" in node:
             assert node.get("additionalProperties") is False, node.get("title")
             assert set(node["required"]) == set(node["properties"]), node["title"]
         if kind == "array":
@@ -677,6 +728,8 @@ def test_the_v1_wire_key_sets_are_pinned() -> None:
         "SIGN_OPINION",
         "FREEZE_DELIVERABLE",
         "FILE_DELIVERABLE",
+        "ADD_TO_BOOK",
+        "WITHDRAW_BOOK_ENTRY",
     }
     assert [model.__name__ for model in V1_DOCUMENTS] == [
         "DirectoryDocument",
@@ -699,7 +752,9 @@ def test_the_wire_schema_uses_only_keywords_the_browser_validator_understands() 
         seen |= set(node)
         assert set(node) <= DSL_KEYWORDS, sorted(set(node) - DSL_KEYWORDS)
         if "additionalProperties" in node:
-            assert node["additionalProperties"] is False
+            # Closed, or a record (the Book's metrics by basis and line,
+            # `record` in shape.ts).
+            assert node["additionalProperties"] is False or _bounded_record(node)
         if "anyOf" in node:
             # Nullability only: one schema and `null`.
             assert len(node["anyOf"]) == 2
@@ -914,3 +969,90 @@ def test_v1_command_models_are_closed_bounded_and_in_the_committed_schema() -> N
             "type": "string",
         }
         assert defs["VerdictRecorded"]["properties"][moment]["format"] == "date-time"
+
+
+def test_book_views_validate_real_constructors_without_changing_the_active_body() -> (
+    None
+):
+    entry: dict[str, Any] = {
+        "entry_id": str(uuid4()),
+        "case_id": str(uuid4()),
+        "run_id": str(uuid4()),
+        "issuer_key": "GB:issuer",
+        "issuer_id": "issuer",
+        "issuer_name": "Issuer",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-10-12",
+        "route": "LITE",
+        "filed": False,
+        "sources_withdrawn": False,
+        "sector": "Industrials",
+        "industry_group": None,
+        "domicile": "GB",
+        "moodys": None,
+        "moodys_outlook": "DEVELOPING",
+        "sp": None,
+        "sp_outlook": None,
+        "fitch": None,
+        "fitch_outlook": None,
+        "composite": "NR",
+        "composite_bucket": "NR",
+        "composite_notch": None,
+        "currency": "GBP",
+        "unit": "millions",
+        "metrics": {"LTM": {"revenue": "-12.50", "margin": None}},
+        "fiscal_years": {"BASE_FY1": "2027"},
+        "limitations": [],
+        "snapshot_sha256": "a" * 64,
+        "added_at": "2026-10-12T10:00:00Z",
+        "withdrawn_at": None,
+        "withdrawal_reason": None,
+        "withdrawal_note": None,
+        "actions": ["WITHDRAW_BOOK_ENTRY"],
+    }
+    view = wire.BookEntryView.model_validate(entry)
+    assert view.metrics == entry["metrics"]
+    assert view.moodys_outlook == "DEVELOPING"
+    for field, bad in (
+        ("unexpected", "refuse"),
+        ("filed", 1),
+        ("issuer_key", "x" * 129),
+        ("moodys_outlook", "x" * 11),
+        ("actions", ["WITHDRAW_BOOK_ENTRY"] * 2),
+        ("metrics", {str(i): {} for i in range(9)}),
+        ("metrics", {"LTM": {str(i): None for i in range(401)}}),
+        ("metrics", {"x" * 257: {}}),
+        ("metrics", {"LTM": {"x" * 257: None}}),
+        ("metrics", {"LTM": {"revenue": 12.5}}),
+        ("metrics", {"LTM": {"revenue": "1e3"}}),
+        ("fiscal_years", {"BASE_FY1": "2027.0"}),
+        ("fiscal_years", {str(i): "2027" for i in range(9)}),
+    ):
+        with pytest.raises(ValidationError):
+            wire.BookEntryView.model_validate({**entry, field: bad})
+    bounded = {str(i): None for i in range(400)}
+    bounded["😀" * 256] = bounded.pop("0")
+    assert (
+        wire.BookEntryView.model_validate(
+            {**entry, "metrics": {str(i): bounded for i in range(8)}}
+        ).metrics["0"]
+        == bounded
+    )
+    issuer = {"issuer_key": "GB:issuer", "displayed": view, "history": [view] * 100}
+    assert len(wire.BookIssuerView.model_validate(issuer).history) == 100
+    for changed in ({"history": [view] * 101}, {"unexpected": True}):
+        with pytest.raises(ValidationError):
+            wire.BookIssuerView.model_validate({**issuer, **changed})
+    metric = {"line_id": "revenue", "label": "Revenue", "unit": "MONEY"}
+    assert wire.BookMetricView.model_validate(metric).unit == "MONEY"
+    for metric_changed in ({"unit": "currency"}, {"unexpected": True}):
+        with pytest.raises(ValidationError):
+            wire.BookMetricView.model_validate({**metric, **metric_changed})
+    for model in (wire.BookMetricView, wire.BookEntryView, wire.BookIssuerView):
+        for node in _schemas(model.model_json_schema()):
+            if node.get("type") == "object" and "properties" not in node:
+                assert _bounded_record(node)
+    assert set(wire.BookBody.model_fields) == {"basis", "columns", "rows"}
+    assert not {"BookMetricView", "BookEntryView", "BookIssuerView"} & set(
+        json.loads(wire_schema())["$defs"]
+    )

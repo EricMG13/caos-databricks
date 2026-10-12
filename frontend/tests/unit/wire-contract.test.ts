@@ -13,6 +13,9 @@ import {
   WireIdentityError,
   WireShapeError,
   parse,
+  record,
+  nullable,
+  string,
   parseAnalysisDocument,
   parseModelDocument,
   parseReportDocument,
@@ -195,6 +198,8 @@ const KEPT = new Set([
   "format",
   "items",
   "additionalProperties",
+  "maxProperties",
+  "propertyNames",
   "minimum",
   "maximum",
 ]);
@@ -234,7 +239,12 @@ function normalise(node: Json, defs: Record<string, Json>): Json {
       const props: { [key: string]: Json } = {};
       for (const name of Object.keys(value).sort()) props[name] = normalise(value[name]!, defs);
       out[key] = props;
-    } else if (key === "items") {
+    } else if (
+      key === "items" ||
+      key === "propertyNames" ||
+      (key === "additionalProperties" && value !== false)
+    ) {
+      // A record's value and key schemas, compared as any other schema is.
       out[key] = normalise(value, defs);
     } else if (key === "required" && Array.isArray(value)) {
       out[key] = [...value].sort();
@@ -956,4 +966,66 @@ describe("the v1 wire contract", () => {
       expect(code, name).not.toMatch(/<\s*[A-Z]\w*\s*>\s*(JSON|value|body)/);
     }
   });
+});
+
+test("record bounds both levels, counts key code points and validates every leaf", () => {
+  const decimal = string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" });
+  const metrics = record(record(nullable(decimal), 400, 256), 8, 256);
+  const lines = Object.fromEntries(Array.from({ length: 400 }, (_, i) => [String(i), null]));
+  delete lines["0"];
+  lines["😀".repeat(256)] = null;
+  const bounded = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [String(i), lines]));
+  expect(parse(metrics, bounded)).toBe(bounded);
+  expect(parse(metrics, {})).toEqual({});
+  expect(parse(metrics, { LTM: { revenue: "-12.50", margin: null } })).toEqual({
+    LTM: { revenue: "-12.50", margin: null },
+  });
+  for (const bad of [
+    null,
+    [],
+    Object.fromEntries(Array.from({ length: 9 }, (_, i) => [String(i), {}])),
+    { LTM: { ...lines, extra: null } },
+    { ["😀".repeat(257)]: {} },
+    { LTM: { ["😀".repeat(257)]: null } },
+    { LTM: null },
+    { LTM: [] },
+    { LTM: { revenue: 12.5 } },
+    { LTM: { revenue: "1e3" } },
+    { LTM: { revenue: "NaN" } },
+  ]) {
+    expect(() => parse(metrics, bad)).toThrow(WireShapeError);
+  }
+  expect(normalise(metrics.toSchema(), {})).toEqual({
+    type: "object",
+    maxProperties: 8,
+    propertyNames: { maxLength: 256 },
+    additionalProperties: {
+      type: "object",
+      maxProperties: 400,
+      propertyNames: { maxLength: 256 },
+      additionalProperties: { nullable: decimal.toSchema() },
+    },
+  });
+  expect(() => normalise({ type: "object", additionalProperties: true }, {})).toThrow();
+});
+
+test("Chrome accepts all 18 declared actions and refuses a nineteenth", () => {
+  const actions = committed()["ActionName"];
+  if (actions === null || typeof actions !== "object" || Array.isArray(actions)) {
+    throw new Error("ActionName schema is not an object");
+  }
+  const names = actions["enum"];
+  if (!Array.isArray(names)) throw new Error("ActionName schema has no enum");
+  expect(names).toHaveLength(18);
+  expect(names).toContain("ADD_TO_BOOK");
+  expect(names).toContain("WITHDRAW_BOOK_ENTRY");
+  const chrome = {
+    subject: null,
+    served_role: { global_role: "READER", standing: null },
+    actions: names.map((action) => ({ action, refusal: null })),
+  };
+  expect(parse(V1_SHAPES.Chrome, chrome)).toEqual(chrome);
+  expect(() =>
+    parse(V1_SHAPES.Chrome, { ...chrome, actions: [...chrome.actions, chrome.actions[0]] }),
+  ).toThrow(WireShapeError);
 });
