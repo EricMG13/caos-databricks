@@ -2,9 +2,9 @@
 
 A deck is the desk's dated statement of reference rates per fiscal year for
 the Base and Downside cases (`CONTEXT.md`), read back as Plan 1's
-`caos.calculators.credit_model.projection.RateDeck`. Four things hold, each
-enforced by the store itself (`0050_rate_decks.sql`) and not only by this
-module.
+`caos.calculators.credit_model.projection.RateDeck`. Five things hold; the
+first four are enforced by the store itself (`0050_rate_decks.sql`) and not
+only by this module, the fifth by this module's lock waits.
 
 *A deck never changes.* Its row, its rates and every run's pin refuse
 UPDATE, DELETE and TRUNCATE; a deck gains no rate after the transaction that
@@ -27,8 +27,15 @@ moves a pin already written. With no deck, nothing is pinned.
 *A pin never misses a deck in flight.* The pin takes the save lock shared
 first, so it waits for a save not yet committed and then pins that deck: a
 deck acknowledged to its admin before the run commits is never passed over.
-The wait is bounded (`PIN_LOCK_TIMEOUT_MS`), so a save queued behind a long run
-unit cannot hold every other run start with it.
+
+*No wait for the save lock is unbounded.* Both waits -- the save's, behind a
+run unit whose pin holds the lock shared, and the pin's, behind a save -- end
+at `LOCK_TIMEOUT_MS` (or the caller's tighter bound) as `STORE_UNAVAILABLE`,
+retryable, so one run unit held open cannot queue a save, and every run start
+behind that save, for as long as it stays open. The save's bound stays in
+force through its writes too, since it holds the lock while it writes: a save
+held there (by a table lock) gives up the same way, rather than holding every
+run start behind it.
 
 The store checks who wrote what by write-once transaction ids
 (`rate_decks.saved_xact`, `runs.created_xact`), never by a timestamp a later
@@ -42,7 +49,8 @@ command receipt the route records.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -98,26 +106,33 @@ _READ_PINNED = (
     " WHERE u.run_id = %s"
     " ORDER BY r.reference_rate, r.year_offset"
 )
-# How long, in milliseconds, a pin waits for a save in flight. A save waiting
-# for the lock queues every later pin behind it (Postgres grants in arrival
-# order), so an unbounded wait would hold every run start on every case for
-# as long as one run unit stays open. Past this a run start is refused
+# How long, in milliseconds, a save or a pin waits for the save lock, and a
+# save, holding it, for any lock its writes wait on. A save waiting for it, or
+# holding it, keeps every later pin behind it (Postgres grants in arrival
+# order), so an unbounded wait on either side -- a pin's for a save in
+# flight, a save's for a run unit held open or for a table lock at its
+# writes -- would hold every run start on every case for as long as that
+# other holder stays. Past this the save or the run start is refused
 # `STORE_UNAVAILABLE`, retryable, the way the store answers any lock wait a
 # `lock_timeout` ended. A tighter bound the caller or an operator already set
-# stands: the pin only ever tightens it.
-PIN_LOCK_TIMEOUT_MS = 5000
-# The bound in force before this pin (in milliseconds, `0` for none), and the
-# unit's bound for the wait: the tighter of the two, or the pin's when there
-# was none. The CTE is materialised, so the prior bound is read first.
-_PIN_BOUND = (
+# stands: the wait only ever tightens it.
+LOCK_TIMEOUT_MS = 5000
+# The bound in force before the wait (in milliseconds, `0` for none), and the
+# unit's bound for the wait: the tighter of the two, or `LOCK_TIMEOUT_MS`
+# when there was none. The CTE is materialised, so the prior bound is read
+# first.
+_LOCK_BOUND = (
     "WITH prior AS MATERIALIZED (SELECT setting::bigint AS ms"
     " FROM pg_catalog.pg_settings WHERE name = 'lock_timeout')"
     " SELECT ms, set_config('lock_timeout',"
-    " (CASE WHEN ms > 0 AND ms < %(pin)s THEN ms ELSE %(pin)s END)::text, true)"
+    " (CASE WHEN ms > 0 AND ms < %(bound)s THEN ms ELSE %(bound)s END)::text,"
+    " true)"
     " FROM prior"
 )
+# A save takes the lock exclusively; a pin, shared.
+_SAVE_WAITS = "SELECT pg_advisory_xact_lock(%s::integer, 0)"
 _PIN_WAITS = "SELECT pg_advisory_xact_lock_shared(%s::integer, 0)"
-_PIN_UNBOUND = "SELECT set_config('lock_timeout', %s, true)"
+_LOCK_UNBOUND = "SELECT set_config('lock_timeout', %s, true)"
 _PIN_LATEST = (
     "INSERT INTO run_rate_decks (run_id, deck_id)"
     " SELECT %s, deck_id FROM rate_decks ORDER BY deck_seq DESC LIMIT 1"
@@ -194,6 +209,22 @@ def check_rates(rates: Sequence[RateDeckYear]) -> None:
             raise Refusal(RefusalCode.REQUEST_INVALID)
 
 
+@contextmanager
+def _lock_bound(conn: StoreConnection) -> Iterator[None]:
+    """Bound every lock wait of the statements in the block to
+    `LOCK_TIMEOUT_MS`, or the unit's tighter bound. Two statements around
+    the block: the bound, and, once the block is done, the unit's own bound
+    put back. A wait past the bound is `STORE_UNAVAILABLE`, the unit failed
+    for the caller to roll back (the bound and anything the block wrote end
+    with it); any other failure propagates as it is."""
+    [(prior, _bound)] = conn.execute(_LOCK_BOUND, {"bound": LOCK_TIMEOUT_MS}).fetchall()
+    try:
+        yield
+    except psycopg.errors.LockNotAvailable:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    conn.execute(_LOCK_UNBOUND, (str(prior),))
+
+
 def save_deck(
     conn: StoreConnection,
     actor_id: UUID,
@@ -202,32 +233,39 @@ def save_deck(
 ) -> UUID:
     """Write one deck and its rates in the caller's unit; its new id.
 
-    Checked first (`check_rates`), so a refused deck writes nothing. Then the
-    save lock, held exclusively to the unit's end; the deck, its identity
-    handed out under that lock, stamped with the clock and carrying the
-    digest of its rates; and the rates -- three statements.
+    Checked first (`check_rates`), so a refused deck writes nothing. Five
+    statements: the lock bound (`LOCK_TIMEOUT_MS`, or the caller's tighter
+    bound); the save lock, held exclusively to the unit's end; the deck, its
+    identity handed out under that lock, stamped with the clock and carrying
+    the digest of its rates; the rates; and the unit's own bound put back.
+    The bound covers the lock and both writes, since the save holds the lock
+    while it writes: a wait past it at any of the three is
+    `STORE_UNAVAILABLE`, and the unit, rolled back, has written nothing.
     """
     check_rates(rates)
-    conn.execute("SELECT pg_advisory_xact_lock(%s::integer, 0)", (SAVE_LOCK,))
     deck_id = uuid4()
-    conn.execute(
-        "INSERT INTO rate_decks (deck_id, as_of, saved_by, saved_at, rates_sha256)"
-        " VALUES (%s, %s, %s, clock_timestamp(), %s)",
-        (deck_id, as_of, actor_id, rates_digest(rates)),
+    deck = (deck_id, as_of, actor_id, rates_digest(rates))
+    columns = (
+        deck_id,
+        [year.reference_rate for year in rates],
+        [year.fiscal_year_offset for year in rates],
+        [year.base for year in rates],
+        [year.downside for year in rates],
     )
-    conn.execute(
-        "INSERT INTO rate_deck_rates"
-        " (deck_id, reference_rate, year_offset, base_rate, downside_rate)"
-        " SELECT %s, * FROM unnest(%s::text[], %s::integer[],"
-        " %s::numeric[], %s::numeric[])",
-        (
-            deck_id,
-            [year.reference_rate for year in rates],
-            [year.fiscal_year_offset for year in rates],
-            [year.base for year in rates],
-            [year.downside for year in rates],
-        ),
-    )
+    with _lock_bound(conn):
+        conn.execute(_SAVE_WAITS, (SAVE_LOCK,))
+        conn.execute(
+            "INSERT INTO rate_decks (deck_id, as_of, saved_by, saved_at, rates_sha256)"
+            " VALUES (%s, %s, %s, clock_timestamp(), %s)",
+            deck,
+        )
+        conn.execute(
+            "INSERT INTO rate_deck_rates"
+            " (deck_id, reference_rate, year_offset, base_rate, downside_rate)"
+            " SELECT %s, * FROM unnest(%s::text[], %s::integer[],"
+            " %s::numeric[], %s::numeric[])",
+            columns,
+        )
     return deck_id
 
 
@@ -281,20 +319,13 @@ def pin_latest_deck(conn: StoreConnection, run_id: UUID) -> PinnedDeck | None:
     name it; with no deck, pin and name nothing. Called by `start_run` only,
     in the unit that creates the run (the store refuses any other).
 
-    Four statements: the unit's lock wait bounded to `PIN_LOCK_TIMEOUT_MS`
-    (or the caller's tighter bound); the
-    save lock taken shared, which waits for a save in flight to commit
-    (`STORE_UNAVAILABLE` past the bound, the unit failed for the caller to
-    roll back); the session's own bound put back; then the pin, read under a
-    fresh snapshot that sees the deck that save committed.
+    Four statements: the lock bound (`LOCK_TIMEOUT_MS`, or the caller's
+    tighter bound); the save lock taken shared, which waits for a save in
+    flight to commit, `STORE_UNAVAILABLE` past the bound; the unit's own
+    bound put back; and the pin, read under a fresh snapshot that sees the
+    deck that save committed.
     """
-    [(prior, _bound)] = conn.execute(
-        _PIN_BOUND, {"pin": PIN_LOCK_TIMEOUT_MS}
-    ).fetchall()
-    try:
+    with _lock_bound(conn):
         conn.execute(_PIN_WAITS, (SAVE_LOCK,))
-    except psycopg.errors.LockNotAvailable:
-        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
-    conn.execute(_PIN_UNBOUND, (str(prior),))
     row = conn.execute(_PIN_LATEST, (run_id,)).fetchone()
     return None if row is None else PinnedDeck(row[0], str(row[1]))

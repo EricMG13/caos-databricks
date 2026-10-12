@@ -316,6 +316,22 @@ def test_a_run_pins_the_latest_deck_at_creation_and_keeps_it_after_a_newer_save(
     assert _decks(conn) == (2, 4, 2)
 
 
+@pytest.mark.parametrize("caller", [None, "250ms", "10s"])
+def test_a_save_leaves_the_sessions_lock_timeout_as_it_was(
+    case: tuple[StoreConnection, UUID], caller: str | None
+) -> None:
+    """The save bounds only its own wait for the save lock (`LOCK_TIMEOUT_MS`):
+    whatever bound the unit had before -- none, tighter or looser -- is what
+    it has after a save that took the lock."""
+    conn, _case_id = case
+    if caller is not None:
+        conn.execute(f"SET LOCAL lock_timeout = '{caller}'")
+    before = conn.execute("SHOW lock_timeout").fetchone()
+    save_deck(conn, uuid4(), date(2026, 10, 1), _years())
+    assert conn.execute("SHOW lock_timeout").fetchone() == before
+    conn.rollback()
+
+
 def test_the_pin_is_written_in_the_run_creating_transaction(
     case: tuple[StoreConnection, UUID],
 ) -> None:

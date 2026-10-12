@@ -48,11 +48,12 @@ from caos.store.commands import (
 )
 from caos.store.rate_decks import save_deck
 
-# The receipt lookup, then `save_deck` (the save lock, the deck, its rates)
-# and the receipt. Measured in `tests/test_rate_decks.py`. A twin that loses
-# the key costs one more (the lookup after its rollback, 6 in all) and is not
-# counted here, as `qualification.py` does not count its own.
-SAVE_IO = 1 + 3 + 1
+# The receipt lookup, then `save_deck` (the lock bound, the save lock, the
+# deck, its rates, the unit's own bound put back) and the receipt. Measured in
+# `tests/test_rate_decks.py`. A twin that loses the key costs one more (the
+# lookup after its rollback, 8 in all) and is not counted here, as
+# `qualification.py` does not count its own.
+SAVE_IO = 1 + 5 + 1
 REPLAY_IO = 1  # the receipt lookup alone; a replay writes nothing
 IO_BUDGET = SAVE_IO
 
@@ -109,7 +110,9 @@ def saved_deck(conn: StoreConnection, request: DeckRequest) -> CommandResult:
     the save lock while the first holds it; once the first commits, the
     twin's receipt insert finds the key taken, its whole unit (its deck
     included) is rolled back, and it replays the receipt that won -- one
-    deck per key, whatever the interleaving.
+    deck per key, whatever the interleaving. A twin that waits past the
+    lock's bound (`caos.store.rate_decks.LOCK_TIMEOUT_MS`) is refused
+    `STORE_UNAVAILABLE` having written nothing, and its retry replays.
     """
     stored = find_receipt(
         conn, actor_id=request.actor_id, scope=NIL_SCOPE, key=request.key
