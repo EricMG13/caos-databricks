@@ -157,6 +157,26 @@ const SaveRateDeck = object({
 const RateDeckSaved = object({ deck_id: uuid });
 
 /** Every command model `schema.json` declares, under its backend name. */
+// Plan 3 Task 2: add a COMPLETE run to the Book, bound to the snapshot digest
+// the Model showed, with the analyst-stated classification (the server judges
+// it against its own vocabularies); withdraw an entry with a reason, and a
+// note `OTHER` requires.
+const classification = string({ max: 64 });
+const rating = string({ max: 8 });
+const outlook = string({ max: 10 });
+const AddToBook = object({
+  snapshot_sha256: hash,
+  sector: classification,
+  industry_group: nullable(classification),
+  domicile: string({ max: 2 }),
+  moodys: nullable(rating),
+  moodys_outlook: nullable(outlook),
+  sp: nullable(rating),
+  sp_outlook: nullable(outlook),
+  fitch: nullable(rating),
+  fitch_outlook: nullable(outlook),
+});
+const BookEntryAdded = object({ entry_id: uuid });
 export const V1_COMMAND_SHAPES = {
   ApproveGate,
   CancelRun,
@@ -184,6 +204,8 @@ export const V1_COMMAND_SHAPES = {
   GatePreviewDocument,
   PinRunInput,
   RateDeckSaved,
+  AddToBook,
+  BookEntryAdded,
   RetryRun,
   RunCreated,
   RunInputPinned,

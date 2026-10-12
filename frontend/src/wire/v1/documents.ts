@@ -223,6 +223,9 @@ const RefusalCode = enumOf([
   "STORE_UNAVAILABLE",
   "IDENTITY_UNAVAILABLE",
   "STREAM_LIMIT_REACHED",
+  "RUN_NOT_COMPLETE_FOR_BOOK",
+  "BOOK_ENTRY_NOT_FOUND",
+  "BOOK_ENTRY_ALREADY_WITHDRAWN",
 ]);
 const RunSummary = object({
   run_id: uuid,
