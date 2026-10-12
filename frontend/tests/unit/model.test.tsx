@@ -162,8 +162,7 @@ describe("Model v1", () => {
     });
     const { container } = renderModel(document);
     expect(container.querySelector("[data-model-limitations]")).toHaveTextContent(limitation);
-    expect(container.querySelector("[aria-label='Credit model lines']")).toBeNull();
-    expect(container.querySelector("[data-model-lines] .tag")).toBeNull();
+    expect(container.querySelector("[data-model-lines]")).toBeNull();
     if (hasForecast) {
       expect(container).toHaveTextContent("Accepted forecast");
       expect(container).toHaveTextContent("123.45");
