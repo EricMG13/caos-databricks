@@ -605,6 +605,8 @@ describe("the v1 wire contract", () => {
       // Plan 3 Task 2: Add to Book and Withdraw.
       "AddToBook",
       "BookEntryAdded",
+      "WithdrawBookEntry",
+      "BookEntryWithdrawn",
     ];
     expect(Object.keys(V1_COMMAND_SHAPES).sort()).toEqual([...commands].sort());
     const shapes = new Map(Object.entries(V1_COMMAND_SHAPES));

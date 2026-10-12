@@ -68,13 +68,17 @@ from caos.api.deps import (
     Methodology,
     RunPath,
     Store,
+    parse_uuid,
 )
 from caos.api.identity import Actor
 from caos.api.reads import model as model_read
 from caos.api.reads.analysis import AnalysisQuery, read_analysis_without_tables
 from caos.api.wire import (
+    WITHDRAWAL_NOTE_CHARS,
     AddToBook,
     BookEntryAdded,
+    BookEntryWithdrawn,
+    WithdrawBookEntry,
 )
 from caos.blobs import BlobStore
 from caos.book.classification import (
@@ -85,55 +89,57 @@ from caos.book.classification import (
     notch,
     valid_domicile,
 )
+from caos.boundary_text import BoundaryText, visible
 from caos.graph.route import ResolvedRoute
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
 from caos.store.audit import GovernedAction
 from caos.store.book import (
+    NOTED_REASON,
     Classification,
     EntrySubject,
     NewEntry,
+    Withdrawal,
     accepted_artifacts,
+    entry_in_case,
     entry_of_run,
     insert_entry,
     snapshot_sha256,
+    withdraw_entry,
 )
 from caos.store.members import Standing
 from caos.store.routes import resolved_route
 
+# The add's statements beyond the Model read's own (Analysis, the live-source
+# pin and the deck, which it reads the same way): the receipt lookup, the
+# case lock's isolation check and lock, the chain head, live standing, the
+# twin lookup, the run's status, its pinned route, its accepted artifacts,
+# its entry, the insert, the receipt, the audit event and the chain head.
+# The Model's is declared for the longest route a run can pin, so this is
+# too. Measured in `tests/test_book_entries.py`.
 ADD_FIXED_IO = 14
-
-
 ADD_IO = ADD_FIXED_IO + model_read.IO_BUDGET
-
-
+# Standing, the receipt lookup, the case lock's isolation check and lock,
+# the chain head, live standing, the twin lookup, the entry (locked), the
+# stamp, the receipt, the audit event and the chain head.
 WITHDRAW_IO = 12
-
-
 IO_BUDGET = max(ADD_IO, WITHDRAW_IO)
-
-
+# The add reads each accepted handoff's artifact and record, as the Model
+# does; the withdrawal reads none.
 BLOB_BUDGET = model_read.BLOB_BUDGET
 
-
+# The commands' receipts are recorded under these names.
 ADD_TO_BOOK = "ADD_TO_BOOK"
-
-
 WITHDRAW_BOOK_ENTRY = "WITHDRAW_BOOK_ENTRY"
-
-
 _CP1 = "CP-1"
 
-
 router = APIRouter()
-
-
 Writer = Annotated[Standing, Depends(require_case_writer)]
 
 
 @dataclass(frozen=True, slots=True)
-class _Asked:
+class Asked:
     """Who asks, under which key, on which case, at what standing: decision
     2's first four dependencies, solved in that order and carried as one."""
 
@@ -143,12 +149,12 @@ class _Asked:
     standing: Standing
 
 
-def _asked(actor: Caller, key: Key, standing: Writer, case_id: CasePath) -> _Asked:
-    return _Asked(actor, key, case_id, standing)
+def _asked(actor: Caller, key: Key, standing: Writer, case_id: CasePath) -> Asked:
+    return Asked(actor, key, case_id, standing)
 
 
 @dataclass(frozen=True, slots=True)
-class _Stores:
+class Stores:
     """The request's store connection, blob store and bundle."""
 
     conn: StoreConnection
@@ -156,21 +162,27 @@ class _Stores:
     bundle: Bundle
 
 
-def _stores(conn: Store, blobs: Blobs, bundle: Methodology) -> _Stores:
-    return _Stores(conn, blobs, bundle)
+def _stores(conn: Store, blobs: Blobs, bundle: Methodology) -> Stores:
+    return Stores(conn, blobs, bundle)
 
 
-ByWriter = Annotated[_Asked, Depends(_asked)]
+def _entry_path(entry_id: str) -> UUID:
+    """The path's entry id, or the answer an entry nobody may act on gets."""
+    return parse_uuid(entry_id, RefusalCode.BOOK_ENTRY_NOT_FOUND)
+
+
+ByWriter = Annotated[Asked, Depends(_asked)]
+EntryPath = Annotated[UUID, Depends(_entry_path)]
 
 
 @dataclass(frozen=True, slots=True)
 class _Add:
     """One add: who asked, the run, the request and the entry it mints."""
 
-    asked: _Asked
+    asked: Asked
     run_id: UUID
     body: AddToBook
-    stores: _Stores
+    stores: Stores
     entry_id: UUID
 
 
@@ -183,7 +195,7 @@ def add_to_book(
     asked: ByWriter,
     run_id: RunPath,
     body: Annotated[AddToBook, Depends(json_body(AddToBook))],
-    stores: Annotated[_Stores, Depends(_stores)],
+    stores: Annotated[Stores, Depends(_stores)],
 ) -> Response:
     """Add the run to the Book, bound to the snapshot the actor reviewed."""
     add = _Add(asked, run_id, body, stores, uuid4())
@@ -341,3 +353,67 @@ def _rated(agency: str, rating: str | None, outlook: str | None) -> int | None:
         return notch(agency, rating)
     except ClassificationRefused:
         raise Refusal(RefusalCode.REQUEST_INVALID) from None
+
+
+@router.post(
+    "/api/v1/cases/{case_id}/book-entries/{entry_id}/withdrawal",
+    dependencies=[IDENTITY_FIRST],
+)
+def withdraw_book_entry(
+    asked: ByWriter,
+    entry_id: EntryPath,
+    body: Annotated[WithdrawBookEntry, Depends(json_body(WithdrawBookEntry))],
+    conn: Store,
+) -> Response:
+    """Withdraw the entry, bound to its snapshot; never delete it."""
+    withdrawal = Withdrawal(entry_id, asked.actor.user_id, body.reason, _note(body))
+
+    def write(unit: StoreConnection) -> tuple[int, BookEntryWithdrawn]:
+        state = entry_in_case(unit, asked.case_id, entry_id)
+        if state is None:
+            raise Refusal(RefusalCode.BOOK_ENTRY_NOT_FOUND)
+        if state.snapshot_sha256 != body.snapshot_sha256:
+            raise Refusal(RefusalCode.COMMAND_EXPECTATION_STALE)
+        if state.withdrawn or not withdraw_entry(unit, withdrawal):
+            raise Refusal(RefusalCode.BOOK_ENTRY_ALREADY_WITHDRAWN)
+        return 200, BookEntryWithdrawn(entry_id=entry_id)
+
+    return governed(
+        conn,
+        scope=asked.case_id,
+        key=asked.key,
+        request=CommandRequest(
+            WITHDRAW_BOOK_ENTRY,
+            asked.case_id,
+            None,
+            str(entry_id),
+            body.model_dump(mode="json"),
+        ),
+        action=GovernedAction(
+            case_id=asked.case_id,
+            actor_id=asked.actor.user_id,
+            action="BOOK_ENTRY_WITHDRAWN",
+            requires=Standing.WRITER,
+            payload={
+                "entry_id": str(entry_id),
+                "snapshot_sha256": body.snapshot_sha256,
+                "reason": body.reason,
+            },
+        ),
+        write=write,
+        model=BookEntryWithdrawn,
+    )
+
+
+def _note(body: WithdrawBookEntry) -> str | None:
+    """The note past the boundary; one with nothing a reader can see in it
+    (white space, zero-width characters: `visible`) is none, and `OTHER`
+    without one is `REQUEST_INVALID` (fix round 1, L3)."""
+    note = None if body.note is None or not visible(body.note).strip() else body.note
+    if note is None and body.reason == NOTED_REASON:
+        raise Refusal(RefusalCode.REQUEST_INVALID)
+    return (
+        None
+        if note is None
+        else BoundaryText.of(note, limit=WITHDRAWAL_NOTE_CHARS).value
+    )
