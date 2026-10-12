@@ -347,6 +347,14 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.STORE_NOT_CONFIGURED: "An operator must configure the store.",
     _C.STORE_UNAVAILABLE: "Retry when the store answers.",
     _C.IDENTITY_UNAVAILABLE: "Retry when the workspace answers.",
+    _C.RUN_NOT_COMPLETE_FOR_BOOK: (
+        "Add a COMPLETE run of this case with CP-1 accepted, an issuer subject"
+        " and a Model that shows its grid."
+    ),
+    _C.BOOK_ENTRY_NOT_FOUND: "Name a book entry of this case.",
+    _C.BOOK_ENTRY_ALREADY_WITHDRAWN: (
+        "Nothing; the entry is withdrawn for good. Add a newer run instead."
+    ),
 }
 
 
@@ -2047,6 +2055,43 @@ class RateDeckView(BaseModel):
     rates: Annotated[list[RateDeckRateView], Field(max_length=RATE_DECK_ROWS_MAX)]
 
 
+# Plan 3 Task 2: an analyst-stated classification field (spec B5). The
+# vocabularies are `caos.book.classification`'s, judged by the command.
+CLASSIFICATION_CHARS = 64
+RATING_CHARS = 8
+WITHDRAWAL_NOTE_CHARS = 1000
+ClassificationText = Annotated[str, Field(max_length=CLASSIFICATION_CHARS)]
+Rating = Annotated[str, Field(max_length=RATING_CHARS)]
+
+
+class AddToBook(BaseModel):
+    """Add a COMPLETE run with CP-1 accepted to the Book (spec B3, B5): the
+    snapshot digest of the accepted artifacts the actor reviewed (invariant
+    5) and the analyst-stated classification. The subject, the metrics, the
+    adder and the time are the host's, never fields."""
+
+    model_config = _CLOSED
+
+    snapshot_sha256: Sha256
+    sector: ClassificationText
+    industry_group: ClassificationText | None
+    domicile: Annotated[str, Field(max_length=2)]
+    moodys: Rating | None
+    moodys_outlook: Rating | None
+    sp: Rating | None
+    sp_outlook: Rating | None
+    fitch: Rating | None
+    fitch_outlook: Rating | None
+
+
+class BookEntryAdded(BaseModel):
+    """The receipt for an added entry."""
+
+    model_config = _CLOSED
+
+    entry_id: UUID
+
+
 V1_COMMANDS: tuple[type[BaseModel], ...] = (
     CreateCase,
     CaseCreated,
@@ -2080,6 +2125,8 @@ V1_COMMANDS: tuple[type[BaseModel], ...] = (
     DeliverableFiled,
     SaveRateDeck,
     RateDeckSaved,
+    AddToBook,
+    BookEntryAdded,
 )
 
 

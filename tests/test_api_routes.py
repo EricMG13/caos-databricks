@@ -1125,6 +1125,8 @@ def test_the_surface_is_exactly_the_routes_it_declares(
         "/api/v1/cases/{case_id}/revisions/{revision_id}/package": (
             "read_deliverable_package"
         ),
+        # Plan 3 Task 2: Add to Book and Withdraw, WRITER+ on the case.
+        "/api/v1/cases/{case_id}/runs/{run_id}/book-entry": "add_to_book",
     }
 
 
