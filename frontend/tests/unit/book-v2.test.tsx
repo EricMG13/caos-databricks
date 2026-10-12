@@ -5,7 +5,7 @@ import { vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router";
 import { displayDecimal } from "@/ds/format";
 import { spelled } from "@/sections/model/grid";
-import { DEFAULT_VIEW } from "@/sections/book/view";
+import { DEFAULT_VIEW, LOCKED } from "@/sections/book/view";
 import { BookSection } from "@/sections/book/BookSection";
 import {
   BASES,
@@ -70,6 +70,12 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+/** Open the column chooser and scope every query to it. */
+function chooser() {
+  fireEvent.click(screen.getByRole("button", { name: "Columns" }));
+  return within(document_().querySelector<HTMLElement>("[data-column-chooser]")!);
+}
 
 /** What the table should show for a figure, from the fixture alone. */
 function figure(issuer: string, column: string, basis: string): string | null {
@@ -163,6 +169,75 @@ describe("the book", () => {
     expect(cell("CZR", "m:revenue")).not.toHaveTextContent(/\d/);
   });
 
+  test("a fiscal year is a column of its own, offered per projected basis", () => {
+    renderBook();
+    const box = chooser();
+    expect(DEFAULT_VIEW.columns.some((c) => c.startsWith("id:fiscal_year"))).toBe(false);
+    fireEvent.click(box.getByLabelText("Fiscal year · Base FY1"));
+    expect(search().getAll("col")).toContain("id:fiscal_year_base_fy1");
+    expect(cell("CVNA", "id:fiscal_year_base_fy1")).toHaveTextContent(/^2026$/);
+    expect(box.getByLabelText("Fiscal year · Downside FY1")).toBeInTheDocument();
+    expect(box.getByLabelText("Unit")).toBeChecked();
+  });
+
+  // ColumnChooser is reached through the real section and changes its table.
+  test("adding and removing a column updates the URL", () => {
+    renderBook();
+    const box = chooser();
+    expect(box.getByLabelText("Domicile")).not.toBeChecked();
+    fireEvent.click(box.getByLabelText("Domicile"));
+    expect(search().getAll("col")).toContain("id:domicile");
+    expect(cell("VMO2", "id:domicile")).toHaveTextContent("GB");
+    fireEvent.click(box.getByLabelText("Domicile"));
+    expect(search().getAll("col")).not.toContain("id:domicile");
+    expect(cell("VMO2", "id:domicile")).toBeNull();
+    // A metric of a chosen basis is a column of its own.
+    fireEvent.click(box.getByLabelText("Total revenue · Downside FY1"));
+    expect(search().getAll("col")).toContain("m:revenue@DOWNSIDE_FY1");
+  });
+
+  test("issuer name and period cannot be removed", () => {
+    renderBook();
+    const box = chooser();
+    expect(LOCKED).toEqual(["id:issuer_name", "id:reporting_period"]);
+    for (const name of ["Issuer", "Reporting period"]) {
+      const check = box.getByLabelText(name);
+      expect(check).toBeChecked();
+      expect(check).toHaveAttribute("aria-disabled", "true");
+      fireEvent.click(check);
+      expect(box.getByLabelText(name)).toBeChecked();
+      expect(search().getAll("col")).toEqual([]);
+    }
+  });
+
+  test("a column outside the catalogue can still be removed", () => {
+    renderBook(document(), "/book/?col=m%3Aadjusted_ebitda_margin");
+    expect(search().getAll("col")).toContain("m:adjusted_ebitda_margin");
+    const box = chooser();
+    const orphan = box.getByLabelText("adjusted_ebitda_margin (not in this Book's catalogue)");
+    expect(orphan).toBeChecked();
+    fireEvent.click(orphan);
+    expect(search().getAll("col")).not.toContain("m:adjusted_ebitda_margin");
+  });
+
+  // FilterBar is reached through the real section and changes its kept issuers.
+  test("a range filter hides issuers outside it", () => {
+    renderBook();
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter column"), {
+      target: { value: "m:metric:net_leverage_adjusted" },
+    });
+    fireEvent.change(screen.getByLabelText("Minimum"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(rows().map((row) => row.getAttribute("data-issuer"))).toEqual(["VMO2", "ALH", "MRG"]);
+    expect(screen.getByText("3 of 9 issuers")).toBeInTheDocument();
+    expect(search().getAll("f")).toEqual(["range|m%3Ametric%3Anet_leverage_adjusted|5|"]);
+    // The chip removes it again.
+    fireEvent.click(screen.getByRole("button", { name: /^Remove filter/ }));
+    expect(rows()).toHaveLength(9);
+    expect(search().getAll("f")).toEqual([]);
+  });
+
   test("links open the entry run's analysis and model", () => {
     const doc = document();
     renderBook(doc);
@@ -241,20 +316,22 @@ describe("the book", () => {
     expect(search().get("basis")).toBe("BASE_FY1");
   });
 
-  test("URL columns and filters apply before their editors arrive", () => {
+  test("URL columns and filters remain editable without losing context", () => {
     renderBook(
       document(),
-      "/book/?case=keep&col=id%3Afiled&col=id%3Afiscal_year_base_fy1&f=set%7Cid%253Aissuer_id%7CCVNA",
+      "/book/?case=keep&tag=one&tag=two&col=id%3Afiled&col=id%3Afiscal_year_base_fy1&f=set%7Cid%253Aissuer_id%7CCVNA",
     );
     expect(rows()).toHaveLength(1);
     expect(cell("CVNA", "id:filed")).toHaveTextContent(/^Yes$/);
     expect(cell("CVNA", "id:fiscal_year_base_fy1")).toHaveTextContent(/^2026$/);
     expect(screen.getByText("1 of 9 issuers")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Columns" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Add filter" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Columns" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add filter" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Remove filter/ })).toBeVisible();
     expect(screen.queryByRole("button", { name: /^History|^Limited|^Withdraw/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
     expect(search().get("case")).toBe("keep");
+    expect(search().getAll("tag")).toEqual(["one", "two"]);
     expect(search().getAll("f")).toEqual([]);
     expect(rows()).toHaveLength(9);
   });
@@ -266,6 +343,109 @@ describe("the book", () => {
     fireEvent.change(screen.getByLabelText("Currency"), { target: { value: "JPY" } });
     expect(rows().map((row) => row.getAttribute("data-issuer"))).toEqual(["PFL"]);
     expect(cell("PFL", "id:currency")).toHaveTextContent(/^JPY$/);
+  });
+
+  test("a filter chip names the basis its column follows", () => {
+    renderBook();
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter column"), {
+      target: { value: "m:metric:net_leverage_adjusted" },
+    });
+    fireEvent.change(screen.getByLabelText("Minimum"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(screen.getByRole("button", { name: /^Remove filter.*\(LTM\)/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Base FY1" }));
+    expect(
+      screen.getByRole("button", { name: /^Remove filter.*\(Base FY1\)/ }),
+    ).toBeInTheDocument();
+  });
+
+  test("a money range filter does nothing until a currency is chosen", () => {
+    renderBook();
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter column"), { target: { value: "m:revenue" } });
+    fireEvent.change(screen.getByLabelText("Minimum"), { target: { value: "1000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    expect(screen.getByText("9 of 9 issuers")).toBeInTheDocument();
+    expect(screen.getByText(/choose a currency to compare/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Currency"), { target: { value: "JPY" } });
+    expect(rows().map((row) => row.getAttribute("data-issuer"))).toEqual(["PFL"]);
+  });
+
+  test("Apply filter does nothing while its bounds are refused", () => {
+    renderBook();
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter column"), {
+      target: { value: "m:metric:net_leverage_adjusted" },
+    });
+    fireEvent.change(screen.getByLabelText("Minimum"), { target: { value: "abc" } });
+    const apply = screen.getByRole("button", { name: "Apply filter" });
+    expect(apply).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("decimal");
+    fireEvent.click(apply);
+    expect(search().getAll("f")).toEqual([]);
+    expect(screen.getByText("9 of 9 issuers")).toBeInTheDocument();
+  });
+
+  test("a set editor applies served values and refuses an empty selection", () => {
+    renderBook();
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter column"), { target: { value: "id:currency" } });
+    const apply = screen.getByRole("button", { name: "Apply filter" });
+    expect(apply).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(apply);
+    expect(search().getAll("f")).toEqual([]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "GBP" }));
+    fireEvent.click(apply);
+    expect(search().getAll("f")).toEqual(["set|id%3Acurrency|GBP"]);
+    expect(rows().map((row) => row.getAttribute("data-issuer"))).toEqual(["VMO2", "NGE", "SLU"]);
+    expect(screen.getByText("3 of 9 issuers")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /^Remove filter.*GBP/ }));
+    expect(rows()).toHaveLength(9);
+  });
+
+  test("a notch editor rejects inverted ratings then filters within its scale", () => {
+    renderBook();
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter column"), { target: { value: "id:moodys" } });
+    fireEvent.change(screen.getByLabelText("Best rating"), { target: { value: "B1" } });
+    fireEvent.change(screen.getByLabelText("Worst rating"), { target: { value: "Ba1" } });
+    const apply = screen.getByRole("button", { name: "Apply filter" });
+    expect(apply).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("best rating is below the worst");
+    fireEvent.click(apply);
+    expect(search().getAll("f")).toEqual([]);
+    fireEvent.change(screen.getByLabelText("Best rating"), { target: { value: "Ba1" } });
+    fireEvent.change(screen.getByLabelText("Worst rating"), { target: { value: "B1" } });
+    fireEvent.click(apply);
+    expect(search().getAll("f")).toEqual(["notch|moodys|Ba1|B1"]);
+    const expected = document().body.issuers.filter((issuer) =>
+      ["Ba1", "Ba2", "Ba3", "B1"].includes(issuer.displayed.moodys ?? ""),
+    );
+    expect(expected.length).toBeGreaterThan(0);
+    expect(expected.length).toBeLessThan(9);
+    expect(rows().map((row) => row.getAttribute("data-issuer"))).toEqual(
+      expected.map((issuer) => issuer.issuer_key),
+    );
+  });
+
+  test.each([
+    ["", "", "Enter a minimum"],
+    ["5", "2", "minimum is above"],
+  ])("a range editor refuses bounds %s and %s", (minimum, maximum, problem) => {
+    renderBook();
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter column"), {
+      target: { value: "m:metric:net_leverage_adjusted" },
+    });
+    fireEvent.change(screen.getByLabelText("Minimum"), { target: { value: minimum } });
+    fireEvent.change(screen.getByLabelText("Maximum"), { target: { value: maximum } });
+    const apply = screen.getByRole("button", { name: "Apply filter" });
+    expect(apply).toHaveAttribute("aria-disabled", "true");
+    if (minimum || maximum) expect(screen.getByRole("alert")).toHaveTextContent(problem);
+    fireEvent.click(apply);
+    expect(search().getAll("f")).toEqual([]);
+    expect(rows()).toHaveLength(9);
   });
 
   test("the column vocabulary names every column once", () => {
