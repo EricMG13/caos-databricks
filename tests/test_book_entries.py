@@ -12,6 +12,9 @@ from __future__ import annotations
 from dataclasses import replace
 from uuid import UUID, uuid4
 
+import pytest
+from psycopg.errors import CheckViolation
+
 from caos.digest import canonical_digest
 from caos.store import StoreConnection
 from caos.store.book import (
@@ -21,6 +24,7 @@ from caos.store.book import (
     EntrySubject,
     NewEntry,
     Withdrawal,
+    WithdrawalReason,
     accepted_artifacts,
     entry_in_case,
     entry_of_run,
@@ -66,8 +70,14 @@ def test_the_snapshot_digest_binds_the_artifacts_and_every_stored_figure() -> No
     assert digest not in moved and len(moved) == 6
 
 
+@pytest.mark.parametrize(
+    ("reason", "note"),
+    [("ADDED_IN_ERROR", None), ("OTHER", "The analyst withdrew this entry.")],
+)
 def test_the_store_inserts_an_entry_live_and_withdraws_it_once(
     case: tuple[StoreConnection, UUID],
+    reason: WithdrawalReason,
+    note: str | None,
 ) -> None:
     conn, case_id = case
     run_id = start_run(conn, case_id)
@@ -113,7 +123,18 @@ def test_the_store_inserts_an_entry_live_and_withdraws_it_once(
         ["no rate deck: BASE:2026"],
     )
     conn.rollback()
-    withdrawal = Withdrawal(entry_id, adder, "ADDED_IN_ERROR", None)
+    for invalid_note in (None, "", " \t\n"):
+        with pytest.raises(CheckViolation):
+            conn.execute(
+                "UPDATE book_entries SET withdrawn_at = now(), withdrawn_by = %s,"
+                " withdrawal_reason = 'OTHER', withdrawal_note = %s"
+                " WHERE entry_id = %s",
+                (adder, invalid_note, entry_id),
+            )
+        conn.rollback()
+        assert entry_of_run(conn, run_id) == live
+        conn.rollback()
+    withdrawal = Withdrawal(entry_id, adder, reason, note)
     assert withdraw_entry(conn, withdrawal) is True
     conn.commit()
     assert withdraw_entry(conn, withdrawal) is False
