@@ -22,6 +22,7 @@ import re
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import date
 from decimal import (
     ROUND_HALF_EVEN,
     Context,
@@ -41,6 +42,7 @@ from caos.refusals import Refusal, RefusalCode
 MAX_FORECAST_PERIODS = 40
 MAX_FORECAST_CASES = 6
 MAX_FORECAST_FACILITIES = 40
+MAX_FORECAST_SEGMENTS = 40
 MAX_AMORTISATION = 2_000
 # In the request's own unit: a residual past this is unreconciled, whatever the
 # request says (F62).
@@ -54,6 +56,7 @@ RELATIVE_TOLERANCE = Decimal("0.001")
 # A fiscal year as the chain orders it: a year number.
 _FISCAL_YEAR = re.compile(r"[1-9][0-9]{3}")
 _NUMBER = re.compile(r"-?(0|[1-9][0-9]{0,17})(\.[0-9]{1,6})?")
+_SEGMENT_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 _MOVEMENTS = (
     "revenue",
     "ebitda",
@@ -70,20 +73,32 @@ _MOVEMENTS = (
     "fx_perimeter",
 )
 _SIGNED = {"acquisitions_disposals", "fx_perimeter"}
+_OPTIONAL_MOVEMENTS = (
+    "net_equity_issue_repay",
+    "other_investing_financing",
+    "restricted_cash_change",
+    "carrying_value_change",
+)
 _STATED = {"stated_closing_debt", "stated_closing_cash"}
 _PAIR = {"case", "period_id"}
+_OWNED_BASIS = "OWNED_CASH_DEBT_SERVICE"
+_CALENDAR = {"start_date", "end_date"}
 
 
 @dataclass(frozen=True, slots=True)
 class _Inputs:
     periods: list[dict[str, Any]]
     drivers: dict[tuple[str, str], dict[str, Any]]
+    # Future aggregate principal when selected; facility totals otherwise.
     repayments: dict[tuple[str, str], Decimal]
     opening: tuple[Decimal, Decimal]
     # The stated tolerance; each period caps it by its own openings (N75).
     tolerance: Decimal
     units: dict[str, Any]
     perimeter: str
+    projection_basis: str | None
+    # A shared first-period bridge, applied independently to each case once.
+    actual_debt_cash: dict[str, Decimal]
 
 
 def cash_flow_forecast(request: Mapping[str, Any]) -> dict[str, Any]:
@@ -121,13 +136,16 @@ def cash_flow_forecast(request: Mapping[str, Any]) -> dict[str, Any]:
                     "reason": row["unavailable_reason"],
                 }
             )
-        return {
+        result = {
             "status": "incomplete" if unavailable else "complete",
             "units": inputs.units,
             "perimeter": inputs.perimeter,
             "rows": rows,
             "checks": checks,
         }
+        if inputs.projection_basis is not None:
+            result["projection_basis"] = inputs.projection_basis
+        return result
 
 
 def forecast_bytes(request: Mapping[str, Any]) -> bytes:
@@ -176,34 +194,43 @@ def _pair(row: Mapping[str, Any]) -> tuple[str, str]:
     return _text(row.get("case")), _text(row.get("period_id"))
 
 
-def _decimal(value: object, *, signed: bool = False) -> Decimal:
+def _number_shape(value: object, *, signed: bool = False) -> str:
+    """Validate the entire bounded money grammar without constructing Decimal."""
     if (
         not isinstance(value, str)
         or len(value) > 26
         or _NUMBER.fullmatch(value) is None
     ):
         raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
-    amount = Decimal(value)
-    if not signed and amount < 0:
+    if not signed and value.startswith("-") and any(c in "123456789" for c in value):
         raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
-    return amount
+    return value
+
+
+def _decimal(value: object, *, signed: bool = False) -> Decimal:
+    return Decimal(_number_shape(value, signed=signed))
 
 
 def _enforce_work_factor(request: Mapping[str, Any]) -> None:
-    """Bound every collection before parsing even the first days or amount."""
+    """Bound all collections and scalar shapes before any request Decimal work."""
     _object(
         request,
         {"opening", "periods", "drivers", "contractual", "units", "perimeter"},
-        {"tolerance"},
+        {"tolerance", "projection_basis", "actuals"},
     )
-    opening = _object(
-        request["opening"], {"cash", "as_of_period_id", "debt_by_facility"}
-    )
-    _rows(opening["debt_by_facility"], MAX_FORECAST_FACILITIES)
+    selected = "projection_basis" in request
+    if selected and request["projection_basis"] != _OWNED_BASIS:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+    if not selected and "actuals" in request:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
     periods = _rows(request["periods"], MAX_FORECAST_PERIODS * MAX_FORECAST_CASES)
-    _rows(request["drivers"], len(periods))
-    contractual = _object(request["contractual"], {"amortisation"})
-    _rows(contractual["amortisation"], MAX_AMORTISATION)
+    drivers = _rows(request["drivers"], len(periods))
+    contractual = _object(
+        request["contractual"],
+        {"amortisation", "aggregate_amortisation"} if selected else {"amortisation"},
+    )
+    amortisation = _rows(contractual["amortisation"], MAX_AMORTISATION)
+    _request_shapes(request, periods, drivers, amortisation, selected)
     counts = Counter(_text(row.get("case")) for row in periods)
     if (
         not counts
@@ -211,6 +238,165 @@ def _enforce_work_factor(request: Mapping[str, Any]) -> None:
         or max(counts.values()) > MAX_FORECAST_PERIODS
     ):
         raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+    if selected:
+        _owned_shape(request, periods)
+
+
+def _request_shapes(
+    request: Mapping[str, Any],
+    periods: list[dict[str, Any]],
+    drivers: list[dict[str, Any]],
+    amortisation: list[dict[str, Any]],
+    selected: bool,
+) -> None:
+    opening = _object(
+        request["opening"], {"cash", "as_of_period_id", "debt_by_facility"}
+    )
+    _text(opening["as_of_period_id"])
+    _number_shape(opening["cash"], signed=True)
+    for row in _rows(opening["debt_by_facility"], MAX_FORECAST_FACILITIES):
+        _object(row, {"facility_id", "amount"})
+        _text(row["facility_id"])
+        _number_shape(row["amount"], signed=True)
+    period_fields = _PAIR | {"fiscal_year", "days"} | (_CALENDAR if selected else set())
+    for row in periods:
+        _object(row, period_fields)
+        _pair(row)
+        _text(row["fiscal_year"])
+        _number_shape(row["days"])
+    for row in drivers:
+        _driver_shape(row)
+    amortisation_fields = _PAIR | {"facility_id", "amount"}
+    for row in amortisation:
+        _object(row, amortisation_fields)
+        _pair(row)
+        _text(row["facility_id"])
+        _number_shape(row["amount"])
+    units = _object(request["units"], {"currency", "scale"})
+    _text(units["currency"])
+    _text(units["scale"])
+    _text(request["perimeter"])
+    _number_shape(request.get("tolerance", "0.001"))
+
+
+def _driver_shape(row: dict[str, Any]) -> None:
+    _object(
+        row,
+        {*_PAIR, *_STATED, "status"},
+        {*_MOVEMENTS, *_OPTIONAL_MOVEMENTS, "segment_revenue"},
+    )
+    _pair(row)
+    _text(row["status"])
+    for name in (*_MOVEMENTS, *_STATED, *_OPTIONAL_MOVEMENTS):
+        if name in row:
+            _number_shape(
+                row[name],
+                signed=name in _SIGNED
+                or name in _STATED
+                or name in _OPTIONAL_MOVEMENTS,
+            )
+    if "segment_revenue" in row:
+        _segment_shape(row["segment_revenue"])
+
+
+def _date(value: object) -> date:
+    if not isinstance(value, str) or len(value) != 10:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID) from None
+    if parsed.isoformat() != value:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+    return parsed
+
+
+def _owned_calendars(
+    periods: list[dict[str, Any]],
+) -> dict[tuple[str, str], tuple[date, date]]:
+    calendars = {}
+    latest: dict[str, int] = {}
+    first: tuple[str, int] | None = None
+    for row in periods:
+        pair = _pair(row)
+        start, end = _date(row["start_date"]), _date(row["end_date"])
+        if (
+            start != date(start.year, 1, 1)
+            or end != date(start.year, 12, 31)
+            or row["fiscal_year"] != str(start.year)
+            or row["days"] != str((end - start).days + 1)
+            or pair in calendars
+        ):
+            raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+        if pair[0] in latest:
+            if start.year != latest[pair[0]] + 1:
+                raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+        else:
+            identity = (pair[1], start.year)
+            if first is not None and first != identity:
+                raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+            first = identity
+        latest[pair[0]] = start.year
+        calendars[pair] = (start, end)
+    return calendars
+
+
+def _owned_shape(request: Mapping[str, Any], periods: list[dict[str, Any]]) -> None:
+    contractual = request["contractual"]
+    if contractual["amortisation"]:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+    actuals = _object(request.get("actuals"), {"debt_cash_movements"})
+    bridges = _rows(actuals["debt_cash_movements"], 1)
+    first_period = _pair(periods[0])[1]
+    for row in bridges:
+        _object(row, {"period_id", "historical_period_id", "amount"})
+        if _text(row["period_id"]) != first_period:
+            raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+        _text(row["historical_period_id"])
+        _number_shape(row["amount"], signed=True)
+    calendars = _owned_calendars(periods)
+    aggregate_rows = _rows(contractual["aggregate_amortisation"], len(periods))
+    _aggregate_shape(aggregate_rows, calendars, first_period, bool(bridges))
+
+
+def _aggregate_shape(
+    rows: list[dict[str, Any]],
+    calendars: dict[tuple[str, str], tuple[date, date]],
+    first_period: str,
+    has_bridge: bool,
+) -> None:
+    seen: set[tuple[str, str]] = set()
+    first_starts: set[date] = set()
+    required = _PAIR | _CALENDAR | {"amount"}
+    for row in rows:
+        _object(row, required)
+        pair = _pair(row)
+        if pair not in calendars or pair in seen:
+            raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+        seen.add(pair)
+        _number_shape(row["amount"])
+        start, end = _date(row["start_date"]), _date(row["end_date"])
+        year_start, year_end = calendars[pair]
+        if not year_start <= start <= end == year_end:
+            raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+        if pair[1] == first_period and has_bridge:
+            if start == year_start:
+                raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+            first_starts.add(start)
+        elif start != year_start:
+            raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+    if seen != calendars.keys() or len(first_starts) > 1:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+
+
+def _segment_shape(value: object) -> None:
+    """Refuse unbounded or unsafe maps before any request Decimal work."""
+    if not isinstance(value, dict) or not 1 <= len(value) <= MAX_FORECAST_SEGMENTS:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+    for key, amount in value.items():
+        if not isinstance(key, str) or _SEGMENT_ID.fullmatch(key) is None:
+            raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+        _number_shape(amount, signed=True)
 
 
 def _parse(request: Mapping[str, Any]) -> _Inputs:
@@ -227,7 +413,8 @@ def _parse(request: Mapping[str, Any]) -> _Inputs:
         "billions",
     }:
         raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
-    periods = _periods(request["periods"])
+    selected = "projection_basis" in request
+    periods = _periods(request["periods"], selected=selected)
     pairs = {_pair(period) for period in periods}
     facilities = {}
     for row in request["opening"]["debt_by_facility"]:
@@ -242,13 +429,27 @@ def _parse(request: Mapping[str, Any]) -> _Inputs:
         _decimal(request["opening"]["cash"], signed=True),
     )
     return _Inputs(
-        periods,
-        _drivers(request["drivers"], pairs),
-        _contractual(request["contractual"]["amortisation"], pairs, set(facilities)),
-        opening,
-        _tolerance(request.get("tolerance", "0.001")),
-        dict(units),
-        _text(request["perimeter"]),
+        periods=periods,
+        drivers=_drivers(request["drivers"], pairs),
+        repayments={
+            _pair(row): _decimal(row["amount"])
+            for row in request["contractual"]["aggregate_amortisation"]
+        }
+        if selected
+        else _contractual(
+            request["contractual"]["amortisation"], pairs, set(facilities)
+        ),
+        opening=opening,
+        tolerance=_tolerance(request.get("tolerance", "0.001")),
+        units=dict(units),
+        perimeter=_text(request["perimeter"]),
+        projection_basis=_OWNED_BASIS if selected else None,
+        actual_debt_cash={
+            _text(row["period_id"]): _decimal(row["amount"], signed=True)
+            for row in request["actuals"]["debt_cash_movements"]
+        }
+        if selected
+        else {},
     )
 
 
@@ -268,15 +469,19 @@ def _chronological(periods: list[dict[str, Any]], as_of: str) -> None:
         latest[case] = year
 
 
-def _periods(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _periods(
+    rows: list[dict[str, Any]], *, selected: bool = False
+) -> list[dict[str, Any]]:
     periods = []
     seen = set()
+    required = _PAIR | {"fiscal_year", "days"} | (_CALENDAR if selected else set())
     for row in rows:
-        _object(row, _PAIR | {"fiscal_year", "days"})
-        case, period_id = _pair(row)
-        if (case, period_id) in seen:
+        _object(row, required)
+        pair = _pair(row)
+        case, period_id = pair
+        if pair in seen:
             raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
-        seen.add((case, period_id))
+        seen.add(pair)
         days = _decimal(row["days"])
         if "." in row["days"] or not 1 <= days <= 366:
             raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
@@ -295,19 +500,37 @@ def _drivers(
     rows: list[dict[str, Any]], pairs: set[tuple[str, str]]
 ) -> dict[tuple[str, str], dict[str, Any]]:
     drivers = {}
+    required = _PAIR | _STATED | {"status"}
+    optional = set(_MOVEMENTS) | set(_OPTIONAL_MOVEMENTS) | {"segment_revenue"}
+    names = (*_MOVEMENTS, *_STATED, *_OPTIONAL_MOVEMENTS)
+    signed = _SIGNED | _STATED | set(_OPTIONAL_MOVEMENTS)
     for row in rows:
-        _object(row, _PAIR | _STATED | {"status"}, set(_MOVEMENTS))
+        _object(row, required, optional)
         pair = _pair(row)
         if pair not in pairs or pair in drivers:
             raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
         driver: dict[str, Any] = {"status": _text(row["status"])}
-        for name in (*_MOVEMENTS, *_STATED):
+        for name in names:
             if name in row:
                 driver[name] = _decimal(
-                    row[name], signed=name in _SIGNED or name in _STATED
+                    row[name],
+                    signed=name in signed,
                 )
+        if "segment_revenue" in row:
+            driver["segment_revenue"] = _segment_revenue(row["segment_revenue"], driver)
         drivers[pair] = driver
     return drivers
+
+
+def _segment_revenue(
+    segments: dict[str, str], driver: dict[str, Any]
+) -> dict[str, Decimal]:
+    amounts = {key: _decimal(value, signed=True) for key, value in segments.items()}
+    # Missing required revenue still yields DRIVER_FIELD_MISSING, but every
+    # present segment is parsed even for an incomplete or unready driver.
+    if "revenue" in driver and sum(amounts.values(), Decimal(0)) != driver["revenue"]:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+    return amounts
 
 
 def _contractual(
@@ -371,7 +594,8 @@ def _project_period(
     moves = inputs.drivers[_pair(period)]
     repayment = inputs.repayments.get(_pair(period), Decimal(0))
     opening_debt, opening_cash = opening
-    debt = (
+    actual = inputs.actual_debt_cash.get(period["period_id"], Decimal(0))
+    closing_debt = (
         opening_debt
         + moves["issuance"]
         + moves["pik"]
@@ -379,6 +603,7 @@ def _project_period(
         - repayment
         - moves["optional_repayment"]
         + moves["fx_perimeter"]
+        + moves.get("carrying_value_change", Decimal(0))
     )
     financing = (
         moves["issuance"]
@@ -386,11 +611,22 @@ def _project_period(
         - moves["optional_repayment"]
         - moves["acquisitions_disposals"]
     )
+    if inputs.projection_basis is not None:
+        closing_debt += actual
+        financing += actual
     # `cfo` is before cash interest and cash taxes, deducted here (FP-39).
     fcf = moves["cfo"] - moves["capex"] - moves["cash_interest"] - moves["cash_taxes"]
-    cash = opening_cash + fcf - moves["distributions"] + financing
-    residual_debt = moves["stated_closing_debt"] - debt
-    residual_cash = moves["stated_closing_cash"] - cash
+    closing_cash = (
+        opening_cash
+        + fcf
+        - moves["distributions"]
+        + financing
+        + moves.get("net_equity_issue_repay", Decimal(0))
+        + moves.get("other_investing_financing", Decimal(0))
+        - moves.get("restricted_cash_change", Decimal(0))
+    )
+    residual_debt = moves["stated_closing_debt"] - closing_debt
+    residual_cash = moves["stated_closing_cash"] - closing_cash
     # Each residual is held to `RELATIVE_TOLERANCE` of its own balance as this
     # period opened -- debt of the opening debt, cash of the opening cash
     # (N20, FP-23, N10) -- never the chain's first: after a deleveraging year
@@ -429,7 +665,7 @@ def _project_period(
         "fcf": _amount(fcf),
         "debt": {
             "opening": _amount(opening_debt),
-            "closing": _amount(debt),
+            "closing": _amount(closing_debt),
             **{
                 name: _amount(moves[name])
                 for name in ("pik", "capitalised_interest", "fx_perimeter")
@@ -437,17 +673,36 @@ def _project_period(
         },
         "cash": {
             "opening": _amount(opening_cash),
-            "closing": _amount(cash),
-            "accessible": _amount(cash),
+            "closing": _amount(closing_cash),
+            "accessible": _amount(closing_cash),
         },
         "residual_debt": _amount(residual_debt),
         "residual_cash": _amount(residual_cash),
         "metrics": {
-            "gross_leverage": _ratio(debt, moves["ebitda"]),
-            "net_leverage": _ratio(debt - cash, moves["ebitda"]),
+            "gross_leverage": _ratio(closing_debt, moves["ebitda"]),
+            "net_leverage": _ratio(closing_debt - closing_cash, moves["ebitda"]),
             "interest_coverage": _ratio(moves["ebitda"], moves["cash_interest"]),
-            "fcf_to_debt": _ratio(fcf, debt),
+            "fcf_to_debt": _ratio(fcf, closing_debt),
         },
         "unavailable_reason": reason,
     }
-    return row, debt, cash
+    if inputs.projection_basis is not None:
+        row["financing"]["actual_debt_cash_movement"] = _amount(actual)
+    _optional_results(row, moves)
+    return row, closing_debt, closing_cash
+
+
+def _optional_results(row: dict[str, Any], moves: dict[str, Any]) -> None:
+    """Expose explicit components without adding absent-field claims."""
+    for name, location in (
+        ("net_equity_issue_repay", "financing"),
+        ("other_investing_financing", "financing"),
+        ("restricted_cash_change", "cash"),
+        ("carrying_value_change", "debt"),
+    ):
+        if name in moves:
+            row[location][name] = _amount(moves[name])
+    if "segment_revenue" in moves:
+        row["operating"]["segment_revenue"] = {
+            key: _amount(value) for key, value in moves["segment_revenue"].items()
+        }

@@ -628,3 +628,371 @@ def test_the_brief_holds_each_close_to_its_own_opening_balance() -> None:
         " part in a thousand of its own opening balance: debt of the opening"
         " debt, cash of the opening cash" in brief
     )
+
+
+def test_explicit_cash_and_carrying_movements_are_distinct() -> None:
+    request = forecast_request()
+    request["periods"] = request["periods"][:1]
+    request["drivers"] = request["drivers"][:1]
+    request["contractual"]["amortisation"] = request["contractual"]["amortisation"][:1]
+    request["drivers"][0].update(
+        net_equity_issue_repay="5",
+        other_investing_financing="-24",
+        restricted_cash_change="15",
+        carrying_value_change="26",
+        stated_closing_cash="92",
+        stated_closing_debt="1026",
+    )
+    result = cash_flow_forecast(request)
+    assert result["status"] == "complete"
+    row = result["rows"][0]
+    assert row["cash"]["closing"] == "92.000000"
+    assert row["debt"]["closing"] == "1026.000000"
+    assert row["fcf"] == "45.000000"
+    assert row["financing"]["financing_investing"] == "-15.000000"
+
+
+@pytest.mark.parametrize(
+    ("field", "location", "cash_closes", "debt_closes"),
+    [
+        ("net_equity_issue_repay", "financing", ("133", "119"), ("1000", "1000")),
+        ("other_investing_financing", "financing", ("133", "119"), ("1000", "1000")),
+        ("restricted_cash_change", "cash", ("119", "133"), ("1000", "1000")),
+        ("carrying_value_change", "debt", ("126", "126"), ("1007", "993")),
+    ],
+)
+@pytest.mark.parametrize("negative", [False, True])
+def test_optional_movements_have_independent_signed_effects(
+    field: str,
+    location: str,
+    cash_closes: tuple[str, str],
+    debt_closes: tuple[str, str],
+    negative: bool,
+) -> None:
+    request = forecast_request()
+    cash = cash_closes[int(negative)]
+    debt = debt_closes[int(negative)]
+    value = "-7" if negative else "7"
+    request["drivers"][0].update(
+        {field: value, "stated_closing_cash": cash, "stated_closing_debt": debt}
+    )
+    row = cash_flow_forecast(request)["rows"][0]
+    assert row["unavailable_reason"] is None
+    assert row["cash"]["closing"] == row["cash"]["accessible"] == cash + ".000000"
+    assert row["debt"]["closing"] == debt + ".000000"
+    assert row[location][field] == value + ".000000"
+    assert row["fcf"] == "45.000000"
+    assert row["financing"]["financing_investing"] == "-15.000000"
+
+
+@pytest.mark.parametrize(
+    ("field", "location"),
+    [
+        ("net_equity_issue_repay", "financing"),
+        ("other_investing_financing", "financing"),
+        ("restricted_cash_change", "cash"),
+        ("carrying_value_change", "debt"),
+    ],
+)
+def test_optional_zero_is_visible_and_absence_preserves_legacy_shape(
+    field: str, location: str
+) -> None:
+    request = forecast_request()
+    legacy = cash_flow_forecast(request)
+    assert all(field not in row[location] for row in legacy["rows"])
+    request["drivers"][0][field] = "-0.000000"
+    explicit = cash_flow_forecast(request)
+    assert explicit["rows"][0][location].pop(field) == "0.000000"
+    assert explicit == legacy
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "net_equity_issue_repay",
+        "other_investing_financing",
+        "restricted_cash_change",
+        "carrying_value_change",
+        "segment_revenue",
+    ],
+)
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        True,
+        False,
+        1,
+        1.5,
+        Decimal("1"),
+        "NaN",
+        "Infinity",
+        "-Infinity",
+        "1e2",
+        "+1",
+        "01",
+        "1\n",
+        "1" * 10000,
+        "0.1234567",
+        [],
+        {},
+    ],
+)
+def test_optional_scalar_grammar_refuses_hidden_bad_values(
+    field: str, value: object
+) -> None:
+    request = forecast_request()
+    request["drivers"][-1]["status"] = "DRAFT"
+    request["drivers"][-1][field] = (
+        {"SEG": value} if field == "segment_revenue" else value
+    )
+    refused(request)
+
+
+@pytest.mark.parametrize("count", [1, 40])
+def test_segment_revenue_is_exact_signed_and_canonical(count: int) -> None:
+    request = forecast_request()
+    segments = {f"SEG_{index}": "0" for index in range(count)}
+    segments["SEG_0"] = "500"
+    if count > 1:
+        segments["SEG_0"] = "512.125001"
+        segments["SEG_1"] = "-12.125001"
+    request["drivers"][0]["segment_revenue"] = segments
+    result = cash_flow_forecast(request)
+    assert result["status"] == "complete"
+    expected = {key: "0.000000" for key in segments}
+    expected["SEG_0"] = "500.000000" if count == 1 else "512.125001"
+    if count > 1:
+        expected["SEG_1"] = "-12.125001"
+    assert result["rows"][0]["operating"]["segment_revenue"] == expected
+    assert "segment_revenue" not in result["rows"][1]["operating"]
+
+
+@pytest.mark.parametrize("status", ["READY", "DRAFT"])
+@pytest.mark.parametrize("amount", ["499.999999", "500.000001"])
+def test_segment_sum_requires_exact_equality_even_when_unready(
+    status: str, amount: str
+) -> None:
+    request = forecast_request()
+    request["tolerance"] = "1000"
+    request["drivers"][0].update(status=status, segment_revenue={"SEG": amount})
+    refused(request)
+
+
+@pytest.mark.parametrize(
+    "segments",
+    [
+        None,
+        [],
+        "500",
+        {},
+        {f"S{i}": "0" for i in range(41)},
+        {"SEG": []},
+        {"SEG": {"nested": "500"}},
+        {"SEG": "NaN"},
+    ],
+)
+@pytest.mark.parametrize("status", ["READY", "DRAFT"])
+def test_every_segment_map_is_bounded_before_any_numeric_work(
+    monkeypatch: pytest.MonkeyPatch,
+    segments: object,
+    status: str,
+) -> None:
+    request = forecast_request()
+    request["drivers"][0]["segment_revenue"] = {"SAFE": "500"}
+    request["drivers"][-1].update(status=status, segment_revenue=segments)
+
+    def no_decimal(*args: object, **kwargs: object) -> None:
+        pytest.fail("a malformed later segment map reached Decimal work")
+
+    monkeypatch.setattr(cash_flow, "_decimal", no_decimal)
+    monkeypatch.setattr(cash_flow, "Decimal", no_decimal)
+    refused(request)
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        None,
+        1,
+        "",
+        "a" * 65,
+        "a/b",
+        "a~b",
+        "a b",
+        "a\n",
+        "a\x00",
+        "a\u202e",
+        "é",
+        "e\u0301",
+        "_SEG",
+        "-SEG",
+    ],
+)
+def test_segment_keys_refuse_unsafe_or_normalized_aliases_before_numbers(
+    monkeypatch: pytest.MonkeyPatch, key: object
+) -> None:
+    request = forecast_request()
+    request["drivers"][-1]["segment_revenue"] = {key: "500"}
+
+    def no_decimal(*args: object, **kwargs: object) -> None:
+        pytest.fail("an unsafe segment identifier reached numeric work")
+
+    monkeypatch.setattr(cash_flow, "_decimal", no_decimal)
+    refused(request)
+
+
+def test_segment_identifier_boundary_and_missing_required_revenue() -> None:
+    request = forecast_request()
+    request["drivers"][0]["segment_revenue"] = {"A" + "a_.-0" * 12 + "end": "500"}
+    assert cash_flow_forecast(request)["status"] == "complete"
+    del request["drivers"][0]["revenue"]
+    assert (
+        cash_flow_forecast(request)["rows"][0]["unavailable_reason"]
+        == "DRIVER_FIELD_MISSING"
+    )
+    request["drivers"][0]["segment_revenue"]["BAD"] = "1e2"
+    refused(request)
+
+
+def test_optional_movements_chain_separately_in_interleaved_cases() -> None:
+    request = forecast_request()
+    # BASE: +5 equity -24 otherFI -15 restricted; next year +10 release.
+    # DOWN: -7 equity -3 carrying; next year +9 otherFI +4 carrying.
+    updates = [
+        dict(
+            net_equity_issue_repay="5",
+            other_investing_financing="-24",
+            restricted_cash_change="15",
+            carrying_value_change="26",
+            stated_closing_cash="92",
+            stated_closing_debt="1026",
+        ),
+        dict(
+            restricted_cash_change="-10",
+            stated_closing_cash="128",
+            stated_closing_debt="1026",
+        ),
+        dict(
+            net_equity_issue_repay="-7",
+            carrying_value_change="-3",
+            stated_closing_cash="79",
+            stated_closing_debt="997",
+        ),
+        dict(
+            other_investing_financing="9",
+            carrying_value_change="4",
+            stated_closing_cash="74",
+            stated_closing_debt="1001",
+        ),
+    ]
+    for driver, update in zip(request["drivers"], updates, strict=True):
+        driver.update(update)
+    request["periods"] = [request["periods"][i] for i in (0, 2, 1, 3)]
+    result = cash_flow_forecast(request)
+    assert result["status"] == "complete"
+    assert [
+        (row["debt"]["closing"], row["cash"]["closing"]) for row in result["rows"]
+    ] == [
+        ("1026.000000", "92.000000"),
+        ("997.000000", "79.000000"),
+        ("1026.000000", "128.000000"),
+        ("1001.000000", "74.000000"),
+    ]
+    request["drivers"][0]["stated_closing_cash"] = "93"
+    assert [
+        row["unavailable_reason"] for row in cash_flow_forecast(request)["rows"]
+    ] == ["RESIDUAL_UNRECONCILED", None, "PRIOR_PERIOD_UNAVAILABLE", None]
+
+
+def test_optional_fields_remain_exact_under_hostile_decimal_context() -> None:
+    request = forecast_request()
+    request["drivers"][0].update(
+        net_equity_issue_repay="5",
+        other_investing_financing="-24",
+        restricted_cash_change="15",
+        carrying_value_change="26",
+        segment_revenue={
+            "OPERATING": "999999999999999999.999999",
+            "CORPORATE": "-999999999999999499.999999",
+        },
+        stated_closing_cash="92",
+        stated_closing_debt="1026",
+    )
+    with localcontext() as context:
+        context.prec = 2
+        context.rounding = ROUND_DOWN
+        context.Emax = 2
+        context.Emin = -2
+        for trap in context.traps:
+            context.traps[trap] = True
+        result = cash_flow_forecast(request)
+    assert result["rows"][0]["unavailable_reason"] is None
+    assert result["rows"][0]["cash"]["closing"] == "92.000000"
+    assert result["rows"][0]["debt"]["closing"] == "1026.000000"
+    assert (
+        result["rows"][0]["operating"]["segment_revenue"]
+        == request["drivers"][0]["segment_revenue"]
+    )
+
+
+@pytest.mark.parametrize("residual", ["debt", "cash"])
+@pytest.mark.parametrize("sign", [1, -1])
+@pytest.mark.parametrize(
+    ("opening", "tolerance", "boundary"),
+    [
+        ("1000", "5", "1"),
+        ("-1000", "5", "1"),
+        ("1000", "0.5", "0.5"),
+        ("10000000", "1000", "1000"),
+        ("0", "1000", "0"),
+    ],
+)
+def test_optional_movements_preserve_each_residual_cap_in_both_directions(
+    residual: str,
+    sign: int,
+    opening: str,
+    tolerance: str,
+    boundary: str,
+) -> None:
+    request = forecast_request()
+    request["opening"]["debt_by_facility"] = [
+        {"facility_id": "TERM", "amount": opening}
+    ]
+    request["opening"]["cash"] = opening
+    request["tolerance"] = tolerance
+    # Debt's existing net movement is 0, cash's is +26; explicit effects +9/+7.
+    debt = Decimal(opening) + 9
+    cash = Decimal(opening) + 33
+    request["drivers"][0].update(
+        net_equity_issue_repay="7",
+        carrying_value_change="9",
+        stated_closing_debt=str(debt),
+        stated_closing_cash=str(cash),
+    )
+    closing = debt if residual == "debt" else cash
+    for delta, reason in [
+        (Decimal(boundary), None),
+        (Decimal(boundary) + Decimal("0.000001"), "RESIDUAL_UNRECONCILED"),
+    ]:
+        request["drivers"][0][f"stated_closing_{residual}"] = str(
+            closing + sign * delta
+        )
+        assert cash_flow_forecast(request)["rows"][0]["unavailable_reason"] == reason
+
+
+@pytest.mark.parametrize("field", list(cash_flow._MOVEMENTS))
+def test_optional_fields_never_replace_a_missing_required_movement(field: str) -> None:
+    request = forecast_request()
+    request["drivers"][0].update(
+        net_equity_issue_repay="0",
+        other_investing_financing="0",
+        restricted_cash_change="0",
+        carrying_value_change="0",
+        segment_revenue={"SEG": "500"},
+    )
+    del request["drivers"][0][field]
+    assert (
+        cash_flow_forecast(request)["rows"][0]["unavailable_reason"]
+        == "DRIVER_FIELD_MISSING"
+    )
