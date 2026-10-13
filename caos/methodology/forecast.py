@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Any, NamedTuple
 
 from caos.calculators.cash_flow import cash_flow_forecast
 from caos.evidence.citations import AnchoredCitation
 from caos.methodology.citation_markers import unmarked
 from caos.methodology.host import verified_host_bytes
+from caos.methodology.model_inputs import Cp1Registers
 from caos.methodology.vendor import VendorContract
 from caos.refusals import Refusal, RefusalCode
 
@@ -31,6 +32,8 @@ _OWNERS = {
     "drivers": "CP-2G",
     "tolerance": "CP-2G",
     "contractual": "CP-4",
+    "projection_basis": "CP-2G",
+    "actuals": "CP-1",
 }
 # The modules whose citations CP-CF binds as calculation inputs (D106).
 FORECAST_OWNERS = frozenset(_OWNERS.values())
@@ -193,15 +196,15 @@ _DRIVER_TABLE = "cp2g.cp_model_forecast_drivers"
 class _DriverRow(NamedTuple):
     """One CP-2G driver row CP-CF maps for each case and period (G3-9).
 
-    `field` is the request movement the row is, or None for a movement this
-    contract does not carry, so the row must be a READY 0 with its own source
-    line. `negated` is how the row's signed figure becomes the calculator's
+    `field` is the request movement the row is. Optional equity and other
+    investing/financing fields still require READY zero when absent.
+    `negated` is how the row's signed figure becomes the calculator's
     input: the figure itself, or its sign reversed (`Decimal.copy_negate`,
     exact in any context).
     """
 
     driver_id: str
-    field: str | None
+    field: str
     negated: bool
 
 
@@ -218,8 +221,8 @@ class _DriverRow(NamedTuple):
 _DRIVER_ROWS: tuple[_DriverRow, ...] = (
     _DriverRow("acquisitions_disposals", "acquisitions_disposals", negated=True),
     _DriverRow("dividends_paid", "distributions", negated=True),
-    _DriverRow("net_equity_issue_repay", None, negated=False),
-    _DriverRow("other_investing_financing", None, negated=False),
+    _DriverRow("net_equity_issue_repay", "net_equity_issue_repay", negated=False),
+    _DriverRow("other_investing_financing", "other_investing_financing", negated=False),
 )
 # A driver value as the host reads it (G3-9): digits grouped by commas in
 # threes or not at all, an optional fraction, and a sign written as a leading
@@ -266,15 +269,15 @@ def validate_driver_mapping(
 ) -> None:
     """The four CP-2G driver rows CP-CF maps, read and compared exactly (G3-9).
 
-    Unsupported cash flows refuse. `FORECAST_DRIVER_NOT_READY` where every row
+    `FORECAST_DRIVER_NOT_READY` where every row
     CP-CF needs is readable and one or more is NOT_APPLICABLE: CP-2G's
     permitted word, which leaves CP-CF nothing to project until CP-2G states
     the row READY (a zero with its own source line). `HANDOFF_INCOMPLETE` for
     anything else it cannot map: no table, a scale other than millions, a
     missing or doubled row, a status, unit or value that is malformed, or a
     value that is not the request's movement once CP-2G's sign convention is
-    reversed into the calculator's (`_DRIVER_ROWS`, C2) -- or, for the two
-    movements this contract lacks, not 0.
+    mapped into the calculator's (`_DRIVER_ROWS`, C2). Optional equity and
+    other investing/financing map directly, or to READY zero when absent.
     """
     request = _document(markdown)["request"]
     faults = _faults_or_none(contract, request, owner)
@@ -340,7 +343,12 @@ def _faults(
             raise ValueError
         for mapped in _DRIVER_ROWS:
             key = (mapped.driver_id, *pair, period["fiscal_year"])
-            wanted = _figure(driver[mapped.field]) if mapped.field else Decimal(0)
+            wanted = (
+                _figure(driver.get(mapped.field, "0"))
+                if mapped.field
+                in {"net_equity_issue_repay", "other_investing_financing"}
+                else _figure(driver[mapped.field])
+            )
             fault = _row_fault(contract, rows, key, wanted, mapped)
             if fault is not None:
                 faults.append((_row_name(key), fault))
@@ -371,20 +379,19 @@ def _row_fault(
     The row's figure is compared once converted to the calculator's input as
     `mapped` declares (C2), exactly: `Decimal` equality, never a float.
     """
-    matches = [
-        row
-        for row in rows
+    row = None
+    count = 0
+    for candidate in rows:
         if (
-            row.get("driver_id"),
-            row.get("case"),
-            row.get("period_id"),
-            row.get("fiscal_year"),
-        )
-        == key
-    ]
-    if len(matches) != 1:
+            candidate.get("driver_id"),
+            candidate.get("case"),
+            candidate.get("period_id"),
+            candidate.get("fiscal_year"),
+        ) == key:
+            row = candidate
+            count += 1
+    if count != 1 or row is None:
         return "is not exactly one row"
-    row = matches[0]
     status, value = row.get("status"), row.get("value", "")
     if row.get("unit") != "CURRENCY_MM":
         return "is not CURRENCY_MM"
@@ -398,8 +405,8 @@ def _row_fault(
         return "holds no plain, comma-grouped or parenthesised figure"
     if (figure.copy_negate() if mapped.negated else figure) == wanted:
         return None
-    if mapped.field is None:
-        return "is not 0, and this contract carries no such movement"
+    if not mapped.negated:
+        return f"does not equal the request's {mapped.field} (absent means READY 0)"
     return (
         f"does not equal the request's {mapped.field} once negated: CP-2G signs"
         " an outflow negative, the calculator positive"
@@ -413,3 +420,43 @@ def _row_name(key: tuple[str, ...]) -> str:
     if all(_ROW_KEY.fullmatch(str(part)) for part in (case, period)):
         return f"`{vendor}` row for {case} {period}"
     return f"`{vendor}` row"
+
+
+def _accepted_registers(contract: VendorContract, owner: bytes) -> Cp1Registers:
+    """Read only the accepted bytes already supplied by the canonical caller."""
+    from caos.calculators.credit_model._cells import CONTEXT
+    from caos.methodology.model_inputs import cp1_registers
+    from caos.methodology.tables import handoff_tables
+
+    try:
+        with localcontext(CONTEXT):
+            tables = handoff_tables(contract, owner.decode("utf-8"))
+            if tables.unavailable_reason is not None:
+                raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
+            return cp1_registers(tables.tables)
+    except UnicodeDecodeError:
+        raise Refusal(RefusalCode.HANDOFF_INCOMPLETE) from None
+
+
+def validate_segment_mapping(
+    contract: VendorContract, markdown: bytes, owner: bytes
+) -> None:
+    """Validate explicit maps against accepted CP-1; HANDOFF_INCOMPLETE."""
+    from caos.methodology.forecast_segments import (
+        _check_request,
+        validate_segment_revenue,
+    )
+
+    request = _document(markdown)["request"]
+    if not any(
+        isinstance(row, dict) and "segment_revenue" in row
+        for row in request.get("drivers", [])
+    ):
+        return
+    try:
+        _check_request(request)
+        validate_segment_revenue(request, _accepted_registers(contract, owner))
+    except Refusal as exc:
+        if exc.code is RefusalCode.HANDOFF_MALFORMED:
+            raise Refusal(RefusalCode.HANDOFF_INCOMPLETE) from None
+        raise
