@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from inspect import unwrap
+from pathlib import Path
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
@@ -696,3 +699,237 @@ def test_a_billed_answer_above_its_reservation_is_never_accepted_on_replay(
     )
     _out, err = capsys.readouterr()
     assert err.splitlines()[-1].startswith("BUDGET_CHARGE_OVER_RESERVATION ")
+
+
+def _owned_forecast_request() -> dict[str, Any]:
+    from test_forecast_route import request_data
+
+    request = request_data()
+    request["projection_basis"] = "OWNED_CASH_DEBT_SERVICE"
+    request["perimeter"] = "consolidated"
+    request["opening"]["as_of_period_id"] = "FY2025"
+    request["periods"][0].update(start_date="2026-01-01", end_date="2026-12-31")
+    request["drivers"][0].update(
+        segment_revenue={"OPS": "500"},
+        stated_closing_debt="467",
+        stated_closing_cash="12",
+    )
+    request["actuals"] = {
+        "debt_cash_movements": [
+            {"period_id": "FY2026", "historical_period_id": "H1_2026", "amount": "-98"}
+        ]
+    }
+    request["contractual"] = {
+        "amortisation": [],
+        "aggregate_amortisation": [
+            {
+                "case": "BASE",
+                "period_id": "FY2026",
+                "start_date": "2026-07-01",
+                "end_date": "2026-12-31",
+                "amount": "55",
+            }
+        ],
+    }
+    return request
+
+
+def _owned_cp1_rows() -> dict[str, list[list[str]]]:
+    from canonical_route_fixtures import _cp1
+
+    rows = _cp1()
+    rows["T4.14"][0][9] = "MILLIONS"
+    for account in rows["T4.15"]:
+        account[0] = {"cash": "cash_and_equivalents", "debt": "total_debt"}.get(
+            account[0], account[0]
+        )
+        account[5] = "Verified"
+    rows["T4.14"].append(
+        [
+            "H1_2026",
+            "2026",
+            "—",
+            "YTD",
+            "2026-01-01",
+            "2026-06-30",
+            "181",
+            "unaudited",
+            "USD",
+            "MILLIONS",
+            "reported",
+            "consolidated",
+            "issuer-pack",
+            "issuer-pack p1",
+            "—",
+        ]
+    )
+    rows["T4.15"].append(
+        [
+            "net_debt_issue_repay",
+            "H1_2026",
+            "-98",
+            "+",
+            "reported",
+            "Calculated",
+            "issuer-pack",
+            "issuer-pack p1",
+            "none disclosed",
+            "annual only",
+        ]
+    )
+    rows["T4.17"] = [
+        [
+            "restructuring",
+            "Restructuring",
+            "RESTRUCTURING",
+            "REALIZED",
+            "1",
+            "FY2025",
+            "0",
+            "Verified",
+            "No restructuring addback",
+            "issuer-pack",
+            "issuer-pack p1",
+        ]
+    ]
+    rows["T4.16"] = [
+        [
+            "OPS",
+            "Operations",
+            "OPERATING_SEGMENT",
+            "1",
+            "FY2025",
+            "1000",
+            "Verified",
+            "issuer-pack",
+            "issuer-pack p1",
+        ]
+    ]
+    return rows
+
+
+@pytest.fixture
+def owned_forecast_harness(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> _Harness:
+    import canonical_route_fixtures
+    import test_forecast_route
+    import test_relative_value_route
+
+    from caos.graph.route import RouteExtensions
+
+    old_owner = test_forecast_route.owner_of
+    monkeypatch.setattr(
+        test_forecast_route,
+        "owner_of",
+        lambda pointer: "CP-2G"
+        if pointer == "/projection_basis"
+        else old_owner(pointer),
+    )
+    request = _owned_forecast_request()
+    quotes = test_forecast_route.owner_quotes(
+        test_forecast_route.assignment_rows(request)
+    )
+    monkeypatch.setattr(
+        test_relative_value_route,
+        "PACK",
+        canonical_route_fixtures.PACK + b"\n" + "\n".join(quotes.values()).encode(),
+    )
+    monkeypatch.setitem(canonical_route_fixtures._ROWS, "CP-1", _owned_cp1_rows)
+    route = resolve_route(
+        CATALOG,
+        "FULL_CREDIT_32",
+        "RELATIVE_VALUE",
+        extensions=RouteExtensions(model_extension=True),
+    )
+    factory = cast(
+        Callable[[tuple[StoreConnection, UUID], Path, ResolvedRoute], _Harness],
+        unwrap(test_relative_value_route.harness),
+    )
+    return factory(case, tmp_path, route)
+
+
+def test_owned_forecast_acceptance_and_replay_use_accepted_cp1(
+    owned_forecast_harness: _Harness,
+) -> None:
+    from conftest import tamper
+    from test_canonical_runtime import _module_provider, _run_route, _status
+    from test_forecast_route import ForecastCompletions
+
+    from caos.graph.runtime import accepted_artifacts
+    from caos.methodology.forecast import forecast_projection
+
+    h = owned_forecast_harness
+    answers = ForecastCompletions(h.source_id, request=_owned_forecast_request())
+    assert _run_route(h, _module_provider(h, answers)) is None
+    assert _status(h) == "COMPLETE"
+    rows = accepted_artifacts(h.conn, h.blobs, h.route, h.run_id, bundle=h.bundle)
+    assert len(rows) == 10
+    replayed = _owned_accepted_forecast(h)
+    assert replayed == answers.answers[-1]
+    result = forecast_projection(replayed)
+    assert result["rows"][0]["debt"]["closing"] == "467.000000"
+    assert result["rows"][0]["cash"]["closing"] == "12.000000"
+    # A changed accepted upstream cannot replay under the accepted record/HMAC.
+    node = _node(h, "CP-1")
+    row = h.conn.execute(
+        "SELECT artifact_sha256 FROM artifacts WHERE run_id=%s AND route_node_id=%s",
+        (h.run_id, node.route_node_id),
+    ).fetchone()
+    assert row is not None
+    original = h.blobs.get(row[0])
+    changed = original.replace(b"| -98 |", b"| -43 |")
+    assert changed != original
+    tamper(
+        h.conn,
+        "UPDATE artifacts SET artifact_sha256=%s WHERE run_id=%s AND route_node_id=%s",
+        (h.blobs.put(changed), h.run_id, node.route_node_id),
+    )
+    h.conn.commit()
+    with pytest.raises(Refusal):
+        _owned_accepted_forecast(h)
+
+
+@pytest.mark.parametrize("defect", ["wrong-owner", "segment", "bridge", "calendar"])
+def test_owned_forecast_acceptance_refuses_changed_owner_contract(
+    owned_forecast_harness: _Harness, defect: str
+) -> None:
+    from test_canonical_runtime import _module_provider, _run_route
+    from test_forecast_route import ForecastCompletions
+
+    request = _owned_forecast_request()
+    if defect == "segment":
+        request["drivers"][0]["segment_revenue"] = {"ALIEN": "500"}
+    elif defect == "bridge":
+        request["actuals"]["debt_cash_movements"][0]["amount"] = "-43"
+    elif defect == "calendar":
+        request["contractual"]["aggregate_amortisation"][0]["start_date"] = "2026-07-02"
+    h = owned_forecast_harness
+    answers = ForecastCompletions(
+        h.source_id,
+        request=request,
+        defect="wrong-owner" if defect == "wrong-owner" else "",
+    )
+    assert _run_route(h, _module_provider(h, answers)) is RefusalCode.HANDOFF_INCOMPLETE
+
+
+def _owned_accepted_forecast(h: _Harness) -> bytes:
+    from caos.methodology.canonical import accepted_handoff
+    from caos.methodology.verification import AcceptedRow
+
+    node = _node(h, "CP-CF")
+    row = h.conn.execute(
+        "SELECT attempt_id, artifact_sha256, record_sha256 FROM artifacts"
+        " WHERE run_id=%s AND route_node_id=%s",
+        (h.run_id, node.route_node_id),
+    ).fetchone()
+    assert row is not None
+    artifact = AcceptedRow(
+        run_id=h.run_id,
+        route_node_id=node.route_node_id,
+        attempt_id=row[0],
+        artifact_sha256=row[1],
+        record_sha256=row[2],
+    )
+    markdown, _record = accepted_handoff(h.conn, h.blobs, h.bundle, h.route, artifact)
+    return markdown

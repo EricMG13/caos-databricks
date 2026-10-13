@@ -518,6 +518,89 @@ def test_validate_driver_mapping_optional_financial_movements_are_direct(
         assert line is not None and "once negated" not in line
 
 
+@pytest.mark.parametrize(
+    "defect",
+    [
+        "none",
+        "wrong-owner",
+        "marker-collision",
+        "object-quote",
+        "changed-bridge",
+        "unlinked",
+        "missing",
+        "duplicate-json",
+    ],
+)
+def test_owned_forecast_bindings_require_exact_owner_leaves(defect: str) -> None:
+    from test_canonical_execution import _owned_forecast_request
+    from test_forecast_route import assignment_rows
+
+    from caos.evidence.citations import AnchoredCitation
+    from caos.methodology.forecast import validate_forecast_bindings
+
+    request = _owned_forecast_request()
+    rows = assignment_rows(request)
+    owners = {
+        "opening": "CP-1",
+        "periods": "CP-1",
+        "units": "CP-1",
+        "perimeter": "CP-1",
+        "actuals": "CP-1",
+        "drivers": "CP-2G",
+        "projection_basis": "CP-2G",
+        "contractual": "CP-4",
+    }
+    bindings = {
+        p: {"module_id": owners[p.split("/")[1]], "quote": q} for p, q in rows.items()
+    }
+    citations = {
+        owner: tuple(
+            AnchoredCitation("c" * 64, 1, q, (), linked=True, marker=1)
+            for p, q in rows.items()
+            if owners[p.split("/")[1]] == owner
+        )
+        for owner in set(owners.values())
+    }
+    pointer = "/drivers/0/segment_revenue/OPS"
+    if defect == "wrong-owner":
+        bindings[pointer]["module_id"] = "CP-1"
+    elif defect == "marker-collision":
+        citations["CP-2G"] = citations["CP-1"]
+    elif defect == "object-quote":
+        bindings[pointer]["quote"] = '/drivers/0/segment_revenue = {"OPS": "500"}'
+    elif defect == "changed-bridge":
+        bindings["/actuals/debt_cash_movements/0/amount"]["quote"] = (
+            '/actuals/debt_cash_movements/0/amount = "-43"'
+        )
+    elif defect == "unlinked":
+        citations["CP-1"] = tuple(
+            AnchoredCitation("c" * 64, 1, c.matched_text, (), linked=False, marker=1)
+            for c in citations["CP-1"]
+        )
+    elif defect == "missing":
+        del bindings["/actuals/debt_cash_movements/0/amount"]
+    document = {
+        "request": request,
+        "bindings": bindings,
+        "forecast": cash_flow_forecast(request),
+    }
+    markdown = ("```caos-forecast-v1\n" + json.dumps(document) + "\n```\n").encode()
+    if defect == "duplicate-json":
+        markdown = markdown.replace(
+            b'"projection_basis": "OWNED_CASH_DEBT_SERVICE"',
+            b'"projection_basis": "OWNED_CASH_DEBT_SERVICE", '
+            b'"projection_basis": "OWNED_CASH_DEBT_SERVICE"',
+            1,
+        )
+    upstream = dict.fromkeys(owners.values(), b"accepted owner [C1]")
+    if defect == "none":
+        validate_forecast_bindings(markdown, upstream, citations)
+    else:
+        with pytest.raises(Refusal) as caught:
+            validate_forecast_bindings(markdown, upstream, citations)
+        assert caught.value.code is RefusalCode.HANDOFF_INCOMPLETE
+
+
 def test_new_forecast_owner_adapters_legacy_return_before_cp1_parsing() -> None:
     from canonical_fixtures import CONTRACT
 
@@ -528,6 +611,90 @@ def test_new_forecast_owner_adapters_legacy_return_before_cp1_parsing() -> None:
 
     for validate in (validate_debt_service_mapping, validate_segment_mapping):
         validate(CONTRACT, forecast_markdown(), b"\xff invalid CP1")
+
+
+def test_new_forecast_owner_adapters_translate_expected_refusals() -> None:
+    import canonical_route_fixtures
+    from canonical_fixtures import CONTRACT
+    from canonical_route_fixtures import canonical_markdown, route_identity
+    from test_canonical_execution import _owned_cp1_rows, _owned_forecast_request
+
+    from caos.methodology.forecast import (
+        validate_debt_service_mapping,
+        validate_segment_mapping,
+    )
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(canonical_route_fixtures._ROWS, "CP-1", _owned_cp1_rows)
+        owner = canonical_markdown(route_identity("CP-1"))
+    markdown = forecast_markdown(_owned_forecast_request())
+    for validate in (validate_debt_service_mapping, validate_segment_mapping):
+        validate(CONTRACT, markdown, owner)
+        for bad in (
+            b"\xff",
+            b"No CP1 registers",
+            owner.replace(b"MILLIONS", b"THOUSANDS"),
+        ):
+            with pytest.raises(Refusal) as caught:
+                validate(CONTRACT, markdown, bad)
+            assert caught.value.code is RefusalCode.HANDOFF_INCOMPLETE
+
+
+@pytest.mark.parametrize("capability", ["segments", "debt"])
+def test_owner_adapters_bound_requests_before_cp1_decimal_parsing(
+    capability: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from canonical_fixtures import CONTRACT
+    from test_canonical_execution import _owned_forecast_request
+
+    from caos.methodology import forecast
+
+    request = _owned_forecast_request()
+    if capability == "segments":
+        request["drivers"][0]["segment_revenue"] = {f"s{i}": "0" for i in range(41)}
+        validate = forecast.validate_segment_mapping
+    else:
+        request["actuals"]["debt_cash_movements"] *= 2
+        validate = forecast.validate_debt_service_mapping
+
+    def must_not_parse(*_args: object) -> None:
+        raise AssertionError
+
+    monkeypatch.setattr(forecast, "_accepted_registers", must_not_parse)
+    raw = (
+        "```caos-forecast-v1\n"
+        + json.dumps({"request": request, "bindings": {}, "forecast": {}})
+        + "\n```\n"
+    ).encode()
+    with pytest.raises(Refusal) as caught:
+        validate(CONTRACT, raw, b"unread")
+    assert caught.value.code is RefusalCode.HANDOFF_INCOMPLETE
+
+
+def test_owner_adapters_isolate_cp1_parsing_from_ambient_decimal_context() -> None:
+    from decimal import Inexact, localcontext
+
+    import canonical_route_fixtures
+    from canonical_fixtures import CONTRACT
+    from canonical_route_fixtures import canonical_markdown, route_identity
+    from test_canonical_execution import _owned_cp1_rows, _owned_forecast_request
+
+    from caos.methodology.forecast import (
+        validate_debt_service_mapping,
+        validate_segment_mapping,
+    )
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(canonical_route_fixtures._ROWS, "CP-1", _owned_cp1_rows)
+        owner = canonical_markdown(route_identity("CP-1")).replace(
+            b"| 1000 |", b"| 1234 |"
+        )
+    markdown = forecast_markdown(_owned_forecast_request())
+    with localcontext() as context:
+        context.prec = 2
+        context.traps[Inexact] = True
+        validate_segment_mapping(CONTRACT, markdown, owner)
+        validate_debt_service_mapping(CONTRACT, markdown, owner)
 
 
 @pytest.mark.parametrize(
