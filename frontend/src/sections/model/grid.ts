@@ -218,7 +218,7 @@ export function passportOfCell(input: PassportInput): Passport {
       );
     }
   }
-  const located = cell.sources.filter((source) => source.citation === null);
+  const located = cell.sources;
   if (located.length) {
     derivation.push(
       `Sources: ${located.map((source) => `${source.source_id} ${source.source_locator}`).join("; ")}`,

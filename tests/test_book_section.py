@@ -17,8 +17,9 @@ import pytest
 from command_fixtures import command_headers, member
 from fastapi.testclient import TestClient
 from test_analysis_section import _as, _CountingConnection, _serving
-from test_book_entries import CLASSIFIED, added, client, harness, route
+from test_book_entries import CLASSIFIED, added, client, harness
 from test_execution_freshness import _Harness
+from test_model_section import forecast_route, route
 
 from caos.api.app import app, store_connection
 from caos.api.reads import book as book_read
@@ -44,7 +45,7 @@ from caos.store.gates import withdraw_source
 from caos.store.members import Standing
 from caos.store.runs import create_case, start_run
 
-__all__ = ["added", "client", "harness", "route"]
+__all__ = ["added", "client", "forecast_route", "harness", "route"]
 
 PATH = "/api/v1/book"
 STATED = Classification(
@@ -440,3 +441,85 @@ def test_an_entry_offers_withdraw_only_to_a_writer_member_of_its_case(
     )
     harness.conn.rollback()
     assert document.body.issuers == []
+
+
+@pytest.mark.parametrize("route", ["owned-model"], indirect=True)
+def test_owned_model_real_add_replay_stale_and_stored_book_equality(
+    client: TestClient,
+    harness: _Harness,
+) -> None:
+    from copy import deepcopy
+
+    from test_book_entries import _actions, _add, _entries
+    from test_model_section import _complete, _get, _OwnedModelCompletions, _path
+
+    _complete(harness, _OwnedModelCompletions(harness.source_id))
+    writer = member(harness.conn, harness.case_id, Standing.WRITER)
+    body = _get(client, harness)["body"]
+    stale = _add(client, harness, writer, {**CLASSIFIED, "snapshot_sha256": "0" * 64})
+    assert stale.status_code == 409
+    assert _entries(harness.conn, harness.run_id) == 0
+    assert _actions(harness.conn, harness.case_id).count("BOOK_ENTRY_ADDED") == 0
+    request = {**CLASSIFIED, "snapshot_sha256": body["snapshot_sha256"]}
+    headers = command_headers(writer, key=uuid4())
+    added = _add(client, harness, writer, request, headers)
+    assert added.status_code == 201, added.json()
+    replayed = _add(client, harness, writer, request, headers)
+    assert replayed.status_code == 201
+    assert replayed.headers["idempotency-replayed"] == "true"
+    assert replayed.json() == added.json()
+    assert _entries(harness.conn, harness.run_id) == 1
+    assert _actions(harness.conn, harness.case_id).count("BOOK_ENTRY_ADDED") == 1
+    receipts = harness.conn.execute(
+        "SELECT count(*) FROM command_requests"
+        " WHERE scope=%s AND command='ADD_TO_BOOK'",
+        (harness.case_id,),
+    ).fetchone()
+    harness.conn.rollback()
+    assert receipts == (1,)
+    row = harness.conn.execute(
+        "SELECT metrics, limitations, snapshot_sha256 FROM book_entries"
+        " WHERE run_id=%s",
+        (harness.run_id,),
+    ).fetchone()
+    harness.conn.rollback()
+    assert row is not None
+    metrics, limitations, digest = row
+    assert (
+        metrics["BASE_FY1"]["cash_closing"],
+        metrics["DOWNSIDE_FY1"]["cash_closing"],
+    ) == ("-22.000000", "-23.000000")
+    assert (metrics["BASE_FY1"]["fcf"], metrics["DOWNSIDE_FY1"]["fcf"]) == (
+        "45.000000",
+        "44.000000",
+    )
+    assert limitations == body["limitations"]
+    assert digest == body["snapshot_sha256"]
+    for case in ("BASE", "DOWNSIDE"):
+        index = [c["column_id"] for c in body["columns"]].index(f"{case}:2026")
+        served = {
+            line["line_id"]: line["cells"][index]["value"]
+            for line in body["lines"]
+            if line["line_id"] in model_read.BOOK_LINES
+            or line["line_id"].startswith("metric:")
+        }
+        assert metrics[f"{case}_FY1"] == {**served, "fiscal_year": "2026"}
+    stranger = uuid4()
+    shown = _book(client, harness, stranger).body.issuers[0].displayed
+    expected = deepcopy(metrics)
+    years = {
+        basis: values.pop("fiscal_year")
+        for basis, values in expected.items()
+        if "fiscal_year" in values
+    }
+    assert shown.metrics == expected
+    assert shown.fiscal_years == years
+    assert shown.limitations == limitations
+    readonly = client.get(_path(harness), headers=_as(stranger))
+    harness.conn.rollback()
+    assert readonly.status_code == 200
+    read_body = readonly.json()["body"]
+    assert read_body["lines"] == body["lines"]
+    assert read_body["limitations"] == body["limitations"]
+    assert read_body["snapshot_sha256"] is None
+    assert readonly.json()["chrome"]["actions"] == []
