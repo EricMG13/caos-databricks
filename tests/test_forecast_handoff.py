@@ -483,3 +483,11 @@ def test_the_brief_and_the_extension_state_the_driver_sign_convention() -> None:
     assert "a `45` disposal is -45" in brief
     assert "a 45 dividend is `dividends_paid` (45) and distributions 45" in extension
     assert "a 45 disposal `acquisitions_disposals` 45 and -45" in extension
+
+
+def test_new_segment_owner_adapter_legacy_returns_before_cp1_parsing() -> None:
+    from canonical_fixtures import CONTRACT
+
+    from caos.methodology.forecast import validate_segment_mapping
+
+    validate_segment_mapping(CONTRACT, forecast_markdown(), b"\xff invalid CP1")

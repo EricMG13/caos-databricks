@@ -2058,6 +2058,7 @@ def _forecast_inputs(
         from caos.methodology.forecast import (
             validate_driver_mapping,
             validate_forecast_bindings,
+            validate_segment_mapping,
         )
 
         citations = {
@@ -2066,6 +2067,7 @@ def _forecast_inputs(
         }
         validate_forecast_bindings(markdown, upstream, citations)
         validate_driver_mapping(_contract(bundle), markdown, upstream["CP-2G"])
+        validate_segment_mapping(_contract(bundle), markdown, upstream["CP-1"])
     verify_owner_restrictions(
         _contract(bundle),
         markdown,
