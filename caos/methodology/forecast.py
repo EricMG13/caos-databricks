@@ -460,3 +460,25 @@ def validate_segment_mapping(
         if exc.code is RefusalCode.HANDOFF_MALFORMED:
             raise Refusal(RefusalCode.HANDOFF_INCOMPLETE) from None
         raise
+
+
+def validate_debt_service_mapping(
+    contract: VendorContract, markdown: bytes, owner: bytes
+) -> None:
+    """Accepted CP-1 adapter; expected bad input becomes HANDOFF_INCOMPLETE."""
+    from caos.methodology.forecast_debt_service import (
+        _selected,
+        validate_owned_debt_service,
+    )
+    from caos.methodology.forecast_segments import _check_request
+
+    request = _document(markdown)["request"]
+    try:
+        if not _selected(request):
+            return
+        _check_request(request)
+        validate_owned_debt_service(request, _accepted_registers(contract, owner))
+    except Refusal as exc:
+        if exc.code is RefusalCode.HANDOFF_MALFORMED:
+            raise Refusal(RefusalCode.HANDOFF_INCOMPLETE) from None
+        raise
