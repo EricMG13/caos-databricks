@@ -1860,3 +1860,92 @@ def test_an_incomplete_base_fy_still_refuses_a_malformed_driver() -> None:
     with pytest.raises(Refusal) as caught:
         projection(_inputs(regs, request))
     assert caught.value.code == RefusalCode.METHODOLOGY_INPUT_INVALID
+
+
+def test_optional_cash_movements_preserve_first_year_interest_and_fcf() -> None:
+    request = example_request()
+    baseline = _frame(_inputs())["BASE:2026"]
+    request["drivers"][0].update(
+        net_equity_issue_repay="5",
+        other_investing_financing="-24",
+        restricted_cash_change="15",
+        carrying_value_change="26",
+    )
+    actual = _frame(_inputs(request=request))["BASE:2026"]
+    assert actual["cash_interest"] == baseline["cash_interest"]
+    assert actual["fcf"] == baseline["fcf"]
+    assert actual["cash_closing"].value == _value(baseline["cash_closing"]) - 34
+    assert actual["total_debt"].value == _value(baseline["total_debt"]) + 26
+    assert actual["equity_raised_net"].value == 5
+    assert actual["other_investing_financing"].value == -24
+    assert actual["fx_and_other_cash"].value == -15
+    assert actual["equity_raised_net"].sources == ()
+
+
+def test_explicit_segment_levels_override_shared_slot_growth() -> None:
+    from test_forecast_segments import segment_inputs
+
+    request, regs = segment_inputs()
+    inputs = _inputs(regs=regs, request=request)
+    inputs = replace(
+        inputs, slots=(SlotAllocation("shared", ("las_vegas", "regional")),)
+    )
+    frame = _frame(inputs)
+    for cells in frame.values():
+        assert cells["bu:las_vegas"].value == 4300
+        assert cells["bu:regional"].value == 5800
+        assert cells["bu:corporate_eliminations"].value == -60
+        assert cells["bu:las_vegas"].sources == ()
+        assert "explicit CP-2G" in (cells["bu:las_vegas"].note or "")
+
+
+@pytest.mark.parametrize("amount", ["0", "-5", "5"])
+def test_optional_movements_preserve_explicit_zero_and_sign(amount: str) -> None:
+    request = example_request()
+    request["drivers"][0].update(
+        net_equity_issue_repay=amount,
+        other_investing_financing=amount,
+        restricted_cash_change=amount,
+        carrying_value_change=amount,
+    )
+    actual = _frame(_inputs(request=request))["BASE:2026"]
+    baseline = _frame(_inputs())["BASE:2026"]
+    value = Decimal(amount)
+    assert actual["cash_closing"].value == _value(baseline["cash_closing"]) + value
+    assert actual["total_debt"].value == _value(baseline["total_debt"]) + value
+    assert actual["equity_raised_net"].value == value
+    assert actual["other_investing_financing"].value == value
+    assert actual["fx_and_other_cash"].value == -value
+    assert actual["equity_raised_net"].note is None
+    assert "restricted-cash transfer" in (actual["fx_and_other_cash"].note or "")
+
+
+@pytest.mark.parametrize("defect", ["corporate", "sum", "missing"])
+def test_explicit_segment_model_contract_refuses_invalid_input(defect: str) -> None:
+    from test_forecast_segments import segment_inputs
+
+    request, regs = segment_inputs()
+    values = request["drivers"][0]["segment_revenue"]
+    if defect == "corporate":
+        values["corporate_eliminations"] = "-59"
+        values["las_vegas"] = "4299"
+    elif defect == "sum":
+        values["las_vegas"] = "4300.000001"
+    else:
+        del values["regional"]
+    with pytest.raises(Refusal) as caught:
+        _frame(_inputs(regs=regs, request=request))
+    assert caught.value.code is RefusalCode.HANDOFF_MALFORMED
+
+
+def test_explicit_segments_do_not_call_native_growth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from test_forecast_segments import segment_inputs
+
+    def unexpected(*args: object) -> Cell:
+        raise AssertionError
+
+    request, regs = segment_inputs()
+    monkeypatch.setattr(projection_module, "_grown", unexpected)
+    _frame(_inputs(regs=regs, request=request))

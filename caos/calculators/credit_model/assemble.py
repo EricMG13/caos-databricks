@@ -31,6 +31,12 @@ and column, on exact Decimal equality (the calculator never rounds):
   to (interest is computed from the facility weights, never through the
   rounded rate, so the two part only in their last digits).
 
+Selected aggregate projections additionally compare every primary total and
+principal component to immutable expectations recomputed from the original
+request. Missing/incomplete expectations and numeric instrument, secured,
+rate or RCF/liquidity diagnostics fail. Selection is structured metadata,
+never inferred from cell notes.
+
 Nothing else is checked: not the CFO as reported (a memo), the income
 statement above EBIT, the debt totals net of cash and with leases, working
 capital, the interest base, nor revenue against the business units (a noted
@@ -59,13 +65,14 @@ Pure: Decimal only, no I/O, no rounding.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, localcontext
-from typing import Any
+from typing import Any, Literal
 
-from caos.calculators.credit_model._cells import CONTEXT, uncombined_periods
+from caos.calculators.cash_flow import cash_flow_forecast
+from caos.calculators.credit_model._cells import CONTEXT, join_notes, uncombined_periods
 from caos.calculators.credit_model.debt import notes_of
-from caos.calculators.credit_model.frame import Cell, Column, Frame
+from caos.calculators.credit_model.frame import Cell, Column, Frame, SourceRef
 from caos.calculators.credit_model.history import (
     account_frame,
     column_footings,
@@ -75,6 +82,10 @@ from caos.calculators.credit_model.history import (
 from caos.calculators.credit_model.layout import BANDS, UNALLOCATED, Line, layout
 from caos.calculators.credit_model.metrics import metric_frame
 from caos.calculators.credit_model.projection import (
+    ALLOCATION_NOTE,
+    OWNED_BASIS,
+    OWNED_DIAGNOSTICS,
+    OWNED_NOTE,
     ProjectionInputs,
     RateDeck,
     projection,
@@ -107,6 +118,36 @@ _OPEX_BAND, _ADJUSTED_BAND, _LIQUIDITY_BAND, _DEBT_BAND = (
 )
 
 
+_OWNED_KEYS = frozenset(
+    {
+        "revenue",
+        "adjusted_ebitda",
+        "cash_interest",
+        "cash_opening",
+        "cash_closing",
+        "debt_opening",
+        "debt_closing",
+        "total_debt",
+        "debt:unallocated",
+        "debt_raised_net",
+        "rollforward:debt_raised_net",
+        "debt_non_cash",
+        "fcf",
+        "ncf",
+        "contractual_repayment",
+        "actual_debt_cash_movement",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _OwnedCheck:
+    """Immutable expected values, recomputed from the original cash request."""
+
+    column_id: str
+    values: tuple[tuple[str, Decimal], ...]
+
+
 @dataclass(frozen=True, slots=True)
 class CreditModel:
     currency: str
@@ -115,6 +156,8 @@ class CreditModel:
     lines: tuple[Line, ...]
     rate_deck_id: str | None
     limitations: tuple[str, ...]
+    projection_basis: Literal["OWNED_CASH_DEBT_SERVICE"] | None = None
+    owned_checks: tuple[_OwnedCheck, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +168,7 @@ class ModelInputs:
     slots: tuple[SlotAllocation, ...]
     deck: RateDeck | None
     exclude_unrealised: bool = False
+    forecast_sources: Mapping[str, SourceRef] | None = None
 
 
 def _projected(inputs: ModelInputs, history: Frame) -> tuple[tuple[Column, ...], Frame]:
@@ -140,6 +184,7 @@ def _projected(inputs: ModelInputs, history: Frame) -> tuple[tuple[Column, ...],
             slots=inputs.slots,
             deck=inputs.deck,
             history=history,
+            forecast_sources=inputs.forecast_sources,
         )
     )
     ordered = sorted(columns, key=lambda column: column.case == "DOWNSIDE")
@@ -197,6 +242,76 @@ def _limitations(
     )
 
 
+def _owned_check(row: Mapping[str, Any]) -> _OwnedCheck:
+    """Independent aggregate invariants over a complete calculator result row."""
+    cash, debt, financing = row["cash"], row["debt"], row["financing"]
+    net_debt_cash = (
+        Decimal(financing["actual_debt_cash_movement"])
+        + Decimal(financing["issuance"])
+        - Decimal(financing["optional_repayment"])
+        - Decimal(financing["contractual_repayment"])
+    )
+    noncash = sum(
+        (
+            Decimal(debt.get(key, "0"))
+            for key in (
+                "pik",
+                "capitalised_interest",
+                "fx_perimeter",
+                "carrying_value_change",
+            )
+        ),
+        Decimal(0),
+    )
+    values = (
+        ("revenue", Decimal(row["operating"]["revenue"])),
+        ("adjusted_ebitda", Decimal(row["operating"]["ebitda"])),
+        ("cash_interest", -Decimal(financing["cash_interest"])),
+        ("cash_opening", Decimal(cash["opening"])),
+        ("cash_closing", Decimal(cash["closing"])),
+        ("debt_opening", Decimal(debt["opening"])),
+        ("debt_closing", Decimal(debt["closing"])),
+        ("total_debt", Decimal(debt["closing"])),
+        ("debt:unallocated", Decimal(debt["closing"])),
+        ("debt_raised_net", net_debt_cash),
+        ("rollforward:debt_raised_net", net_debt_cash),
+        ("debt_non_cash", noncash),
+        ("fcf", Decimal(row["fcf"])),
+        (
+            "ncf",
+            Decimal(cash["closing"])
+            - Decimal(cash["opening"])
+            + Decimal(cash.get("restricted_cash_change", "0")),
+        ),
+        ("contractual_repayment", -Decimal(financing["contractual_repayment"])),
+        ("actual_debt_cash_movement", Decimal(financing["actual_debt_cash_movement"])),
+    )
+    return _OwnedCheck(f"{row['case']}:{row['fiscal_year']}", values)
+
+
+def _owned_checks(request: Mapping[str, Any] | None) -> tuple[_OwnedCheck, ...]:
+    if request is None or request.get("projection_basis") != OWNED_BASIS:
+        return ()
+    with localcontext(CONTEXT):
+        result = cash_flow_forecast(request)
+        return tuple(
+            _owned_check(row)
+            for row in result["rows"]
+            if row["case"] in {"BASE", "DOWNSIDE"}
+        )
+
+
+def _owned_metric_notes(columns: tuple[Column, ...], frame: Frame) -> None:
+    """Retain aggregate provenance after generic ratios consume their inputs."""
+    for column in columns:
+        cells = frame[column.column_id]
+        if "contractual_repayment" not in cells:
+            continue
+        for key, cell in cells.items():
+            if key.startswith("metric:") and cell.value is not None:
+                cells[key] = replace(cell, note=join_notes((cell.note, OWNED_NOTE)))
+
+
 def credit_model(inputs: ModelInputs) -> CreditModel:
     """The credit model of CP-1's registers, with CP-2G and CP-CF's
     projections where `request` is CP-CF's accepted request: every column,
@@ -232,6 +347,7 @@ def credit_model(inputs: ModelInputs) -> CreditModel:
         corporate=corporate,
         footings=column_footings(regs, historical),
     )
+    _owned_metric_notes(every, metrics)
     deck = inputs.deck if inputs.request is not None else None
     lines = layout(regs, every, metrics, exclude, deck.as_of if deck else None)
     return CreditModel(
@@ -241,6 +357,10 @@ def credit_model(inputs: ModelInputs) -> CreditModel:
         lines=lines,
         rate_deck_id=deck.deck_id if deck else None,
         limitations=_limitations(inputs, every, lines),
+        projection_basis=inputs.request.get("projection_basis")
+        if inputs.request is not None
+        else None,
+        owned_checks=_owned_checks(inputs.request),
     )
 
 
@@ -437,18 +557,55 @@ def _column_faults(
     return faults
 
 
+def _owned_faults(
+    model: CreditModel, column: Column, cells: Mapping[str, Cell]
+) -> list[str]:
+    """Selected mode must positively match inputs and withhold allocation claims."""
+    if column.kind != "PROJECTED":
+        return []
+    if model.projection_basis != OWNED_BASIS:
+        selected = model.owned_checks or {
+            "contractual_repayment",
+            "actual_debt_cash_movement",
+        }.intersection(cells)
+        return [f"{column.column_id}:owned_inputs"] if selected else []
+    faults = []
+    expected = [
+        check for check in model.owned_checks if check.column_id == column.column_id
+    ]
+    if (
+        len(expected) != 1
+        or len(expected[0].values) != len(_OWNED_KEYS)
+        or {key for key, _ in expected[0].values} != _OWNED_KEYS
+        or any(
+            key not in cells or cells[key].value != value
+            for key, value in expected[0].values
+        )
+    ):
+        faults.append(f"{column.column_id}:owned_inputs")
+    diagnostics = set(OWNED_DIAGNOSTICS) | {
+        key for key in cells if key.startswith(("fac:", "rank:"))
+    }
+    if any(
+        key not in cells
+        or cells[key].value is not None
+        or cells[key].reason != "NOT_PROJECTED"
+        or cells[key].note != ALLOCATION_NOTE
+        for key in diagnostics
+    ):
+        faults.append(f"{column.column_id}:owned_diagnostics")
+    return faults
+
+
 def reconciliation_faults(model: CreditModel) -> tuple[str, ...]:
     """Every bridge that does not close on a column, as
     `"<column_id>:<bridge>"`; empty when every bridge closes. The bridges:
     those the module docstring lists, and only those."""
     bridges = _bridges(model.lines)
     with localcontext(CONTEXT):
-        return tuple(
-            fault
-            for index, column in enumerate(model.columns)
-            for fault in _column_faults(
-                column,
-                {line.line_id: line.cells[index] for line in model.lines},
-                bridges,
-            )
-        )
+        faults = []
+        for index, column in enumerate(model.columns):
+            cells = {line.line_id: line.cells[index] for line in model.lines}
+            faults.extend(_column_faults(column, cells, bridges))
+            faults.extend(_owned_faults(model, column, cells))
+        return tuple(faults)

@@ -63,8 +63,10 @@ before it, each noted, and a reference rate the deck lacks is implied.
 The aggregate debt roll-forward is CP-CF's: opening, less the scheduled
 amortisation, plus issuance, less optional repayment (`debt_raised_net`),
 plus PIK, capitalised interest and FX (`debt_non_cash`; absent is none).
-CP-CF has no equity movement (its distributions carry every equity outflow),
-so equity raised is zero, noted. Secured debt sums the scheduled secured
+Explicit equity and other investing/financing movements enter NCF; absent
+equity retains the historical zero and note. Explicit restricted-cash
+transfers adjust cash outside NCF, and carrying-value changes enter only
+noncash debt. Secured debt sums the scheduled secured
 balances, noted "excludes unallocated CP-CF movements" in a year CP-CF's
 total debt moves off the schedule; the revolver's undrawn amount is held at
 the opening. A facility in another currency at the opening is noted
@@ -78,6 +80,13 @@ A request without the fields the projection reads (`opening` and its
 `HANDOFF_MALFORMED`, and so is a period year outside 1900-2200 or more than
 ten years from the base year. A driver of zero is zero, never negative zero.
 
+With OWNED_CASH_DEBT_SERVICE explicitly selected, CP-1 validates the opening
+and actual bridge, and a complete public cash-flow recomputation supplies the
+aggregate cash/debt contract. No native facility schedule or rate determines
+these totals. Instruments, secured debt, rates and RCF liquidity are expressly
+unprojected; total debt remains visible as unallocated. Explicit validated
+segment levels replace the slot growth for their row.
+
 Pure: Decimal only, no I/O, no rounding.
 """
 
@@ -85,12 +94,14 @@ from __future__ import annotations
 
 import calendar
 import re
+import unicodedata
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, localcontext
 from typing import Any
 
+from caos.calculators.cash_flow import cash_flow_forecast
 from caos.calculators.credit_model._cells import (
     ABSENT,
     CONTEXT,
@@ -113,8 +124,10 @@ from caos.calculators.credit_model.debt import (
     notes_of,
     payment_rank,
 )
-from caos.calculators.credit_model.frame import Case, Cell, Column, Frame
+from caos.calculators.credit_model.frame import Case, Cell, Column, Frame, SourceRef
 from caos.calculators.credit_model.history import _fiscal_year_note, historical_columns
+from caos.methodology.forecast_debt_service import validate_owned_debt_service
+from caos.methodology.forecast_segments import validate_segment_revenue
 from caos.methodology.model_inputs import (
     Cp1Registers,
     DivisionGrowth,
@@ -142,6 +155,25 @@ WORKING_CAPITAL = "includes working capital"
 NOT_READY = "driver not ready"
 NO_EQUITY_MOVEMENT = "not a CP-CF movement"
 RCF_HELD = "RCF drawing held at opening"
+OWNED_BASIS = "OWNED_CASH_DEBT_SERVICE"
+OWNED_NOTE = "Cash debt-service basis: accepted CP-CF aggregate forecast"
+ALLOCATION_NOTE = (
+    "Aggregate cash debt-service forecast. Instrument allocation not supplied"
+)
+SEGMENT_NOTE = "explicit CP-2G forecast assumption"
+RESTRICTED_NOTE = "restricted-cash transfer outside accessible cash"
+OWNED_DIAGNOSTICS = (
+    "secured_debt",
+    "rcf_drawn",
+    "undrawn_rcf",
+    "liquidity",
+    "reference_rate",
+    "wa_rate",
+    "interest_bearing_debt_opening",
+    "metric:senior_secured_leverage",
+    "metric:senior_secured_net_leverage",
+    "metric:liquidity_to_debt",
+)
 
 _CASES: dict[str, Case] = {"BASE": "BASE", "DOWNSIDE": "DOWNSIDE"}
 _RATE_TYPES = frozenset({"FIXED", "FLOATING", "NOT_STATED"})
@@ -203,6 +235,7 @@ class ProjectionInputs:
     slots: tuple[SlotAllocation, ...]
     deck: RateDeck | None
     history: Frame  # `statement_frame` over `historical_columns(regs)`
+    forecast_sources: Mapping[str, SourceRef] | None = None
 
 
 def _stated(deck: RateDeck, reference_rate: str, offset: int) -> list[RateDeckYear]:
@@ -340,6 +373,10 @@ class _Context:
     base_year: int  # the last historical FY: FY+1 is the year after
     year_end: date  # its end date (31 December without one)
     base_note: str | None  # selected FY is not twelve whole months
+    owned: dict[tuple[str, str], Mapping[str, Any]]
+    request: Mapping[str, Any]
+    forecast_sources: Mapping[str, SourceRef] | None
+    driver_pointers: dict[tuple[str, str], str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -405,16 +442,34 @@ def _number(value: object) -> Decimal:
     return Decimal(value)
 
 
+def _source(ctx: _Context | ProjectionInputs, pointer: str) -> tuple[SourceRef, ...]:
+    """Pure callers may omit provenance; an explicitly supplied map is exact."""
+    sources = ctx.forecast_sources
+    if sources is None:
+        return ()
+    if pointer not in sources:
+        raise _malformed()
+    return (sources[pointer],)
+
+
+def _driver_sources(ctx: _Context, period: _Period, name: str) -> tuple[SourceRef, ...]:
+    pointer = ctx.driver_pointers[(period.case, period.period_id)]
+    return _source(ctx, f"{pointer}/{name}")
+
+
 def _driver(ctx: _Context, period: _Period, name: str, sign: int) -> Cell:
     """CP-CF's driver for the period, signed: `NOT_SOURCED` without the row or
     the field, `NOT_STATED` on a row that is not READY."""
     row = ctx.drivers.get((period.case, period.period_id))
     if row is None or name not in row:
         return ABSENT
+    sources = _driver_sources(ctx, period, name)
     if row.get("status") != "READY":
-        return Cell(None, "NOT_STATED", note=NOT_READY)
+        return Cell(None, "NOT_STATED", sources=sources, note=NOT_READY)
     value = _number(row[name]) * sign
-    return Cell(value.copy_abs() if value.is_zero() else value, basis="DRIVER")
+    return Cell(
+        value.copy_abs() if value.is_zero() else value, basis="DRIVER", sources=sources
+    )
 
 
 def _movement(ctx: _Context, period: _Period, name: str) -> Cell:
@@ -666,15 +721,35 @@ def _revenue(
 ) -> tuple[dict[str, Cell], dict[str, Cell]]:
     """The `bu:` cells and revenue: CP-CF's, else (no revenue in its
     request) the business units' sum."""
-    units = {
-        segment: _grown(ctx, segment, prior, period)
-        for segment, prior in state.business_units.items()
-    }
+    driver = ctx.drivers.get((period.case, period.period_id), {})
+    if "segment_revenue" in driver:
+        units = {
+            segment: Cell(
+                _number(value),
+                basis="PROJECTED",
+                note=SEGMENT_NOTE,
+                sources=_driver_sources(ctx, period, f"segment_revenue/{segment}"),
+            )
+            if driver.get("status") == "READY"
+            else Cell(
+                None,
+                "NOT_STATED",
+                note=NOT_READY,
+                sources=_driver_sources(ctx, period, f"segment_revenue/{segment}"),
+            )
+            for segment, value in driver["segment_revenue"].items()
+        }
+    else:
+        units = {
+            segment: _grown(ctx, segment, prior, period)
+            for segment, prior in state.business_units.items()
+        }
     cells = {f"bu:{segment}": cell for segment, cell in units.items()}
     revenue = _driver(ctx, period, "revenue", 1)
     if revenue.reason == "NOT_SOURCED" and units:
         revenue = calc((cell, 1) for cell in units.values())
-    return units, {**cells, "revenue": revenue}
+    cells["revenue"] = revenue
+    return units, cells
 
 
 def _cash_flow(
@@ -704,6 +779,13 @@ def _cash_flow(
         ),
         "dividends": _driver(ctx, period, "distributions", -1),
     }
+    driver = ctx.drivers.get((period.case, period.period_id), {})
+    if "net_equity_issue_repay" in driver:
+        flows["equity_raised_net"] = _driver(ctx, period, "net_equity_issue_repay", 1)
+    if "other_investing_financing" in driver:
+        flows["other_investing_financing"] = _driver(
+            ctx, period, "other_investing_financing", 1
+        )
     return {
         "adjusted_ebitda": ebitda,
         "cash_taxes": taxes,
@@ -721,11 +803,22 @@ def _year(
 ) -> tuple[dict[str, Cell], _State]:
     """One projected year's cells and the state the next opens with."""
     units, revenue = _revenue(ctx, state, period)
+    if ctx.owned:
+        cells = _owned_year(ctx, state, period, revenue)
+        return cells, _State(units, {}, cells["cash_closing"], cells["debt_closing"])
     schedule = _schedule(ctx, state, period)
     interest = _interest(state, schedule, ctx.implied)
     flows = _cash_flow(ctx, period, interest["cash_interest"], schedule.scheduled)
     cash = calc(((state.cash, 1), (flows["ncf"], 1)))
+    transfers = _cash_transfer(ctx, period)
+    if transfers:
+        cash = calc(((cash, 1), (transfers["fx_and_other_cash"], 1)))
     non_cash = calc((_movement(ctx, period, name), 1) for name in _NON_CASH)
+    driver = ctx.drivers.get((period.case, period.period_id), {})
+    if "carrying_value_change" in driver:
+        non_cash = calc(
+            ((non_cash, 1), (_driver(ctx, period, "carrying_value_change", 1), 1))
+        )
     raised = flows["debt_raised_net"]
     debt = calc(((state.debt, 1), (raised, 1), (non_cash, 1)), carried((state.debt,)))
     cells = {
@@ -733,6 +826,7 @@ def _year(
         **flows,
         "cash_opening": state.cash,
         "cash_closing": cash,
+        **transfers,
         **schedule.cells,
         "total_debt": debt,
         "secured_debt": _secured(ctx, schedule, debt),
@@ -748,6 +842,153 @@ def _year(
         **{f"kpi:{row.kpi_id}": _NOT_PROJECTED for row in ctx.regs.kpis},
     }
     return cells, _State(units, schedule.balances, cash, debt)
+
+
+def _cash_transfer(ctx: _Context, period: _Period) -> dict[str, Cell]:
+    """An explicitly stated restricted-cash transfer, including zero."""
+    driver = ctx.drivers.get((period.case, period.period_id), {})
+    if "restricted_cash_change" not in driver:
+        return {}
+    cell = _driver(ctx, period, "restricted_cash_change", -1)
+    return {
+        "fx_and_other_cash": replace(
+            cell, note=join_notes((cell.note, RESTRICTED_NOTE))
+        )
+    }
+
+
+def _owned_rows(request: Mapping[str, Any]) -> dict[tuple[str, str], Mapping[str, Any]]:
+    """Recompute the complete public cash contract, never native facility prices."""
+    if request.get("projection_basis") != OWNED_BASIS:
+        return {}
+    result = cash_flow_forecast(request)
+    if result["status"] != "complete":
+        raise _malformed()
+    return {(row["case"], row["period_id"]): row for row in result["rows"]}
+
+
+def _principal_sources(ctx: _Context, period: _Period) -> tuple[SourceRef, ...]:
+    rows = ctx.request["contractual"]["aggregate_amortisation"]
+    identity = (period.case, period.period_id)
+    return refs(
+        source
+        for index, row in enumerate(rows)
+        if (row["case"], row["period_id"]) == identity
+        for source in _source(
+            ctx, f"/contractual/aggregate_amortisation/{index}/amount"
+        )
+    )
+
+
+def _actual_sources(ctx: _Context, period: _Period) -> tuple[SourceRef, ...]:
+    rows = ctx.request["actuals"]["debt_cash_movements"]
+    period_id = period.period_id
+    return refs(
+        source
+        for index, row in enumerate(rows)
+        if row["period_id"] == period_id
+        for source in _source(ctx, f"/actuals/debt_cash_movements/{index}/amount")
+    )
+
+
+def _owned_provenance(
+    ctx: _Context, period: _Period, cells: dict[str, Cell]
+) -> dict[str, Cell]:
+    """Propagate actual operands without coupling the independent numeric check."""
+    driver = ctx.drivers[(period.case, period.period_id)]
+    noncash = refs(
+        source
+        for name in (*_NON_CASH, "carrying_value_change")
+        if name in driver
+        for source in _driver_sources(ctx, period, name)
+    )
+    cells["debt_non_cash"] = replace(cells["debt_non_cash"], sources=noncash)
+    for target, operands in (
+        ("cash_closing", ("ncf", "fx_and_other_cash", "cash_opening")),
+        ("debt_closing", ("debt_raised_net", "debt_non_cash", "debt_opening")),
+        ("total_debt", ("debt_closing",)),
+        ("net_debt", ("debt_closing", "cash_closing")),
+    ):
+        sources = refs(
+            source
+            for operand in operands
+            for source in cells.get(operand, ABSENT).sources
+        )
+        cells[target] = replace(cells[target], sources=sources)
+    selector = _source(ctx, "/projection_basis")
+    return {
+        key: replace(cell, sources=refs((*cell.sources, *selector)))
+        for key, cell in cells.items()
+    }
+
+
+def _owned_year(
+    ctx: _Context, state: _State, period: _Period, revenue: dict[str, Cell]
+) -> dict[str, Cell]:
+    """Aggregate cash debt service; no inferred instrument or rate allocation."""
+    # Public cash rows use NFC; keep the request's original identity elsewhere.
+    row = ctx.owned[(period.case, unicodedata.normalize("NFC", period.period_id))]
+    financing, debt, cash = row["financing"], row["debt"], row["cash"]
+    interest = Cell(
+        -Decimal(financing["cash_interest"]),
+        basis="DRIVER",
+        sources=_driver_sources(ctx, period, "cash_interest"),
+    )
+    principal = Cell(
+        Decimal(financing["contractual_repayment"]),
+        basis="DRIVER",
+        sources=_principal_sources(ctx, period),
+    )
+    actual = Cell(
+        Decimal(financing["actual_debt_cash_movement"]),
+        basis="DRIVER",
+        sources=_actual_sources(ctx, period),
+    )
+    flows = _cash_flow(ctx, period, interest, principal)
+    flows["debt_raised_net"] = calc(((flows["debt_raised_net"], 1), (actual, 1)))
+    flows["ncf"] = calc(((flows["ncf"], 1), (actual, 1)))
+    non_cash = sum((Decimal(debt[name]) for name in _NON_CASH), Decimal(0)) + Decimal(
+        debt.get("carrying_value_change", "0")
+    )
+    cells = {
+        **revenue,
+        **flows,
+        **_cash_transfer(ctx, period),
+        "cash_interest": interest,
+        "contractual_repayment": replace(
+            principal, value=-principal.value if principal.value else Decimal(0)
+        ),
+        "actual_debt_cash_movement": actual,
+        "cash_opening": replace(
+            state.cash, value=Decimal(cash["opening"]), reason=None, basis="CALCULATED"
+        ),
+        "cash_closing": Cell(Decimal(cash["closing"]), basis="CALCULATED"),
+        "debt_opening": replace(
+            state.debt, value=Decimal(debt["opening"]), reason=None, basis="CALCULATED"
+        ),
+        "debt_closing": Cell(Decimal(debt["closing"]), basis="CALCULATED"),
+        "total_debt": Cell(Decimal(debt["closing"]), basis="CALCULATED"),
+        "debt_non_cash": Cell(non_cash, basis="CALCULATED"),
+        "net_debt": Cell(
+            Decimal(debt["closing"]) - Decimal(cash["closing"]), basis="CALCULATED"
+        ),
+    }
+    cells = _owned_provenance(ctx, period, cells)
+    for key, cell in cells.items():
+        cells[key] = replace(cell, note=join_notes((cell.note, OWNED_NOTE)))
+    diagnostic = Cell(None, "NOT_PROJECTED", note=ALLOCATION_NOTE)
+    cells.update(dict.fromkeys(_NOT_PROJECTED_KEYS, _NOT_PROJECTED))
+    cells.update(dict.fromkeys(OWNED_DIAGNOSTICS, diagnostic))
+    cells.update({f"fac:{r.facility_id}": diagnostic for r in ctx.regs.facilities})
+    cells.update({f"rank:{payment_rank(r)}": diagnostic for r in ctx.regs.facilities})
+    cells.update({f"kpi:{r.kpi_id}": _NOT_PROJECTED for r in ctx.regs.kpis})
+    cells["debt:unallocated"] = Cell(
+        Decimal(debt["closing"]),
+        basis="CALCULATED",
+        note=ALLOCATION_NOTE,
+        sources=cells["total_debt"].sources,
+    )
+    return cells
 
 
 def _secured(ctx: _Context, schedule: _Schedule, debt: Cell) -> Cell:
@@ -892,6 +1133,19 @@ def _opening(
     has no row for is not projected) and the anchor's balances."""
     segments = dict.fromkeys(row.segment_id for row in inputs.regs.segments)
     units = {segment: prior.get(f"bu:{segment}", ABSENT) for segment in segments}
+    cash = _opening_cell(anchor.get("cash_closing", ABSENT))
+    debt = _opening_cell(anchor.get("total_debt", ABSENT))
+    if inputs.forecast_sources is not None:
+        cash = replace(
+            cash,
+            sources=refs((*_source(inputs, "/opening/cash"), *cash.sources)),
+        )
+        debt_sources = [
+            source
+            for index, _ in enumerate(inputs.request["opening"]["debt_by_facility"])
+            for source in _source(inputs, f"/opening/debt_by_facility/{index}/amount")
+        ]
+        debt = replace(debt, sources=refs((*debt_sources, *debt.sources)))
     return _State(
         business_units={
             segment: cell
@@ -902,8 +1156,8 @@ def _opening(
             row.facility_id: anchor[f"fac:{row.facility_id}"].value
             for row in facilities
         },
-        cash=_opening_cell(anchor.get("cash_closing", ABSENT)),
-        debt=_opening_cell(anchor.get("total_debt", ABSENT)),
+        cash=cash,
+        debt=debt,
     )
 
 
@@ -959,8 +1213,10 @@ def _context(inputs: ProjectionInputs, request: _Request) -> tuple[_Context, _St
         (column for column in columns if column.period_id == request.as_of), None
     )
     opened = named or last_fy or ltm
-    at = inputs.history.get(opened.column_id, {}) if opened is not None else {}
-    facilities = _anchor_rows(regs, opened, at)
+    opening_cells = (
+        inputs.history.get(opened.column_id, {}) if opened is not None else {}
+    )
+    facilities = _anchor_rows(regs, opened, opening_cells)
     periods: dict[str | None, PeriodRow] = {p.period_id: p for p in regs.periods}
     base_note = (
         None if last_fy is None else _fiscal_year_note(periods[last_fy.period_id])
@@ -985,13 +1241,20 @@ def _context(inputs: ProjectionInputs, request: _Request) -> tuple[_Context, _St
         ),
         facilities=facilities,
         implied=_implied(anchor),
-        undrawn=_undrawn(at, facilities, regs.currency),
+        undrawn=_undrawn(opening_cells, facilities, regs.currency),
         left_out=left_out(facilities, regs.currency),
         base_year=base_year,
         year_end=date.fromisoformat(end) if end else date(base_year, 12, 31),
         base_note=base_note,
+        owned=_owned_rows(inputs.request),
+        request=inputs.request,
+        forecast_sources=inputs.forecast_sources,
+        driver_pointers={
+            (_text(row, "case"), _text(row, "period_id")): f"/drivers/{index}"
+            for index, row in enumerate(_rows(inputs.request, "drivers"))
+        },
     )
-    return context, _opening(inputs, facilities, at, prior)
+    return context, _opening(inputs, facilities, opening_cells, prior)
 
 
 def projection(inputs: ProjectionInputs) -> tuple[tuple[Column, ...], Frame]:
@@ -1002,6 +1265,8 @@ def projection(inputs: ProjectionInputs) -> tuple[tuple[Column, ...], Frame]:
     selected base FY withholds every numeric figure, for every case/year,
     after request validation; structural unprojected/nonapplicable cells remain."""
     with localcontext(CONTEXT):
+        validate_segment_revenue(inputs.request, inputs.regs)
+        validate_owned_debt_service(inputs.request, inputs.regs)
         request = _Request(
             _periods(inputs.request), _drivers(inputs.request), _as_of(inputs.request)
         )
