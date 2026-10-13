@@ -622,6 +622,12 @@ def _unallocated(
 
 
 def _cell(spec: _Spec, column: Column, cells: Mapping[str, Cell]) -> Cell:
+    if (
+        column.kind == "PROJECTED"
+        and (spec.total is not None or spec.parts)
+        and spec.key in cells
+    ):
+        return cells[spec.key]
     if spec.total is not None:
         return _unallocated(column, cells, spec, spec.total)
     if spec.parts:
@@ -703,6 +709,26 @@ def layout(
         if ltm.kind == "LTM" and ltm.period_id == pf.period_id
     }
     with localcontext(CONTEXT):
+        specs = _specs(regs, columns, exclude_unrealised, deck_as_of)
+        if any("contractual_repayment" in cells for cells in frame.values()):
+            specs.extend(
+                (band, _plain(key, label, "MEMO"))
+                for band, key, label in (
+                    (
+                        _ROLLFORWARD_BAND,
+                        "contractual_repayment",
+                        "Future contractual principal",
+                    ),
+                    (
+                        _ROLLFORWARD_BAND,
+                        "actual_debt_cash_movement",
+                        "Actual debt cash movement",
+                    ),
+                    (_DEBT_BAND, "secured_debt", "Secured debt"),
+                    (_LIQUIDITY_BAND, "rcf_drawn", "RCF drawing"),
+                )
+            )
+            specs.sort(key=lambda item: BANDS.index(item[0]))
         lines = [
             Line(
                 line_id=spec.line_id,
@@ -718,6 +744,6 @@ def layout(
                     for column in columns
                 ),
             )
-            for band, spec in _specs(regs, columns, exclude_unrealised, deck_as_of)
+            for band, spec in specs
         ]
         return tuple(_revenue_noted(lines, columns))

@@ -1,8 +1,8 @@
 """The credit model's shared types: a column, a cell and the frame of both.
 
 A frame maps a column id to its keys and each key to one cell. A cell holds a
-`Decimal` or the reason it has none, never both; its sources keep the CP-1
-cell text verbatim, `[C<n>]` markers kept (D107).
+`Decimal` or the reason it has none, never both; its sources keep accepted
+owner text verbatim, `[C<n>]` markers kept (D107).
 """
 
 from __future__ import annotations
@@ -28,7 +28,9 @@ Reason = Literal[
 class SourceRef:
     source_id: str
     source_locator: str
-    cell_text: str  # the CP-1 cell text verbatim, [C<n>] markers kept (D107)
+    cell_text: str  # the source text verbatim, [C<n>] markers kept (D107)
+    module_id: str = "CP-1"
+    request_pointer: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -70,6 +70,7 @@ def test_fiscal_year_note_preserves_classification_and_input(
     [
         "caos.methodology.model_inputs",
         "caos.methodology.forecast",
+        "caos.methodology.forecast_debt_service",
         "caos.methodology.forecast_segments",
         "caos.calculators.credit_model.owner_inputs",
         "caos.calculators.credit_model.assemble",
@@ -82,6 +83,7 @@ def test_owner_inputs_cold_import_order(first: str) -> None:
         first,
         "caos.methodology.model_inputs",
         "caos.methodology.forecast",
+        "caos.methodology.forecast_debt_service",
         "caos.methodology.forecast_segments",
         "caos.calculators.credit_model.owner_inputs",
         "caos.calculators.credit_model.assemble",
