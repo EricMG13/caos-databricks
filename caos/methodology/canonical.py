@@ -2056,6 +2056,7 @@ def _forecast_inputs(
     upstream = {ref.module_id: data for ref, data in context.upstream}
     if module == MODEL_MODULE:
         from caos.methodology.forecast import (
+            validate_debt_service_mapping,
             validate_driver_mapping,
             validate_forecast_bindings,
             validate_segment_mapping,
@@ -2068,6 +2069,7 @@ def _forecast_inputs(
         validate_forecast_bindings(markdown, upstream, citations)
         validate_driver_mapping(_contract(bundle), markdown, upstream["CP-2G"])
         validate_segment_mapping(_contract(bundle), markdown, upstream["CP-1"])
+        validate_debt_service_mapping(_contract(bundle), markdown, upstream["CP-1"])
     verify_owner_restrictions(
         _contract(bundle),
         markdown,

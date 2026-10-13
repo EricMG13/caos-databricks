@@ -485,9 +485,73 @@ def test_the_brief_and_the_extension_state_the_driver_sign_convention() -> None:
     assert "a 45 disposal `acquisitions_disposals` 45 and -45" in extension
 
 
-def test_new_segment_owner_adapter_legacy_returns_before_cp1_parsing() -> None:
+@pytest.mark.parametrize(
+    "field", ["net_equity_issue_repay", "other_investing_financing"]
+)
+@pytest.mark.parametrize("value", ["-24", "0", "26"])
+def test_validate_driver_mapping_optional_financial_movements_are_direct(
+    field: str, value: str
+) -> None:
+    from canonical_fixtures import CONTRACT
+    from canonical_route_fixtures import canonical_markdown, route_identity
+    from test_forecast_route import request_data
+
+    from caos.methodology.forecast import driver_line, validate_driver_mapping
+
+    request = request_data()
+    request["drivers"][0][field] = value
+    owner = _driver_cells(
+        canonical_markdown(route_identity("CP-2G")), field, value, "READY"
+    )
+    validate_driver_mapping(CONTRACT, forecast_markdown(request), owner)
+    if value != "0":
+        wrong = _driver_cells(
+            canonical_markdown(route_identity("CP-2G")),
+            field,
+            str(-int(value)),
+            "READY",
+        )
+        with pytest.raises(Refusal) as caught:
+            validate_driver_mapping(CONTRACT, forecast_markdown(request), wrong)
+        assert caught.value.code is RefusalCode.HANDOFF_INCOMPLETE
+        line = driver_line(CONTRACT, forecast_markdown(request), wrong)
+        assert line is not None and "once negated" not in line
+
+
+def test_new_forecast_owner_adapters_legacy_return_before_cp1_parsing() -> None:
     from canonical_fixtures import CONTRACT
 
-    from caos.methodology.forecast import validate_segment_mapping
+    from caos.methodology.forecast import (
+        validate_debt_service_mapping,
+        validate_segment_mapping,
+    )
 
-    validate_segment_mapping(CONTRACT, forecast_markdown(), b"\xff invalid CP1")
+    for validate in (validate_debt_service_mapping, validate_segment_mapping):
+        validate(CONTRACT, forecast_markdown(), b"\xff invalid CP1")
+
+
+@pytest.mark.parametrize(
+    "field", ["net_equity_issue_repay", "other_investing_financing"]
+)
+@pytest.mark.parametrize("invalid", [None, False, 0, "NaN"])
+def test_validate_driver_mapping_does_not_default_explicit_invalid_optional(
+    field: str, invalid: object
+) -> None:
+    from canonical_fixtures import CONTRACT
+    from canonical_route_fixtures import canonical_markdown, route_identity
+    from test_forecast_route import request_data
+
+    from caos.methodology.forecast import validate_driver_mapping
+
+    request = request_data()
+    request["drivers"][0][field] = invalid
+    raw = (
+        "```caos-forecast-v1\n"
+        + json.dumps({"request": request, "bindings": {}, "forecast": {}})
+        + "\n```\n"
+    ).encode()
+    with pytest.raises(Refusal) as caught:
+        validate_driver_mapping(
+            CONTRACT, raw, canonical_markdown(route_identity("CP-2G"))
+        )
+    assert caught.value.code is RefusalCode.HANDOFF_INCOMPLETE
