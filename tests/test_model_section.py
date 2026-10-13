@@ -40,6 +40,7 @@ from caos.api.reads import analysis as analysis_read
 from caos.api.reads import model as model_read
 from caos.api.wire import ModelBody
 from caos.boundary_text import BoundaryText
+from caos.calculators.cash_flow import cash_flow_forecast
 from caos.calculators.credit_model.assemble import ModelInputs, credit_model
 from caos.calculators.credit_model.layout import BANDS
 from caos.calculators.credit_model.projection import RateDeckYear
@@ -64,6 +65,8 @@ __all__ = ["client", "forecast_route", "harness", "route"]
 def route(
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 ) -> ResolvedRoute:
+    if getattr(request, "param", None) == "owned-model":
+        _owned_model_route(monkeypatch)
     if getattr(request, "param", None) == "zero-interest":
         import test_forecast_route as fixture
 
@@ -1289,3 +1292,405 @@ def test_the_accepted_forecast_is_re_derived_with_its_request_and_bindings(
     request, bindings = forecast_inputs(accepted.model_analysis.encode("utf-8"))
     assert request["drivers"][0]["ebitda"] == "100"
     assert bindings["/drivers/0/ebitda"]["module_id"] == "CP-2G"
+
+
+# Real accepted owner route: each owner's C3 means a different anchored fact.
+def _owned_model_request() -> dict[str, Any]:
+    from copy import deepcopy
+
+    from test_canonical_execution import _owned_forecast_request
+
+    request = _owned_forecast_request()
+    request["drivers"][0].update(
+        net_equity_issue_repay="5",
+        other_investing_financing="-24",
+        restricted_cash_change="15",
+        carrying_value_change="26",
+        stated_closing_cash="-22",
+        stated_closing_debt="493",
+    )
+    for group in ("periods", "drivers"):
+        downside = deepcopy(request[group][0])
+        downside["case"] = "DOWNSIDE"
+        if group == "drivers":
+            downside.update(cash_interest="11", stated_closing_cash="-23")
+        request[group].append(downside)
+    principal = deepcopy(request["contractual"]["aggregate_amortisation"][0])
+    principal["case"] = "DOWNSIDE"
+    request["contractual"]["aggregate_amortisation"].append(principal)
+    return request
+
+
+def _owned_model_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    import canonical_route_fixtures
+    import test_forecast_route as fixture
+    from test_canonical_execution import _owned_cp1_rows
+
+    old_owner, old_quotes = fixture.owner_of, fixture.owner_quotes
+    monkeypatch.setattr(
+        fixture,
+        "owner_of",
+        lambda pointer: "CP-2G"
+        if pointer == "/projection_basis"
+        else old_owner(pointer),
+    )
+
+    def quotes(rows: dict[str, str]) -> dict[str, str]:
+        found = old_quotes(rows)
+        targets = {
+            "CP-1": "/actuals/debt_cash_movements/0/amount",
+            "CP-2G": "/drivers/0/cash_interest",
+            "CP-4": "/contractual/aggregate_amortisation/0/amount",
+        }
+        for owner, pointer in targets.items():
+            lines = found[owner].splitlines()
+            target = rows[pointer]
+            lines.remove(target)
+            lines.insert(2, target)
+            found[owner] = "\n".join(lines)
+        return found
+
+    monkeypatch.setattr(fixture, "owner_quotes", quotes)
+    rows = fixture.assignment_rows(_owned_model_request())
+    monkeypatch.setattr(fixture, "ROWS", rows)
+    monkeypatch.setitem(canonical_route_fixtures._ROWS, "CP-1", _owned_cp1_rows)
+
+
+class _OwnedModelCompletions(ForecastCompletions):
+    def __init__(self, source_id: UUID) -> None:
+        super().__init__(source_id, request=_owned_model_request())
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = super().complete(prompt, json_object=json_object)
+        if fields_from_prompt(prompt)["module_id"] != "CP-2G":
+            return done
+        assert done.content is not None
+        answer = json.loads(done.content)
+        for case in ("BASE", "DOWNSIDE"):
+            for name, value in (
+                ("net_equity_issue_repay", "5"),
+                ("other_investing_financing", "-24"),
+            ):
+                row = f"| {name} |  | {case} | FY2026 | 2026 | "
+                answer["canonical_markdown"] = answer["canonical_markdown"].replace(
+                    row + "0 | CURRENCY_MM", row + value + " | CURRENCY_MM"
+                )
+        return replace(done, content=json.dumps(answer))
+
+
+@pytest.mark.parametrize("route", ["owned-model"], indirect=True)
+def test_owned_model_serves_exact_owner_sources_and_segment_levels(
+    client: TestClient,
+    harness: _Harness,
+) -> None:
+    _complete(harness, _OwnedModelCompletions(harness.source_id))
+    body = _get(client, harness)["body"]
+    for case in ("BASE", "DOWNSIDE"):
+        column = f"{case}:2026"
+        expected = {
+            "revenue": "500",
+            "cash_interest": "-10.000000" if case == "BASE" else "-11.000000",
+            "total_debt": "493.000000",
+            "cash_closing": "-22.000000" if case == "BASE" else "-23.000000",
+            "fcf": "45.000000" if case == "BASE" else "44.000000",
+            "actual_debt_cash_movement": "-98.000000",
+        }
+        for line, value in expected.items():
+            assert _cell(body, line, column)["value"] == value
+        assert _cell(body, "bu:OPS", column)["value"] == "500"
+        assert _cell(body, "wa_rate", column)["value"] is None
+        driver_index = 0 if case == "BASE" else 1
+        for line, field in (
+            ("cash_interest", "cash_interest"),
+            ("bu:OPS", "segment_revenue/OPS"),
+            ("equity_raised_net", "net_equity_issue_repay"),
+            ("other_investing_financing", "other_investing_financing"),
+            ("fx_and_other_cash", "restricted_cash_change"),
+        ):
+            sources = _cell(body, line, column)["sources"]
+            assert any(
+                f"CP-2G /drivers/{driver_index}/{field} ·" in ref["source_locator"]
+                and ref["citation"] is not None
+                for ref in sources
+            )
+    for line, owner, pointer in (
+        ("cash_interest", "CP-2G", "/drivers/0/cash_interest"),
+        ("actual_debt_cash_movement", "CP-1", "/actuals/debt_cash_movements/0/amount"),
+        (
+            "contractual_repayment",
+            "CP-4",
+            "/contractual/aggregate_amortisation/0/amount",
+        ),
+    ):
+        refs = _cell(body, line, "BASE:2026")["sources"]
+        source = next(s for s in refs if pointer in s["source_locator"])
+        assert owner in source["source_locator"]
+        assert source["source_id"] == str(harness.source_id)
+        assert source["citation"]["marker"] == 3
+        assert source["citation"]["matched_text"].startswith(pointer + " = ")
+        page = client.get(
+            f"/api/v1/cases/{harness.case_id}/runs/{harness.run_id}/sources/"
+            f"{source['source_id']}/pages/{source['citation']['page']}",
+            headers=_as(harness.approver),
+        )
+        harness.conn.rollback()
+        assert page.status_code == 200, page.json()
+        assert source["citation"]["matched_text"] in [
+            line["text"] for line in page.json()["body"]["lines"]
+        ]
+    for period in body["forecast"]["periods"]:
+        values = {v["name"]: v for v in period["values"]}
+        assert values["operating.segment_revenue.OPS"] == {
+            "name": "operating.segment_revenue.OPS",
+            "unit": "MONEY",
+            "value": "500.000000",
+            "unavailable_reason": None,
+        }
+    assert any(
+        "Cash debt-service basis: accepted CP-CF aggregate forecast" in n
+        for n in body["limitations"]
+    )
+
+
+@pytest.mark.parametrize("route", ["owned-model"], indirect=True)
+@pytest.mark.parametrize(
+    "defect",
+    ["missing", "owner", "quote", "unlinked", "duplicate", "marker", "missing-marker"],
+)
+def test_owned_source_boundary_refuses_ambiguous_or_changed_bindings(
+    client: TestClient,
+    harness: _Harness,
+    defect: str,
+) -> None:
+    from caos.api.wire import AnalysisBody
+
+    _complete(harness, _OwnedModelCompletions(harness.source_id))
+    response = client.get(
+        f"/api/v1/cases/{harness.case_id}/analysis?run={harness.run_id}",
+        headers=_as(harness.approver),
+    )
+    harness.conn.rollback()
+    assert response.status_code == 200
+    body = AnalysisBody.model_validate(response.json()["body"])
+    owner = next(h for h in body.handoffs if h.module_id == "CP-2G")
+    target = next(f for f in owner.source_facts if f.marker == 3)
+    if defect in {"unlinked", "duplicate", "marker", "missing-marker"}:
+        if defect == "duplicate":
+            owner.source_facts.append(target.model_copy(update={"marker": 999}))
+        else:
+            replacement = target.model_copy(
+                update={"linked": False}
+                if defect == "unlinked"
+                else {
+                    "marker": 999
+                    if defect == "missing-marker"
+                    else owner.source_facts[0].marker
+                }
+            )
+            owner.source_facts[owner.source_facts.index(target)] = replacement
+    else:
+        cpcf = next(h for h in body.handoffs if h.module_id == "CP-CF")
+        request, bindings = forecast_inputs(cpcf.model_analysis.encode())
+        pointer = "/drivers/0/cash_interest"
+        if defect == "missing":
+            del bindings[pointer]
+        else:
+            bindings[pointer]["module_id" if defect == "owner" else "quote"] = (
+                "CP-1" if defect == "owner" else '/drivers/0/cash_interest = "11"'
+            )
+        document = {
+            "request": request,
+            "bindings": bindings,
+            "forecast": cash_flow_forecast(request),
+        }
+        changed = "```caos-forecast-v1\n" + json.dumps(document) + "\n```"
+        body.handoffs[body.handoffs.index(cpcf)] = cpcf.model_copy(
+            update={"model_analysis": changed}
+        )
+    with pytest.raises(Refusal) as caught:
+        model_read._forecast_sources(body)
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+def test_segment_map_adapter_preserves_dimensions_order_and_wire_cap() -> None:
+    from caos.calculators.cash_flow import cash_flow_forecast
+
+    row = cash_flow_forecast(_owned_model_request())["rows"][0]
+    baseline = model_read._period(row)
+    count = len(baseline.values)
+    assert count < 40
+    row["operating"]["segment_revenue"] = {
+        f"SEG{i}": "1.000000" for i in range(41 - count)
+    }
+    bounded = model_read._period(row)
+    assert len(bounded.values) == 40
+    assert [v.name for v in bounded.values if "segment_revenue" not in v.name] == [
+        v.name for v in baseline.values if "segment_revenue" not in v.name
+    ]
+    assert (
+        next(v for v in bounded.values if v.name == "operating.margin").unit == "RATIO"
+    )
+    row["operating"]["segment_revenue"]["overflow"] = "1.000000"
+    with pytest.raises(Refusal) as caught:
+        model_read._period(row)
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED
+
+
+def test_source_ref_owner_defaults_and_quoted_markers_do_not_alias() -> None:
+    from caos.api.wire import CitationView, LineView
+    from caos.calculators.credit_model.frame import SourceRef
+
+    source_id = uuid4()
+    quote = '/drivers/0/cash_interest = "10" [C1]'
+    fact = CitationView(
+        document_sha256="a" * 64,
+        source_id=source_id,
+        filename="assumptions.txt",
+        page=1,
+        matched_text=quote,
+        line=LineView(before="", excerpt=quote, after="", recorded=True),
+        rects=[],
+        withdrawn_at=None,
+        cited_page=None,
+        linked=True,
+        marker=3,
+    )
+    other = fact.model_copy(
+        update={"matched_text": "different historical fact", "marker": 1}
+    )
+    source = SourceRef(
+        str(source_id), "p.1", quote, "CP-2G", "/drivers/0/cash_interest"
+    )
+    assert (
+        model_read._citation(
+            source, {("CP-1", 3): other, ("CP-2G", 1): other, ("CP-2G", 3): fact}
+        )
+        == fact
+    )
+    legacy = SourceRef("issuer-pack", "p.1", "600 [C3]")
+    assert (legacy.module_id, legacy.request_pointer) == ("CP-1", None)
+    assert (
+        model_read._citation(legacy, {("CP-1", 3): other, ("CP-2G", 3): fact}) == other
+    )
+
+
+def test_forecast_source_refs_preserve_original_indices_and_chained_years() -> None:
+    from test_credit_model_owned_debt_service import owned_inputs
+
+    from caos.calculators.credit_model.assemble import reconciliation_faults
+    from caos.calculators.credit_model.frame import SourceRef
+
+    request, regs = owned_inputs()
+    request["drivers"].reverse()
+    for rows in (
+        request["periods"],
+        request["drivers"],
+        request["contractual"]["aggregate_amortisation"],
+        request["actuals"]["debt_cash_movements"],
+    ):
+        for row in rows:
+            row["period_id"] += "-cafe\u0301"
+    source_id = str(uuid4())
+    sources = {}
+    for pointer, value in model_read._forecast_leaves(request):
+        owner = (
+            "CP-2G"
+            if pointer.startswith("/drivers/") or pointer == "/projection_basis"
+            else ("CP-4" if pointer.startswith("/contractual/") else "CP-1")
+        )
+        sources[pointer] = SourceRef(
+            source_id,
+            "assumptions p.1",
+            pointer + " = " + json.dumps(value, ensure_ascii=False),
+            owner,
+            pointer,
+        )
+    baseline = credit_model(ModelInputs(regs, request, (), (), None))
+    model = credit_model(
+        ModelInputs(regs, request, (), (), None, forecast_sources=sources)
+    )
+    assert model.owned_checks == baseline.owned_checks
+    assert reconciliation_faults(model) == ()
+    for index, driver in enumerate(request["drivers"]):
+        year = next(
+            p["fiscal_year"]
+            for p in request["periods"]
+            if (p["case"], p["period_id"]) == (driver["case"], driver["period_id"])
+        )
+        column = next(
+            i
+            for i, c in enumerate(model.columns)
+            if c.column_id == f"{driver['case']}:{year}"
+        )
+        interest = next(
+            line for line in model.lines if line.line_id == "cash_interest"
+        ).cells[column]
+        assert sources[f"/drivers/{index}/cash_interest"] in interest.sources
+        assert sources["/projection_basis"] in interest.sources
+    for case in ("BASE", "DOWNSIDE"):
+        index = next(
+            i for i, c in enumerate(model.columns) if c.column_id == f"{case}:2027"
+        )
+        opening = next(
+            line for line in model.lines if line.line_id == "debt_opening"
+        ).cells[index]
+        assert sources["/actuals/debt_cash_movements/0/amount"] in opening.sources
+        assert any("cafe\u0301" in ref.cell_text for ref in sources.values())
+
+
+@pytest.mark.parametrize("route", ["owned-model"], indirect=True)
+@pytest.mark.parametrize("defect", ["withdrawn", "artifact"])
+def test_owned_model_and_add_refuse_changed_accepted_sources(
+    client: TestClient,
+    harness: _Harness,
+    defect: str,
+) -> None:
+    from command_fixtures import member
+    from test_book_entries import CLASSIFIED, _add
+
+    _complete(harness, _OwnedModelCompletions(harness.source_id))
+    body = _get(client, harness)["body"]
+    writer = member(harness.conn, harness.case_id, Standing.WRITER)
+    if defect == "withdrawn":
+        withdraw_source(
+            harness.conn,
+            case_id=harness.case_id,
+            source_id=harness.source_id,
+            actor_id=harness.approver,
+        )
+    else:
+        row = harness.conn.execute(
+            "SELECT artifact_sha256 FROM artifacts WHERE run_id=%s"
+            " AND route_node_id LIKE '%%CP-CF%%'",
+            (harness.run_id,),
+        ).fetchone()
+        assert row is not None
+        harness.blobs.path_of(row[0]).write_bytes(b"changed accepted forecast binding")
+    harness.conn.commit()
+    response = client.get(_path(harness), headers=_as(harness.approver))
+    harness.conn.rollback()
+    assert response.status_code != 200
+    assert set(response.json()) == {"code", "clears"}
+    added = _add(
+        client,
+        harness,
+        writer,
+        {**CLASSIFIED, "snapshot_sha256": body["snapshot_sha256"]},
+    )
+    assert added.status_code != 201
+    assert set(added.json()) == {"code", "clears"}
+    assert response.json()["code"] == added.json()["code"]
+    assert response.json()["code"] in {
+        "ARTIFACT_RECORD_MISMATCH",
+        "BLOB_DIGEST_MISMATCH",
+        "EVIDENCE_NOT_AVAILABLE",
+    }
+
+
+def test_partial_forecast_source_map_refuses_typed() -> None:
+    from test_credit_model_owned_debt_service import owned_inputs
+
+    request, regs = owned_inputs()
+    with pytest.raises(Refusal) as caught:
+        credit_model(ModelInputs(regs, request, (), (), None, forecast_sources={}))
+    assert caught.value.code == RefusalCode.HANDOFF_MALFORMED

@@ -6,7 +6,8 @@ from the accepted handoffs' tagged tables at request time and served 1:1:
 the columns, the lines in their bands, each cell an exact decimal string or
 the reason it has none, and the limitations the cells note. A projection
 reads the rate deck the run pinned at its creation, never a newer one. A
-CP-1 cell's `[C<n>]` marker resolves to CP-1's own citation (D107).
+CP-1 cell's `[C<n>]` marker resolves to CP-1's own citation (D107). New
+forecast assumptions resolve the exact bound quote from their accepted owner.
 
 Before CP-1 is accepted the body is empty and says the handoffs are pending
 (spec M1). The accepted CP-CF record stays beside the model for comparison,
@@ -37,6 +38,7 @@ document offers nothing an Add to Book could bind.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
@@ -99,7 +101,8 @@ from caos.calculators.credit_model.projection import RateDeck
 from caos.graph.route import MODEL_MODULE
 from caos.methodology.bundle import Bundle
 from caos.methodology.citation_markers import ESCAPE, MARKER
-from caos.methodology.forecast import forecast_inputs, forecast_projection
+from caos.methodology.forecast import binds_input, forecast_inputs, forecast_projection
+from caos.methodology.handoff import markers
 from caos.methodology.model_inputs import (
     Cp1Registers,
     DivisionGrowth,
@@ -247,9 +250,7 @@ def _model_document(query: AnalysisQuery, *, exclude_unrealised: bool) -> ModelD
         empty = _empty(body, forecast, exclude_unrealised, [grid.limitation])
         return _document(analysis, empty, pending=False)
     served = replace(grid, forecast=forecast)
-    return _document(
-        analysis, _body(body, served, _citations(accepted.cp1)), pending=False
-    )
+    return _document(analysis, _body(body, served, _citations(body)), pending=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,6 +309,7 @@ def run_model(
         slots=slots,
         deck=deck,
         exclude_unrealised=exclude_unrealised,
+        forecast_sources=_forecast_sources(accepted.body),
     )
     return RunModel(inputs, deck, noted)
 
@@ -420,20 +422,113 @@ def _request(body: AnalysisBody) -> Mapping[str, Any] | None:
     return forecast_inputs(cpcf.model_analysis.encode("utf-8"))[0]
 
 
-def _citations(cp1: HandoffView) -> dict[int, CitationView]:
-    """CP-1's host-verified citations by the marker its body cites each by."""
-    return {fact.marker: fact for fact in cp1.source_facts if fact.marker is not None}
+def _citations(body: AnalysisBody) -> dict[tuple[str, int], CitationView]:
+    """Accepted citations by owner and marker; legacy cells default to CP-1."""
+    return {
+        (handoff.module_id, fact.marker): fact
+        for handoff in body.handoffs
+        for fact in handoff.source_facts
+        if fact.marker is not None
+    }
+
+
+def _forecast_leaves(value: object, pointer: str = "") -> Iterable[tuple[str, object]]:
+    """The already validated request's exact leaf pointers, including empty arrays."""
+    if isinstance(value, dict) and value:
+        for key, item in value.items():
+            yield from _forecast_leaves(item, f"{pointer}/{key}")
+    elif isinstance(value, list) and value:
+        for index, item in enumerate(value):
+            yield from _forecast_leaves(item, f"{pointer}/{index}")
+    else:
+        yield pointer, value
+
+
+def _bound_source(
+    body: AnalysisBody, pointer: str, value: object, binding: object
+) -> SourceRef:
+    """One uniquely linked owner fact, never a marker parsed from quoted text."""
+    if not isinstance(binding, dict) or set(binding) != {"module_id", "quote"}:
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    owner, quote = binding["module_id"], binding["quote"]
+    assignment = pointer + " = " + json.dumps(value, ensure_ascii=False)
+    if (
+        not isinstance(owner, str)
+        or not isinstance(quote, str)
+        or not binds_input(owner, assignment)
+        or assignment not in quote.splitlines()
+    ):
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    handoffs = [h for h in body.handoffs if h.module_id == owner]
+    if len(handoffs) != 1:
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    handoff = handoffs[0]
+    facts = handoff.source_facts
+    matching = [f for f in facts if f.linked and f.matched_text == quote]
+    if len(matching) != 1:
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    fact = matching[0]
+    if (
+        fact.marker is None
+        or fact.marker not in markers(handoff.model_analysis)
+        or sum(f.marker == fact.marker for f in facts) != 1
+    ):
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    return SourceRef(
+        str(fact.source_id), f"{fact.filename} p.{fact.page}", quote, owner, pointer
+    )
+
+
+def _forecast_sources(body: AnalysisBody) -> Mapping[str, SourceRef] | None:
+    """New-capability provenance from the accepted Analysis bytes only; no I/O."""
+    cpcf = _accepted(body, MODEL_MODULE)
+    if cpcf is None:
+        return None
+    request, bindings = forecast_inputs(cpcf.model_analysis.encode("utf-8"))
+    extensions = {
+        "segment_revenue",
+        "net_equity_issue_repay",
+        "other_investing_financing",
+        "restricted_cash_change",
+        "carrying_value_change",
+    }
+    if "projection_basis" not in request and not any(
+        extensions.intersection(row) for row in request["drivers"]
+    ):
+        return None
+    leaves = dict(_forecast_leaves(request))
+    if set(bindings) != set(leaves):
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    return {
+        pointer: _bound_source(body, pointer, value, bindings[pointer])
+        for pointer, value in leaves.items()
+    }
 
 
 def _citation(
-    source: SourceRef, citations: Mapping[int, CitationView]
+    source: SourceRef, citations: Mapping[tuple[str, int], CitationView]
 ) -> CitationView | None:
-    """The CP-1 citation the cell's first `[C<n>]` names, else None."""
+    """An extension's exact fact; otherwise the legacy cell's first owner marker."""
+    if source.request_pointer is not None:
+        matched = None
+        count = 0
+        for (owner, _), fact in citations.items():
+            if (
+                owner == source.module_id
+                and fact.linked
+                and str(fact.source_id) == source.source_id
+                and fact.matched_text == source.cell_text
+            ):
+                matched = fact
+                count += 1
+        if count != 1:
+            raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+        return matched
     found = MARKER.search(ESCAPE.sub(r"\1", source.cell_text))
     if found is None:
         return None
     first = found.group(1).split(",")[0].strip()
-    return citations.get(int(first.removeprefix("C")))
+    return citations.get((source.module_id, int(first.removeprefix("C"))))
 
 
 def _decimal(value: Decimal | None) -> str | None:
@@ -448,7 +543,9 @@ def served_value(cell: Cell) -> str | None:
     return _decimal(cell.value) if _servable(cell) else None
 
 
-def _cell(cell: Cell, citations: Mapping[int, CitationView]) -> ModelCellView:
+def _cell(
+    cell: Cell, citations: Mapping[tuple[str, int], CitationView]
+) -> ModelCellView:
     """The cell on the wire; one whose figure runs past `DecimalText` is
     withheld as `NOT_APPLICABLE`, noted, its sources kept."""
     if not _servable(cell):
@@ -462,7 +559,12 @@ def _cell(cell: Cell, citations: Mapping[int, CitationView]) -> ModelCellView:
         sources=[
             ModelSourceView(
                 source_id=source.source_id,
-                source_locator=source.source_locator,
+                source_locator=source.source_locator
+                if source.request_pointer is None
+                else (
+                    f"{source.module_id} {source.request_pointer} · "
+                    f"{source.source_locator}"
+                ),
                 citation=_citation(source, citations),
             )
             for source in cell.sources[:MODEL_SOURCES_MAX]
@@ -483,7 +585,9 @@ def _column(column: Column) -> ModelColumnView:
     )
 
 
-def _line(line: Line, citations: Mapping[int, CitationView]) -> ModelLineView:
+def _line(
+    line: Line, citations: Mapping[tuple[str, int], CitationView]
+) -> ModelLineView:
     terms = line.terms
     return ModelLineView(
         line_id=line.line_id,
@@ -572,7 +676,9 @@ def served_limitations(served: ServedModel) -> list[str]:
 
 
 def _body(
-    body: AnalysisBody, served: ServedModel, citations: Mapping[int, CitationView]
+    body: AnalysisBody,
+    served: ServedModel,
+    citations: Mapping[tuple[str, int], CitationView],
 ) -> ModelBody:
     """The model on the wire, 1:1 (`read_model` has checked its bounds)."""
     model = served.model
@@ -822,6 +928,33 @@ def _unit(name: str, *, is_ratio: bool) -> ModelUnit:
     return _RATIO_UNITS.get(name, ModelUnit.MULTIPLE)
 
 
+def _values(name: str, value: object) -> list[ModelValue]:
+    """A bounded segment level map, or the existing amount/ratio leaf."""
+    if name == "operating.segment_revenue":
+        if not isinstance(value, dict) or not 1 <= len(value) <= 40:
+            raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+        return [
+            ModelValue(
+                name=f"{name}.{segment}",
+                unit=ModelUnit.MONEY,
+                value=amount,
+                unavailable_reason=None,
+            )
+            for segment, amount in value.items()
+        ]
+    if not isinstance(value, (dict, str)) and value is not None:
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    is_ratio = isinstance(value, dict)
+    return [
+        ModelValue(
+            name=name,
+            unit=_unit(name, is_ratio=is_ratio),
+            value=value["value"] if isinstance(value, dict) else value,
+            unavailable_reason=value["reason"] if isinstance(value, dict) else None,
+        )
+    ]
+
+
 def _period(row: dict[str, Any]) -> ModelPeriod:
     """Flatten named result groups without arithmetic, preserving ratio
     reasons and each leaf's own dimension (R24-12)."""
@@ -834,14 +967,8 @@ def _period(row: dict[str, Any]) -> ModelPeriod:
         if group in identity:
             continue
         for name, value in data.items() if isinstance(data, dict) else [("", data)]:
-            is_ratio = isinstance(value, dict)
             full_name = f"{group}.{name}" if name else group
-            values.append(
-                ModelValue(
-                    name=full_name,
-                    unit=_unit(full_name, is_ratio=is_ratio),
-                    value=value["value"] if is_ratio else value,
-                    unavailable_reason=value["reason"] if is_ratio else None,
-                )
-            )
+            values.extend(_values(full_name, value))
+            if len(values) > 40:
+                raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     return ModelPeriod(**identity, values=values)

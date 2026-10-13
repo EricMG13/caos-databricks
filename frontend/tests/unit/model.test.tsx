@@ -505,6 +505,50 @@ describe("the credit workbook grid", { timeout: 30_000 }, () => {
     expect(bare.derivation).toContain("no rate deck");
   });
 
+  test("aggregate interest passport keeps its owner locator and real evidence without a rate claim", () => {
+    const base = fixture();
+    const analysis = parseAnalysisDocument(
+      JSON.parse(readFileSync(resolve(process.cwd(), "fixtures", "analysis.json"), "utf8")),
+    );
+    const citation = analysis.body.handoffs.flatMap((handoff) => handoff.source_facts)[0]!;
+    const column = indexOfColumn(base.body, "BASE:2026");
+    const basis = "Cash debt-service basis: accepted CP-CF aggregate forecast";
+    const allocation = "Aggregate cash debt-service forecast. Instrument allocation not supplied";
+    const lines = base.body.lines.map((line) => ({
+      ...line,
+      cells: line.cells.map((cell, index) => {
+        if (index !== column) return cell;
+        if (line.line_id === "wa_rate") return { ...cell, value: null, reason: "NOT_PROJECTED" };
+        if (line.line_id === "cash_interest")
+          return {
+            ...cell,
+            value: "-738",
+            note: basis,
+            sources: [
+              {
+                source_id: citation.source_id,
+                source_locator: "CP-2G /drivers/0/cash_interest · assumptions.txt p.1",
+                citation,
+              },
+            ],
+          };
+        return cell;
+      }),
+    }));
+    const document = parseModelDocument({
+      ...base,
+      body: { ...base.body, lines, limitations: [basis, allocation] },
+    });
+    const { container } = renderModel(document);
+    fireEvent.click(cellOf(container, "cash_interest", "BASE:2026"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(basis);
+    expect(dialog).toHaveTextContent("CP-2G /drivers/0/cash_interest");
+    expect(dialog).toHaveTextContent(`${citation.filename} p.${citation.page}`);
+    expect(dialog).not.toHaveTextContent("Weighted-average rate");
+    expect(dialog).not.toHaveTextContent("rate deck as of");
+  });
+
   test("the debt band shows facility terms in their own columns", () => {
     const { container } = renderModel(fixture());
     const terms = (line: string) =>

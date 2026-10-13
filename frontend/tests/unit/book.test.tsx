@@ -279,6 +279,29 @@ describe("the book", () => {
     );
   });
 
+  test("Book displays the stored aggregate basis and allocation limitation", () => {
+    const doc = document();
+    const basis = "Cash debt-service basis: accepted CP-CF aggregate forecast";
+    const allocation = "Aggregate cash debt-service forecast. Instrument allocation not supplied";
+    const changed = {
+      ...doc,
+      body: {
+        ...doc.body,
+        issuers: doc.body.issuers.map((issuer) =>
+          issuer.issuer_key === "MRG"
+            ? { ...issuer, displayed: { ...issuer.displayed, limitations: [basis, allocation] } }
+            : issuer,
+        ),
+      },
+    };
+    renderBook(changed);
+    const row = document_().querySelector<HTMLElement>('tr[data-issuer="MRG"]')!;
+    fireEvent.click(within(row).getByRole("button", { name: /^Limited/ }));
+    const notes = document_().querySelector('[data-limitations="MRG"]');
+    expect(notes).toHaveTextContent(basis);
+    expect(notes).toHaveTextContent(allocation);
+  });
+
   test("links open the entry run's analysis and model", () => {
     const doc = document();
     renderBook(doc);
