@@ -996,3 +996,691 @@ def test_optional_fields_never_replace_a_missing_required_movement(field: str) -
         cash_flow_forecast(request)["rows"][0]["unavailable_reason"]
         == "DRIVER_FIELD_MISSING"
     )
+
+
+def test_zero_segment_revenue_and_maximum_signed_cancellation_are_exact() -> None:
+    request = forecast_request()
+    request["drivers"][0].update(revenue="0", segment_revenue={"SEG": "-0.000000"})
+    row = cash_flow_forecast(request)["rows"][0]
+    assert row["unavailable_reason"] is None
+    assert row["operating"]["segment_revenue"] == {"SEG": "0.000000"}
+    segments = {f"POS_{i}": "999999999999999999.999999" for i in range(20)}
+    segments.update({f"NEG_{i}": "-999999999999999999.999999" for i in range(20)})
+    request["drivers"][0]["segment_revenue"] = segments
+    row = cash_flow_forecast(request)["rows"][0]
+    assert row["unavailable_reason"] is None
+    assert row["operating"]["segment_revenue"] == segments
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "net_equity_issue_repay",
+        "other_investing_financing",
+        "restricted_cash_change",
+        "carrying_value_change",
+    ],
+)
+@pytest.mark.parametrize(
+    "value", ["999999999999999999.999999", "-999999999999999999.999999"]
+)
+def test_optional_movement_numeric_limits_are_finite(field: str, value: str) -> None:
+    request = forecast_request()
+    request["drivers"][0][field] = value
+    row = cash_flow_forecast(request)["rows"][0]
+    assert row["unavailable_reason"] == "RESIDUAL_UNRECONCILED"
+    for balance in ("debt", "cash"):
+        assert Decimal(row[balance]["closing"]).is_finite()
+    request["drivers"][0][field] = value.replace(".999999", "9.999999")
+    refused(request)
+
+
+def owned_forecast_request() -> dict[str, Any]:
+    """Independent synthetic annual example; no accepted owner/source claim."""
+    periods = []
+    drivers = []
+    principal = []
+    for case in ("BASE", "DOWNSIDE"):
+        for year, days, amount, debt, cash in (
+            (2026, "365", "55", "11657", "1225"),
+            (2027, "365", "114", "11569", "1602"),
+            (2028, "366", "767", "10828", "1326"),
+        ):
+            pair = {"case": case, "period_id": f"FY{year}"}
+            periods.append(
+                dict(
+                    pair,
+                    fiscal_year=str(year),
+                    days=days,
+                    start_date=f"{year}-01-01",
+                    end_date=f"{year}-12-31",
+                )
+            )
+            drivers.append(
+                dict(
+                    pair,
+                    status="READY",
+                    revenue="4000",
+                    ebitda="2200",
+                    cfo="1800",
+                    capex="400",
+                    cash_interest="738",
+                    cash_taxes="50",
+                    distributions="82",
+                    acquisitions_disposals="0",
+                    issuance="0",
+                    optional_repayment="0",
+                    pik="0",
+                    capitalised_interest="0",
+                    fx_perimeter="0",
+                    net_equity_issue_repay="0",
+                    other_investing_financing="-24",
+                    restricted_cash_change="15",
+                    carrying_value_change="26",
+                    segment_revenue={"OPERATING": "4010", "CORPORATE": "-10"},
+                    stated_closing_debt=debt,
+                    stated_closing_cash=cash,
+                )
+            )
+            principal.append(
+                dict(
+                    pair,
+                    start_date=f"{year}-07-01" if year == 2026 else f"{year}-01-01",
+                    end_date=f"{year}-12-31",
+                    amount=amount,
+                )
+            )
+    return {
+        "projection_basis": "OWNED_CASH_DEBT_SERVICE",
+        "opening": {
+            "as_of_period_id": "FY2025",
+            "cash": "887",
+            "debt_by_facility": [
+                {"facility_id": "TERM", "amount": "11792"},
+                {"facility_id": "COST", "amount": "-8"},
+            ],
+        },
+        "periods": periods,
+        "drivers": drivers,
+        "actuals": {
+            "debt_cash_movements": [
+                {
+                    "period_id": "FY2026",
+                    "historical_period_id": "H1_2026",
+                    "amount": "-98",
+                }
+            ]
+        },
+        "contractual": {"amortisation": [], "aggregate_amortisation": principal},
+        "units": {"currency": "USD", "scale": "millions"},
+        "perimeter": "SYNTHETIC_CONSOLIDATED",
+    }
+
+
+def test_owned_cash_debt_service_has_independent_three_year_answer_key() -> None:
+    request = owned_forecast_request()
+    before = deepcopy(request)
+    result = cash_flow_forecast(request)
+    assert result["status"] == "complete"
+    assert result["projection_basis"] == "OWNED_CASH_DEBT_SERVICE"
+    assert request == before
+    # FCF=1800-400-738-50=612; actual+future debt cash=-98-55=-153.
+    # NCF before restricted cash=612-82-153-24=353.
+    # Accessible cash=887+353-15=1225; debt=11792-8-98-55+26=11657.
+    # Next debt=11657-114+26=11569; then 11569-767+26=10828.
+    for row, (debt, cash, actual, principal) in zip(
+        result["rows"],
+        [
+            ("11657", "1225", "-98", "55"),
+            ("11569", "1602", "0", "114"),
+            ("10828", "1326", "0", "767"),
+        ]
+        * 2,
+        strict=True,
+    ):
+        assert row["debt"]["closing"] == debt + ".000000"
+        assert row["cash"]["closing"] == cash + ".000000"
+        assert row["financing"]["actual_debt_cash_movement"] == actual + ".000000"
+        assert row["financing"]["contractual_repayment"] == principal + ".000000"
+        assert row["fcf"] == "612.000000"
+        assert "start_date" not in row and "end_date" not in row
+    first = result["rows"][0]
+    assert first["financing"]["financing_investing"] == "-153.000000"
+    assert Decimal(first["fcf"]) - 82 - 153 - 24 == 353
+    assert forecast_bytes(request) == forecast_bytes(before)
+
+
+@pytest.mark.parametrize(
+    "bridge",
+    [[], [{"period_id": "FY2026", "historical_period_id": "H1_2026", "amount": "0"}]],
+)
+def test_owned_explicit_empty_or_zero_actuals_are_independent(
+    bridge: list[dict[str, str]],
+) -> None:
+    request = owned_forecast_request()
+    request["actuals"]["debt_cash_movements"] = bridge
+    for row in request["drivers"]:
+        row["stated_closing_debt"] = str(int(row["stated_closing_debt"]) + 98)
+        row["stated_closing_cash"] = str(int(row["stated_closing_cash"]) + 98)
+    if not bridge:
+        for row in request["contractual"]["aggregate_amortisation"]:
+            row["start_date"] = row["start_date"][:4] + "-01-01"
+    result = cash_flow_forecast(request)
+    assert result["status"] == "complete"
+    assert all(
+        row["financing"]["actual_debt_cash_movement"] == "0.000000"
+        for row in result["rows"]
+    )
+
+
+@pytest.mark.parametrize(
+    "field,value,delta",
+    [
+        ("issuance", "17", 17),
+        ("optional_repayment", "17", -17),
+        ("acquisitions_disposals", "-17", 17),
+    ],
+)
+def test_owned_future_flows_keep_independent_cash_and_debt_signs(
+    field: str, value: str, delta: int
+) -> None:
+    request = owned_forecast_request()
+    request["drivers"][0][field] = value
+    for row in request["drivers"][:3]:
+        row["stated_closing_cash"] = str(int(row["stated_closing_cash"]) + delta)
+        if field != "acquisitions_disposals":
+            row["stated_closing_debt"] = str(int(row["stated_closing_debt"]) + delta)
+    result = cash_flow_forecast(request)
+    assert result["status"] == "complete"
+    assert result["rows"][0]["financing"]["actual_debt_cash_movement"] == "-98.000000"
+    assert result["rows"][3]["cash"]["closing"] == "1225.000000"
+
+
+def _owned_replace(
+    request: dict[str, Any], path: tuple[str | int, ...], value: object
+) -> None:
+    target: Any = request
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("projection_basis",), None),
+        (("projection_basis",), True),
+        (("projection_basis",), {}),
+        (("projection_basis",), "FACILITY"),
+        (("actuals",), {}),
+        (("actuals",), None),
+        (("actuals", "debt_cash_movements"), None),
+        (
+            ("actuals", "debt_cash_movements"),
+            [
+                {
+                    "period_id": "FY2026",
+                    "historical_period_id": "H1_2026",
+                    "amount": "-98",
+                }
+            ]
+            * 2,
+        ),
+        (("actuals", "debt_cash_movements", 0, "period_id"), "FY2027"),
+        (("actuals", "debt_cash_movements", 0, "historical_period_id"), ""),
+        (("actuals", "debt_cash_movements", 0, "amount"), "1e2"),
+        (
+            ("contractual", "amortisation"),
+            [
+                {
+                    "case": "BASE",
+                    "period_id": "FY2026",
+                    "facility_id": "TERM",
+                    "amount": "0",
+                }
+            ],
+        ),
+        (("contractual", "aggregate_amortisation"), []),
+        (("contractual", "aggregate_amortisation", 5, "amount"), {"nested": "0"}),
+        (("contractual", "aggregate_amortisation", 5, "amount"), "-1"),
+        (("contractual", "aggregate_amortisation", 5, "case"), "UNKNOWN"),
+        (("contractual", "aggregate_amortisation", 5, "period_id"), "FY2027"),
+        (("periods", 5, "start_date"), "2028-1-01"),
+        (("periods", 5, "start_date"), "20280101"),
+        (("periods", 5, "start_date"), "2028-02-30"),
+        (("periods", 5, "end_date"), "2028-12-30"),
+        (("periods", 5, "start_date"), "2028-02-01"),
+        (("periods", 5, "fiscal_year"), "2029"),
+        (("periods", 5, "days"), "365"),
+        (("periods", 1, "days"), "366"),
+        (("periods", 1, "days"), "365.0"),
+        (("periods", 3, "period_id"), "OTHER2026"),
+        (("contractual", "aggregate_amortisation", 0, "end_date"), "2026-12-30"),
+        (("contractual", "aggregate_amortisation", 0, "start_date"), "2025-07-01"),
+        (("contractual", "aggregate_amortisation", 0, "start_date"), "2027-01-01"),
+        (("contractual", "aggregate_amortisation", 1, "start_date"), "2027-07-01"),
+        (("contractual", "aggregate_amortisation", 3, "start_date"), "2026-06-01"),
+        (("drivers", 5, "cfo"), "1e2"),
+        (("drivers", 5, "stated_closing_cash"), []),
+        (("opening", "debt_by_facility", 1, "amount"), {}),
+        (("opening", "cash"), True),
+        (("tolerance",), "NaN"),
+    ],
+)
+@pytest.mark.parametrize("status", ["READY", "DRAFT"])
+def test_owned_invalid_late_shapes_refuse_before_decimal(
+    monkeypatch: pytest.MonkeyPatch,
+    path: tuple[str | int, ...],
+    value: object,
+    status: str,
+) -> None:
+    request = owned_forecast_request()
+    request["drivers"][-1]["status"] = status
+    _owned_replace(request, path, value)
+
+    def no_decimal(*args: object, **kwargs: object) -> None:
+        pytest.fail("invalid selected-mode input reached Decimal parsing")
+
+    monkeypatch.setattr(cash_flow, "_decimal", no_decimal)
+    monkeypatch.setattr(cash_flow, "Decimal", no_decimal)
+    refused(request)
+
+
+@pytest.mark.parametrize("reserved", ["actuals", "aggregate", "dates"])
+def test_owned_reserved_keys_refuse_without_selector(reserved: str) -> None:
+    request = forecast_request()
+    if reserved == "actuals":
+        request["actuals"] = {"debt_cash_movements": []}
+    elif reserved == "aggregate":
+        request["contractual"]["aggregate_amortisation"] = []
+    else:
+        request["periods"][-1]["start_date"] = "2027-01-01"
+    refused(request)
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "projection_basis",
+        "actuals",
+        "aggregate_amortisation",
+        "amortisation",
+        "start_date",
+        "end_date",
+    ],
+)
+def test_owned_required_structures_cannot_be_inferred(missing: str) -> None:
+    request = owned_forecast_request()
+    if missing in {"projection_basis", "actuals"}:
+        del request[missing]
+    elif missing in {"aggregate_amortisation", "amortisation"}:
+        del request["contractual"][missing]
+    else:
+        del request["periods"][-1][missing]
+    refused(request)
+
+
+def test_owned_repeated_actuals_in_stated_closes_fail_and_cases_are_independent() -> (
+    None
+):
+    request = owned_forecast_request()
+    request["periods"] = [request["periods"][index] for index in (0, 3, 1, 4, 2, 5)]
+    request["drivers"][1]["stated_closing_debt"] = "11471"
+    result = cash_flow_forecast(request)
+    assert [row["unavailable_reason"] for row in result["rows"]] == [
+        None,
+        None,
+        "RESIDUAL_UNRECONCILED",
+        None,
+        "PRIOR_PERIOD_UNAVAILABLE",
+        None,
+    ]
+
+
+@pytest.mark.parametrize("residual", ["cash", "debt"])
+@pytest.mark.parametrize("sign", [-1, 1])
+def test_owned_residual_boundaries_survive_hostile_decimal_context(
+    residual: str, sign: int
+) -> None:
+    request = owned_forecast_request()
+    request["tolerance"] = "1000"
+    bound = Decimal("0.887") if residual == "cash" else Decimal("11.784")
+    closing = Decimal("1225") if residual == "cash" else Decimal("11657")
+    for delta, reason in [
+        (bound, None),
+        (bound + Decimal("0.000001"), "RESIDUAL_UNRECONCILED"),
+    ]:
+        request["drivers"][0][f"stated_closing_{residual}"] = str(
+            closing + sign * delta
+        )
+        with localcontext() as context:
+            context.prec = 2
+            context.rounding = ROUND_DOWN
+            context.Emax = 2
+            context.Emin = -2
+            for trap in context.traps:
+                context.traps[trap] = True
+            result = cash_flow_forecast(request)
+        assert result["rows"][0]["unavailable_reason"] == reason
+
+
+@pytest.mark.parametrize(
+    "amount",
+    ["98", "-0.000000", "999999999999999999.999999", "-999999999999999999.999999"],
+)
+def test_owned_bridge_signed_extremes_are_finite_and_apply_only_once(
+    amount: str,
+) -> None:
+    request = owned_forecast_request()
+    request["actuals"]["debt_cash_movements"][0]["amount"] = amount
+    # Independent additive correction to all stated closes, with enough precision
+    # to retain six fractional digits at the grammar's magnitude boundary.
+    with localcontext() as context:
+        context.prec = 38
+        delta = Decimal(amount) + 98
+        for row in request["drivers"]:
+            for field in ("stated_closing_cash", "stated_closing_debt"):
+                updated = Decimal(row[field]) + delta
+                if abs(updated) < 10**18:
+                    row[field] = format(updated, "f")
+        result = cash_flow_forecast(request)
+    first = result["rows"][0]
+    assert Decimal(first["debt"]["closing"]).is_finite()
+    assert Decimal(first["cash"]["closing"]).is_finite()
+    if abs(Decimal(amount)) < 100:
+        assert result["status"] == "complete"
+        assert result["rows"][1]["financing"]["actual_debt_cash_movement"] == "0.000000"
+    request["actuals"]["debt_cash_movements"][0]["amount"] = "1000000000000000000"
+    refused(request)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        True,
+        0,
+        1.0,
+        "NaN",
+        "Infinity",
+        "1e2",
+        "+1",
+        "01",
+        "1\n",
+        "0.1234567",
+        "1" * 10000,
+        [],
+        {},
+        {"amount": "0"},
+    ],
+)
+@pytest.mark.parametrize("collection", ["bridge", "aggregate"])
+def test_owned_money_grammar_refuses_before_any_decimal(
+    monkeypatch: pytest.MonkeyPatch, collection: str, value: object
+) -> None:
+    request = owned_forecast_request()
+    row = (
+        request["actuals"]["debt_cash_movements"][0]
+        if collection == "bridge"
+        else request["contractual"]["aggregate_amortisation"][-1]
+    )
+    row["amount"] = value
+
+    def no_decimal(*args: object, **kwargs: object) -> None:
+        pytest.fail("malformed owned money reached numeric work")
+
+    monkeypatch.setattr(cash_flow, "Decimal", no_decimal)
+    refused(request)
+
+
+def test_owned_zero_future_principal_is_explicit_and_pair_order_independent() -> None:
+    request = owned_forecast_request()
+    request["contractual"]["aggregate_amortisation"][0]["amount"] = "-0.000000"
+    request["contractual"]["aggregate_amortisation"].reverse()
+    for row in request["drivers"][:3]:
+        row["stated_closing_cash"] = str(int(row["stated_closing_cash"]) + 55)
+        row["stated_closing_debt"] = str(int(row["stated_closing_debt"]) + 55)
+    result = cash_flow_forecast(request)
+    assert result["status"] == "complete"
+    assert result["rows"][0]["financing"]["contractual_repayment"] == "0.000000"
+    assert result["rows"][0]["financing"]["actual_debt_cash_movement"] == "-98.000000"
+
+
+@pytest.mark.parametrize(
+    "target", ["request", "actuals", "bridge", "aggregate", "period"]
+)
+def test_owned_objects_are_closed_before_decimal(
+    monkeypatch: pytest.MonkeyPatch, target: str
+) -> None:
+    request = owned_forecast_request()
+    objects = {
+        "request": request,
+        "actuals": request["actuals"],
+        "bridge": request["actuals"]["debt_cash_movements"][0],
+        "aggregate": request["contractual"]["aggregate_amortisation"][-1],
+        "period": request["periods"][-1],
+    }
+    objects[target]["unknown"] = []
+
+    def no_decimal(*args: object, **kwargs: object) -> None:
+        pytest.fail("an unknown owned key reached numeric work")
+
+    monkeypatch.setattr(cash_flow, "Decimal", no_decimal)
+    refused(request)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "gap",
+        "repeat_year",
+        "first_year",
+        "duplicate_pair",
+        "missing_pair",
+        "no_bridge_partial",
+        "bridge_full_year",
+    ],
+)
+def test_owned_calendar_chains_and_complete_schedules_are_required(change: str) -> None:
+    request = owned_forecast_request()
+    if change in {"gap", "repeat_year", "first_year"}:
+        index, year = {
+            "gap": (1, 2029),
+            "repeat_year": (1, 2026),
+            "first_year": (3, 2027),
+        }[change]
+        request["periods"][index].update(
+            fiscal_year=str(year), start_date=f"{year}-01-01", end_date=f"{year}-12-31"
+        )
+    elif change == "duplicate_pair":
+        request["periods"][-1] = deepcopy(request["periods"][-2])
+    elif change == "missing_pair":
+        request["contractual"]["aggregate_amortisation"].pop()
+    elif change == "no_bridge_partial":
+        request["actuals"]["debt_cash_movements"] = []
+    else:
+        request["contractual"]["aggregate_amortisation"][0]["start_date"] = "2026-01-01"
+    refused(request)
+
+
+def _owned_at_bounds(cases: int = 6, years: int = 40) -> dict[str, Any]:
+    request = owned_forecast_request()
+    period = request["periods"][0]
+    driver = request["drivers"][0]
+    aggregate = request["contractual"]["aggregate_amortisation"][0]
+    request["periods"], request["drivers"] = [], []
+    request["contractual"]["aggregate_amortisation"] = []
+    for case in range(cases):
+        for index in range(years):
+            year = 2026 + index
+            pair = {"case": f"CASE{case}", "period_id": f"FY{year}"}
+            request["periods"].append(
+                dict(
+                    period,
+                    **pair,
+                    fiscal_year=str(year),
+                    days="366" if year % 4 == 0 else "365",
+                    start_date=f"{year}-01-01",
+                    end_date=f"{year}-12-31",
+                )
+            )
+            # Every future principal is 55; net debt after Y1 falls29/year;
+            # accessible cash increases436/year with H=-98 only in year1.
+            request["drivers"].append(
+                dict(
+                    driver,
+                    **pair,
+                    stated_closing_debt=str(11657 - 29 * index),
+                    stated_closing_cash=str(1225 + 436 * index),
+                )
+            )
+            request["contractual"]["aggregate_amortisation"].append(
+                dict(
+                    aggregate,
+                    **pair,
+                    start_date=f"{year}-07-01" if index == 0 else f"{year}-01-01",
+                    end_date=f"{year}-12-31",
+                )
+            )
+    return request
+
+
+def test_owned_maximum_240_pairs_40_years_6_cases_are_accepted() -> None:
+    result = cash_flow_forecast(_owned_at_bounds())
+    assert result["status"] == "complete"
+    assert len(result["rows"]) == 240
+    assert result["rows"][-1]["debt"]["closing"] == "10526.000000"
+    assert result["rows"][-1]["cash"]["closing"] == "18229.000000"
+
+
+@pytest.mark.parametrize(
+    "oversize",
+    ["cases", "years", "periods", "aggregate", "facilities", "legacy_amortisation"],
+)
+def test_owned_collection_caps_precede_decimal(
+    monkeypatch: pytest.MonkeyPatch, oversize: str
+) -> None:
+    request = _owned_at_bounds(7, 1) if oversize == "cases" else _owned_at_bounds(1, 41)
+    if oversize not in {"cases", "years"}:
+        request = owned_forecast_request()
+        if oversize == "periods":
+            request["periods"] *= 41
+        elif oversize == "aggregate":
+            request["contractual"]["aggregate_amortisation"] *= 2
+        elif oversize == "facilities":
+            request["opening"]["debt_by_facility"] *= 21
+        else:
+            request["contractual"]["amortisation"] = [{}] * 2001
+
+    def no_decimal(*args: object, **kwargs: object) -> None:
+        pytest.fail("an excessive owned collection reached numeric work")
+
+    monkeypatch.setattr(cash_flow, "Decimal", no_decimal)
+    refused(request)
+
+
+@pytest.mark.parametrize("field", list(cash_flow._MOVEMENTS))
+def test_owned_basis_never_replaces_missing_required_movement(field: str) -> None:
+    request = owned_forecast_request()
+    del request["drivers"][0][field]
+    result = cash_flow_forecast(request)
+    assert result["rows"][0]["unavailable_reason"] == "DRIVER_FIELD_MISSING"
+    assert result["rows"][1]["unavailable_reason"] == "PRIOR_PERIOD_UNAVAILABLE"
+    assert result["rows"][3]["unavailable_reason"] is None
+
+
+@pytest.mark.parametrize("decomposed_periods", [False, True])
+def test_owned_bridge_uses_the_same_canonical_period_identity_as_the_chain(
+    decomposed_periods: bool,
+) -> None:
+    request = owned_forecast_request()
+    composed, decomposed = "FY2026é", "FY2026e\u0301"
+    for rows in (
+        request["periods"],
+        request["drivers"],
+        request["contractual"]["aggregate_amortisation"],
+    ):
+        for row in rows:
+            if row["period_id"] == "FY2026":
+                row["period_id"] = decomposed if decomposed_periods else composed
+    request["actuals"]["debt_cash_movements"][0]["period_id"] = decomposed
+    result = cash_flow_forecast(request)
+    assert result["status"] == "complete"
+    assert result["rows"][0]["period_id"] == composed
+    assert result["rows"][0]["financing"]["actual_debt_cash_movement"] == "-98.000000"
+
+
+@pytest.mark.parametrize("residual", ["cash", "debt"])
+@pytest.mark.parametrize("sign", [-1, 1])
+@pytest.mark.parametrize(
+    "opening,tolerance,boundary",
+    [
+        ("1000", "5", "1"),
+        ("-1000", "5", "1"),
+        ("1000", "0.5", "0.5"),
+        ("10000000", "1000", "1000"),
+        ("0", "1000", "0"),
+    ],
+)
+def test_owned_preserves_all_residual_caps(
+    residual: str, sign: int, opening: str, tolerance: str, boundary: str
+) -> None:
+    request = owned_forecast_request()
+    request["opening"]["cash"] = opening
+    request["opening"]["debt_by_facility"] = [
+        {"facility_id": "TERM", "amount": opening}
+    ]
+    request["tolerance"] = tolerance
+    # Owned first-year debt changes -98-55+26=-127 and cash changes+338.
+    debt, cash = Decimal(opening) - 127, Decimal(opening) + 338
+    request["drivers"][0].update(
+        stated_closing_debt=str(debt), stated_closing_cash=str(cash)
+    )
+    closing = debt if residual == "debt" else cash
+    for delta, reason in [
+        (Decimal(boundary), None),
+        (Decimal(boundary) + Decimal("0.000001"), "RESIDUAL_UNRECONCILED"),
+    ]:
+        request["drivers"][0][f"stated_closing_{residual}"] = str(
+            closing + sign * delta
+        )
+        with localcontext() as context:
+            context.prec = 2
+            context.rounding = ROUND_DOWN
+            context.Emax = 2
+            context.Emin = -2
+            for trap in context.traps:
+                context.traps[trap] = True
+            row = cash_flow_forecast(request)["rows"][0]
+        assert row["unavailable_reason"] == reason
+
+
+@pytest.mark.parametrize("tamper", ["selector", "actual", "principal", "cash"])
+def test_owned_pure_handoff_reader_recomputes_complete_exact_result(
+    tamper: str,
+) -> None:
+    from caos.methodology.forecast import forecast_projection
+
+    request = owned_forecast_request()
+    result = cash_flow_forecast(request)
+    document = {"request": request, "bindings": {}, "forecast": deepcopy(result)}
+
+    def markdown() -> bytes:
+        return ("```caos-forecast-v1\n" + json.dumps(document) + "\n```\n").encode()
+
+    assert forecast_projection(markdown()) == result
+    target = document["forecast"]
+    if tamper == "selector":
+        del target["projection_basis"]
+    elif tamper == "cash":
+        target["rows"][0]["cash"]["closing"] = "1226.000000"
+    else:
+        key = (
+            "actual_debt_cash_movement"
+            if tamper == "actual"
+            else "contractual_repayment"
+        )
+        target["rows"][0]["financing"][key] = "0.000000"
+    with pytest.raises(Refusal) as caught:
+        forecast_projection(markdown())
+    assert caught.value.code is RefusalCode.HANDOFF_INCOMPLETE
