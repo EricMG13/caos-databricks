@@ -157,3 +157,21 @@ def test_a_register_neither_the_id_nor_the_vendor_finds_is_still_named() -> None
         "host register check: the register ID `conflict_log` appears nowhere"
         " in the answer"
     ) in _cp1a_lines(markdown)
+
+
+def test_a_locator_failure_surfaces_and_is_not_swallowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only an unreadable contract is nothing to report; a bug in the vendor's
+    locator must surface, as it does for the keep line."""
+
+    def broken(*_: object, **__: object) -> object:
+        raise RuntimeError("locator bug")
+
+    monkeypatch.setattr(CONTRACT.completeness_check, "find_registers", broken)
+    ident = replace(identity("CP-0"), module_id="CP-1A")
+    markdown = handoff_markdown(
+        ident, fields={"module_id": "CP-1A"}, omit_register="conflict_log"
+    )
+    with pytest.raises(RuntimeError, match="locator bug"):
+        _cp1a_lines(markdown)

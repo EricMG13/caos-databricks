@@ -1316,34 +1316,37 @@ def _absent_ids_line(
     `MAX_FEEDBACK_CITATIONS` IDs are named, the rest counted."""
     if not skill or module_id == MODEL_MODULE:
         return None
+    loaded = None
     with suppress(Exception):  # a contract it cannot read is nothing to report
-        absent = _unlocated(contract, module_id, text, skill)
-        if absent:
-            shown = absent[:MAX_FEEDBACK_CITATIONS]
-            rest = len(absent) - len(shown)
-            named = ", ".join(f"`{register}`" for register in shown)
-            named += f" and {rest} more" if rest else ""
-            subject = "register ID" if len(absent) == 1 else "register IDs"
-            verb = "appears" if len(absent) == 1 else "appear"
-            return (
-                f"host register check: the {subject} {named} {verb} nowhere"
-                " in the answer"
-            )
-    return None
+        loaded = contract.completeness_check.load_contract(
+            skill.decode("utf-8"), module_id
+        )
+    if loaded is None:
+        return None
+    absent = _unlocated(contract, text, loaded)  # a locator failure surfaces
+    if not absent:
+        return None
+    shown = absent[:MAX_FEEDBACK_CITATIONS]
+    rest = len(absent) - len(shown)
+    named = ", ".join(f"`{register}`" for register in shown)
+    named += f" and {rest} more" if rest else ""
+    subject = "register ID" if len(absent) == 1 else "register IDs"
+    verb = "appears" if len(absent) == 1 else "appear"
+    return f"host register check: the {subject} {named} {verb} nowhere in the answer"
 
 
 def _unlocated(
-    contract: VendorContract, module_id: str, text: str, skill: bytes
+    contract: VendorContract, text: str, loaded: Mapping[str, Any]
 ) -> list[str]:
-    """The module's register IDs `text` never writes whole and the vendor's
-    `find_registers` does not locate either, sorted."""
-    checker = contract.completeness_check
-    loaded = checker.load_contract(skill.decode("utf-8"), module_id)
+    """The loaded contract's register IDs `text` never writes whole and the
+    vendor's `find_registers` does not locate either, sorted."""
     registers = loaded["registers"]
     unwritten = [r for r in registers if not _writes_id(text, r)]
     if not unwritten:
         return []
-    found = checker.find_registers(text, registers, loaded.get("retired_registers", ()))
+    found = contract.completeness_check.find_registers(
+        text, registers, loaded.get("retired_registers", ())
+    )
     return sorted(register for register in unwritten if register not in found)
 
 
