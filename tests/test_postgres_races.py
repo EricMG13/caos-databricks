@@ -538,10 +538,11 @@ def test_a_stale_worker_returning_after_reclaim_keeps_its_bill_and_accepts_nothi
         ).fetchall() == [(second,)]
 
 
-def test_passing_over_an_unreserved_attempt_never_lets_a_stale_holder_call(
+def test_passing_over_an_attempt_that_never_reserved_never_lets_a_stale_holder_call(
     empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
 ) -> None:
-    """QF2-1: the ledger cannot tell a budget-refused attempt from one another
+    """QF2-1: the ledger cannot tell an attempt that never reserved (a budget
+    refusal, a lost lease, a crash before `reserve`) from one another
     worker has started and not yet reserved -- both are a row with no
     reservation, outcome or refusal -- so the guided retry passes over either,
     and what keeps that exactly-once is the fence, not the read. A holds an

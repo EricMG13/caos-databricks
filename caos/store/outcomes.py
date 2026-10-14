@@ -186,20 +186,22 @@ class NodeAttempt:
     diagnostic_sha256: str | None
     drop_kind: str | None = None
     # True for an attempt that never reserved: no reservation, call outcome,
-    # artifact, charge or refusal. `_run_node` leaves one when the budget
-    # refuses `BUDGET_CEILING_REACHED` after `start_attempt` committed
-    # (`passed_over`). Defaults False so every other constructor stands.
+    # artifact, charge or refusal. `_run_node` leaves one when `reserve`
+    # refuses after `start_attempt` committed (a budget refusal, a lost lease or
+    # a cancel) or the process dies between the two (`passed_over`). Defaults False so
+    # every other constructor stands.
     unreserved: bool = False
 
 
 def passed_over(attempts: Iterable[NodeAttempt]) -> list[NodeAttempt]:
-    """`attempts` less those that never reserved (QF2-1, controller ruling
+    """`attempts` less those that never reserved (a budget refusal, a lost
+    lease or a cancel at `reserve`, or a crash before it; QF2-1, controller ruling
     R48): the ledger's read of a node's last real attempt must not be hidden by
     a row that bought and asked nothing. Safe against an attempt another worker
     has started and not yet reserved, because passing over changes only which
     prompt and which pass the next attempt gets, never whether it may call: that
     attempt still takes `start_attempt`'s `_UNSETTLED` check and its own
-    `reserve` under the run lock, and a holder whose lease lapsed is refused
+    `reserve` under the run lock, and a holder whose lease was reclaimed is refused
     `LEASE_NOT_HELD` at its own `reserve` and `check_call`. Write order is
     untouched; this is a read."""
     return [a for a in attempts if not a.unreserved]

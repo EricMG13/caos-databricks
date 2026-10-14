@@ -409,14 +409,15 @@ def test_the_second_attempt_survives_a_crash_after_the_refusal(
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
 
 
-def test_an_unreserved_attempt_does_not_break_the_guided_retry_chain(
+def test_an_attempt_that_never_reserved_does_not_break_the_guided_retry_chain(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """QF2-1 (diagnosis 2, Q1 c1): an attempt the budget refused before it
-    reserved -- a row with no reservation, call, outcome or refusal -- is
-    passed over like a declared drop (D110), so the node still owes the guided
-    retry its refusal earned and the retry is told that refusal. Walked on a
-    real ledger: the orphan is what `_run_node` leaves when `reserve` refuses
+    """QF2-1 (diagnosis 2, Q1 c1): an attempt that never reserved (a budget
+    refusal, a lost lease or a cancel at `reserve`, or a crash before it) -- a
+    row with no reservation, call, outcome or refusal -- is passed over like a
+    declared drop (D110), so the node still owes the guided retry its refusal
+    earned and the retry is told that refusal. Walked on a real ledger: the
+    orphan is what `_run_node` leaves when `reserve` refuses
     `BUDGET_CEILING_REACHED` after `start_attempt` committed."""
     from caos.methodology.canonical import _feedback_body
     from caos.methodology.executor import Assignment
@@ -450,6 +451,40 @@ def test_an_unreserved_attempt_does_not_break_the_guided_retry_chain(
     assert body is not None and body[1] == refused[0].attempt_id
     # The reserved count is unchanged: only the refusal ever reserved.
     assert _cp0_ledger(harness)[1] == 1
+
+
+def test_a_reserved_attempt_with_no_outcome_still_ends_the_chain(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QF2-1 (review I1): an attempt that reserved but recorded no outcome is a
+    call in flight, or a holder that died mid-call with its bill unknown. It is
+    not an attempt that never reserved, so it is not passed over: the node owes
+    no guided retry while it stands (`_UNSETTLED` holds the node as well)."""
+    from decimal import Decimal
+
+    from conftest import reserve_at
+
+    from caos.store.runs import start_attempt
+
+    flawed = _Flawed(CanonicalCompletions(harness.source_id))
+
+    def crash(*_args: object) -> bool:
+        raise _Crash
+
+    monkeypatch.setattr(runtime, "_second_due", crash)
+    with pytest.raises(_Crash):
+        _run(harness, flawed)
+    monkeypatch.undo()
+    cp0 = _node(harness, "CP-0").route_node_id
+    assert second_attempt_due(harness.conn, run_id=harness.run_id, route_node_id=cp0)
+    attempt = start_attempt(harness.conn, harness.run_id, cp0)
+    reserve_at(harness.conn, attempt, Decimal("0.01"))
+    last = node_attempts(harness.conn, harness.run_id, cp0)[-1]
+    assert last.attempt_id == attempt and last.unreserved is False
+    harness.conn.rollback()
+    assert not second_attempt_due(
+        harness.conn, run_id=harness.run_id, route_node_id=cp0
+    )
 
 
 def _checks(prompt: str) -> str:
