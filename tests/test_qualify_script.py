@@ -31,6 +31,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 from decimal import ROUND_UP, Decimal
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 import psycopg
@@ -839,6 +840,178 @@ def test_a_set_resumed_under_a_ceiling_that_pays_prints_what_is_left(
     document = json.loads(out[out.index('{\n  "adapter_version"') :])
     assert document["result"][0]["stopped"] == "HANDOFF_MALFORMED"
     assert document["result"][0]["refused_with"] is None
+
+
+@dataclass
+class _Scripted(_FakeProvider):
+    """The canonical answers with a module's QA verdict or CP-0's readiness rows
+    scripted: the two ways a real run ended BLOCKED (qualify runs 3 and 4)."""
+
+    qa_by_module: dict[str, str] = field(default_factory=dict)
+    readiness: dict[str, str] = field(default_factory=dict)
+    blockers: dict[str, str] = field(default_factory=dict)
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        self.prompts.append(prompt)
+        source_id = re.findall(r"^source_id: (\S+)$", prompt, re.MULTILINE)[-1]
+        return CanonicalCompletions(
+            UUID(source_id),
+            generation_id="gen-qualify-test",
+            qa_by_module=self.qa_by_module,
+            readiness=self.readiness,
+            blockers=self.blockers,
+        ).complete(prompt, json_object=json_object)
+
+
+_PRICE = "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+
+
+def _capture_of(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    provider: _FakeProvider,
+) -> dict[str, Any]:
+    """`qualify.main` over the lite set with `provider`; its capture."""
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    qualify.main(
+        [
+            str(_write_lite_set(tmp_path / "set")),
+            "--expect-identity",
+            "test-fake-identity",
+            "--ceiling",
+            "5.00",
+        ]
+    )
+    out = capsys.readouterr().out
+    document: dict[str, Any] = json.loads(out[out.index('{\n  "adapter_version"') :])
+    return document
+
+
+def _priced(monkeypatch: pytest.MonkeyPatch) -> _Scripted:
+    monkeypatch.setenv("CAOS_MODEL_PRICE", _PRICE)
+    return _Scripted(price=price_from_environment(_Scripted.model, _PRICE))
+
+
+def test_a_run_a_module_blocked_names_the_node_and_the_verdict_row(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """QF3-1, qualify run 4: CP-2G answered Blocked and the capture said only
+    `status: BLOCKED`. The row now names the route node, the attempt and the
+    verdict row the store holds for it."""
+    provider = _priced(monkeypatch)
+    provider.qa_by_module = {"CP-L10": "Blocked"}
+    document = _capture_of(monkeypatch, capsys, tmp_path, provider)
+
+    [row] = document["result"]
+    assert row["status"] == "BLOCKED"
+    blocked = row["blocked_by"]
+    assert blocked["path"] == "module"
+    assert blocked["route_node_id"].endswith("-CP-L10")
+    assert blocked["code"] == "HANDOFF_BLOCKED"
+    assert blocked["ordinal"] == 1
+    admin = os.environ["CAOS_TEST_POSTGRES_URL"]
+    with connect(admin.rsplit("/", 1)[0] + "/" + created[0]) as conn:
+        [stored] = conn.execute(
+            "SELECT v.attempt_id, v.citations_sha256, v.recorded_at, t.ordinal"
+            " FROM run_blocking_verdicts v JOIN run_attempts t USING (attempt_id)"
+        ).fetchall()
+    assert blocked["attempt_id"] == str(stored[0])
+    assert blocked["citations_sha256"] == stored[1]
+    assert blocked["recorded_at"] == stored[2].isoformat()
+    assert blocked["ordinal"] == stored[3]
+    assert QUOTE not in json.dumps(blocked)
+
+
+def test_a_run_the_route_blocked_names_each_node_and_the_verdict_that_held_it(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """QF3-1, qualify run 3: CP-0 ruled a consumer CONDITIONAL, the frontier
+    emptied and `block_run` named no node. The row lists the nodes the route
+    left BLOCKED, each with the readiness verdict CP-0 gave it and the
+    producers it still waits on."""
+    provider = _priced(monkeypatch)
+    provider.readiness = {"CP-L10": "CONDITIONAL"}
+    provider.blockers = {"CP-L10": "Source pack is not mapped"}
+    document = _capture_of(monkeypatch, capsys, tmp_path, provider)
+
+    [row] = document["result"]
+    assert row["status"] == "BLOCKED" and row["stopped"] is None
+    blocked = row["blocked_by"]
+    assert blocked["path"] == "route"
+    by_module = {node["module_id"]: node for node in blocked["nodes"]}
+    assert by_module["CP-L10"]["route_node_id"].endswith("-CP-L10")
+    assert by_module["CP-L10"]["verdict"] == "CONDITIONAL"
+    assert by_module["CP-L10"]["verdict_from"] == "CP-0"
+    assert by_module["CP-L10"]["held_by_verdict"] is True
+    assert by_module["CP-5"]["verdict"] == "READY"
+    assert by_module["CP-5"]["held_by_verdict"] is False
+    [edge] = by_module["CP-5"]["waiting_on"]
+    assert (edge["module_id"], edge["verdict"]) == ("CP-L10", "CONDITIONAL")
+    assert "Source pack" not in json.dumps(blocked)
+
+
+def test_a_route_block_whose_gate_record_will_not_load_still_names_its_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """The capture of a paid run is not lost to CP-0's blob going missing: the
+    BLOCKED nodes are named, the verdicts are not guessed, and the typed code
+    says why none was read."""
+    from caos.methodology.bundle import Bundle
+
+    provider = _priced(monkeypatch)
+    provider.readiness = {"CP-L10": "CONDITIONAL"}
+    provider.blockers = {"CP-L10": "Source pack is not mapped"}
+    document = _capture_of(monkeypatch, capsys, tmp_path, provider)
+    [row] = document["result"]
+    run_id = UUID(row["run_id"])
+
+    admin = os.environ["CAOS_TEST_POSTGRES_URL"]
+    with connect(admin.rsplit("/", 1)[0] + "/" + created[0]) as conn:
+        bundle = Bundle(Path(qualify.__file__).parents[1] / "vendor/deploy-v")
+        record = Performed(
+            case_label="c",
+            run_id=run_id,
+            status=RunStatus.BLOCKED,
+            stopped=None,
+            proof=None,
+            refusal=None,
+            unrun=_unrun(conn, BlobStore(tmp_path / "blobs"), bundle, run_id),
+        )
+        blocked = qualify._blocked_by(
+            conn, BlobStore(tmp_path / "no-blobs"), bundle, record
+        )
+
+    assert blocked is not None and blocked["path"] == "route"
+    assert blocked["readiness_unreadable"] == "ARTIFACT_RECORD_MISMATCH"
+    nodes: Any = blocked["nodes"]
+    assert [n["route_node_id"].rsplit("-", 1)[-1] for n in nodes] == ["L10", "5"]
+    assert all(set(n) == {"route_node_id"} for n in nodes)
+
+
+def test_a_run_that_is_not_blocked_carries_no_blocked_by(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """`blocked_by` is for a BLOCKED run only; a refused run says `stopped`."""
+    monkeypatch.setenv("CAOS_MODEL_PRICE", _PRICE)
+    document = _capture_of(
+        monkeypatch, capsys, tmp_path, _AlwaysRefused.from_environment()
+    )
+    [row] = document["result"]
+    assert row["status"] != "BLOCKED"
+    assert row["blocked_by"] is None
 
 
 def test_stop_code_reads_the_ledger_for_the_stopped_node(harness: _Harness) -> None:
