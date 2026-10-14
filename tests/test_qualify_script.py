@@ -28,7 +28,8 @@ import os
 import re
 import sys
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from decimal import ROUND_UP, Decimal
 from pathlib import Path
 from uuid import UUID
 
@@ -36,12 +37,15 @@ import psycopg
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, QUOTE, CanonicalCompletions
 
+from caos.blobs import BlobStore
 from caos.models import identity_of
-from caos.pricing import ModelPrice, price_from_environment
+from caos.pricing import ModelPrice, price_from_environment, worst_case
 from caos.provider import Completion, encode_request
+from caos.qualification.harness import Harness, PerformedSet, PreparedCase, perform
+from caos.qualification.matrix import QualificationSet
 from caos.qualification.on_disk import MANIFEST
 from caos.refusals import Refusal, RefusalCode
-from caos.store import connect
+from caos.store import StoreConnection, connect
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -687,3 +691,89 @@ def test_each_docstring_example_expects_the_identity_its_endpoint_resolves_to() 
     ]
     assert identity_of("claude-opus-5-5") == expected[0]
     assert identity_of(endpoints[0]) == expected[1]
+
+
+@dataclass
+class _RefusedOnce(_FakeProvider):
+    """Answers the first call with a dangling marker (a refusal the guided
+    retry is owed for) and every later call correctly."""
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = super().complete(prompt, json_object=json_object)
+        if len(self.prompts) > 1:
+            return done
+        wire = json.loads(done.content or "")
+        wire["canonical_markdown"] += "\nAs cited [C99].\n"
+        return replace(done, content=json.dumps(wire))
+
+
+def test_a_set_the_budget_stopped_is_reported_as_the_budget_and_not_re_entered(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """QF2-2, CP-5 #4 of qualify run 2: a refusal, then a guided retry the run
+    ceiling refused before it reserved. `_with_second_attempt` re-raises the
+    refusal before, so the capture named the stale refusal as the stop, the
+    loop re-entered `perform` into the same ceiling, and nothing printed what
+    the run had left."""
+    _skip_without_postgres()
+    monkeypatch.setenv(
+        "CAOS_QUALIFY_POSTGRES_URL", os.environ["CAOS_TEST_POSTGRES_URL"]
+    )
+    monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
+    price_text = "a-model/for-the-test,0.000000000001,0.00001,2026-09-13"
+    monkeypatch.setenv("CAOS_MODEL_PRICE", price_text)
+    provider = _RefusedOnce.from_environment()
+    monkeypatch.setattr(qualify, "from_environment", lambda: provider)
+    # A ceiling that pays for one call (the worst a call can cost) and, the
+    # first call having reserved nearly all of it, not for the retry.
+    ceiling = worst_case(price_from_environment(provider.model, price_text)).quantize(
+        Decimal("0.000001"), rounding=ROUND_UP
+    )
+    performs: list[int] = []
+    real = perform
+
+    def counted(
+        conn: StoreConnection,
+        blobs: BlobStore,
+        harness: Harness,
+        *,
+        qualification: QualificationSet,
+        prepared: tuple[PreparedCase, ...],
+    ) -> PerformedSet:
+        performs.append(1)
+        return real(
+            conn, blobs, harness, qualification=qualification, prepared=prepared
+        )
+
+    monkeypatch.setattr(qualify, "perform", counted)
+
+    code = qualify.main(
+        [
+            str(_write_lite_set(tmp_path / "set")),
+            "--expect-identity",
+            "test-fake-identity",
+            "--ceiling",
+            str(ceiling),
+            "--attempts",
+            "3",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    out = captured.out
+    assert code == 1, captured.err
+    assert len(provider.prompts) == 1 and performs == [1]
+    assert '"resumed_after"' not in out
+    [stop] = [
+        json.loads(line)
+        for line in out.splitlines()
+        if line.startswith("{") and '"stopped_by"' in line
+    ]
+    assert stop["stopped_by"] == "BUDGET_CEILING_REACHED"
+    assert Decimal(stop["remaining"]) < ceiling
+    document = json.loads(out[out.index('{\n  "adapter_version"') :])
+    assert document["result"][0]["stopped"] == "BUDGET_CEILING_REACHED"
+    assert document["result"][0]["refused_with"] == "HANDOFF_MALFORMED"
