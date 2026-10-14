@@ -538,6 +538,54 @@ def test_a_stale_worker_returning_after_reclaim_keeps_its_bill_and_accepts_nothi
         ).fetchall() == [(second,)]
 
 
+def test_passing_over_an_unreserved_attempt_never_lets_a_stale_holder_call(
+    empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
+) -> None:
+    """QF2-1: the ledger cannot tell a budget-refused attempt from one another
+    worker has started and not yet reserved -- both are a row with no
+    reservation, outcome or refusal -- so the guided retry passes over either,
+    and what keeps that exactly-once is the fence, not the read. A holds an
+    unreserved second attempt when B reclaims; B owes the guided retry the first
+    attempt's refusal earned, starts and pays it, and A's late reservation and
+    pre-transport check are refused, so A makes no call and B's is the only
+    one."""
+    from caos.methodology.canonical import second_attempt_due
+
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        node = approved_nodes(conn, run_id, tmp_path)["CP-0"]
+    stale = _claimed(empty_database, run_id)
+    with connect(empty_database) as a, connect(empty_database) as b:
+        first = start_attempt(a, run_id, node, lease=stale)
+        reserve(a, first, RESERVED, lease=stale)
+        outcome = CallOutcome(CHARGE, MODEL, GENERATION, "d" * 64)
+        assert record_outcome(a, attempt_id=first, outcome=outcome)
+        assert record_refusal(
+            a,
+            attempt_id=first,
+            code=RefusalCode.HANDOFF_MALFORMED,
+            lease=stale,
+        )
+        in_flight = start_attempt(a, run_id, node, lease=stale)
+        fresh = _reclaimed(empty_database, run_id)
+        assert second_attempt_due(b, run_id=run_id, route_node_id=node)
+        retry = start_attempt(b, run_id, node, lease=fresh)
+        reserve(b, retry, RESERVED, lease=fresh)
+        _refused(
+            RefusalCode.LEASE_NOT_HELD,
+            lambda: reserve(a, in_flight, RESERVED, lease=stale),
+        )
+        _refused(
+            RefusalCode.LEASE_NOT_HELD,
+            lambda: _checked(a, in_flight, run_id, node, stale),
+        )
+        assert b.execute(
+            "SELECT attempt_id FROM budget_reservations WHERE run_id = %s"
+            " AND attempt_id <> %s",
+            (run_id, first),
+        ).fetchall() == [(retry,)]
+
+
 def test_a_claim_during_an_in_flight_acceptance_takes_nothing(
     empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
 ) -> None:

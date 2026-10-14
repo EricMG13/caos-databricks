@@ -365,6 +365,21 @@ def test_the_ledger_makes_the_fourth_attempt_the_last_guided_retry() -> None:
     assert _feedback_source([*three[:2], refused("PROVIDER_REFUSED")]) is None
     assert _feedback_source([*three[:2], refused(None)]) is None
     assert _feedback_source([]) is None
+    # QF2-1: an attempt that never reserved is passed over -- the retry chain
+    # holds -- but an unexplained attempt that did reserve still ends it, and
+    # passing over never counts toward the retries spent.
+    orphan = NodeAttempt(uuid4(), None, None, unreserved=True)
+    assert _feedback_source([three[0], orphan]) == three[0]
+    assert _feedback_source([*three[:2], orphan, orphan]) == three[1]
+    assert _feedback_source([*three, orphan]) == three[-1]
+    assert _feedback_source([*three, refused(malformed), orphan]) is None
+    assert _feedback_source([orphan]) is None
+    assert _feedback_source([three[0], refused(None)]) is None
+    from caos.store.outcomes import passed_over
+
+    plain = refused(None)
+    assert passed_over([three[0], orphan, plain, orphan]) == [three[0], plain]
+    assert passed_over([orphan]) == []
 
 
 class _Crash(BaseException):
@@ -392,6 +407,49 @@ def test_the_second_attempt_survives_a_crash_after_the_refusal(
     assert _run(harness, flawed) is None
     assert VENDOR_LINE in answers.prompts[1]
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_an_unreserved_attempt_does_not_break_the_guided_retry_chain(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QF2-1 (diagnosis 2, Q1 c1): an attempt the budget refused before it
+    reserved -- a row with no reservation, call, outcome or refusal -- is
+    passed over like a declared drop (D110), so the node still owes the guided
+    retry its refusal earned and the retry is told that refusal. Walked on a
+    real ledger: the orphan is what `_run_node` leaves when `reserve` refuses
+    `BUDGET_CEILING_REACHED` after `start_attempt` committed."""
+    from caos.methodology.canonical import _feedback_body
+    from caos.methodology.executor import Assignment
+    from caos.store.runs import start_attempt
+
+    answers = CanonicalCompletions(harness.source_id)
+    flawed = _Flawed(answers)
+
+    def crash(*_args: object) -> bool:
+        raise _Crash
+
+    monkeypatch.setattr(runtime, "_second_due", crash)
+    with pytest.raises(_Crash):
+        _run(harness, flawed)
+    monkeypatch.undo()
+    node = _node(harness, "CP-0")
+    cp0 = node.route_node_id
+    refused = node_attempts(harness.conn, harness.run_id, cp0)
+    assert [a.refusal for a in refused] == ["HANDOFF_MALFORMED"]
+    for _orphans in range(2):
+        start_attempt(harness.conn, harness.run_id, cp0)
+        assert second_attempt_due(
+            harness.conn, run_id=harness.run_id, route_node_id=cp0
+        )
+    retry = start_attempt(harness.conn, harness.run_id, cp0)
+    body = _feedback_body(
+        harness.conn,
+        harness.blobs,
+        Assignment("CP-0", harness.run_id, node, harness.route, retry),
+    )
+    assert body is not None and body[1] == refused[0].attempt_id
+    # The reserved count is unchanged: only the refusal ever reserved.
+    assert _cp0_ledger(harness)[1] == 1
 
 
 def _checks(prompt: str) -> str:
