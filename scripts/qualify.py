@@ -44,6 +44,7 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import asdict
 from decimal import ROUND_DOWN, Decimal
 from enum import Enum
@@ -60,8 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from caos.blobs import BlobStore
 from caos.copilot import require_ready
 from caos.graph.route import (
-    GATE_MODULE,
-    READY,
+    Edge,
     NodeState,
     readiness_from,
     waiting_on,
@@ -78,6 +78,7 @@ from caos.qualification.harness import (
     Performed,
     PerformedSet,
     PreparedCase,
+    Unrun,
     assert_admissible,
     perform,
     prepare,
@@ -197,7 +198,7 @@ def _result_row(
     item: Performed, stop: RefusalCode | None, blocked_by: dict[str, Plain] | None
 ) -> dict[str, Plain]:
     """One case's outcome. `stopped` is the capture's corrected reading
-    (`_stop_code`); `refused_with` is the code the run raised, which
+    (`_stop_code`); `raised` is the code the run raised, which
     `caos/qualification/store.py` persists in the evidence snapshot unchanged,
     and is None when the two agree. `blocked_by` is `_blocked_by`'s reading of
     a BLOCKED run and None for any other."""
@@ -206,7 +207,7 @@ def _result_row(
         "run_id": str(item.run_id),
         "status": item.status.value,
         "stopped": None if stop is None else stop.value,
-        "refused_with": None
+        "raised": None
         if item.stopped is None or stop is item.stopped
         else item.stopped.value,
         "refusal": None if item.refusal is None else item.refusal.value,
@@ -218,7 +219,8 @@ def _result_row(
 def _blocked_by(
     conn: StoreConnection, blobs: BlobStore, bundle: Bundle, item: Performed
 ) -> dict[str, Plain] | None:
-    """What blocked a BLOCKED run, read from the ledger and never inferred (QF3-1).
+    """What blocked a BLOCKED run, read from the ledger; `path` is the only
+    derived field (QF3-1).
 
     A run ends BLOCKED two ways and the status says neither. A module's own
     validated Blocked answer ends it through `block_run(verdict=...)`, which
@@ -231,28 +233,29 @@ def _blocked_by(
     """
     if item.status is not RunStatus.BLOCKED:
         return None
-    verdict = conn.execute(
-        "SELECT t.route_node_id, t.attempt_id, t.ordinal, v.citations_sha256,"
-        " v.recorded_at FROM run_blocking_verdicts v"
-        " JOIN run_attempts t USING (attempt_id) WHERE v.run_id = %s",
-        (item.run_id,),
-    ).fetchone()
-    if verdict is not None:
-        return {
-            "path": "module",
-            "route_node_id": str(verdict[0]),
-            "attempt_id": str(verdict[1]),
-            "ordinal": verdict[2],
-            # The row stores no code. `block_run` is given a verdict only by
-            # `runtime._block_on`, which has two callers: `_end_blocked` (the
-            # run's own pass) and `_settle` (a resumed run replaying a stored
-            # answer). Each requires `Verdict.BLOCKED` from `replay_billed`
-            # first, which is what `HANDOFF_BLOCKED` names.
-            "code": RefusalCode.HANDOFF_BLOCKED.value,
-            "citations_sha256": verdict[3],
-            "recorded_at": verdict[4].isoformat(),
-        }
-    return _route_blocked(conn, blobs, bundle, item)
+    # One read unit, so the capture needs no ordering among its reads: each
+    # needs an idle connection (`_capture` reads `_stop_code` first).
+    with execution_reads(conn):
+        verdict = conn.execute(
+            "SELECT t.route_node_id, t.attempt_id, t.ordinal, v.citations_sha256,"
+            " v.recorded_at FROM run_blocking_verdicts v"
+            " JOIN run_attempts t USING (attempt_id) WHERE v.run_id = %s",
+            (item.run_id,),
+        ).fetchone()
+        if verdict is not None:
+            return {
+                "path": "module",
+                "route_node_id": str(verdict[0]),
+                "attempt_id": str(verdict[1]),
+                "ordinal": verdict[2],
+                "citations_sha256": verdict[3],
+                "recorded_at": verdict[4].isoformat(),
+            }
+        return _route_blocked(conn, blobs, bundle, item)
+
+
+# The explicit marker for a route block over no recorded unrun node.
+_NO_UNRUN: dict[str, Plain] = {"no_unrun_nodes": True}
 
 
 def _route_blocked(
@@ -272,33 +275,40 @@ def _route_blocked(
     readiness = readiness_from(route, accepted)
     module_of = {node.route_node_id: node.module_id for node in route.nodes}
     nodes: list[Plain] = [
-        {
-            "route_node_id": unrun.route_node_id,
-            "module_id": module_of[unrun.route_node_id],
-            "verdict": readiness.get(module_of[unrun.route_node_id]),
-            "verdict_from": None
-            if module_of[unrun.route_node_id] not in readiness
-            else GATE_MODULE,
-            "held_by_verdict": readiness.get(module_of[unrun.route_node_id])
-            not in (None, *READY),
-            "waiting_on": [
-                {
-                    "module_id": edge.source,
-                    "edge": edge.type.value,
-                    "verdict": readiness.get(edge.source),
-                }
-                for edge in waiting_on(route, accepted, unrun.route_node_id)
-            ],
-        }
+        _blocked_node(
+            unrun,
+            module_of[unrun.route_node_id],
+            readiness,
+            waiting_on(route, accepted, unrun.route_node_id),
+        )
         for unrun in item.unrun
         if unrun.state is NodeState.BLOCKED
     ]
-    return {"path": "route", "nodes": nodes, **_none_unrun(item)}
+    # An empty list is not an answer: say when the harness recorded no node.
+    return {"path": "route", "nodes": nodes, **({} if item.unrun else _NO_UNRUN)}
 
 
-def _none_unrun(item: Performed) -> dict[str, Plain]:
-    """The explicit marker for a route block over no recorded unrun node."""
-    return {} if item.unrun else {"no_unrun_nodes": True}
+def _blocked_node(
+    unrun: Unrun,
+    module_id: str,
+    readiness: Mapping[str, str],
+    waits: tuple[Edge, ...],
+) -> dict[str, Plain]:
+    """One node the route left BLOCKED: CP-0's verdict for its module (None for
+    a module CP-0 did not rule on) and the producers it still waits on."""
+    return {
+        "route_node_id": unrun.route_node_id,
+        "module_id": module_id,
+        "verdict": readiness.get(module_id),
+        "waiting_on": [
+            {
+                "module_id": edge.source,
+                "edge": edge.type.value,
+                "verdict": readiness.get(edge.source),
+            }
+            for edge in waits
+        ],
+    }
 
 
 def _readiness_unreadable(
@@ -321,7 +331,7 @@ def _readiness_unreadable(
             {"route_node_id": unrun.route_node_id, "state": unrun.state.value}
             for unrun in item.unrun
         ],
-        **_none_unrun(item),
+        **({} if item.unrun else _NO_UNRUN),
     }
 
 
@@ -412,23 +422,28 @@ def _perform_until(  # noqa: PLR0913 -- one set, one loop, keyword-only tail
         conn, blobs, harness, qualification=qualification, prepared=prepared
     )
     for attempts_left in range(attempts - 1, 0, -1):
-        stopped = [record for record in performed.performed if record.stopped]
+        stopped = [(item, item.stopped) for item in performed.performed if item.stopped]
         if not stopped:
             return performed
-        left = _left(conn, stopped[0])
-        code = _stop_code(conn, stopped[0])
-        if code is RefusalCode.BUDGET_CEILING_REACHED:
+        record, raised = stopped[0]
+        left = _left(conn, record)
+        if _stop_code(conn, record) is RefusalCode.BUDGET_CEILING_REACHED:
             # The ceiling refused an attempt before it reserved: entering
             # `perform` again meets the same ceiling and buys nothing.
             print(
-                json.dumps({"stopped_by": code.value, "remaining": left}),
+                json.dumps(
+                    {
+                        "stopped_by": RefusalCode.BUDGET_CEILING_REACHED.value,
+                        "remaining": left,
+                    }
+                ),
                 flush=True,
             )
             return performed
         print(
             json.dumps(
                 {
-                    "resumed_after": code.value if code else None,
+                    "resumed_after": raised.value,
                     "attempts_left": attempts_left,
                     "remaining": left,
                 }
@@ -448,14 +463,17 @@ def _left(conn: StoreConnection, record: Performed) -> str:
 
 
 def _stop_code(conn: StoreConnection, record: Performed) -> RefusalCode | None:
-    """The code that ended `record`'s run, as the ledger reads it.
+    """The code that ended `record`'s run, read back from the ledger.
 
     `_with_second_attempt` re-raises the refusal before when the ceiling cannot
     pay for the retry, so `Performed.stopped` names a refusal the retry never
     answered (CP-5 #4 of qualify run 2). When that refusal is one a retry is
     owed for and the stopped node's latest attempt never reserved
     (`NodeAttempt.never_reserved`), the budget is what stopped it. Any other code,
-    a lost lease included, stands as raised.
+    a lost lease included, stands as raised. The ledger holds no `reserve`
+    refusal: this is `_with_second_attempt`'s `unpaid` rule read back, so revisit
+    it if that rule changes. A record whose `unrun` could not be read keeps its
+    raised code and may be re-entered once more.
     """
     if record.stopped not in SECOND_ATTEMPT_CODES | {RefusalCode.PROVIDER_UNAVAILABLE}:
         return record.stopped
