@@ -1311,16 +1311,13 @@ def _absent_ids_line(
     fact about the answer, not a rule. The checker finds a register by its ID
     and says only that it is missing; CP-1A live wrote every register under a
     human title and its second attempt, told eleven were missing, could not see
-    why. At most `MAX_FEEDBACK_CITATIONS` IDs are named, the rest counted."""
+    why. Only an ID the vendor's own `find_registers` also fails to find is
+    named, so the line never contradicts the keep line (QF2-2). At most
+    `MAX_FEEDBACK_CITATIONS` IDs are named, the rest counted."""
     if not skill or module_id == MODEL_MODULE:
         return None
     with suppress(Exception):  # a contract it cannot read is nothing to report
-        registers = contract.completeness_check.load_contract(
-            skill.decode("utf-8"), module_id
-        )["registers"]
-        absent = sorted(
-            register for register in registers if not _writes_id(text, register)
-        )
+        absent = _unlocated(contract, module_id, text, skill)
         if absent:
             shown = absent[:MAX_FEEDBACK_CITATIONS]
             rest = len(absent) - len(shown)
@@ -1333,6 +1330,21 @@ def _absent_ids_line(
                 " in the answer"
             )
     return None
+
+
+def _unlocated(
+    contract: VendorContract, module_id: str, text: str, skill: bytes
+) -> list[str]:
+    """The module's register IDs `text` never writes whole and the vendor's
+    `find_registers` does not locate either, sorted."""
+    checker = contract.completeness_check
+    loaded = checker.load_contract(skill.decode("utf-8"), module_id)
+    registers = loaded["registers"]
+    unwritten = [r for r in registers if not _writes_id(text, r)]
+    if not unwritten:
+        return []
+    found = checker.find_registers(text, registers, loaded.get("retired_registers", ()))
+    return sorted(register for register in unwritten if register not in found)
 
 
 def kept_registers_line(

@@ -125,3 +125,35 @@ def test_past_the_line_limit_the_rest_are_counted(
 def test_an_answer_with_no_register_gets_no_keep_line() -> None:
     markdown = b"---\nmodule_id: CP-1\n---\n\n## Analysis\n\nNo tables.\n"
     assert _kept("CP-1", markdown) is None
+
+
+def _cp1a_lines(markdown: bytes) -> list[str]:
+    """The host register check's lines for a CP-1A answer of this Markdown."""
+    citation = {"source_id": str(UUID(int=1)), "page": 1, "matched_text": "x"}
+    body = wire(markdown, [citation])
+    ident = replace(identity("CP-0"), module_id="CP-1A")
+    lines = feedback_lines(CONTRACT, catalog(BUNDLE), ident, body, skill=skill("CP-1A"))
+    return [line for line in lines if line.startswith("host register check")]
+
+
+def test_a_register_the_vendor_finds_under_a_title_is_not_called_absent() -> None:
+    """CP-1A #2 (qualify run 2, body 93b54ded): ten snake_case registers were
+    written under human titles. The vendor's locator found all 22 and the keep
+    line said so, yet this line said ten IDs "appear nowhere": a falsehood."""
+    ident = replace(identity("CP-0"), module_id="CP-1A")
+    markdown = handoff_markdown(ident, fields={"module_id": "CP-1A"}).decode()
+    for title in ("company_description", "conflict_log"):
+        human = title.replace("_", " ").capitalize()
+        markdown = markdown.replace(f"#### {title}\n", f"#### {human}\n", 1)
+    assert _cp1a_lines(markdown.encode()) == []
+
+
+def test_a_register_neither_the_id_nor_the_vendor_finds_is_still_named() -> None:
+    ident = replace(identity("CP-0"), module_id="CP-1A")
+    markdown = handoff_markdown(
+        ident, fields={"module_id": "CP-1A"}, omit_register="conflict_log"
+    )
+    assert (
+        "host register check: the register ID `conflict_log` appears nowhere"
+        " in the answer"
+    ) in _cp1a_lines(markdown)
