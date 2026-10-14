@@ -308,8 +308,9 @@ def test_a_marker_naming_no_citation_gets_a_retry_naming_it(
     assert (
         "host marker check: the Markdown body writes [C9], but the answer has 1"
         " citation, so it names none; a marker [C<n>] names the citation at"
-        " place n of the list, from [C1] to [C1]"
-        in " ".join(answers.prompts[1].split())
+        " place n of the list, from [C1] to [C1]; re-point it to the citation"
+        " that carries its passage, or remove it; add a citation only for a"
+        " passage not yet listed" in " ".join(answers.prompts[1].split())
     )
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
 

@@ -86,7 +86,9 @@ def test_the_dangling_marker_line_names_each_marker_and_the_count() -> None:
     assert line == (
         "host marker check: the Markdown body writes [C0], [C9], but the answer"
         " has 1 citation, so they name none; a marker [C<n>] names the citation"
-        " at place n of the list, from [C1] to [C1]"
+        " at place n of the list, from [C1] to [C1]; re-point each of them to the"
+        " citation that carries its passage, or remove it; add a citation only"
+        " for a passage not yet listed"
     )
     assert SECRET not in "".join(lines)
 
@@ -309,3 +311,19 @@ def test_body_reads_after_the_front_matter_with_escapes_read() -> None:
     assert body("---\nnote: [C9]\n---\nSee \\[C1\\].") == "See [C1]."
     assert body("---\nnote: [C9]\n---") == ""
     assert body("---\nunclosed [C2]") == "---\nunclosed [C2]"
+
+
+def test_the_dangling_line_stays_within_the_line_limit() -> None:
+    """The action it now states must not push the line past what one line
+    holds: markers shown give way to a count, as the repeat line's pairs do."""
+    long = "9" * 40
+    markers = " ".join(f"[C{long}{n}]" for n in range(30))
+    body = wire(CP0_MD + f"\n{markers}\n".encode(), [_citation()])
+    [line] = [
+        line
+        for line in handoff.feedback_lines(CONTRACT, CATALOG, CP0, body)
+        if line.startswith("host marker check")
+    ]
+    assert len(line) <= handoff.MAX_FEEDBACK_CHARS
+    assert " more, but the answer has 1 citation" in line
+    assert line.endswith("not yet listed")

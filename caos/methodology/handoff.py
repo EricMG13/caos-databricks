@@ -1697,24 +1697,32 @@ def _dangling_line(text: str, count: int) -> str | None:
     """The markers that name no citation (D107), each as `[C<n>]` as written
     -- the model's own number, cut past 12 digits, never its text -- and the
     count they must stay within: the check that refused the answer
-    (`parse_response`)."""
+    (`parse_response`), and what to do with each -- re-point it to a listed
+    citation or remove it. As many markers as `MAX_FEEDBACK_CHARS` holds."""
     dangling = _dangling(text, count)
     if not dangling:
         return None
-    shown = [
+    names = "it names" if len(dangling) == 1 else "they name"
+    each = "it" if len(dangling) == 1 else "each of them"
+    cited = "citation" if count == 1 else "citations"
+    marks = [
         f"[C{n if len(n) <= 12 else n[:12] + '...'}]"
         for n in dangling[:MAX_FEEDBACK_CITATIONS]
     ]
-    rest = len(dangling) - len(shown)
-    more = f" and {rest} more" if rest else ""
-    names = "it names" if len(dangling) == 1 else "they name"
-    cited = "citation" if count == 1 else "citations"
-    return (
-        f"host marker check: the Markdown body writes {', '.join(shown)}{more},"
-        f" but the answer has {count} {cited}, so"
-        f" {names} none; a marker [C<n>] names the citation at place n of the"
-        f" list, from [C1] to [C{count}]"
-    )
+    for shown in range(len(marks), 0, -1):
+        rest = len(dangling) - shown
+        more = f" and {rest} more" if rest else ""
+        line = (
+            f"host marker check: the Markdown body writes {', '.join(marks[:shown])}"
+            f"{more}, but the answer has {count} {cited}, so {names} none; a"
+            " marker [C<n>] names the citation at place n of the list, from [C1]"
+            f" to [C{count}]; re-point {each} to the citation that carries its"
+            " passage, or remove it; add a citation only for a passage not yet"
+            " listed"
+        )
+        if len(line) <= MAX_FEEDBACK_CHARS:
+            break
+    return line
 
 
 def _unmarked_line(text: str, count: int) -> str | None:
