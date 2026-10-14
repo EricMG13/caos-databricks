@@ -327,3 +327,15 @@ def test_the_dangling_line_stays_within_the_line_limit() -> None:
     assert len(line) <= handoff.MAX_FEEDBACK_CHARS
     assert " more, but the answer has 1 citation" in line
     assert line.endswith("not yet listed")
+
+
+def test_the_dangling_line_with_no_citations_has_nothing_to_re_point_to() -> None:
+    """At count 0 there is no citation to re-point a marker to."""
+    assert handoff._dangling_line("See [C9].", 0) == (
+        "host marker check: the Markdown body writes [C9], but the answer has"
+        " no citations; remove it, or add the citation for its passage"
+    )
+    assert handoff._dangling_line("See [C9] [C8].", 0) == (
+        "host marker check: the Markdown body writes [C9], [C8], but the answer"
+        " has no citations; remove them, or add the citations for their passages"
+    )

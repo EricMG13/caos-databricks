@@ -165,13 +165,16 @@ def test_a_locator_failure_surfaces_and_is_not_swallowed(
     """Only an unreadable contract is nothing to report; a bug in the vendor's
     locator must surface, as it does for the keep line."""
 
+    class LocatorBug(RuntimeError):
+        pass
+
     def broken(*_: object, **__: object) -> object:
-        raise RuntimeError("locator bug")
+        raise LocatorBug
 
     monkeypatch.setattr(CONTRACT.completeness_check, "find_registers", broken)
     ident = replace(identity("CP-0"), module_id="CP-1A")
     markdown = handoff_markdown(
         ident, fields={"module_id": "CP-1A"}, omit_register="conflict_log"
     )
-    with pytest.raises(RuntimeError, match="locator bug"):
+    with pytest.raises(LocatorBug):
         _cp1a_lines(markdown)

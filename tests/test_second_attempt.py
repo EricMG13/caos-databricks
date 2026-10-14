@@ -1517,10 +1517,11 @@ def test_a_repeated_citation_is_named_as_one_and_its_answer_carried() -> None:
     assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
     lines = feedback_lines(CONTRACT, CATALOG, gate, body, skill=skill("CP-0"))
     assert lines[0] == (
-        "host citation check: citation 3 repeats citation 1: write [C1] where"
-        " you wrote [C3], and delete citation 3; citation 4 repeats citation 2:"
-        " write [C2] where you wrote [C4], and delete citation 4 (a repeat has"
-        " the same source_id, page and matched_text); then renumber every"
+        "host citation check: citation 3 repeats citation 1: write [C1]"
+        " wherever the body writes [C3], and delete citation 3; citation 4"
+        " repeats citation 2: write [C2] wherever the body writes [C4], and"
+        " delete citation 4 (a repeat has the same source_id, page and"
+        " matched_text); then renumber every"
         " marker after a citation you removed"
     )
     assert not any("not the JSON object" in line for line in lines)
@@ -1538,8 +1539,8 @@ def test_the_repeat_line_stays_within_the_line_limit() -> None:
     lines = feedback_lines(CONTRACT, CATALOG, gate, body, skill=skill("CP-0"))
     line = lines[0]
     assert line.startswith(
-        "host citation check: citation 201 repeats citation 1: write [C1] where"
-        " you wrote [C201], and delete citation 201; "
+        "host citation check: citation 201 repeats citation 1: write [C1]"
+        " wherever the body writes [C201], and delete citation 201; "
     )
     assert len(line) <= MAX_FEEDBACK_CHARS
     named = line.count(" repeats citation ")
@@ -1563,8 +1564,8 @@ def test_a_retry_after_a_repeated_citation_carries_the_answer(
     assert _run(harness, flawed) is None
     second = " ".join(answers.prompts[1].split())
     assert (
-        "host citation check: citation 2 repeats citation 1: write [C1] where"
-        " you wrote [C2], and delete citation 2"
+        "host citation check: citation 2 repeats citation 1: write [C1]"
+        " wherever the body writes [C2], and delete citation 2"
     ) in second
     assert REFUSED in second and "not the JSON object" not in second
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)

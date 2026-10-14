@@ -1666,8 +1666,8 @@ def _repeat_text(repeats: Sequence[tuple[int, int]], shown: int) -> str:
     """`_repeated_line`'s text naming the first `shown` pairs, each with the
     exact substitution that removes the repeat."""
     pairs = [
-        f"citation {n} repeats citation {first}: write [C{first}] where you"
-        f" wrote [C{n}], and delete citation {n}"
+        f"citation {n} repeats citation {first}: write [C{first}]"
+        f" wherever the body writes [C{n}], and delete citation {n}"
         for n, first in repeats[:shown]
     ]
     named = "; ".join(pairs)
@@ -1706,8 +1706,9 @@ def _dangling_line(text: str, count: int) -> str | None:
     dangling = _dangling(text, count)
     if not dangling:
         return None
-    names = "it names" if len(dangling) == 1 else "they name"
-    each = "it" if len(dangling) == 1 else "each of them"
+    one = len(dangling) == 1
+    names = "it names" if one else "they name"
+    each = "it" if one else "each of them"
     cited = "citation" if count == 1 else "citations"
     marks = [
         f"[C{n if len(n) <= 12 else n[:12] + '...'}]"
@@ -1716,14 +1717,25 @@ def _dangling_line(text: str, count: int) -> str | None:
     for shown in range(len(marks), 0, -1):
         rest = len(dangling) - shown
         more = f" and {rest} more" if rest else ""
-        line = (
-            f"host marker check: the Markdown body writes {', '.join(marks[:shown])}"
-            f"{more}, but the answer has {count} {cited}, so {names} none; a"
-            " marker [C<n>] names the citation at place n of the list, from [C1]"
-            f" to [C{count}]; re-point {each} to the citation that carries its"
-            " passage, or remove it; add a citation only for a passage not yet"
-            " listed"
-        )
+        head = f"host marker check: the Markdown body writes {', '.join(marks[:shown])}"
+        if count == 0:  # nothing to re-point to
+            line = (
+                f"{head}{more}, but the answer has no citations; remove"
+                f" {'it' if one else 'them'}, or add the "
+                + (
+                    "citation for its passage"
+                    if one
+                    else "citations for their passages"
+                )
+            )
+        else:
+            line = (
+                f"{head}{more}, but the answer has {count} {cited}, so {names}"
+                " none; a marker [C<n>] names the citation at place n of the"
+                f" list, from [C1] to [C{count}]; re-point {each} to the"
+                " citation that carries its passage, or remove it; add a"
+                " citation only for a passage not yet listed"
+            )
         if len(line) <= MAX_FEEDBACK_CHARS:
             break
     return line
