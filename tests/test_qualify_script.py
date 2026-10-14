@@ -36,16 +36,24 @@ from uuid import UUID
 import psycopg
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, QUOTE, CanonicalCompletions
+from test_execution_freshness import _Harness
 
 from caos.blobs import BlobStore
 from caos.models import identity_of
 from caos.pricing import ModelPrice, price_from_environment, worst_case
-from caos.provider import Completion, encode_request
-from caos.qualification.harness import Harness, PerformedSet, PreparedCase, perform
+from caos.provider import Completion, DropKind, encode_request
+from caos.qualification.harness import (
+    Harness,
+    Performed,
+    PerformedSet,
+    PreparedCase,
+    _unrun,
+    perform,
+)
 from caos.qualification.matrix import QualificationSet
 from caos.qualification.on_disk import MANIFEST
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection, connect
+from caos.store import RunStatus, StoreConnection, connect
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -695,12 +703,14 @@ def test_each_docstring_example_expects_the_identity_its_endpoint_resolves_to() 
 
 @dataclass
 class _RefusedOnce(_FakeProvider):
-    """Answers the first call with a dangling marker (a refusal the guided
-    retry is owed for) and every later call correctly."""
+    """Answers the first `refusals` calls with a dangling marker (a refusal the
+    guided retry is owed for) and every later call correctly."""
+
+    refusals: int = 1
 
     def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
         done = super().complete(prompt, json_object=json_object)
-        if len(self.prompts) > 1:
+        if len(self.prompts) > self.refusals:
             return done
         wire = json.loads(done.content or "")
         wire["canonical_markdown"] += "\nAs cited [C99].\n"
@@ -777,3 +787,99 @@ def test_a_set_the_budget_stopped_is_reported_as_the_budget_and_not_re_entered(
     document = json.loads(out[out.index('{\n  "adapter_version"') :])
     assert document["result"][0]["stopped"] == "BUDGET_CEILING_REACHED"
     assert document["result"][0]["refused_with"] == "HANDOFF_MALFORMED"
+
+
+@dataclass
+class _AlwaysRefused(_RefusedOnce):
+    refusals: int = 10**6
+
+
+def test_a_set_resumed_under_a_ceiling_that_pays_prints_what_is_left(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """QF2-2 review I2: a refusal the ceiling did not cause is resumed, with the
+    run's remaining budget beside it, and its stop stands as raised."""
+    _skip_without_postgres()
+    monkeypatch.setenv(
+        "CAOS_QUALIFY_POSTGRES_URL", os.environ["CAOS_TEST_POSTGRES_URL"]
+    )
+    monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
+    provider = _AlwaysRefused.from_environment()
+    monkeypatch.setattr(qualify, "from_environment", lambda: provider)
+
+    code = qualify.main(
+        [
+            str(_write_lite_set(tmp_path / "set")),
+            "--expect-identity",
+            "test-fake-identity",
+            "--ceiling",
+            "5.00",
+            "--attempts",
+            "2",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert code == 1
+    [resumed] = [
+        json.loads(line)
+        for line in out.splitlines()
+        if line.startswith("{") and '"resumed_after"' in line
+    ]
+    assert resumed["resumed_after"] == "HANDOFF_MALFORMED"
+    assert resumed["attempts_left"] == 1
+    assert Decimal("0") < Decimal(resumed["remaining"]) < Decimal("5.00")
+    assert '"stopped_by"' not in out
+    document = json.loads(out[out.index('{\n  "adapter_version"') :])
+    assert document["result"][0]["stopped"] == "HANDOFF_MALFORMED"
+    assert document["result"][0]["refused_with"] is None
+
+
+def test_stop_code_reads_the_ledger_for_the_stopped_node(harness: _Harness) -> None:
+    """`_stop_code`, over a real store: a refusal a retry is owed for is the
+    budget's stop only when the stopped node's latest attempt never reserved."""
+    from conftest import reserve_at
+    from test_canonical_execution import _node
+
+    from caos.store.outcomes import CallOutcome, record_outcome
+    from caos.store.runs import start_attempt
+
+    conn = harness.conn
+    node = _node(harness, "CP-0").route_node_id
+
+    def stop(raised: RefusalCode) -> RefusalCode | None:
+        conn.commit()
+        record = Performed(
+            case_label="c",
+            run_id=harness.run_id,
+            status=RunStatus.RUNNING,
+            stopped=raised,
+            proof=None,
+            refusal=None,
+            unrun=_unrun(conn, harness.blobs, harness.bundle, harness.run_id),
+        )
+        conn.rollback()
+        return qualify._stop_code(conn, record)
+
+    # No attempt at any node: the raised code stands.
+    assert stop(RefusalCode.HANDOFF_MALFORMED) is RefusalCode.HANDOFF_MALFORMED
+    # A declared drop, then an attempt the budget refused before it reserved.
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+    first = start_attempt(conn, harness.run_id, node)
+    assert record_outcome(conn, attempt_id=first, outcome=dropped)
+    start_attempt(conn, harness.run_id, node)
+    budget = RefusalCode.BUDGET_CEILING_REACHED
+    assert stop(RefusalCode.PROVIDER_UNAVAILABLE) is budget
+    assert stop(RefusalCode.HANDOFF_MALFORMED) is budget
+    # A code a retry is not owed for stands, however the attempt ended.
+    assert stop(RefusalCode.LEASE_NOT_HELD) is RefusalCode.LEASE_NOT_HELD
+    # A reserved latest attempt: the raised code stands.
+    reserve_at(conn, start_attempt(conn, harness.run_id, node), Decimal("0.01"))
+    assert stop(RefusalCode.PROVIDER_UNAVAILABLE) is RefusalCode.PROVIDER_UNAVAILABLE
+    assert stop(RefusalCode.HANDOFF_MALFORMED) is RefusalCode.HANDOFF_MALFORMED

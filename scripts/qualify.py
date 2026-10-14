@@ -177,8 +177,10 @@ def _capture(
 
 
 def _result_row(item: Performed, stop: RefusalCode | None) -> dict[str, Plain]:
-    """One case's outcome. `stopped` is `_stop_code`'s reading; `refused_with`
-    keeps the refusal the run last raised when the budget stopped it after."""
+    """One case's outcome. `stopped` is the capture's corrected reading
+    (`_stop_code`); `refused_with` is the code the run raised, which
+    `caos/qualification/store.py` persists in the evidence snapshot unchanged,
+    and is None when the two agree."""
     return {
         "case_label": item.case_label,
         "run_id": str(item.run_id),
