@@ -67,6 +67,7 @@ from caos.methodology.verification import AcceptedRow
 from caos.qualification.proof import OrchestrationProof, assert_orchestration_proof
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
+from caos.store.outcomes import RECORDED_ATTEMPT_SQL
 from caos.store.routes import resolved_route
 from caos.store.run_inputs import RunSubject
 from caos.store.runs import run_status
@@ -732,17 +733,8 @@ def _refusal_met(
             " AND t.attempt_id = (SELECT l.attempt_id FROM run_attempts l"
             "  WHERE l.run_id = t.run_id AND l.route_node_id = t.route_node_id"
             # An attempt that never reserved is passed over, as in
-            # `outcomes.node_attempts` (QF2-1): it bought and asked nothing.
-            "  AND (EXISTS (SELECT 1 FROM budget_reservations b"
-            "   WHERE b.attempt_id = l.attempt_id)"
-            "   OR EXISTS (SELECT 1 FROM attempt_refusals x"
-            "   WHERE x.attempt_id = l.attempt_id)"
-            "   OR EXISTS (SELECT 1 FROM call_outcomes o"
-            "   WHERE o.attempt_id = l.attempt_id)"
-            "   OR EXISTS (SELECT 1 FROM artifacts z"
-            "   WHERE z.attempt_id = l.attempt_id)"
-            "   OR EXISTS (SELECT 1 FROM budget_ledger g"
-            "   WHERE g.attempt_id = l.attempt_id))"
+            # `outcomes.node_attempts` (QF2-1): the shared definition.
+            "  AND (" + RECORDED_ATTEMPT_SQL.format(t="l") + ")"
             "  ORDER BY l.ordinal DESC NULLS LAST, l.started_at DESC,"
             "  l.attempt_id DESC LIMIT 1)",
             (run_id, expected.value),

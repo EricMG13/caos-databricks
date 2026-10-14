@@ -454,7 +454,7 @@ def _stop_code(conn: StoreConnection, record: Performed) -> RefusalCode | None:
     pay for the retry, so `Performed.stopped` names a refusal the retry never
     answered (CP-5 #4 of qualify run 2). When that refusal is one a retry is
     owed for and the stopped node's latest attempt never reserved
-    (`NodeAttempt.unreserved`), the budget is what stopped it. Any other code,
+    (`NodeAttempt.never_reserved`), the budget is what stopped it. Any other code,
     a lost lease included, stands as raised.
     """
     if record.stopped not in SECOND_ATTEMPT_CODES | {RefusalCode.PROVIDER_UNAVAILABLE}:
@@ -464,7 +464,7 @@ def _stop_code(conn: StoreConnection, record: Performed) -> RefusalCode | None:
         return record.stopped
     with execution_reads(conn):
         latest = node_attempts(conn, record.run_id, node.route_node_id)
-    if latest and latest[-1].unreserved:
+    if latest and latest[-1].never_reserved:
         return RefusalCode.BUDGET_CEILING_REACHED
     return record.stopped
 

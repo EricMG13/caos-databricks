@@ -45,7 +45,7 @@ from caos.methodology.canonical import (
 from caos.pricing import ModelPrice
 from caos.provider import Completion, CutAfterContentError, DropKind
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection, connect
+from caos.store import RunStatus, StoreConnection, connect
 from caos.store.outcomes import (
     DROP_REATTEMPTS,
     CallOutcome,
@@ -540,7 +540,7 @@ def test_the_ledger_gives_one_re_attempt_after_one_declared_drop() -> None:
     assert reattempts_a_drop([invalid, declared])
     # QF2-1: an attempt that never reserved is passed over; one that did and
     # was left unexplained is not, and a passed-over row spends no re-attempt.
-    orphan = NodeAttempt(uuid4(), None, None, unreserved=True)
+    orphan = NodeAttempt(uuid4(), None, None, never_reserved=True)
     assert reattempts_a_drop([declared, orphan])
     assert reattempts_a_drop([declared, orphan, orphan])
     assert not reattempts_a_drop([declared, declared, orphan])
@@ -1359,7 +1359,7 @@ def test_a_reserved_attempt_with_no_outcome_is_not_passed_over_after_a_drop(
     conn.rollback()
     attempt = start_attempt(conn, harness.run_id, node)
     reserve_at(conn, attempt, Decimal("0.01"))
-    assert node_attempts(conn, harness.run_id, node)[-1].unreserved is False
+    assert node_attempts(conn, harness.run_id, node)[-1].never_reserved is False
     conn.rollback()
     assert not drop_reattempt_due(conn, run_id=harness.run_id, route_node_id=node)
 
@@ -1535,3 +1535,89 @@ def test_a_bill_retried_after_a_lost_ack_and_a_later_start_is_a_no_op(
     canonical.bill(conn, first, dropped)
     assert len(tries) == 2
     assert _drop_kinds(harness) == ["declared", None]
+
+
+def test_both_readers_of_never_reserved_agree_on_each_recording_table(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QF2-1 (whole-branch I1): `node_attempts` and the matrix's `_refusal_met`
+    both read the one `RECORDED_ATTEMPT_SQL`. A node whose last attempt holds
+    exactly one row in exactly one of the five tables is that node's last
+    attempt for both readers; the same attempt holding none is passed over by
+    both. A table dropped from the shared definition, or a reader that spells
+    its own, fails here."""
+    import inspect
+
+    from conftest import reserve_at
+
+    from caos.qualification import matrix
+    from caos.qualification.matrix import _refusal_met
+    from caos.store.outcomes import node_attempts
+    from caos.store.runs import start_attempt
+
+    unavailable = RefusalCode.PROVIDER_UNAVAILABLE
+    node = _node(harness, "CP-0").route_node_id
+    conn, run_id = harness.conn, harness.run_id
+    # The run stays running so attempts can be added; only the matrix's
+    # ended-run gate is read as ended, to reach the attempt reading under test.
+    monkeypatch.setattr(matrix, "run_status", lambda *_: RunStatus.FAILED)
+    # Both readers take the definition from the one constant.
+    assert 'RECORDED_ATTEMPT_SQL.format(t="l")' in inspect.getsource(
+        matrix._refusal_met
+    )
+    assert 'RECORDED_ATTEMPT_SQL.format(t="t")' in inspect.getsource(node_attempts)
+
+    def record(table: str, attempt: UUID) -> None:
+        if table == "budget_reservations":
+            reserve_at(conn, attempt, Decimal("0.01"))
+        elif table == "attempt_refusals":
+            conn.execute(
+                "INSERT INTO attempt_refusals (attempt_id, code) VALUES (%s, %s)",
+                (attempt, RefusalCode.HANDOFF_MALFORMED.value),
+            )
+        elif table == "call_outcomes":
+            conn.execute(
+                "INSERT INTO call_outcomes (attempt_id, run_id, model)"
+                " VALUES (%s, %s, 'm')",
+                (attempt, run_id),
+            )
+        elif table == "budget_ledger":
+            conn.execute(
+                "INSERT INTO budget_ledger (attempt_id, run_id, amount)"
+                " VALUES (%s, %s, 0)",
+                (attempt, run_id),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO artifacts (attempt_id, run_id, case_id, artifact_sha256,"
+                " model, generation_id) SELECT %s, run_id, case_id, %s, 'legacy',"
+                " 'legacy' FROM runs WHERE run_id = %s",
+                (attempt, "a" * 64, run_id),
+            )
+
+    # artifacts last: a node holding an artifact refuses the matrix's reading
+    # whatever else it holds, so only `node_attempts` can tell that table apart.
+    for table in (
+        "budget_reservations",
+        "attempt_refusals",
+        "call_outcomes",
+        "budget_ledger",
+        "artifacts",
+    ):
+        refused = start_attempt(conn, run_id, node)
+        conn.execute(
+            "INSERT INTO attempt_refusals (attempt_id, code) VALUES (%s, %s)",
+            (refused, unavailable.value),
+        )
+        bare = start_attempt(conn, run_id, node)
+        conn.commit()
+        assert node_attempts(conn, run_id, node)[-1].never_reserved is True, table
+        if table != "artifacts":
+            assert _refusal_met(conn, run_id, unavailable, None) is True, table
+        conn.rollback()
+        record(table, bare)
+        conn.commit()
+        assert node_attempts(conn, run_id, node)[-1].never_reserved is False, table
+        if table != "artifacts":
+            assert _refusal_met(conn, run_id, unavailable, None) is False, table
+        conn.rollback()

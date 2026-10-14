@@ -170,10 +170,10 @@ from caos.store.outcomes import (
     declared_drop,
     execution_reads,
     node_attempts,
-    passed_over,
     producer_identifier,
     record_outcome,
     require_idle,
+    without_unreserved,
 )
 from caos.store.run_inputs import load_run_input
 from caos.store.runs import attempt_ordinal
@@ -1297,8 +1297,8 @@ def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
     declared is passed over (D110): it answered nothing, so the attempt
     after it repeats the guided retry it replaced and spends none. So is an
     attempt that never reserved (a budget refusal, a lost lease or a cancel at
-    `reserve`, or a crash before it: `passed_over`)."""
-    attempts = [a for a in passed_over(attempts) if not declared_drop(a)]
+    `reserve`, or a crash before it: `without_unreserved`)."""
+    attempts = [a for a in without_unreserved(attempts) if not declared_drop(a)]
     refused = [a for a in attempts if a.refusal in SECOND_ATTEMPT_CODES]
     if not refused or len(refused) > GUIDED_RETRIES or attempts[-1] != refused[-1]:
         return None
@@ -1320,8 +1320,8 @@ def reattempts_a_drop(attempts: Sequence[NodeAttempt]) -> bool:
     the node holds at most `DROP_REATTEMPTS` such drops in all. Counted on
     the call outcome, not its explanation, so a crash between the two
     changes nothing; a guided retry neither spends one nor is spent. An
-    attempt that never reserved is passed over (`passed_over`)."""
-    attempts = passed_over(attempts)
+    attempt that never reserved is passed over (`without_unreserved`)."""
+    attempts = without_unreserved(attempts)
     if not attempts:
         return False
     drops = sum(1 for a in attempts if declared_drop(a))
