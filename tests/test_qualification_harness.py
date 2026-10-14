@@ -1515,6 +1515,7 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
     """DQ-2's second half: `_refusal_met` chose the node's last attempt by
     `started_at` and a random id, so a retry whose clock read earlier let the
     stale refusal of an earlier attempt match. The run lock numbers attempts."""
+    from conftest import reserve_at
     from run_terminals import fail_run
 
     from caos.qualification.matrix import _refusal_met
@@ -1547,6 +1548,9 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
         ).fetchone()
         assert row is not None
         retry = start_attempt(conn, record.run_id, str(row[0]))
+        # A real later attempt: it reserved (one that never reserved is passed
+        # over, QF2-1).
+        reserve_at(conn, retry, Decimal("0.01"))
         tamper(
             conn,
             "UPDATE run_attempts SET started_at = started_at - interval '1 hour'"
@@ -1557,6 +1561,45 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
         conn.commit()
         met = _refusal_met(conn, record.run_id, RefusalCode.PROVIDER_UNAVAILABLE, None)
         assert met is False
+
+
+def test_a_never_reserved_attempt_after_the_refusal_is_not_the_last_attempt(
+    empty_database: str, tmp_path: Path
+) -> None:
+    """QF2-1 (review m4): `_refusal_met` takes the node's last attempt, and an
+    attempt that never reserved (a budget refusal, a lost lease or a cancel at
+    `reserve`, or a crash before it) is passed over there as in the guided-retry
+    reads, so the run's refusal still stands as the node's last word."""
+    from run_terminals import fail_run
+
+    from caos.qualification.matrix import _refusal_met
+    from caos.store import apply_schema, connect
+    from caos.store.runs import start_attempt
+
+    no_quote = b"Acme Holdings plc annual report 2026\nRevenue grew in the year\n"
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        performed = _perform(
+            conn,
+            BlobStore(tmp_path / "blobs"),
+            QualificationSet(
+                cases=(_case("orphan", no_quote, quote="Revenue grew in the year"),)
+            ),
+            completions=_Completions(refuses_call=1),
+        )
+        [record] = performed.performed
+        assert record.stopped is RefusalCode.PROVIDER_UNAVAILABLE
+        row = conn.execute(
+            "SELECT route_node_id FROM run_attempts WHERE run_id=%s",
+            (record.run_id,),
+        ).fetchone()
+        assert row is not None
+        start_attempt(conn, record.run_id, str(row[0]))
+        assert fail_run(conn, record.run_id)
+        conn.commit()
+        met = _refusal_met(conn, record.run_id, RefusalCode.PROVIDER_UNAVAILABLE, None)
+        assert met is True
 
 
 def test_a_matrix_refused_after_the_runs_keeps_the_performed_snapshot(
