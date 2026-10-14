@@ -1602,6 +1602,40 @@ def test_a_never_reserved_attempt_after_the_refusal_is_not_the_last_attempt(
         assert met is True
 
 
+def test_a_refusal_the_proof_itself_gave_meets_the_declared_refusal(
+    empty_database: str, tmp_path: Path
+) -> None:
+    """Mutation (`_refusal_met`): a run that ended refused and whose proof
+    refused with the declared code meets the key, with no stored refusal
+    needed; a proof that refused otherwise (or not at all) falls to the stored
+    refusal, which this run does not carry for the declared code."""
+    from run_terminals import fail_run
+
+    from caos.qualification.matrix import _refusal_met
+    from caos.store import apply_schema, connect
+
+    no_quote = b"Acme Holdings plc annual report 2026\nRevenue grew in the year\n"
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        performed = _perform(
+            conn,
+            BlobStore(tmp_path / "blobs"),
+            QualificationSet(
+                cases=(_case("proof", no_quote, quote="Revenue grew in the year"),)
+            ),
+            completions=_Completions(refuses_call=1),
+        )
+        [record] = performed.performed
+        assert fail_run(conn, record.run_id)
+        conn.commit()
+        declared = RefusalCode.HANDOFF_MALFORMED
+        assert _refusal_met(conn, record.run_id, declared, declared) is True
+        assert _refusal_met(conn, record.run_id, declared, None) is False
+        other = RefusalCode.AUTHORITY_BYTES_MISMATCH
+        assert _refusal_met(conn, record.run_id, declared, other) is False
+
+
 def test_a_matrix_refused_after_the_runs_keeps_the_performed_snapshot(
     empty_database: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

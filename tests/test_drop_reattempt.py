@@ -1419,6 +1419,35 @@ def test_drop_stop_owed_reads_the_park_against_the_latest_drop(
     assert _drop_kinds(harness) == ["declared"] * 3 + [None]
 
 
+def test_drop_stop_is_not_owed_while_the_one_re_attempt_is_still_due(
+    harness: _Harness,
+) -> None:
+    """F530 (mutation): a single declared drop on an enqueued run is the
+    re-attempt's turn, not the stop's. The stop is owed only once the
+    re-attempt itself dropped (`drops > DROP_REATTEMPTS`), and a latest attempt
+    that is no drop owes none however many dropped before it."""
+    from caos.methodology.canonical import drop_reattempt_due
+    from caos.store.runs import start_attempt
+    from caos.store.work import enqueue_run
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+
+    def owed() -> bool:
+        said = drop_stop_owed(conn, run_id=harness.run_id, route_node_id=node)
+        conn.rollback()
+        return said
+
+    first = start_attempt(conn, harness.run_id, node)
+    assert record_outcome(conn, attempt_id=first, outcome=dropped)
+    enqueue_run(conn, harness.run_id)
+    conn.commit()
+    assert drop_reattempt_due(conn, run_id=harness.run_id, route_node_id=node)
+    conn.rollback()
+    assert not owed(), "one drop: the re-attempt is owed, not the stop"
+
+
 def test_a_drop_billed_after_the_node_moved_on_is_kept_but_not_counted(
     harness: _Harness,
 ) -> None:
