@@ -40,6 +40,8 @@ from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, QUOTE, CanonicalCom
 from test_execution_freshness import _Harness
 
 from caos.blobs import BlobStore
+from caos.graph.route import NodeState
+from caos.methodology.bundle import Bundle
 from caos.models import identity_of
 from caos.pricing import ModelPrice, price_from_environment, worst_case
 from caos.provider import Completion, DropKind, encode_request
@@ -55,6 +57,7 @@ from caos.qualification.matrix import QualificationSet
 from caos.qualification.on_disk import MANIFEST
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, connect
+from caos.store.routes import resolved_route
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -946,6 +949,8 @@ def test_a_run_the_route_blocked_names_each_node_and_the_verdict_that_held_it(
     blocked = row["blocked_by"]
     assert blocked["path"] == "route"
     by_module = {node["module_id"]: node for node in blocked["nodes"]}
+    assert set(by_module) == {"CP-L10", "CP-5"}
+    assert by_module["CP-L10"]["waiting_on"] == []
     assert by_module["CP-L10"]["route_node_id"].endswith("-CP-L10")
     assert by_module["CP-L10"]["verdict"] == "CONDITIONAL"
     assert by_module["CP-L10"]["verdict_from"] == "CP-0"
@@ -954,48 +959,161 @@ def test_a_run_the_route_blocked_names_each_node_and_the_verdict_that_held_it(
     assert by_module["CP-5"]["held_by_verdict"] is False
     [edge] = by_module["CP-5"]["waiting_on"]
     assert (edge["module_id"], edge["verdict"]) == ("CP-L10", "CONDITIONAL")
+    assert edge["edge"] == "ADVISORY"
     assert "Source pack" not in json.dumps(blocked)
 
 
-def test_a_route_block_whose_gate_record_will_not_load_still_names_its_nodes(
+def _route_blocked_run(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
-    created: list[str],
-) -> None:
-    """The capture of a paid run is not lost to CP-0's blob going missing: the
-    BLOCKED nodes are named, the verdicts are not guessed, and the typed code
-    says why none was read."""
-    from caos.methodology.bundle import Bundle
-
+) -> UUID:
+    """A run the route blocked (CP-0 ruled CP-L10 CONDITIONAL), in its database."""
     provider = _priced(monkeypatch)
     provider.readiness = {"CP-L10": "CONDITIONAL"}
     provider.blockers = {"CP-L10": "Source pack is not mapped"}
     document = _capture_of(monkeypatch, capsys, tmp_path, provider)
     [row] = document["result"]
-    run_id = UUID(row["run_id"])
+    return UUID(row["run_id"])
 
+
+def _performed(
+    conn: StoreConnection, blobs: BlobStore, run_id: UUID, bundle: Bundle
+) -> Performed:
+    """The record `harness.perform` would hold for `run_id`, read through
+    `blobs` as `_unrun` reads it."""
+    return Performed(
+        case_label="c",
+        run_id=run_id,
+        status=RunStatus.BLOCKED,
+        stopped=None,
+        proof=None,
+        refusal=None,
+        unrun=_unrun(conn, blobs, bundle, run_id),
+    )
+
+
+def _run_connection(created: list[str]) -> StoreConnection:
     admin = os.environ["CAOS_TEST_POSTGRES_URL"]
-    with connect(admin.rsplit("/", 1)[0] + "/" + created[0]) as conn:
+    return connect(admin.rsplit("/", 1)[0] + "/" + created[0])
+
+
+def test_a_route_block_whose_gate_record_will_not_load_lists_every_unrun_node(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """The unreadable-readiness branch, as production pairs it: the same broken
+    store feeds `_unrun` (which then computes every state without CP-0's
+    readiness, so CP-L10 is no longer BLOCKED) and `_blocked_by`. The nodes a
+    verdict held are exactly the ones a BLOCKED filter would drop."""
+    run_id = _route_blocked_run(monkeypatch, capsys, tmp_path)
+    broken = BlobStore(tmp_path / "no-blobs")
+    with _run_connection(created) as conn:
         bundle = Bundle(Path(qualify.__file__).parents[1] / "vendor/deploy-v")
-        record = Performed(
-            case_label="c",
-            run_id=run_id,
-            status=RunStatus.BLOCKED,
-            stopped=None,
-            proof=None,
-            refusal=None,
-            unrun=_unrun(conn, BlobStore(tmp_path / "blobs"), bundle, run_id),
+        record = _performed(conn, broken, run_id, bundle)
+        blocked: Any = qualify._blocked_by(conn, broken, bundle, record)
+
+    assert blocked["path"] == "route"
+    assert blocked["readiness_unreadable"] == "ARTIFACT_RECORD_MISMATCH"
+    assert blocked["states_without_readiness"] is True
+    nodes = {n["route_node_id"].rsplit("-", 1)[-1]: n for n in blocked["nodes"]}
+    assert set(nodes) == {"L10", "5"}
+    assert all(set(n) == {"route_node_id", "state"} for n in nodes.values())
+    assert nodes["L10"]["state"] != "BLOCKED"
+
+
+def test_a_value_error_reading_the_gate_record_is_a_typed_marker_not_the_text(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """`harness._accepted` guards `(Refusal, ValueError)` around the same read;
+    an escape here would end the process after the spend and before
+    `record_evidence`. The marker is the class name, never `str(exc)`."""
+    run_id = _route_blocked_run(monkeypatch, capsys, tmp_path)
+    blobs = BlobStore(tmp_path / "blobs")
+
+    class _Malformed(ValueError):
+        def __init__(self) -> None:
+            super().__init__("the document says: Total debt")
+
+    def malformed(*_: object, **__: object) -> object:
+        raise _Malformed
+
+    with _run_connection(created) as conn:
+        bundle = Bundle(Path(qualify.__file__).parents[1] / "vendor/deploy-v")
+        record = _performed(conn, blobs, run_id, bundle)
+        monkeypatch.setattr(qualify, "accepted_artifacts", malformed)
+        blocked: Any = qualify._blocked_by(conn, blobs, bundle, record)
+
+    assert blocked["readiness_unreadable"] == "_Malformed"
+    assert blocked["states_without_readiness"] is True
+    assert "Total debt" not in json.dumps(blocked)
+    assert len(blocked["nodes"]) == 2
+
+
+def test_a_route_block_names_only_blocked_nodes_and_reads_no_verdict_for_a_module(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """A node that is not BLOCKED is left out; a BLOCKED module CP-0 did not
+    rule on (CP-0 itself) carries no verdict and is not held by one."""
+    run_id = _route_blocked_run(monkeypatch, capsys, tmp_path)
+    blobs = BlobStore(tmp_path / "blobs")
+    with _run_connection(created) as conn:
+        bundle = Bundle(Path(qualify.__file__).parents[1] / "vendor/deploy-v")
+        record = _performed(conn, blobs, run_id, bundle)
+        [l10, cp5] = record.unrun
+        route = resolved_route(conn, run_id)
+        assert route is not None
+        [gate] = [n.route_node_id for n in route.nodes if n.module_id == "CP-0"]
+        cp0 = replace(l10, route_node_id=gate)
+        record = replace(
+            record, unrun=(cp0, l10, replace(cp5, state=NodeState.RUNNABLE))
         )
-        blocked = qualify._blocked_by(
-            conn, BlobStore(tmp_path / "no-blobs"), bundle, record
+        blocked: Any = qualify._blocked_by(conn, blobs, bundle, record)
+
+    by_module = {n["module_id"]: n for n in blocked["nodes"]}
+    assert set(by_module) == {"CP-0", "CP-L10"}
+    assert by_module["CP-0"]["verdict"] is None
+    assert by_module["CP-0"]["verdict_from"] is None
+    assert by_module["CP-0"]["held_by_verdict"] is False
+    assert by_module["CP-L10"]["verdict_from"] == "CP-0"
+    assert by_module["CP-L10"]["held_by_verdict"] is True
+
+
+def test_a_route_block_with_no_pin_or_no_unrun_nodes_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """An empty list is not an answer: say whether the pin is gone or the
+    harness recorded no unrun node."""
+    run_id = _route_blocked_run(monkeypatch, capsys, tmp_path)
+    blobs = BlobStore(tmp_path / "blobs")
+    with _run_connection(created) as conn:
+        bundle = Bundle(Path(qualify.__file__).parents[1] / "vendor/deploy-v")
+        record = _performed(conn, blobs, run_id, bundle)
+        none_unrun: Any = qualify._blocked_by(
+            conn, blobs, bundle, replace(record, unrun=())
+        )
+        unpinned: Any = qualify._blocked_by(
+            conn, blobs, bundle, replace(record, run_id=UUID(int=1), unrun=())
         )
 
-    assert blocked is not None and blocked["path"] == "route"
-    assert blocked["readiness_unreadable"] == "ARTIFACT_RECORD_MISMATCH"
-    nodes: Any = blocked["nodes"]
-    assert [n["route_node_id"].rsplit("-", 1)[-1] for n in nodes] == ["L10", "5"]
-    assert all(set(n) == {"route_node_id"} for n in nodes)
+    assert none_unrun["path"] == "route" and none_unrun["nodes"] == []
+    assert none_unrun["no_unrun_nodes"] is True
+    assert unpinned == {
+        "path": "route",
+        "nodes": [],
+        "route_pin_missing": True,
+    }
 
 
 def test_a_run_that_is_not_blocked_carries_no_blocked_by(

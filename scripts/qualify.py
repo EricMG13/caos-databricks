@@ -244,8 +244,10 @@ def _blocked_by(
             "attempt_id": str(verdict[1]),
             "ordinal": verdict[2],
             # The row stores no code. `block_run` is given a verdict only by
-            # `runtime._block_on`, reached only once `_end_blocked` replays the
-            # answer as Blocked, which is what `HANDOFF_BLOCKED` names.
+            # `runtime._block_on`, which has two callers: `_end_blocked` (the
+            # run's own pass) and `_settle` (a resumed run replaying a stored
+            # answer). Each requires `Verdict.BLOCKED` from `replay_billed`
+            # first, which is what `HANDOFF_BLOCKED` names.
             "code": RefusalCode.HANDOFF_BLOCKED.value,
             "citations_sha256": verdict[3],
             "recorded_at": verdict[4].isoformat(),
@@ -260,49 +262,67 @@ def _route_blocked(
     CP-0 gave its module and the producers it still waits on."""
     route = resolved_route(conn, item.run_id)
     if route is None:
-        return {"path": "route", "nodes": []}
-    module_of = {node.route_node_id: node.module_id for node in route.nodes}
+        # The pin is gone: no node can be named, and an empty list must not
+        # read as "the route held none".
+        return {"path": "route", "nodes": [], "route_pin_missing": True}
     try:
         accepted = accepted_artifacts(conn, blobs, route, item.run_id, bundle=bundle)
-    except Refusal as refusal:
-        # CP-0's record will not load (the case `harness._accepted` guards the
-        # same way): the capture of a paid run is not lost to it. The nodes the
-        # route held BLOCKED are still named, with the code that says why no
-        # verdict can be read; none is guessed.
-        return {
-            "path": "route",
-            "readiness_unreadable": refusal.code.value,
-            "nodes": [
-                {"route_node_id": unrun.route_node_id}
-                for unrun in item.unrun
-                if unrun.state is NodeState.BLOCKED
+    except (Refusal, ValueError) as error:
+        return _readiness_unreadable(item, error)
+    readiness = readiness_from(route, accepted)
+    module_of = {node.route_node_id: node.module_id for node in route.nodes}
+    nodes: list[Plain] = [
+        {
+            "route_node_id": unrun.route_node_id,
+            "module_id": module_of[unrun.route_node_id],
+            "verdict": readiness.get(module_of[unrun.route_node_id]),
+            "verdict_from": None
+            if module_of[unrun.route_node_id] not in readiness
+            else GATE_MODULE,
+            "held_by_verdict": readiness.get(module_of[unrun.route_node_id])
+            not in (None, *READY),
+            "waiting_on": [
+                {
+                    "module_id": edge.source,
+                    "edge": edge.type.value,
+                    "verdict": readiness.get(edge.source),
+                }
+                for edge in waiting_on(route, accepted, unrun.route_node_id)
             ],
         }
-    readiness = readiness_from(route, accepted)
-    nodes: list[Plain] = []
-    for unrun in item.unrun:
-        if unrun.state is not NodeState.BLOCKED:
-            continue
-        module = module_of[unrun.route_node_id]
-        own = readiness.get(module)
-        nodes.append(
-            {
-                "route_node_id": unrun.route_node_id,
-                "module_id": module,
-                "verdict": own,
-                "verdict_from": None if own is None else GATE_MODULE,
-                "held_by_verdict": own is not None and own not in READY,
-                "waiting_on": [
-                    {
-                        "module_id": edge.source,
-                        "edge": edge.type.value,
-                        "verdict": readiness.get(edge.source),
-                    }
-                    for edge in waiting_on(route, accepted, unrun.route_node_id)
-                ],
-            }
-        )
-    return {"path": "route", "nodes": nodes}
+        for unrun in item.unrun
+        if unrun.state is NodeState.BLOCKED
+    ]
+    return {"path": "route", "nodes": nodes, **_none_unrun(item)}
+
+
+def _none_unrun(item: Performed) -> dict[str, Plain]:
+    """The explicit marker for a route block over no recorded unrun node."""
+    return {} if item.unrun else {"no_unrun_nodes": True}
+
+
+def _readiness_unreadable(
+    item: Performed, error: Refusal | ValueError
+) -> dict[str, Plain]:
+    """CP-0's record will not load (the case `harness._accepted` guards the
+    same way): the capture of a paid run is not lost to it. That guard has
+    already given up the readiness that separates BLOCKED from RESTRICTED or
+    RUNNABLE, so `item.unrun`'s states were computed without it and the nodes a
+    verdict held may no longer read BLOCKED. Every unrun node is listed, with
+    its state, flagged as such; no verdict is guessed. A ValueError is a fixed
+    marker (its class name), never its text."""
+    return {
+        "path": "route",
+        "readiness_unreadable": error.code.value
+        if isinstance(error, Refusal)
+        else type(error).__name__,
+        "states_without_readiness": True,
+        "nodes": [
+            {"route_node_id": unrun.route_node_id, "state": unrun.state.value}
+            for unrun in item.unrun
+        ],
+        **_none_unrun(item),
+    }
 
 
 def _attempts(conn: StoreConnection, runs: list[UUID]) -> list[dict[str, Plain]]:
