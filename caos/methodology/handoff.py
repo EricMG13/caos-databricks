@@ -1660,19 +1660,20 @@ def _repeated_line(repeats: Sequence[tuple[int, int]]) -> str:
 
 
 def _repeat_text(repeats: Sequence[tuple[int, int]], shown: int) -> str:
-    """`_repeated_line`'s text naming the first `shown` pairs."""
-    pairs = [f"citation {n} repeats citation {first}" for n, first in repeats[:shown]]
+    """`_repeated_line`'s text naming the first `shown` pairs, each with the
+    exact substitution that removes the repeat."""
+    pairs = [
+        f"citation {n} repeats citation {first}: write [C{first}] where you"
+        f" wrote [C{n}], and delete citation {n}"
+        for n, first in repeats[:shown]
+    ]
+    named = "; ".join(pairs)
     if rest := len(repeats) - shown:
-        named = ", ".join(pairs) + f" and {rest} more"
-    else:
-        named = " and ".join(
-            [", ".join(pairs[:-1]), pairs[-1]] if pairs[:-1] else pairs
-        )
+        named += f"; and {rest} more repeats"
     return (
-        f"host citation check: {named}, the same source_id, page and"
-        " matched_text; list each citation once, cite a repeated passage again"
-        " by the marker of its first place, and renumber every marker after a"
-        " citation you remove"
+        f"host citation check: {named} (a repeat has the same source_id, page"
+        " and matched_text); then renumber every marker after a citation you"
+        " removed"
     )
 
 
