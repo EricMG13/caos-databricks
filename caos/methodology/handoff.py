@@ -1350,15 +1350,15 @@ def _unlocated(
     return sorted(register for register in unwritten if register not in found)
 
 
-def kept_registers_line(
+def _held_registers(
     contract: VendorContract, module_id: str, body: str, skill: bytes
-) -> str | None:
-    """Name the required registers the carried answer holds, in contract order.
-
-    Missing profiles or unreadable register locations contribute no keep line;
-    unrelated locator failures still surface. The line preserves the largest
-    prefix fitting MAX_FEEDBACK_CHARS and counts the remaining held IDs.
-    """
+) -> tuple[Sequence[str], list[str]] | None:
+    """The module's required registers in contract order, and those of them
+    the vendor's `find_registers` locates in the answer `body` carries; None
+    when `body` is not the transport, the module is CP-MODEL (no register
+    contract), no skill was given, or the contract or its locations cannot be
+    read (a missing profile, KeyError/ValueError). Unrelated locator failures
+    still surface."""
     markdown = answer_markdown(body)
     if markdown is None or not skill or module_id == MODEL_MODULE:
         return None
@@ -1373,7 +1373,22 @@ def kept_registers_line(
     except (KeyError, ValueError):
         return None
     required = loaded["registers"]
-    kept = [register for register in required if register in found]
+    return required, [register for register in required if register in found]
+
+
+def kept_registers_line(
+    contract: VendorContract, module_id: str, body: str, skill: bytes
+) -> str | None:
+    """Name the required registers the carried answer holds, in contract order.
+
+    Missing profiles or unreadable register locations contribute no keep line;
+    unrelated locator failures still surface. The line preserves the largest
+    prefix fitting MAX_FEEDBACK_CHARS and counts the remaining held IDs.
+    """
+    held = _held_registers(contract, module_id, body, skill)
+    if held is None:
+        return None
+    required, kept = held
     if not kept:
         return None
     for shown in range(len(kept), 0, -1):
@@ -1381,6 +1396,43 @@ def kept_registers_line(
         if len(line) <= MAX_FEEDBACK_CHARS:
             return line
     return None
+
+
+def answer_shrank(
+    contract: VendorContract, module_id: str, earlier: str, later: str, skill: bytes
+) -> bool:
+    """Whether the answer `later` holds fewer required registers, or fewer
+    distinct H2 sections, than the answer `earlier` (D104's amendment of 14
+    October 2026, F649), both bodies as stored. Compared only when both are
+    the transport; a count that cannot be read for either (no skill, an
+    unreadable contract, CP-MODEL's registers, front matter the vendor will
+    not parse) is not compared, and the other still is; a body that is not
+    the transport has neither count, so it is never compared. Pure over the
+    two bodies."""
+    counts = [_extent(contract, module_id, body, skill) for body in (earlier, later)]
+    return any(
+        before is not None and after is not None and after < before
+        for before, after in zip(*counts, strict=True)
+    )
+
+
+def _extent(
+    contract: VendorContract, module_id: str, body: str, skill: bytes
+) -> tuple[int | None, int | None]:
+    """How many required registers and how many distinct H2 headings (the
+    vendor's own reader, over the answer less its front matter and fenced
+    code) the answer `body` holds; None for a count that cannot be read."""
+    held = _held_registers(contract, module_id, body, skill)
+    headings: int | None = None
+    markdown = answer_markdown(body)
+    vendor = contract.validate_handoff
+    if markdown is not None:
+        with suppress(ValueError):  # no front matter the vendor parses
+            _fields, text = vendor.parse_restricted_frontmatter(
+                markdown.decode("utf-8")
+            )
+            headings = len(set(vendor._canonical_h2s(text)))
+    return (None if held is None else len(held[1])), headings
 
 
 def _kept_text(kept: Sequence[str], shown: int, required: int) -> str:

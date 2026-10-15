@@ -43,6 +43,7 @@ from test_execution_freshness import _Harness
 from test_loop_charges import ESTIMATE
 
 from caos.graph import runtime
+from caos.graph.route import MODEL_MODULE
 from caos.graph.runtime import Execution, run_route
 from caos.methodology import canonical, invocation
 from caos.methodology.canonical import second_attempt_due
@@ -447,6 +448,7 @@ def test_an_attempt_that_never_reserved_does_not_break_the_guided_retry_chain(
     body = _feedback_body(
         harness.conn,
         harness.blobs,
+        harness.bundle,
         Assignment("CP-0", harness.run_id, node, harness.route, retry),
     )
     assert body is not None and body[1] == refused[0].attempt_id
@@ -2312,3 +2314,277 @@ def test_a_retry_the_ceiling_cannot_pay_to_carry_is_sent_plain(
             (harness.run_id, node),
         ).fetchall()
     assert [Decimal(row[0]) for row in reserved] == [first, cost(second)]
+
+
+# F649 (D104's amendment of 14 October 2026): a retry whose answer shrank
+# against the answer it was asked to correct carries the earlier, more
+# complete answer, and that answer's lines.
+
+
+def _cut(markdown: str, start: str, stop: str) -> str:
+    """`markdown` less the text from `start` up to (not into) `stop`."""
+    first = markdown.index(start)
+    return markdown[:first] + markdown[markdown.index(stop, first + len(start)) :]
+
+
+def _edited(
+    flaw: Callable[[str], str], edit: Callable[[str], str]
+) -> Callable[[str], str]:
+    """`flaw`'s answer with its Markdown edited, still the closed transport."""
+
+    def edited(body: str) -> str:
+        wire_ = json.loads(flaw(body))
+        wire_["canonical_markdown"] = edit(wire_["canonical_markdown"])
+        return json.dumps(wire_)
+
+    return edited
+
+
+def _less_a_register(flaw: Callable[[str], str], register: str) -> Callable[[str], str]:
+    """`flaw`'s answer without one required register's table."""
+    return _edited(flaw, lambda md: _cut(md, f"#### {register}\n", "#### "))
+
+
+def _less_a_section(flaw: Callable[[str], str]) -> Callable[[str], str]:
+    """`flaw`'s answer without its Source Registry H2, every register kept."""
+    return _edited(flaw, lambda md: _cut(md, "## Source Registry\n", "## Gaps"))
+
+
+def _retries(
+    harness: _Harness, *flaws: Callable[[str], str]
+) -> tuple[CanonicalCompletions, _Flawed]:
+    """CP-0 answered by `flaws` in turn, each refused, then accepted."""
+    answers = CanonicalCompletions(harness.source_id)
+    queue = iter(flaws)
+    flawed = _Flawed(answers, bad=len(flaws), flaw=lambda body: next(queue)(body))
+    assert _run(harness, flawed) is None
+    return answers, flawed
+
+
+def _cp0_prompts(answers: CanonicalCompletions) -> list[str]:
+    return [p for p in answers.prompts if _module(p) == "CP-0"]
+
+
+def test_a_retry_after_a_shrunken_answer_carries_the_earlier_one_with_its_lines(
+    harness: _Harness,
+) -> None:
+    """The fork's CP-6 #1 -> #2: the second answer dropped registers the first
+    held, and the third attempt was asked to correct the shrunken one. It now
+    carries the first answer, judged and kept-lined as the first."""
+    answers, flawed = _retries(
+        harness, _with_material, _less_a_register(_with_fixture_marker, "T5")
+    )
+    third = _cp0_prompts(answers)[2]
+    assert flawed.sent[0] in third and flawed.sent[1] not in third
+    assert len(flawed.sent[0]) > len(flawed.sent[1])
+    flat = " ".join(third.split())
+    assert VENDOR_LINE in flat and "fixture marker" not in flat
+    assert "appears nowhere" not in flat
+    assert "holds 10 of the 10 required registers" in flat
+
+
+def test_a_retry_after_a_lost_section_carries_the_earlier_answer(
+    harness: _Harness,
+) -> None:
+    answers, flawed = _retries(
+        harness, _with_material, _less_a_section(_with_fixture_marker)
+    )
+    third = _cp0_prompts(answers)[2]
+    assert flawed.sent[0] in third and flawed.sent[1] not in third
+    assert VENDOR_LINE in third and "fixture marker" not in third
+
+
+def test_a_retry_after_an_answer_as_complete_carries_the_latest(
+    harness: _Harness,
+) -> None:
+    """Equal is not shrunk (unchanged), and neither is more."""
+    answers, flawed = _retries(harness, _with_material, _with_fixture_marker)
+    third = _cp0_prompts(answers)[2]
+    assert flawed.sent[1] in third and flawed.sent[0] not in third
+    answers, flawed = _retries(
+        _sibling(harness),
+        _less_a_register(_with_material, "T5"),
+        _with_fixture_marker,
+    )
+    third = _cp0_prompts(answers)[2]
+    assert flawed.sent[1] in third and flawed.sent[0] not in third
+
+
+def test_a_section_lost_for_a_register_gained_is_not_a_register_shrink(
+    harness: _Harness,
+) -> None:
+    """Fewer on either count is enough: the later answer here holds all ten
+    registers the earlier one held, and one H2 fewer."""
+    answers, flawed = _retries(
+        harness,
+        _less_a_register(_with_material, "T5"),
+        _less_a_section(_with_fixture_marker),
+    )
+    third = _cp0_prompts(answers)[2]
+    assert flawed.sent[0] in third and flawed.sent[1] not in third
+
+
+def test_the_earlier_answer_is_carried_through_a_chain_of_shrinking_answers(
+    harness: _Harness,
+) -> None:
+    """The answer a retry was asked to correct is the one the walk carried
+    for it: a 3rd answer is measured against the 1st carried past the 2nd."""
+    shrunk = _less_a_register(_with_fixture_marker, "T5")
+    answers, flawed = _retries(
+        harness, _with_material, shrunk, _less_a_register(shrunk, "T4")
+    )
+    fourth = _cp0_prompts(answers)[3]
+    assert flawed.sent[0] in fourth
+    assert flawed.sent[1] not in fourth and flawed.sent[2] not in fourth
+    # A 3rd answer as complete as the carried 1st is carried in its turn.
+    answers, flawed = _retries(
+        _sibling(harness), _with_material, shrunk, _with_fixture_marker
+    )
+    fourth = _cp0_prompts(answers)[3]
+    assert flawed.sent[2] in fourth and flawed.sent[0] not in fourth
+
+
+def test_a_lost_earlier_answer_leaves_the_latest_carried(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The documented fail-open: the lines are help, not a verdict, so an
+    earlier body that is gone is no earlier answer."""
+    answers = CanonicalCompletions(harness.source_id)
+    queue = iter((_with_material, _less_a_register(_with_fixture_marker, "T5")))
+    flawed = _Flawed(answers, bad=2, flaw=lambda body: next(queue)(body))
+    calls: list[str] = []
+    due = runtime._second_due
+
+    def crash_on_the_second(
+        conn: StoreConnection, run_id: UUID, route_node_id: str
+    ) -> bool:
+        calls.append(route_node_id)
+        if len(calls) == 2:
+            raise _Crash
+        return due(conn, run_id, route_node_id)
+
+    monkeypatch.setattr(runtime, "_second_due", crash_on_the_second)
+    with pytest.raises(_Crash):
+        _run(harness, flawed)
+    monkeypatch.undo()
+    cp0 = _node(harness, "CP-0").route_node_id
+    first = node_attempts(harness.conn, harness.run_id, cp0)[0]
+    assert first.diagnostic_sha256 is not None
+    harness.blobs.path_of(first.diagnostic_sha256).unlink()
+    harness.conn.rollback()
+    assert _run(harness, flawed) is None
+    third = _cp0_prompts(answers)[2]
+    assert flawed.sent[1] in third and flawed.sent[0] not in third
+    assert "appears nowhere" in " ".join(third.split())
+
+
+def test_a_retry_after_an_answer_that_is_not_the_transport_is_unchanged(
+    harness: _Harness,
+) -> None:
+    answers, flawed = _retries(harness, _with_material, lambda _body: "not json")
+    third = _cp0_prompts(answers)[2]
+    assert REFUSED not in third and flawed.sent[0] not in third
+    assert "again from the beginning" in third  # D30's block, as before
+
+
+def test_the_priced_and_the_sent_prompt_of_a_shrunken_retry_are_one_prompt(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A crash after the refusal rebuilds, byte for byte, the prompt a sibling
+    run that never crashed sent, and the priced size is the sent size."""
+    flaws = (_with_material, _less_a_register(_with_fixture_marker, "T5"))
+    sibling = _sibling(harness)
+    unbroken, _sent = _retries(sibling, *flaws)
+    answers = CanonicalCompletions(harness.source_id)
+    queue = iter(flaws)
+    flawed = _Flawed(answers, bad=2, flaw=lambda body: next(queue)(body))
+    calls: list[str] = []
+    due = runtime._second_due
+
+    def crash_on_the_second(
+        conn: StoreConnection, run_id: UUID, route_node_id: str
+    ) -> bool:
+        calls.append(route_node_id)
+        if len(calls) == 2:
+            raise _Crash
+        return due(conn, run_id, route_node_id)
+
+    monkeypatch.setattr(runtime, "_second_due", crash_on_the_second)
+    with pytest.raises(_Crash):
+        _run(harness, flawed)
+    monkeypatch.undo()
+    sizes: list[int] = []
+    measure = invocation.request_size
+
+    def measured(provider: CompletionProvider, prompt: str) -> int:
+        size = measure(provider, prompt)
+        if _module(prompt) == "CP-0":
+            sizes.append(size)
+        return size
+
+    monkeypatch.setattr(canonical, "request_size", measured)
+    assert _run(harness, flawed) is None
+    assert flawed.sent[0] in answers.prompts[2]
+    assert flawed.sent[1] not in answers.prompts[2]
+    assert _own(answers.prompts[2]) == _own(_cp0_prompts(unbroken)[2])
+    assert len(sizes) == 2 and sizes[0] == sizes[1]
+
+
+_CITATION = {"source_id": str(UUID(int=1)), "page": 1, "matched_text": "x"}
+
+
+def _answer_body(**omit: str) -> str:
+    """CP-0's accepted-shape answer as the transport, less what `omit` names."""
+    ident = identity("CP-0")
+    markdown = handoff_markdown(ident, omit_register=omit.get("register")).decode()
+    if "section" in omit:
+        markdown = _cut(markdown, f"## {omit['section']}\n", "## Gaps")
+    return wire(markdown.encode(), [_CITATION])
+
+
+def test_an_answer_shrank_when_it_holds_fewer_registers_or_fewer_sections() -> None:
+    from caos.methodology.handoff import answer_shrank
+
+    def shrank(earlier: str, later: str, *, module: str = "CP-0") -> bool:
+        return answer_shrank(CONTRACT, module, earlier, later, skill(module))
+
+    full = _answer_body()
+    assert shrank(full, _answer_body(register="T5"))
+    assert shrank(full, _answer_body(section="Source Registry"))
+    assert not shrank(full, full)
+    assert not shrank(_answer_body(register="T5"), full)
+    assert not shrank(_answer_body(section="Source Registry"), full)
+    # Either count alone is enough: registers equal and sections fewer, and
+    # the reverse.
+    assert shrank(_answer_body(register="T5"), _answer_body(section="Source Registry"))
+    assert shrank(_answer_body(section="Source Registry"), _answer_body(register="T5"))
+    # Not compared unless both are the transport.
+    assert not shrank(full, "not json") and not shrank("not json", full)
+
+
+def test_an_answer_shrank_compares_sections_only_where_registers_cannot_be_read() -> (
+    None
+):
+    from caos.methodology.handoff import answer_shrank
+
+    full, short = _answer_body(), _answer_body(register="T5")
+    fewer = _answer_body(section="Source Registry")
+    # No skill: no register comparison; sections still compared.
+    assert not answer_shrank(CONTRACT, "CP-0", full, short, b"")
+    assert answer_shrank(CONTRACT, "CP-0", full, fewer, b"")
+    # A module the skill does not describe is a ValueError/KeyError: as above.
+    assert not answer_shrank(CONTRACT, "CP-NOPE", full, short, skill("CP-0"))
+    assert answer_shrank(CONTRACT, "CP-NOPE", full, fewer, skill("CP-0"))
+    # The model module compares sections only (its registers are not the contract's).
+    assert not answer_shrank(CONTRACT, MODEL_MODULE, full, short, skill("CP-0"))
+    assert answer_shrank(CONTRACT, MODEL_MODULE, full, fewer, skill("CP-0"))
+    # Sections are counted by distinct heading text, fenced ones not at all.
+    fenced = json.dumps(
+        {
+            "canonical_markdown": json.loads(full)["canonical_markdown"]
+            + "\n```\n## Invented\n```\n",
+            "citations": [_CITATION],
+        }
+    )
+    assert not answer_shrank(CONTRACT, "CP-0", fenced, full, skill("CP-0"))
+    assert not answer_shrank(CONTRACT, "CP-0", full, fenced, skill("CP-0"))
