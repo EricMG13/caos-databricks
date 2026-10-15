@@ -1215,6 +1215,26 @@ def test_cp0_writes_only_the_preparation_registers_that_hold_its_findings() -> N
     assert _violations("CP-0", old) == []
 
 
+def test_cp0_rates_no_consumer_conditional_for_what_only_its_view_lacks() -> None:
+    """F650 (owner, 2026-10-15): in the fork's runs 3 and 4 CP-0 ruled CP-4 and
+    CP-4C CONDITIONAL over credit-agreement and indenture page maps the corpus
+    holds, and CP-3 CONDITIONAL over the Sector RV workbook CP-3's own SKILL.md
+    says to name as a gap; runs 1 and 2 rated the same evidence
+    READY_WITH_LIMITATIONS. The final check says a page map is CP-0's view
+    alone, and that a named-gap reference is a limitation, not a condition."""
+    block = " ".join(prompt_block("cp0_final_check").split())
+    assert "(evidence_delivery PAGE_MAP) is shown that way to you alone" in block
+    assert "handed it in full (or the pages the cell names)" in block
+    assert "which the host then tells that consumer" in block
+    assert "Never rate a consumer CONDITIONAL because you saw only a page map" in block
+    assert "to name as a gap and continue past" in block
+    assert "is a limitation, not a condition" in block
+    assert "READY_WITH_LIMITATIONS with the gap in its row" in block
+    assert block.index("shown that way to you alone") < block.index(
+        "--- END CP-0 FINAL CHECK {tag} ---"
+    )
+
+
 def test_cp_l10_writes_a_gap_once_and_keeps_every_screen_s_rows() -> None:
     """D96 (V8): on the six stored CP-L10 answers no absorbed screen's
     source-and-scope table repeated another's (0 of 60 pairs shared a row) and
