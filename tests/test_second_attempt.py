@@ -369,18 +369,18 @@ def test_the_ledger_makes_the_fourth_attempt_the_last_guided_retry() -> None:
     # QF2-1: an attempt that never reserved is passed over -- the retry chain
     # holds -- but an unexplained attempt that did reserve still ends it, and
     # passing over never counts toward the retries spent.
-    orphan = NodeAttempt(uuid4(), None, None, unreserved=True)
+    orphan = NodeAttempt(uuid4(), None, None, never_reserved=True)
     assert _feedback_source([three[0], orphan]) == three[0]
     assert _feedback_source([*three[:2], orphan, orphan]) == three[1]
     assert _feedback_source([*three, orphan]) == three[-1]
     assert _feedback_source([*three, refused(malformed), orphan]) is None
     assert _feedback_source([orphan]) is None
     assert _feedback_source([three[0], refused(None)]) is None
-    from caos.store.outcomes import passed_over
+    from caos.store.outcomes import without_unreserved
 
     plain = refused(None)
-    assert passed_over([three[0], orphan, plain, orphan]) == [three[0], plain]
-    assert passed_over([orphan]) == []
+    assert without_unreserved([three[0], orphan, plain, orphan]) == [three[0], plain]
+    assert without_unreserved([orphan]) == []
 
 
 class _Crash(BaseException):
@@ -481,7 +481,7 @@ def test_a_reserved_attempt_with_no_outcome_still_ends_the_chain(
     attempt = start_attempt(harness.conn, harness.run_id, cp0)
     reserve_at(harness.conn, attempt, Decimal("0.01"))
     last = node_attempts(harness.conn, harness.run_id, cp0)[-1]
-    assert last.attempt_id == attempt and last.unreserved is False
+    assert last.attempt_id == attempt and last.never_reserved is False
     harness.conn.rollback()
     assert not second_attempt_due(
         harness.conn, run_id=harness.run_id, route_node_id=cp0

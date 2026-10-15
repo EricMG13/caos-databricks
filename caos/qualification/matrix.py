@@ -52,6 +52,8 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
+from psycopg import sql
+
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document
@@ -67,6 +69,7 @@ from caos.methodology.verification import AcceptedRow
 from caos.qualification.proof import OrchestrationProof, assert_orchestration_proof
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
+from caos.store.outcomes import recorded_attempt
 from caos.store.routes import resolved_route
 from caos.store.run_inputs import RunSubject
 from caos.store.runs import run_status
@@ -724,27 +727,20 @@ def _refusal_met(
         return True
     return bool(
         conn.execute(
-            "SELECT 1 FROM attempt_refusals r JOIN run_attempts t"
-            " USING (attempt_id) WHERE t.run_id = %s AND r.code = %s"
-            " AND NOT EXISTS (SELECT 1 FROM artifacts a JOIN run_attempts n"
-            "  ON n.attempt_id = a.attempt_id"
-            "  WHERE n.run_id = t.run_id AND n.route_node_id = t.route_node_id)"
-            " AND t.attempt_id = (SELECT l.attempt_id FROM run_attempts l"
-            "  WHERE l.run_id = t.run_id AND l.route_node_id = t.route_node_id"
-            # An attempt that never reserved is passed over, as in
-            # `outcomes.node_attempts` (QF2-1): it bought and asked nothing.
-            "  AND (EXISTS (SELECT 1 FROM budget_reservations b"
-            "   WHERE b.attempt_id = l.attempt_id)"
-            "   OR EXISTS (SELECT 1 FROM attempt_refusals x"
-            "   WHERE x.attempt_id = l.attempt_id)"
-            "   OR EXISTS (SELECT 1 FROM call_outcomes o"
-            "   WHERE o.attempt_id = l.attempt_id)"
-            "   OR EXISTS (SELECT 1 FROM artifacts z"
-            "   WHERE z.attempt_id = l.attempt_id)"
-            "   OR EXISTS (SELECT 1 FROM budget_ledger g"
-            "   WHERE g.attempt_id = l.attempt_id))"
-            "  ORDER BY l.ordinal DESC NULLS LAST, l.started_at DESC,"
-            "  l.attempt_id DESC LIMIT 1)",
+            sql.SQL(
+                "SELECT 1 FROM attempt_refusals r JOIN run_attempts t"
+                " USING (attempt_id) WHERE t.run_id = %s AND r.code = %s"
+                " AND NOT EXISTS (SELECT 1 FROM artifacts a JOIN run_attempts n"
+                "  ON n.attempt_id = a.attempt_id"
+                "  WHERE n.run_id = t.run_id AND n.route_node_id = t.route_node_id)"
+                " AND t.attempt_id = (SELECT l.attempt_id FROM run_attempts l"
+                "  WHERE l.run_id = t.run_id AND l.route_node_id = t.route_node_id"
+                # An attempt that never reserved is passed over, as in
+                # `outcomes.node_attempts` (QF2-1): the shared definition.
+                "  AND ({})"
+                "  ORDER BY l.ordinal DESC NULLS LAST, l.started_at DESC,"
+                "  l.attempt_id DESC LIMIT 1)"
+            ).format(recorded_attempt("l")),
             (run_id, expected.value),
         ).fetchone()
     )
