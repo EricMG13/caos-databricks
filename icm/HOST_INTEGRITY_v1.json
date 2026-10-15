@@ -1,8 +1,8 @@
 {
   "host_prompt_hashes": {
     "cp0_final_check.md": {
-      "bytes": 1103,
-      "sha256": "a0fa1a673230e24f29bde743b3bd9ea866aa39a3380878cb91926db929401451"
+      "bytes": 1754,
+      "sha256": "94ef1e1636330c79f5715c6745f0265cd0aa1da33f8db1e3fa9c00f5d374f839"
     },
     "current_command.md": {
       "bytes": 325,
