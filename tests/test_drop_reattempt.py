@@ -1570,7 +1570,7 @@ def test_both_readers_of_never_reserved_agree_on_each_recording_table(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """QF2-1 (whole-branch I1): `node_attempts` and the matrix's `_refusal_met`
-    both read the one `RECORDED_ATTEMPT_SQL`. A node whose last attempt holds
+    both read the one `recorded_attempt`. A node whose last attempt holds
     exactly one row in exactly one of the five tables is that node's last
     attempt for both readers; the same attempt holding none is passed over by
     both. A table dropped from the shared definition, or a reader that spells
@@ -1581,7 +1581,7 @@ def test_both_readers_of_never_reserved_agree_on_each_recording_table(
 
     from caos.qualification import matrix
     from caos.qualification.matrix import _refusal_met
-    from caos.store.outcomes import node_attempts
+    from caos.store.outcomes import node_attempts, recorded_attempt
     from caos.store.runs import start_attempt
 
     unavailable = RefusalCode.PROVIDER_UNAVAILABLE
@@ -1591,10 +1591,11 @@ def test_both_readers_of_never_reserved_agree_on_each_recording_table(
     # ended-run gate is read as ended, to reach the attempt reading under test.
     monkeypatch.setattr(matrix, "run_status", lambda *_: RunStatus.FAILED)
     # Both readers take the definition from the one constant.
-    assert 'RECORDED_ATTEMPT_SQL.format(t="l")' in inspect.getsource(
-        matrix._refusal_met
-    )
-    assert 'RECORDED_ATTEMPT_SQL.format(t="t")' in inspect.getsource(node_attempts)
+    assert 'recorded_attempt("l")' in inspect.getsource(matrix._refusal_met)
+    assert 'recorded_attempt("t")' in inspect.getsource(node_attempts)
+    rendered = recorded_attempt("l").as_string(conn)
+    assert rendered.count("EXISTS") == 5
+    assert '= "l".attempt_id' in rendered
 
     def record(table: str, attempt: UUID) -> None:
         if table == "budget_reservations":

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 import psycopg
+from psycopg import sql
 from psycopg.pq import TransactionStatus
 
 from caos.refusals import Refusal, RefusalCode
@@ -193,21 +194,29 @@ class NodeAttempt:
     never_reserved: bool = False
 
 
-# A run_attempts row that reserved, asked or was explained: it has a
-# reservation, refusal, call outcome, artifact or charge. `{t}` is the
-# run_attempts alias. The one definition of "never reserved" (its negation):
-# `node_attempts` and the qualification matrix both read it (QF2-1). A constant
-# string with an alias only; no user input reaches it.
-RECORDED_ATTEMPT_SQL = " OR ".join(
-    f"EXISTS (SELECT 1 FROM {table} x WHERE x.attempt_id = {{t}}.attempt_id)"
-    for table in (
-        "budget_reservations",
-        "attempt_refusals",
-        "call_outcomes",
-        "artifacts",
-        "budget_ledger",
-    )
+# The five tables whose row says a run_attempts row reserved, asked or was
+# explained: a reservation, refusal, call outcome, artifact or charge.
+_RECORDING_TABLES = (
+    "budget_reservations",
+    "attempt_refusals",
+    "call_outcomes",
+    "artifacts",
+    "budget_ledger",
 )
+
+
+def recorded_attempt(alias: str) -> sql.Composed:
+    """The condition that a run_attempts row (aliased `alias`) reserved, asked
+    or was explained. The one definition of "never reserved" (its negation):
+    `node_attempts` and the qualification matrix both read it (QF2-1). Composed
+    with psycopg `sql`: every table and the alias are identifiers, no user input
+    reaches it."""
+    return sql.SQL(" OR ").join(
+        sql.SQL(
+            "EXISTS (SELECT 1 FROM {} x WHERE x.attempt_id = {}.attempt_id)"
+        ).format(sql.Identifier(table), sql.Identifier(alias))
+        for table in _RECORDING_TABLES
+    )
 
 
 def without_unreserved(attempts: Iterable[NodeAttempt]) -> list[NodeAttempt]:
@@ -229,13 +238,15 @@ def node_attempts(
 ) -> tuple[NodeAttempt, ...]:
     """Every attempt at this run node, oldest first. Caller owns the read."""
     rows = conn.execute(
-        "SELECT t.attempt_id, r.code, o.diagnostic_sha256, o.drop_kind,"
-        " NOT (" + RECORDED_ATTEMPT_SQL.format(t="t") + ") AS never_reserved"
-        " FROM run_attempts t"
-        " LEFT JOIN attempt_refusals r USING (attempt_id)"
-        " LEFT JOIN call_outcomes o USING (attempt_id)"
-        " WHERE t.run_id = %s AND t.route_node_id = %s"
-        " ORDER BY t.ordinal NULLS FIRST, t.started_at, t.attempt_id",
+        sql.SQL(
+            "SELECT t.attempt_id, r.code, o.diagnostic_sha256, o.drop_kind,"
+            " NOT ({}) AS never_reserved"
+            " FROM run_attempts t"
+            " LEFT JOIN attempt_refusals r USING (attempt_id)"
+            " LEFT JOIN call_outcomes o USING (attempt_id)"
+            " WHERE t.run_id = %s AND t.route_node_id = %s"
+            " ORDER BY t.ordinal NULLS FIRST, t.started_at, t.attempt_id"
+        ).format(recorded_attempt("t")),
         (run_id, route_node_id),
     ).fetchall()
     return tuple(
