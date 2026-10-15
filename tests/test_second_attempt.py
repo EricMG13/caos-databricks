@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
@@ -50,9 +50,11 @@ from caos.methodology.handoff import (
     ADVISORY,
     HINT_WORDS,
     MAX_ANCHORING_CHARS,
+    MAX_CITATIONS,
     MAX_FEEDBACK_CHARS,
     MAX_FEEDBACK_CITATIONS,
     MAX_FEEDBACK_MESSAGES,
+    MAX_PAGE,
     HostIdentity,
     LineHint,
     anchoring_line,
@@ -1432,6 +1434,158 @@ def test_a_repeated_citation_is_named_as_one_and_its_answer_carried() -> None:
     assert carried_answer(body) == body
 
 
+_SOURCE_CLAUSE = (
+    "{} a source_id not spelled as the valid source_id values are"
+    " (36 characters, lower case, hyphenated, nothing around it)"
+)
+_PAGE_CLAUSE = "{} a page that is not a whole number from 1 to 2,147,483,647"
+_QUOTE_CLAUSE = "{} a matched_text that is empty or not a string"
+_FIELD_TAIL = " (numbered from 1 in the order given)"
+
+
+def _field_body(count: int, **faults: Mapping[int, object]) -> str:
+    """A well-formed transport of `count` citations, citation `n` (1-based)
+    carrying `faults[field][n]` in place of its good value."""
+    gate = identity("CP-0")
+    good: dict[str, object] = {
+        "source_id": str(UUID(int=1)),
+        "page": 1,
+        "matched_text": QUOTE,
+    }
+    cited = [
+        {key: faults.get(key, {}).get(n, value) for key, value in good.items()}
+        for n in range(1, count + 1)
+    ]
+    return wire(with_markers(handoff_markdown(gate), count), cited)
+
+
+def _field_lines(body: str) -> tuple[str, ...]:
+    return feedback_lines(
+        CONTRACT, CATALOG, identity("CP-0"), body, skill=skill("CP-0")
+    )
+
+
+def _refused_malformed(body: str) -> None:
+    with pytest.raises(Refusal) as refused:
+        parse_response(body)
+    assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
+
+
+def test_a_citation_whose_source_id_is_not_a_uuid_is_named_by_place() -> None:
+    """Live run 81e89dc3, attempt 2: citation 23 was not a UUID at all, and the
+    retry was told only that the answer was not the JSON object."""
+    body = _field_body(24, source_id={23: "Evidence-23"})
+    assert _field_lines(body) == (
+        "host citation check: "
+        + _SOURCE_CLAUSE.format("citation 23 has")
+        + _FIELD_TAIL,
+    )
+    assert not any("Evidence-23" in line for line in _field_lines(body))
+    assert not any("not the JSON object" in line for line in _field_lines(body))
+    _refused_malformed(body)
+
+
+@pytest.mark.parametrize(
+    "spelled",
+    [
+        str(UUID(int=0xABCDEF)).upper(),
+        "{" + str(UUID(int=0xABCDEF)) + "}",
+        "urn:uuid:" + str(UUID(int=0xABCDEF)),
+        UUID(int=0xABCDEF).hex,
+    ],
+)
+def test_a_non_canonical_uuid_spelling_is_named_by_place(spelled: str) -> None:
+    """Live run 81e89dc3, attempt 3: citation 13 was a UUID spelled another way."""
+    body = _field_body(14, source_id={13: spelled})
+    [line] = _field_lines(body)
+    assert line.startswith("host citation check: citation 13 has a source_id")
+    assert spelled not in line
+    _refused_malformed(body)
+
+
+@pytest.mark.parametrize("page", [0, MAX_PAGE + 1, "3", True, 1.0, None])
+def test_a_page_fault_is_named_by_place(page: object) -> None:
+    body = _field_body(3, page={2: page})
+    assert _field_lines(body) == (
+        "host citation check: " + _PAGE_CLAUSE.format("citation 2 has") + _FIELD_TAIL,
+    )
+    _refused_malformed(body)
+
+
+@pytest.mark.parametrize("quote", ["", "   ", None, 5])
+def test_an_empty_or_non_string_matched_text_is_named_by_place(quote: object) -> None:
+    body = _field_body(3, matched_text={3: quote})
+    assert _field_lines(body) == (
+        "host citation check: " + _QUOTE_CLAUSE.format("citation 3 has") + _FIELD_TAIL,
+    )
+    _refused_malformed(body)
+
+
+def test_mixed_citation_faults_are_named_under_each_field() -> None:
+    body = _field_body(
+        23,
+        source_id={23: "bad"},
+        page={4: 0, 9: 0},
+        matched_text={7: ""},
+    )
+    assert _field_lines(body) == (
+        "host citation check: citation 23 has a source_id not spelled as the"
+        " valid source_id values are (36 characters, lower case, hyphenated,"
+        " nothing around it); citations 4 and 9 have a page that is not a whole"
+        " number from 1 to 2,147,483,647; citation 7 has a matched_text that is"
+        " empty or not a string (numbered from 1 in the order given)",
+    )
+    _refused_malformed(body)
+
+
+def test_the_field_line_stays_within_the_line_limit() -> None:
+    everything = {n: None for n in range(1, MAX_CITATIONS + 1)}
+    body = _field_body(
+        MAX_CITATIONS, source_id=everything, page=everything, matched_text=everything
+    )
+    [line] = _field_lines(body)
+    assert line.startswith("host citation check: citations 1, 2, 3")
+    assert len(line) <= MAX_FEEDBACK_CHARS
+    assert " a source_id " in line and " a page " in line and " a matched_text " in line
+    assert " more " in line and line.endswith(_FIELD_TAIL)
+    _refused_malformed(body)
+
+
+def test_a_shape_fault_still_wins_over_a_citation_field_fault() -> None:
+    gate = identity("CP-0")
+    markdown = with_markers(handoff_markdown(gate), 2)
+    bad = {"source_id": "bad", "page": 1, "matched_text": QUOTE}
+    good = {"source_id": str(UUID(int=1)), "page": 1, "matched_text": QUOTE}
+    shapes = [
+        wire(markdown, [bad, {"source_id": good["source_id"], "page": 1}]),
+        wire(markdown, [bad, {**good, "extra": 1}]),
+        json.dumps({"canonical_markdown": 5, "citations": [bad, good]}),
+    ]
+    for body in shapes:
+        [line] = _field_lines(body)
+        assert line.startswith("host transport check: the answer is not the JSON")
+        _refused_malformed(body)
+
+
+def _with_an_upper_case_source_id(body: str) -> str:
+    wire_body = json.loads(body)
+    first = wire_body["citations"][0]
+    first["source_id"] = first["source_id"].upper()
+    return json.dumps(wire_body)
+
+
+def test_a_retry_after_a_citation_field_fault_names_the_field(
+    harness: _Harness,
+) -> None:
+    answers = CanonicalCompletions(harness.source_id)
+    flawed = _Flawed(answers, flaw=_with_an_upper_case_source_id)
+    assert _run(harness, flawed) is None
+    second = " ".join(answers.prompts[1].split())
+    assert "host citation check: citation 1 has a source_id" in second
+    assert "not the JSON object" not in second
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
 def test_the_repeat_line_stays_within_the_line_limit() -> None:
     """R45: past what one line holds, the repeats are counted, never cut."""
     gate = identity("CP-0")
@@ -2141,7 +2295,7 @@ def test_a_retry_carrying_its_answer_reserves_for_the_larger_request(
 def test_carried_answer_is_the_transport_across_the_boundary_or_nothing() -> None:
     """D104: only a decodable envelope is carried, NFC as it crosses
     `BoundaryText`; text no reader can see, or that will not cross, is not."""
-    cited = {"source_id": str(UUID(int=7)), "page": 1, "matched_text": "debt"}
+    cited = {"source_id": str(UUID(int=0xABCDEF)), "page": 1, "matched_text": "debt"}
     wire = {"canonical_markdown": "Caf\u0065\u0301 debt", "citations": [cited]}
     body = json.dumps(wire, ensure_ascii=False)
     assert carried_answer(body) == unicodedata.normalize("NFC", body)

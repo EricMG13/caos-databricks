@@ -919,19 +919,49 @@ def _closed(value: object, keys: frozenset[str]) -> dict[str, Any]:
     return value
 
 
-def _requested(item: object) -> Citation:
-    citation = _closed(item, WIRE_CITATION_KEYS)
+def _field_faults(citation: Mapping[str, Any]) -> list[str]:
+    """The fields of a closed citation that break their rule, in the order
+    `_FIELD_CLAUSES` names them: the one source of the three rules."""
     source_id, page = citation["source_id"], citation["page"]
     quote = citation["matched_text"]
+    faults = []
     # Only the canonical spelling of the id the prompt handed over: a UUID
     # accepts braces, a URN prefix and upper case, none of which the host wrote.
-    if not isinstance(source_id, str) or str(UUID(source_id)) != source_id:
-        raise ValueError
+    try:
+        canonical = isinstance(source_id, str) and str(UUID(source_id)) == source_id
+    except ValueError:
+        canonical = False
+    if not canonical:
+        faults.append("source_id")
     if type(page) is not int or not 1 <= page <= MAX_PAGE:
-        raise ValueError
+        faults.append("page")
     if not isinstance(quote, str) or not quote.strip():
+        faults.append("matched_text")
+    return faults
+
+
+def _citation(citation: Mapping[str, Any]) -> Citation:
+    return Citation(
+        source_id=UUID(citation["source_id"]),
+        page=citation["page"],
+        matched_text=citation["matched_text"],
+    )
+
+
+def _requested(item: object) -> Citation:
+    citation = _closed(item, WIRE_CITATION_KEYS)
+    if _field_faults(citation):
         raise ValueError
-    return Citation(source_id=UUID(source_id), page=page, matched_text=quote)
+    return _citation(citation)
+
+
+class _FieldFaults(ValueError):
+    """A transport whole in shape whose citations break field rules: the
+    1-based places per field, never a value (N50)."""
+
+    def __init__(self, faults: Mapping[str, list[int]]) -> None:
+        super().__init__()
+        self.faults = faults
 
 
 def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
@@ -952,8 +982,15 @@ def _wire(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
     if len(citations) > MAX_CITATIONS:
         raise ValueError
     # A lone surrogate survives `json.loads` and fails here, inside the guard.
-    requested = tuple(_requested(c) for c in citations)
-    return text.encode("utf-8"), text, requested
+    encoded = text.encode("utf-8")
+    closed = [_closed(c, WIRE_CITATION_KEYS) for c in citations]
+    faults: dict[str, list[int]] = {}
+    for place, citation in enumerate(closed, 1):
+        for name in _field_faults(citation):
+            faults.setdefault(name, []).append(place)
+    if faults:
+        raise _FieldFaults(faults)
+    return encoded, text, tuple(_citation(c) for c in closed)
 
 
 def _repeats(citations: Sequence[Citation]) -> list[tuple[int, int]]:
@@ -1624,9 +1661,11 @@ def _transport_or_reason(
     acceptance still refuses them. No caught exception text is quoted.
     """
     with suppress(Exception):  # any failure is named below, never quoted
-        parsed = _wire(body)
-        repeats = _repeats(parsed[2])
-        return parsed, _repeated_line(repeats)
+        try:
+            parsed = _wire(body)
+        except _FieldFaults as bad:
+            return None, _field_line(bad.faults)
+        return parsed, _repeated_line(_repeats(parsed[2]))
     try:
         json.loads(body)  # diagnostic only; _wire remains the strict parser
     except json.JSONDecodeError as bad:
@@ -1662,6 +1701,40 @@ def _repeat_text(repeats: Sequence[tuple[int, int]], shown: int) -> str:
         " by the marker of its first place, and renumber every marker after a"
         " citation you remove"
     )
+
+
+_FIELD_CLAUSES = (
+    (
+        "source_id",
+        "a source_id not spelled as the valid source_id values are (36"
+        " characters, lower case, hyphenated, nothing around it)",
+    ),
+    (
+        "page",
+        f"a page that is not a whole number from 1 to {MAX_PAGE:,}",
+    ),
+    ("matched_text", "a matched_text that is empty or not a string"),
+)
+
+
+def _field_line(faults: Mapping[str, list[int]]) -> str:
+    """Which citations break which field rule, by place, never quoted. Names
+    as many per clause as `MAX_FEEDBACK_CHARS` holds (the rest counted), and
+    one per clause at least."""
+    for shown in range(MAX_FEEDBACK_CITATIONS, 0, -1):
+        clauses = [
+            f"{_numbered(faults[name], shown=shown)}"
+            f" {'has' if len(faults[name]) == 1 else 'have'} {words}"
+            for name, words in _FIELD_CLAUSES
+            if name in faults
+        ]
+        line = (
+            f"host citation check: {'; '.join(clauses)}"
+            " (numbered from 1 in the order given)"
+        )
+        if len(line) <= MAX_FEEDBACK_CHARS:
+            break
+    return line
 
 
 def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
@@ -1742,14 +1815,14 @@ ADVISORY = (
 )
 
 
-def _numbered(failed: Sequence[int]) -> str:
+def _numbered(failed: Sequence[int], *, shown: int = MAX_FEEDBACK_CITATIONS) -> str:
     """`citation 2`, `citations 2 and 5`, `citations 1, 2 and 3`: at most
-    `MAX_FEEDBACK_CITATIONS` numbers, the rest counted."""
-    shown = [str(number) for number in failed[:MAX_FEEDBACK_CITATIONS]]
-    rest = len(failed) - len(shown)
-    named = ", ".join(shown) + (f" and {rest} more" if rest else "")
-    if not rest and len(shown) > 1:
-        named = ", ".join(shown[:-1]) + f" and {shown[-1]}"
+    `shown` numbers, the rest counted."""
+    shown_numbers = [str(number) for number in failed[:shown]]
+    rest = len(failed) - len(shown_numbers)
+    named = ", ".join(shown_numbers) + (f" and {rest} more" if rest else "")
+    if not rest and len(shown_numbers) > 1:
+        named = ", ".join(shown_numbers[:-1]) + f" and {shown_numbers[-1]}"
     return f"citation {named}" if len(failed) == 1 else f"citations {named}"
 
 
