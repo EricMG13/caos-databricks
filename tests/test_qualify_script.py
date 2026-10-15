@@ -31,21 +31,33 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 from decimal import ROUND_UP, Decimal
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 import psycopg
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, QUOTE, CanonicalCompletions
+from test_execution_freshness import _Harness
 
 from caos.blobs import BlobStore
+from caos.graph.route import NodeState
+from caos.methodology.bundle import Bundle
 from caos.models import identity_of
 from caos.pricing import ModelPrice, price_from_environment, worst_case
-from caos.provider import Completion, encode_request
-from caos.qualification.harness import Harness, PerformedSet, PreparedCase, perform
+from caos.provider import Completion, DropKind, encode_request
+from caos.qualification.harness import (
+    Harness,
+    Performed,
+    PerformedSet,
+    PreparedCase,
+    _unrun,
+    perform,
+)
 from caos.qualification.matrix import QualificationSet
 from caos.qualification.on_disk import MANIFEST
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection, connect
+from caos.store import RunStatus, StoreConnection, connect
+from caos.store.routes import resolved_route
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -695,12 +707,14 @@ def test_each_docstring_example_expects_the_identity_its_endpoint_resolves_to() 
 
 @dataclass
 class _RefusedOnce(_FakeProvider):
-    """Answers the first call with a dangling marker (a refusal the guided
-    retry is owed for) and every later call correctly."""
+    """Answers the first `refusals` calls with a dangling marker (a refusal the
+    guided retry is owed for) and every later call correctly."""
+
+    refusals: int = 1
 
     def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
         done = super().complete(prompt, json_object=json_object)
-        if len(self.prompts) > 1:
+        if len(self.prompts) > self.refusals:
             return done
         wire = json.loads(done.content or "")
         wire["canonical_markdown"] += "\nAs cited [C99].\n"
@@ -777,3 +791,386 @@ def test_a_set_the_budget_stopped_is_reported_as_the_budget_and_not_re_entered(
     document = json.loads(out[out.index('{\n  "adapter_version"') :])
     assert document["result"][0]["stopped"] == "BUDGET_CEILING_REACHED"
     assert document["result"][0]["refused_with"] == "HANDOFF_MALFORMED"
+
+
+@dataclass
+class _AlwaysRefused(_RefusedOnce):
+    refusals: int = 10**6
+
+
+def test_a_set_resumed_under_a_ceiling_that_pays_prints_what_is_left(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """QF2-2 review I2: a refusal the ceiling did not cause is resumed, with the
+    run's remaining budget beside it, and its stop stands as raised."""
+    _skip_without_postgres()
+    monkeypatch.setenv(
+        "CAOS_QUALIFY_POSTGRES_URL", os.environ["CAOS_TEST_POSTGRES_URL"]
+    )
+    monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
+    provider = _AlwaysRefused.from_environment()
+    monkeypatch.setattr(qualify, "from_environment", lambda: provider)
+
+    code = qualify.main(
+        [
+            str(_write_lite_set(tmp_path / "set")),
+            "--expect-identity",
+            "test-fake-identity",
+            "--ceiling",
+            "5.00",
+            "--attempts",
+            "2",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert code == 1
+    [resumed] = [
+        json.loads(line)
+        for line in out.splitlines()
+        if line.startswith("{") and '"resumed_after"' in line
+    ]
+    assert resumed["resumed_after"] == "HANDOFF_MALFORMED"
+    assert resumed["attempts_left"] == 1
+    assert Decimal("0") < Decimal(resumed["remaining"]) < Decimal("5.00")
+    assert '"stopped_by"' not in out
+    document = json.loads(out[out.index('{\n  "adapter_version"') :])
+    assert document["result"][0]["stopped"] == "HANDOFF_MALFORMED"
+    assert document["result"][0]["refused_with"] is None
+
+
+@dataclass
+class _Scripted(_FakeProvider):
+    """The canonical answers with a module's QA verdict or CP-0's readiness rows
+    scripted: the two ways a real run ended BLOCKED (qualify runs 3 and 4)."""
+
+    qa_by_module: dict[str, str] = field(default_factory=dict)
+    readiness: dict[str, str] = field(default_factory=dict)
+    blockers: dict[str, str] = field(default_factory=dict)
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        self.prompts.append(prompt)
+        source_id = re.findall(r"^source_id: (\S+)$", prompt, re.MULTILINE)[-1]
+        return CanonicalCompletions(
+            UUID(source_id),
+            generation_id="gen-qualify-test",
+            qa_by_module=self.qa_by_module,
+            readiness=self.readiness,
+            blockers=self.blockers,
+        ).complete(prompt, json_object=json_object)
+
+
+_PRICE = "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+
+
+def _capture_of(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    provider: _FakeProvider,
+) -> dict[str, Any]:
+    """`qualify.main` over the lite set with `provider`; its capture."""
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    qualify.main(
+        [
+            str(_write_lite_set(tmp_path / "set")),
+            "--expect-identity",
+            "test-fake-identity",
+            "--ceiling",
+            "5.00",
+        ]
+    )
+    out = capsys.readouterr().out
+    document: dict[str, Any] = json.loads(out[out.index('{\n  "adapter_version"') :])
+    return document
+
+
+def _priced(monkeypatch: pytest.MonkeyPatch) -> _Scripted:
+    monkeypatch.setenv("CAOS_MODEL_PRICE", _PRICE)
+    return _Scripted(price=price_from_environment(_Scripted.model, _PRICE))
+
+
+def test_a_run_a_module_blocked_names_the_node_and_the_verdict_row(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """QF3-1, qualify run 4: CP-2G answered Blocked and the capture said only
+    `status: BLOCKED`. The row now names the route node, the attempt and the
+    verdict row the store holds for it."""
+    provider = _priced(monkeypatch)
+    provider.qa_by_module = {"CP-L10": "Blocked"}
+    document = _capture_of(monkeypatch, capsys, tmp_path, provider)
+
+    [row] = document["result"]
+    assert row["status"] == "BLOCKED"
+    blocked = row["blocked_by"]
+    assert blocked["path"] == "module"
+    assert blocked["route_node_id"].endswith("-CP-L10")
+    assert blocked["code"] == "HANDOFF_BLOCKED"
+    assert blocked["ordinal"] == 1
+    admin = os.environ["CAOS_TEST_POSTGRES_URL"]
+    with connect(admin.rsplit("/", 1)[0] + "/" + created[0]) as conn:
+        [stored] = conn.execute(
+            "SELECT v.attempt_id, v.citations_sha256, v.recorded_at, t.ordinal"
+            " FROM run_blocking_verdicts v JOIN run_attempts t USING (attempt_id)"
+        ).fetchall()
+    assert blocked["attempt_id"] == str(stored[0])
+    assert blocked["citations_sha256"] == stored[1]
+    assert blocked["recorded_at"] == stored[2].isoformat()
+    assert blocked["ordinal"] == stored[3]
+    assert QUOTE not in json.dumps(blocked)
+
+
+def test_a_run_the_route_blocked_names_each_node_and_the_verdict_that_held_it(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """QF3-1, qualify run 3: CP-0 ruled a consumer CONDITIONAL, the frontier
+    emptied and `block_run` named no node. The row lists the nodes the route
+    left BLOCKED, each with the readiness verdict CP-0 gave it and the
+    producers it still waits on."""
+    provider = _priced(monkeypatch)
+    provider.readiness = {"CP-L10": "CONDITIONAL"}
+    provider.blockers = {"CP-L10": "Source pack is not mapped"}
+    document = _capture_of(monkeypatch, capsys, tmp_path, provider)
+
+    [row] = document["result"]
+    assert row["status"] == "BLOCKED" and row["stopped"] is None
+    blocked = row["blocked_by"]
+    assert blocked["path"] == "route"
+    by_module = {node["module_id"]: node for node in blocked["nodes"]}
+    assert set(by_module) == {"CP-L10", "CP-5"}
+    assert by_module["CP-L10"]["waiting_on"] == []
+    assert by_module["CP-L10"]["route_node_id"].endswith("-CP-L10")
+    assert by_module["CP-L10"]["verdict"] == "CONDITIONAL"
+    assert by_module["CP-L10"]["verdict_from"] == "CP-0"
+    assert by_module["CP-L10"]["held_by_verdict"] is True
+    assert by_module["CP-5"]["verdict"] == "READY"
+    assert by_module["CP-5"]["held_by_verdict"] is False
+    [edge] = by_module["CP-5"]["waiting_on"]
+    assert (edge["module_id"], edge["verdict"]) == ("CP-L10", "CONDITIONAL")
+    assert edge["edge"] == "ADVISORY"
+    assert "Source pack" not in json.dumps(blocked)
+
+
+def _route_blocked_run(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> UUID:
+    """A run the route blocked (CP-0 ruled CP-L10 CONDITIONAL), in its database."""
+    provider = _priced(monkeypatch)
+    provider.readiness = {"CP-L10": "CONDITIONAL"}
+    provider.blockers = {"CP-L10": "Source pack is not mapped"}
+    document = _capture_of(monkeypatch, capsys, tmp_path, provider)
+    [row] = document["result"]
+    return UUID(row["run_id"])
+
+
+def _performed(
+    conn: StoreConnection, blobs: BlobStore, run_id: UUID, bundle: Bundle
+) -> Performed:
+    """The record `harness.perform` would hold for `run_id`, read through
+    `blobs` as `_unrun` reads it."""
+    return Performed(
+        case_label="c",
+        run_id=run_id,
+        status=RunStatus.BLOCKED,
+        stopped=None,
+        proof=None,
+        refusal=None,
+        unrun=_unrun(conn, blobs, bundle, run_id),
+    )
+
+
+def _run_connection(created: list[str]) -> StoreConnection:
+    admin = os.environ["CAOS_TEST_POSTGRES_URL"]
+    return connect(admin.rsplit("/", 1)[0] + "/" + created[0])
+
+
+def test_a_route_block_whose_gate_record_will_not_load_lists_every_unrun_node(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """The unreadable-readiness branch, as production pairs it: the same broken
+    store feeds `_unrun` (which then computes every state without CP-0's
+    readiness, so CP-L10 is no longer BLOCKED) and `_blocked_by`. The nodes a
+    verdict held are exactly the ones a BLOCKED filter would drop."""
+    run_id = _route_blocked_run(monkeypatch, capsys, tmp_path)
+    broken = BlobStore(tmp_path / "no-blobs")
+    with _run_connection(created) as conn:
+        bundle = Bundle(Path(qualify.__file__).parents[1] / "vendor/deploy-v")
+        record = _performed(conn, broken, run_id, bundle)
+        blocked: Any = qualify._blocked_by(conn, broken, bundle, record)
+
+    assert blocked["path"] == "route"
+    assert blocked["readiness_unreadable"] == "ARTIFACT_RECORD_MISMATCH"
+    assert blocked["states_without_readiness"] is True
+    nodes = {n["route_node_id"].rsplit("-", 1)[-1]: n for n in blocked["nodes"]}
+    assert set(nodes) == {"L10", "5"}
+    assert all(set(n) == {"route_node_id", "state"} for n in nodes.values())
+    assert nodes["L10"]["state"] != "BLOCKED"
+
+
+def test_a_value_error_reading_the_gate_record_is_a_typed_marker_not_the_text(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """`harness._accepted` guards `(Refusal, ValueError)` around the same read;
+    an escape here would end the process after the spend and before
+    `record_evidence`. The marker is the class name, never `str(exc)`."""
+    run_id = _route_blocked_run(monkeypatch, capsys, tmp_path)
+    blobs = BlobStore(tmp_path / "blobs")
+
+    class _Malformed(ValueError):
+        def __init__(self) -> None:
+            super().__init__("the document says: Total debt")
+
+    def malformed(*_: object, **__: object) -> object:
+        raise _Malformed
+
+    with _run_connection(created) as conn:
+        bundle = Bundle(Path(qualify.__file__).parents[1] / "vendor/deploy-v")
+        record = _performed(conn, blobs, run_id, bundle)
+        monkeypatch.setattr(qualify, "accepted_artifacts", malformed)
+        blocked: Any = qualify._blocked_by(conn, blobs, bundle, record)
+
+    assert blocked["readiness_unreadable"] == "_Malformed"
+    assert blocked["states_without_readiness"] is True
+    assert "Total debt" not in json.dumps(blocked)
+    assert len(blocked["nodes"]) == 2
+
+
+def test_a_route_block_names_only_blocked_nodes_and_reads_no_verdict_for_a_module(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """A node that is not BLOCKED is left out; a BLOCKED module CP-0 did not
+    rule on (CP-0 itself) carries no verdict and is not held by one."""
+    run_id = _route_blocked_run(monkeypatch, capsys, tmp_path)
+    blobs = BlobStore(tmp_path / "blobs")
+    with _run_connection(created) as conn:
+        bundle = Bundle(Path(qualify.__file__).parents[1] / "vendor/deploy-v")
+        record = _performed(conn, blobs, run_id, bundle)
+        [l10, cp5] = record.unrun
+        route = resolved_route(conn, run_id)
+        assert route is not None
+        [gate] = [n.route_node_id for n in route.nodes if n.module_id == "CP-0"]
+        cp0 = replace(l10, route_node_id=gate)
+        record = replace(
+            record, unrun=(cp0, l10, replace(cp5, state=NodeState.RUNNABLE))
+        )
+        blocked: Any = qualify._blocked_by(conn, blobs, bundle, record)
+
+    by_module = {n["module_id"]: n for n in blocked["nodes"]}
+    assert set(by_module) == {"CP-0", "CP-L10"}
+    assert by_module["CP-0"]["verdict"] is None
+    assert by_module["CP-0"]["verdict_from"] is None
+    assert by_module["CP-0"]["held_by_verdict"] is False
+    assert by_module["CP-L10"]["verdict_from"] == "CP-0"
+    assert by_module["CP-L10"]["held_by_verdict"] is True
+
+
+def test_a_route_block_with_no_pin_or_no_unrun_nodes_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """An empty list is not an answer: say whether the pin is gone or the
+    harness recorded no unrun node."""
+    run_id = _route_blocked_run(monkeypatch, capsys, tmp_path)
+    blobs = BlobStore(tmp_path / "blobs")
+    with _run_connection(created) as conn:
+        bundle = Bundle(Path(qualify.__file__).parents[1] / "vendor/deploy-v")
+        record = _performed(conn, blobs, run_id, bundle)
+        none_unrun: Any = qualify._blocked_by(
+            conn, blobs, bundle, replace(record, unrun=())
+        )
+        unpinned: Any = qualify._blocked_by(
+            conn, blobs, bundle, replace(record, run_id=UUID(int=1), unrun=())
+        )
+
+    assert none_unrun["path"] == "route" and none_unrun["nodes"] == []
+    assert none_unrun["no_unrun_nodes"] is True
+    assert unpinned == {
+        "path": "route",
+        "nodes": [],
+        "route_pin_missing": True,
+    }
+
+
+def test_a_run_that_is_not_blocked_carries_no_blocked_by(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """`blocked_by` is for a BLOCKED run only; a refused run says `stopped`."""
+    monkeypatch.setenv("CAOS_MODEL_PRICE", _PRICE)
+    document = _capture_of(
+        monkeypatch, capsys, tmp_path, _AlwaysRefused.from_environment()
+    )
+    [row] = document["result"]
+    assert row["status"] != "BLOCKED"
+    assert row["blocked_by"] is None
+
+
+def test_stop_code_reads_the_ledger_for_the_stopped_node(harness: _Harness) -> None:
+    """`_stop_code`, over a real store: a refusal a retry is owed for is the
+    budget's stop only when the stopped node's latest attempt never reserved."""
+    from conftest import reserve_at
+    from test_canonical_execution import _node
+
+    from caos.store.outcomes import CallOutcome, record_outcome
+    from caos.store.runs import start_attempt
+
+    conn = harness.conn
+    node = _node(harness, "CP-0").route_node_id
+
+    def stop(raised: RefusalCode) -> RefusalCode | None:
+        conn.commit()
+        record = Performed(
+            case_label="c",
+            run_id=harness.run_id,
+            status=RunStatus.RUNNING,
+            stopped=raised,
+            proof=None,
+            refusal=None,
+            unrun=_unrun(conn, harness.blobs, harness.bundle, harness.run_id),
+        )
+        conn.rollback()
+        return qualify._stop_code(conn, record)
+
+    # No attempt at any node: the raised code stands.
+    assert stop(RefusalCode.HANDOFF_MALFORMED) is RefusalCode.HANDOFF_MALFORMED
+    # A declared drop, then an attempt the budget refused before it reserved.
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+    first = start_attempt(conn, harness.run_id, node)
+    assert record_outcome(conn, attempt_id=first, outcome=dropped)
+    start_attempt(conn, harness.run_id, node)
+    budget = RefusalCode.BUDGET_CEILING_REACHED
+    assert stop(RefusalCode.PROVIDER_UNAVAILABLE) is budget
+    assert stop(RefusalCode.HANDOFF_MALFORMED) is budget
+    # A code a retry is not owed for stands, however the attempt ended.
+    assert stop(RefusalCode.LEASE_NOT_HELD) is RefusalCode.LEASE_NOT_HELD
+    # A reserved latest attempt: the raised code stands.
+    reserve_at(conn, start_attempt(conn, harness.run_id, node), Decimal("0.01"))
+    assert stop(RefusalCode.PROVIDER_UNAVAILABLE) is RefusalCode.PROVIDER_UNAVAILABLE
+    assert stop(RefusalCode.HANDOFF_MALFORMED) is RefusalCode.HANDOFF_MALFORMED
