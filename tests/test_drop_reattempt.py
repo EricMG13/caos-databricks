@@ -538,6 +538,14 @@ def test_the_ledger_gives_one_re_attempt_after_one_declared_drop() -> None:
     assert not declared_drop(invalid)
     assert not declared_drop(_attempt(unavailable, DropKind.VENDOR))
     assert reattempts_a_drop([invalid, declared])
+    # QF2-1: an attempt that never reserved is passed over; one that did and
+    # was left unexplained is not, and a passed-over row spends no re-attempt.
+    orphan = NodeAttempt(uuid4(), None, None, unreserved=True)
+    assert reattempts_a_drop([declared, orphan])
+    assert reattempts_a_drop([declared, orphan, orphan])
+    assert not reattempts_a_drop([declared, declared, orphan])
+    assert not reattempts_a_drop([orphan])
+    assert not reattempts_a_drop([declared, _attempt(None)])
     assert reattempts_a_drop([invalid, _attempt(None), declared])
     for kind in (DropKind.VENDOR, DropKind.RAISED, DropKind.ESCAPED, DropKind.DEADLINE):
         assert not reattempts_a_drop([_attempt(unavailable, kind)])
@@ -1284,6 +1292,76 @@ def test_the_declared_bounds_and_a_brief_retry_after() -> None:
     assert not models._declared(StatusError(399))
     assert not models._declared(StatusError(600))
     assert models._retry_after(_LimitedBriefly("private")) == 0.5
+
+
+def test_an_attempt_that_never_reserved_hides_neither_a_re_attempt_nor_its_stop(
+    harness: _Harness,
+) -> None:
+    """QF2-1: an attempt that never reserved (a budget refusal, a lost lease or a
+    cancel at `reserve`, or a crash before it; no reservation, outcome or
+    refusal) is passed over, as the guided retry
+    passes it over, so it hides neither the re-attempt a declared drop is owed
+    (`drop_reattempt_due`) nor the stop owed after the re-attempt dropped too
+    (`drop_stop_owed`, F530)."""
+    from caos.methodology.canonical import drop_reattempt_due
+    from caos.store.runs import start_attempt
+    from caos.store.work import enqueue_run
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+
+    def drop() -> None:
+        attempt = start_attempt(conn, harness.run_id, node)
+        assert record_outcome(conn, attempt_id=attempt, outcome=dropped)
+
+    def reattempt_due() -> bool:
+        due = drop_reattempt_due(conn, run_id=harness.run_id, route_node_id=node)
+        conn.rollback()
+        return due
+
+    def stop_owed() -> bool:
+        said = drop_stop_owed(conn, run_id=harness.run_id, route_node_id=node)
+        conn.rollback()
+        return said
+
+    drop()
+    start_attempt(conn, harness.run_id, node)
+    conn.commit()
+    assert reattempt_due()
+    drop()
+    start_attempt(conn, harness.run_id, node)
+    conn.commit()
+    assert not reattempt_due()
+    enqueue_run(conn, harness.run_id)
+    conn.commit()
+    assert stop_owed()
+
+
+def test_a_reserved_attempt_with_no_outcome_is_not_passed_over_after_a_drop(
+    harness: _Harness,
+) -> None:
+    """QF2-1 (review I1): after a declared drop, an attempt that reserved and
+    recorded no outcome is a call in flight; it is the node's latest attempt, so
+    no re-attempt is owed while it stands."""
+    from conftest import reserve_at
+
+    from caos.methodology.canonical import drop_reattempt_due
+    from caos.store.outcomes import node_attempts
+    from caos.store.runs import start_attempt
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    first = start_attempt(conn, harness.run_id, node)
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+    assert record_outcome(conn, attempt_id=first, outcome=dropped)
+    assert drop_reattempt_due(conn, run_id=harness.run_id, route_node_id=node)
+    conn.rollback()
+    attempt = start_attempt(conn, harness.run_id, node)
+    reserve_at(conn, attempt, Decimal("0.01"))
+    assert node_attempts(conn, harness.run_id, node)[-1].unreserved is False
+    conn.rollback()
+    assert not drop_reattempt_due(conn, run_id=harness.run_id, route_node_id=node)
 
 
 def test_drop_stop_owed_reads_the_park_against_the_latest_drop(

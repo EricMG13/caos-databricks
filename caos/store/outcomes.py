@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from decimal import Decimal
@@ -185,6 +185,26 @@ class NodeAttempt:
     refusal: str | None
     diagnostic_sha256: str | None
     drop_kind: str | None = None
+    # True for an attempt that never reserved: no reservation, call outcome,
+    # artifact, charge or refusal. `_run_node` leaves one when `reserve`
+    # refuses after `start_attempt` committed (a budget refusal, a lost lease or
+    # a cancel) or the process dies between the two (`passed_over`). Defaults False so
+    # every other constructor stands.
+    unreserved: bool = False
+
+
+def passed_over(attempts: Iterable[NodeAttempt]) -> list[NodeAttempt]:
+    """`attempts` less those that never reserved (a budget refusal, a lost
+    lease or a cancel at `reserve`, or a crash before it; QF2-1, controller ruling
+    R48): the ledger's read of a node's last real attempt must not be hidden by
+    a row that bought and asked nothing. Safe against an attempt another worker
+    has started and not yet reserved, because passing over changes only which
+    prompt and which pass the next attempt gets, never whether it may call: that
+    attempt still takes `start_attempt`'s `_UNSETTLED` check and its own
+    `reserve` under the run lock, and a holder whose lease was reclaimed is refused
+    `LEASE_NOT_HELD` at its own `reserve` and `check_call`. Write order is
+    untouched; this is a read."""
+    return [a for a in attempts if not a.unreserved]
 
 
 def node_attempts(
@@ -192,10 +212,15 @@ def node_attempts(
 ) -> tuple[NodeAttempt, ...]:
     """Every attempt at this run node, oldest first. Caller owns the read."""
     rows = conn.execute(
-        "SELECT t.attempt_id, r.code, o.diagnostic_sha256, o.drop_kind"
+        "SELECT t.attempt_id, r.code, o.diagnostic_sha256, o.drop_kind,"
+        " (b.attempt_id IS NULL AND r.attempt_id IS NULL AND o.attempt_id IS NULL"
+        "  AND NOT EXISTS (SELECT 1 FROM artifacts a WHERE a.attempt_id = t.attempt_id)"
+        "  AND NOT EXISTS (SELECT 1 FROM budget_ledger l"
+        "   WHERE l.attempt_id = t.attempt_id)) AS unreserved"
         " FROM run_attempts t"
         " LEFT JOIN attempt_refusals r USING (attempt_id)"
         " LEFT JOIN call_outcomes o USING (attempt_id)"
+        " LEFT JOIN budget_reservations b USING (attempt_id)"
         " WHERE t.run_id = %s AND t.route_node_id = %s"
         " ORDER BY t.ordinal NULLS FIRST, t.started_at, t.attempt_id",
         (run_id, route_node_id),
@@ -206,8 +231,9 @@ def node_attempts(
             None if code is None else str(code),
             None if diagnostic is None else str(diagnostic),
             None if drop is None else str(drop),
+            unreserved is True,
         )
-        for attempt, code, diagnostic, drop in rows
+        for attempt, code, diagnostic, drop, unreserved in rows
     )
 
 
@@ -240,7 +266,7 @@ def drop_stop_owed(conn: StoreConnection, *, run_id: UUID, route_node_id: str) -
     no work row is a direct caller's, whose rerun is its own decision.
     Caller owns the read; `runs._start` asks it under the run lock, in the
     unit that would start the attempt (F530 round 2)."""
-    attempts = node_attempts(conn, run_id, route_node_id)
+    attempts = passed_over(node_attempts(conn, run_id, route_node_id))
     drops = sum(1 for a in attempts if declared_drop(a))
     if not attempts or not declared_drop(attempts[-1]) or drops <= DROP_REATTEMPTS:
         return False

@@ -308,8 +308,9 @@ def test_a_marker_naming_no_citation_gets_a_retry_naming_it(
     assert (
         "host marker check: the Markdown body writes [C9], but the answer has 1"
         " citation, so it names none; a marker [C<n>] names the citation at"
-        " place n of the list, from [C1] to [C1]"
-        in " ".join(answers.prompts[1].split())
+        " place n of the list, from [C1] to [C1]; re-point it to the citation"
+        " that carries its passage, or remove it; add a citation only for a"
+        " passage not yet listed" in " ".join(answers.prompts[1].split())
     )
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
 
@@ -365,6 +366,21 @@ def test_the_ledger_makes_the_fourth_attempt_the_last_guided_retry() -> None:
     assert _feedback_source([*three[:2], refused("PROVIDER_REFUSED")]) is None
     assert _feedback_source([*three[:2], refused(None)]) is None
     assert _feedback_source([]) is None
+    # QF2-1: an attempt that never reserved is passed over -- the retry chain
+    # holds -- but an unexplained attempt that did reserve still ends it, and
+    # passing over never counts toward the retries spent.
+    orphan = NodeAttempt(uuid4(), None, None, unreserved=True)
+    assert _feedback_source([three[0], orphan]) == three[0]
+    assert _feedback_source([*three[:2], orphan, orphan]) == three[1]
+    assert _feedback_source([*three, orphan]) == three[-1]
+    assert _feedback_source([*three, refused(malformed), orphan]) is None
+    assert _feedback_source([orphan]) is None
+    assert _feedback_source([three[0], refused(None)]) is None
+    from caos.store.outcomes import passed_over
+
+    plain = refused(None)
+    assert passed_over([three[0], orphan, plain, orphan]) == [three[0], plain]
+    assert passed_over([orphan]) == []
 
 
 class _Crash(BaseException):
@@ -392,6 +408,84 @@ def test_the_second_attempt_survives_a_crash_after_the_refusal(
     assert _run(harness, flawed) is None
     assert VENDOR_LINE in answers.prompts[1]
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_an_attempt_that_never_reserved_does_not_break_the_guided_retry_chain(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QF2-1 (diagnosis 2, Q1 c1): an attempt that never reserved (a budget
+    refusal, a lost lease or a cancel at `reserve`, or a crash before it) -- a
+    row with no reservation, call, outcome or refusal -- is passed over like a
+    declared drop (D110), so the node still owes the guided retry its refusal
+    earned and the retry is told that refusal. Walked on a real ledger: the
+    orphan is what `_run_node` leaves when `reserve` refuses
+    `BUDGET_CEILING_REACHED` after `start_attempt` committed."""
+    from caos.methodology.canonical import _feedback_body
+    from caos.methodology.executor import Assignment
+    from caos.store.runs import start_attempt
+
+    answers = CanonicalCompletions(harness.source_id)
+    flawed = _Flawed(answers)
+
+    def crash(*_args: object) -> bool:
+        raise _Crash
+
+    monkeypatch.setattr(runtime, "_second_due", crash)
+    with pytest.raises(_Crash):
+        _run(harness, flawed)
+    monkeypatch.undo()
+    node = _node(harness, "CP-0")
+    cp0 = node.route_node_id
+    refused = node_attempts(harness.conn, harness.run_id, cp0)
+    assert [a.refusal for a in refused] == ["HANDOFF_MALFORMED"]
+    for _orphans in range(2):
+        start_attempt(harness.conn, harness.run_id, cp0)
+        assert second_attempt_due(
+            harness.conn, run_id=harness.run_id, route_node_id=cp0
+        )
+    retry = start_attempt(harness.conn, harness.run_id, cp0)
+    body = _feedback_body(
+        harness.conn,
+        harness.blobs,
+        Assignment("CP-0", harness.run_id, node, harness.route, retry),
+    )
+    assert body is not None and body[1] == refused[0].attempt_id
+    # The reserved count is unchanged: only the refusal ever reserved.
+    assert _cp0_ledger(harness)[1] == 1
+
+
+def test_a_reserved_attempt_with_no_outcome_still_ends_the_chain(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QF2-1 (review I1): an attempt that reserved but recorded no outcome is a
+    call in flight, or a holder that died mid-call with its bill unknown. It is
+    not an attempt that never reserved, so it is not passed over: the node owes
+    no guided retry while it stands (`_UNSETTLED` holds the node as well)."""
+    from decimal import Decimal
+
+    from conftest import reserve_at
+
+    from caos.store.runs import start_attempt
+
+    flawed = _Flawed(CanonicalCompletions(harness.source_id))
+
+    def crash(*_args: object) -> bool:
+        raise _Crash
+
+    monkeypatch.setattr(runtime, "_second_due", crash)
+    with pytest.raises(_Crash):
+        _run(harness, flawed)
+    monkeypatch.undo()
+    cp0 = _node(harness, "CP-0").route_node_id
+    assert second_attempt_due(harness.conn, run_id=harness.run_id, route_node_id=cp0)
+    attempt = start_attempt(harness.conn, harness.run_id, cp0)
+    reserve_at(harness.conn, attempt, Decimal("0.01"))
+    last = node_attempts(harness.conn, harness.run_id, cp0)[-1]
+    assert last.attempt_id == attempt and last.unreserved is False
+    harness.conn.rollback()
+    assert not second_attempt_due(
+        harness.conn, run_id=harness.run_id, route_node_id=cp0
+    )
 
 
 def _checks(prompt: str) -> str:
@@ -1423,10 +1517,12 @@ def test_a_repeated_citation_is_named_as_one_and_its_answer_carried() -> None:
     assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
     lines = feedback_lines(CONTRACT, CATALOG, gate, body, skill=skill("CP-0"))
     assert lines[0] == (
-        "host citation check: citation 3 repeats citation 1 and citation 4"
-        " repeats citation 2, the same source_id, page and matched_text; list"
-        " each citation once, cite a repeated passage again by the marker of its"
-        " first place, and renumber every marker after a citation you remove"
+        "host citation check: citation 3 repeats citation 1: write [C1]"
+        " wherever the body writes [C3], and delete citation 3; citation 4"
+        " repeats citation 2: write [C2] wherever the body writes [C4], and"
+        " delete citation 4 (a repeat has the same source_id, page and"
+        " matched_text); then renumber every"
+        " marker after a citation you removed"
     )
     assert not any("not the JSON object" in line for line in lines)
     assert carried_answer(body) == body
@@ -1442,10 +1538,13 @@ def test_the_repeat_line_stays_within_the_line_limit() -> None:
     body = wire(with_markers(handoff_markdown(gate), 400), cited + cited)
     lines = feedback_lines(CONTRACT, CATALOG, gate, body, skill=skill("CP-0"))
     line = lines[0]
-    assert line.startswith("host citation check: citation 201 repeats citation 1, ")
+    assert line.startswith(
+        "host citation check: citation 201 repeats citation 1: write [C1]"
+        " wherever the body writes [C201], and delete citation 201; "
+    )
     assert len(line) <= MAX_FEEDBACK_CHARS
     named = line.count(" repeats citation ")
-    assert 0 < named < 200 and f" and {200 - named} more, " in line
+    assert 0 < named < 200 and f"; and {200 - named} more repeats (" in line
 
 
 def _with_a_repeated_citation(body: str) -> str:
@@ -1464,7 +1563,10 @@ def test_a_retry_after_a_repeated_citation_carries_the_answer(
     flawed = _Flawed(answers, flaw=_with_a_repeated_citation)
     assert _run(harness, flawed) is None
     second = " ".join(answers.prompts[1].split())
-    assert "host citation check: citation 2 repeats citation 1," in second
+    assert (
+        "host citation check: citation 2 repeats citation 1: write [C1]"
+        " wherever the body writes [C2], and delete citation 2"
+    ) in second
     assert REFUSED in second and "not the JSON object" not in second
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
 

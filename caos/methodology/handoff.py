@@ -1311,28 +1311,43 @@ def _absent_ids_line(
     fact about the answer, not a rule. The checker finds a register by its ID
     and says only that it is missing; CP-1A live wrote every register under a
     human title and its second attempt, told eleven were missing, could not see
-    why. At most `MAX_FEEDBACK_CITATIONS` IDs are named, the rest counted."""
+    why. Only an ID the vendor's own `find_registers` also fails to find is
+    named, so the line never contradicts the keep line (QF2-2). At most
+    `MAX_FEEDBACK_CITATIONS` IDs are named, the rest counted."""
     if not skill or module_id == MODEL_MODULE:
         return None
+    loaded = None
     with suppress(Exception):  # a contract it cannot read is nothing to report
-        registers = contract.completeness_check.load_contract(
+        loaded = contract.completeness_check.load_contract(
             skill.decode("utf-8"), module_id
-        )["registers"]
-        absent = sorted(
-            register for register in registers if not _writes_id(text, register)
         )
-        if absent:
-            shown = absent[:MAX_FEEDBACK_CITATIONS]
-            rest = len(absent) - len(shown)
-            named = ", ".join(f"`{register}`" for register in shown)
-            named += f" and {rest} more" if rest else ""
-            subject = "register ID" if len(absent) == 1 else "register IDs"
-            verb = "appears" if len(absent) == 1 else "appear"
-            return (
-                f"host register check: the {subject} {named} {verb} nowhere"
-                " in the answer"
-            )
-    return None
+    if loaded is None:
+        return None
+    absent = _unlocated(contract, text, loaded)  # a locator failure surfaces
+    if not absent:
+        return None
+    shown = absent[:MAX_FEEDBACK_CITATIONS]
+    rest = len(absent) - len(shown)
+    named = ", ".join(f"`{register}`" for register in shown)
+    named += f" and {rest} more" if rest else ""
+    subject = "register ID" if len(absent) == 1 else "register IDs"
+    verb = "appears" if len(absent) == 1 else "appear"
+    return f"host register check: the {subject} {named} {verb} nowhere in the answer"
+
+
+def _unlocated(
+    contract: VendorContract, text: str, loaded: Mapping[str, Any]
+) -> list[str]:
+    """The loaded contract's register IDs `text` never writes whole and the
+    vendor's `find_registers` does not locate either, sorted."""
+    registers = loaded["registers"]
+    unwritten = [r for r in registers if not _writes_id(text, r)]
+    if not unwritten:
+        return []
+    found = contract.completeness_check.find_registers(
+        text, registers, loaded.get("retired_registers", ())
+    )
+    return sorted(register for register in unwritten if register not in found)
 
 
 def kept_registers_line(
@@ -1648,19 +1663,20 @@ def _repeated_line(repeats: Sequence[tuple[int, int]]) -> str:
 
 
 def _repeat_text(repeats: Sequence[tuple[int, int]], shown: int) -> str:
-    """`_repeated_line`'s text naming the first `shown` pairs."""
-    pairs = [f"citation {n} repeats citation {first}" for n, first in repeats[:shown]]
+    """`_repeated_line`'s text naming the first `shown` pairs, each with the
+    exact substitution that removes the repeat."""
+    pairs = [
+        f"citation {n} repeats citation {first}: write [C{first}]"
+        f" wherever the body writes [C{n}], and delete citation {n}"
+        for n, first in repeats[:shown]
+    ]
+    named = "; ".join(pairs)
     if rest := len(repeats) - shown:
-        named = ", ".join(pairs) + f" and {rest} more"
-    else:
-        named = " and ".join(
-            [", ".join(pairs[:-1]), pairs[-1]] if pairs[:-1] else pairs
-        )
+        named += f"; and {rest} more repeats"
     return (
-        f"host citation check: {named}, the same source_id, page and"
-        " matched_text; list each citation once, cite a repeated passage again"
-        " by the marker of its first place, and renumber every marker after a"
-        " citation you remove"
+        f"host citation check: {named} (a repeat has the same source_id, page"
+        " and matched_text); then renumber every marker after a citation you"
+        " removed"
     )
 
 
@@ -1685,24 +1701,44 @@ def _dangling_line(text: str, count: int) -> str | None:
     """The markers that name no citation (D107), each as `[C<n>]` as written
     -- the model's own number, cut past 12 digits, never its text -- and the
     count they must stay within: the check that refused the answer
-    (`parse_response`)."""
+    (`parse_response`), and what to do with each -- re-point it to a listed
+    citation or remove it. As many markers as `MAX_FEEDBACK_CHARS` holds."""
     dangling = _dangling(text, count)
     if not dangling:
         return None
-    shown = [
+    one = len(dangling) == 1
+    names = "it names" if one else "they name"
+    each = "it" if one else "each of them"
+    cited = "citation" if count == 1 else "citations"
+    marks = [
         f"[C{n if len(n) <= 12 else n[:12] + '...'}]"
         for n in dangling[:MAX_FEEDBACK_CITATIONS]
     ]
-    rest = len(dangling) - len(shown)
-    more = f" and {rest} more" if rest else ""
-    names = "it names" if len(dangling) == 1 else "they name"
-    cited = "citation" if count == 1 else "citations"
-    return (
-        f"host marker check: the Markdown body writes {', '.join(shown)}{more},"
-        f" but the answer has {count} {cited}, so"
-        f" {names} none; a marker [C<n>] names the citation at place n of the"
-        f" list, from [C1] to [C{count}]"
-    )
+    for shown in range(len(marks), 0, -1):
+        rest = len(dangling) - shown
+        more = f" and {rest} more" if rest else ""
+        head = f"host marker check: the Markdown body writes {', '.join(marks[:shown])}"
+        if count == 0:  # nothing to re-point to
+            line = (
+                f"{head}{more}, but the answer has no citations; remove"
+                f" {'it' if one else 'them'}, or add the "
+                + (
+                    "citation for its passage"
+                    if one
+                    else "citations for their passages"
+                )
+            )
+        else:
+            line = (
+                f"{head}{more}, but the answer has {count} {cited}, so {names}"
+                " none; a marker [C<n>] names the citation at place n of the"
+                f" list, from [C1] to [C{count}]; re-point {each} to the"
+                " citation that carries its passage, or remove it; add a"
+                " citation only for a passage not yet listed"
+            )
+        if len(line) <= MAX_FEEDBACK_CHARS:
+            break
+    return line
 
 
 def _unmarked_line(text: str, count: int) -> str | None:

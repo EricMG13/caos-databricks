@@ -170,6 +170,7 @@ from caos.store.outcomes import (
     declared_drop,
     execution_reads,
     node_attempts,
+    passed_over,
     producer_identifier,
     record_outcome,
     require_idle,
@@ -1294,8 +1295,10 @@ def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
     every later attempt is an ordinary one. Read from the ledger, so a crash
     between a refusal and its retry changes nothing. A drop the provider
     declared is passed over (D110): it answered nothing, so the attempt
-    after it repeats the guided retry it replaced and spends none."""
-    attempts = [a for a in attempts if not declared_drop(a)]
+    after it repeats the guided retry it replaced and spends none. So is an
+    attempt that never reserved (a budget refusal, a lost lease or a cancel at
+    `reserve`, or a crash before it: `passed_over`)."""
+    attempts = [a for a in passed_over(attempts) if not declared_drop(a)]
     refused = [a for a in attempts if a.refusal in SECOND_ATTEMPT_CODES]
     if not refused or len(refused) > GUIDED_RETRIES or attempts[-1] != refused[-1]:
         return None
@@ -1316,7 +1319,9 @@ def reattempts_a_drop(attempts: Sequence[NodeAttempt]) -> bool:
     provider declared, unexplained or explained `PROVIDER_UNAVAILABLE`, and
     the node holds at most `DROP_REATTEMPTS` such drops in all. Counted on
     the call outcome, not its explanation, so a crash between the two
-    changes nothing; a guided retry neither spends one nor is spent."""
+    changes nothing; a guided retry neither spends one nor is spent. An
+    attempt that never reserved is passed over (`passed_over`)."""
+    attempts = passed_over(attempts)
     if not attempts:
         return False
     drops = sum(1 for a in attempts if declared_drop(a))

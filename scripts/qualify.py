@@ -61,11 +61,13 @@ from caos.blobs import BlobStore
 from caos.copilot import require_ready
 from caos.methodology import CANONICAL_ADAPTER_VERSION
 from caos.methodology.bundle import Bundle
+from caos.methodology.canonical import SECOND_ATTEMPT_CODES
 from caos.methodology.vendor import catalog
 from caos.models import ChatCompletions, from_environment
 from caos.pricing import price_from_environment, worst_case
 from caos.qualification.harness import (
     Harness,
+    Performed,
     PerformedSet,
     PreparedCase,
     assert_admissible,
@@ -77,9 +79,10 @@ from caos.qualification.on_disk import load_qualification_set
 from caos.qualification.store import performed_evidence, record_evidence
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect
-from caos.store.budget import validate_spend
+from caos.store.budget import remaining, validate_spend
 from caos.store.gates import Gate, GateApproval, approve_gate, gate_preview
 from caos.store.members import Standing, grant
+from caos.store.outcomes import execution_reads, node_attempts
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -142,6 +145,7 @@ def _capture(
     explicit, because a reader wants how many keys missed and then which.
     """
     snapshot = performed_evidence(prepared=prepared, performed=performed)
+    stops = {item.run_id: _stop_code(conn, item) for item in performed.performed}
     runs = [item.input.run_id for item in prepared]
     return {
         "adapter_version": CANONICAL_ADAPTER_VERSION,
@@ -153,15 +157,7 @@ def _capture(
         "performed_sha256": snapshot.evidence.performed_sha256,
         "complete": snapshot.complete,
         "result": [
-            {
-                "case_label": item.case_label,
-                "run_id": str(item.run_id),
-                "status": item.status.value,
-                "stopped": None if item.stopped is None else item.stopped.value,
-                "refusal": None if item.refusal is None else item.refusal.value,
-                "proof": None if item.proof is None else _object(asdict(item.proof)),
-            }
-            for item in performed.performed
+            _result_row(item, stops[item.run_id]) for item in performed.performed
         ],
         "attempts": _attempts(conn, runs),
         "matrix": None
@@ -177,6 +173,22 @@ def _capture(
             }
             for row in performed.matrix.rows
         ],
+    }
+
+
+def _result_row(item: Performed, stop: RefusalCode | None) -> dict[str, Plain]:
+    """One case's outcome. `stopped` is `_stop_code`'s reading; `refused_with`
+    keeps the refusal the run last raised when the budget stopped it after."""
+    return {
+        "case_label": item.case_label,
+        "run_id": str(item.run_id),
+        "status": item.status.value,
+        "stopped": None if stop is None else stop.value,
+        "refused_with": None
+        if item.stopped is None or stop is item.stopped
+        else item.stopped.value,
+        "refusal": None if item.refusal is None else item.refusal.value,
+        "proof": None if item.proof is None else _object(asdict(item.proof)),
     }
 
 
@@ -266,20 +278,62 @@ def _perform_until(  # noqa: PLR0913 -- one set, one loop, keyword-only tail
     performed = perform(
         conn, blobs, harness, qualification=qualification, prepared=prepared
     )
-    for remaining in range(attempts - 1, 0, -1):
-        if all(record.stopped is None for record in performed.performed):
+    for attempts_left in range(attempts - 1, 0, -1):
+        stopped = [record for record in performed.performed if record.stopped]
+        if not stopped:
             return performed
-        stopped = next(
-            record.stopped for record in performed.performed if record.stopped
-        )
+        left = _left(conn, stopped[0])
+        code = _stop_code(conn, stopped[0])
+        if code is RefusalCode.BUDGET_CEILING_REACHED:
+            # The ceiling refused an attempt before it reserved: entering
+            # `perform` again meets the same ceiling and buys nothing.
+            print(
+                json.dumps({"stopped_by": code.value, "remaining": left}),
+                flush=True,
+            )
+            return performed
         print(
-            json.dumps({"resumed_after": stopped.value, "attempts_left": remaining}),
+            json.dumps(
+                {
+                    "resumed_after": code.value if code else None,
+                    "attempts_left": attempts_left,
+                    "remaining": left,
+                }
+            ),
             flush=True,
         )
         performed = perform(
             conn, blobs, harness, qualification=qualification, prepared=prepared
         )
     return performed
+
+
+def _left(conn: StoreConnection, record: Performed) -> str:
+    """What the record's run may still reserve, as the budget ledger says."""
+    with execution_reads(conn):
+        return str(remaining(conn, record.run_id))
+
+
+def _stop_code(conn: StoreConnection, record: Performed) -> RefusalCode | None:
+    """The code that ended `record`'s run, as the ledger reads it.
+
+    `_with_second_attempt` re-raises the refusal before when the ceiling cannot
+    pay for the retry, so `Performed.stopped` names a refusal the retry never
+    answered (CP-5 #4 of qualify run 2). When that refusal is one a retry is
+    owed for and the stopped node's latest attempt never reserved
+    (`NodeAttempt.unreserved`), the budget is what stopped it. Any other code,
+    a lost lease included, stands as raised.
+    """
+    if record.stopped not in SECOND_ATTEMPT_CODES | {RefusalCode.PROVIDER_UNAVAILABLE}:
+        return record.stopped
+    node = next((unrun for unrun in record.unrun if unrun.attempts), None)
+    if node is None:
+        return record.stopped
+    with execution_reads(conn):
+        latest = node_attempts(conn, record.run_id, node.route_node_id)
+    if latest and latest[-1].unreserved:
+        return RefusalCode.BUDGET_CEILING_REACHED
+    return record.stopped
 
 
 def _configured_provider(expect_identity: str) -> ChatCompletions | None:
