@@ -1350,6 +1350,16 @@ def _unlocated(
     return sorted(register for register in unwritten if register not in found)
 
 
+def _readable(body: str) -> str | None:
+    """The Markdown a stored answer carried, as text, when it is the transport
+    and within the host's bounds on text (`_text_bound`); else None. The
+    vendor's heading and register expressions are read only on such text
+    (AI-1, F649): a body `_text` refuses was never read by a validator, and
+    measuring it must not be the first thing that does."""
+    markdown = answer_markdown(body)
+    return None if markdown is None else _text_bound(markdown)[0]
+
+
 def _held_registers(
     contract: VendorContract, module_id: str, body: str, skill: bytes
 ) -> tuple[Sequence[str], list[str]] | None:
@@ -1358,15 +1368,16 @@ def _held_registers(
     when `body` is not the transport, the module is CP-MODEL (no register
     contract), no skill was given, or the contract or its locations cannot be
     read (a missing profile, KeyError/ValueError). Unrelated locator failures
-    still surface."""
-    markdown = answer_markdown(body)
-    if markdown is None or not skill or module_id == MODEL_MODULE:
+    still surface. A body the host's text bound refuses (`_readable`) is not
+    read: the vendor's expressions are quadratic on text `_text` refuses."""
+    text = _readable(body)
+    if text is None or not skill or module_id == MODEL_MODULE:
         return None
     checker = contract.completeness_check
     try:
         loaded = checker.load_contract(skill.decode("utf-8"), module_id)
         found = checker.find_registers(
-            markdown.decode("utf-8"),
+            text,
             loaded["registers"],
             loaded.get("retired_registers", ()),
         )
@@ -1421,17 +1432,20 @@ def _extent(
 ) -> tuple[int | None, int | None]:
     """How many required registers and how many distinct H2 headings (the
     vendor's own reader, over the answer less its front matter and fenced
-    code) the answer `body` holds; None for a count that cannot be read."""
+    code, counting only the canonical ones: a heading the vendor refuses is a
+    fault the retry fixes by removing it, not content lost) the answer `body`
+    holds; None for a count that cannot be read."""
     held = _held_registers(contract, module_id, body, skill)
     headings: int | None = None
-    markdown = answer_markdown(body)
+    text = _readable(body)
     vendor = contract.validate_handoff
-    if markdown is not None:
-        with suppress(ValueError):  # no front matter the vendor parses
-            _fields, text = vendor.parse_restricted_frontmatter(
-                markdown.decode("utf-8")
-            )
-            headings = len(set(vendor._canonical_h2s(text)))
+    if text is not None:
+        # No front matter the vendor parses, or one nested past its parser's
+        # depth: not measured, never a fault (the answer is a refused one).
+        with suppress(ValueError, RecursionError):
+            _fields, rest = vendor.parse_restricted_frontmatter(text)
+            canonical = set(vendor.CANONICAL_HEADINGS)
+            headings = len(canonical.intersection(vendor._canonical_h2s(rest)))
     return (None if held is None else len(held[1])), headings
 
 

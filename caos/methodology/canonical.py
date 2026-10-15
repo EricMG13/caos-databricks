@@ -1405,7 +1405,13 @@ def _carried(
         return None
     asked = _feedback_source(attempts[: attempts.index(refused)])
     earlier = None if asked is None else _carried(blobs, attempts, asked, shrank)
-    if earlier is not None and shrank(earlier[0], body):
+    # An earlier answer `carried_answer` refuses cannot be carried, so it never
+    # displaces one that can (F649).
+    if (
+        earlier is not None
+        and carried_answer(earlier[0]) is not None
+        and shrank(earlier[0], body)
+    ):
         return earlier
     return body, refused.attempt_id
 

@@ -21,6 +21,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 from functools import partial
+from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
 
@@ -2410,11 +2411,12 @@ def test_a_retry_after_an_answer_as_complete_carries_the_latest(
     assert flawed.sent[1] in third and flawed.sent[0] not in third
 
 
-def test_a_section_lost_for_a_register_gained_is_not_a_register_shrink(
+def test_a_section_lost_while_a_register_is_gained_still_carries_the_earlier(
     harness: _Harness,
 ) -> None:
-    """Fewer on either count is enough: the later answer here holds all ten
-    registers the earlier one held, and one H2 fewer."""
+    """Fewer on either count is enough: the earlier answer holds nine
+    registers (T5 cut) and six H2s; the later holds all ten registers and one
+    H2 fewer, so it shrank on the H2 count and the earlier is carried."""
     answers, flawed = _retries(
         harness,
         _less_a_register(_with_material, "T5"),
@@ -2554,8 +2556,8 @@ def test_an_answer_shrank_when_it_holds_fewer_registers_or_fewer_sections() -> N
     assert not shrank(full, full)
     assert not shrank(_answer_body(register="T5"), full)
     assert not shrank(_answer_body(section="Source Registry"), full)
-    # Either count alone is enough: registers equal and sections fewer, and
-    # the reverse.
+    # Either count alone is enough: the pair holds 9 and 10 registers and 6
+    # and 5 H2s, each way round.
     assert shrank(_answer_body(register="T5"), _answer_body(section="Source Registry"))
     assert shrank(_answer_body(section="Source Registry"), _answer_body(register="T5"))
     # Not compared unless both are the transport.
@@ -2588,3 +2590,137 @@ def test_an_answer_shrank_compares_sections_only_where_registers_cannot_be_read(
     )
     assert not answer_shrank(CONTRACT, "CP-0", fenced, full, skill("CP-0"))
     assert not answer_shrank(CONTRACT, "CP-0", full, fenced, skill("CP-0"))
+
+
+# F649 fix round 1.
+
+
+def _with_padding(markdown: str, line: str) -> str:
+    """`markdown` with `line` followed by a run of spaces past the host's bound
+    (`MAX_WHITESPACE_RUN`) and a last word: the shape the vendor's heading
+    expressions read in quadratic time, and `_text` refuses."""
+    return markdown.replace(
+        "## Audit Summary\n", line + " " * 20_000 + "x\n\n## Audit Summary\n", 1
+    )
+
+
+def _with_a_note_section(markdown: str) -> str:
+    return markdown.replace(
+        "## Evidence Trace\n", "## Notes\n\nA note.\n\n## Evidence Trace\n", 1
+    )
+
+
+def _transport(markdown: str) -> str:
+    return json.dumps({"canonical_markdown": markdown, "citations": [_CITATION]})
+
+
+@pytest.mark.parametrize("line", ["## Note", "#### T1"])
+def test_a_body_the_text_bound_refuses_is_never_read_by_the_vendor(line: str) -> None:
+    """H1: the vendor's heading expressions backtrack quadratically on a long
+    whitespace run, which `_text` refuses before any vendor validator sees it
+    (AI-1). Measuring must keep that bound: a refused body has no count, so it
+    is never compared and the latest answer is carried."""
+    import time
+
+    from caos.methodology.handoff import answer_shrank
+
+    full = json.loads(_answer_body())["canonical_markdown"]
+    padded = _transport(_with_padding(full, line))
+    started = time.monotonic()
+    pair = (_transport(full), padded)
+    assert not answer_shrank(CONTRACT, "CP-0", *pair, skill("CP-0"))
+    assert not answer_shrank(CONTRACT, "CP-0", *pair[::-1], skill("CP-0"))
+    assert time.monotonic() - started < 1.0
+
+
+def test_a_padded_heading_in_the_latest_answer_keeps_it_carried(
+    harness: _Harness,
+) -> None:
+    answers, flawed = _retries(
+        harness,
+        _with_material,
+        _edited(_with_fixture_marker, lambda md: _with_padding(md, "## Note")),
+    )
+    third = _cp0_prompts(answers)[2]
+    assert flawed.sent[1] in third and flawed.sent[0] not in third
+
+
+def test_removing_a_non_canonical_section_is_not_a_shrink(harness: _Harness) -> None:
+    """H2: attempt 1 added `## Notes` and was refused for it; attempt 2 removed
+    it as told and is refused for something else. Its lines, not the first
+    answer's, are what attempt 3 must be told."""
+    answers, flawed = _retries(
+        harness, _edited(_with_material, _with_a_note_section), _with_fixture_marker
+    )
+    third = _cp0_prompts(answers)[2]
+    assert flawed.sent[1] in third and flawed.sent[0] not in third
+    assert "fixture marker" in third
+
+
+def test_registers_written_as_sections_then_fixed_is_not_a_shrink() -> None:
+    from caos.methodology.handoff import answer_shrank
+
+    full = json.loads(_answer_body())["canonical_markdown"]
+    as_h2 = full.replace("#### T1\n", "## T1\n").replace("#### T2\n", "## T2\n")
+    assert not answer_shrank(
+        CONTRACT, "CP-0", _transport(as_h2), _transport(full), skill("CP-0")
+    )
+
+
+def test_front_matter_nested_past_the_parsers_depth_is_not_measured(
+    harness: _Harness,
+) -> None:
+    """M1: the vendor's front-matter parser recurses; a RecursionError must not
+    escape and park the run. The answer is simply not measured."""
+    from caos.methodology.handoff import answer_shrank
+
+    nested = _edited(
+        _with_material,
+        lambda md: md.replace(
+            "validation_warnings: []\n",
+            "validation_warnings: " + "[" * 3000 + "]" * 3000 + "\n",
+            1,
+        ),
+    )
+    full = json.loads(_answer_body())["canonical_markdown"]
+    deep = _transport(
+        full.replace(
+            "validation_warnings: []\n",
+            "validation_warnings: " + "[" * 3000 + "]" * 3000 + "\n",
+            1,
+        )
+    )
+    assert not answer_shrank(CONTRACT, "CP-0", _transport(full), deep, skill("CP-0"))
+    _retries(harness, _with_material, nested)
+    # The third attempt ran and was accepted: the run was not parked.
+    assert _cp0_ledger(harness) == (3, 3, ["HANDOFF_MALFORMED"] * 2, 1)
+
+
+def test_an_earlier_answer_that_cannot_be_carried_does_not_displace_a_later_one(
+    tmp_path: Path,
+) -> None:
+    """M2: the rule's purpose is to carry the more complete answer; an earlier
+    one `carried_answer` refuses (here a raw zero-width space) cannot be, so the
+    later answer is carried with its own lines. `shrank` is stood in as True
+    because the walk, not the measure, is under test."""
+    from uuid import uuid4
+
+    from caos.blobs import BlobStore
+    from caos.methodology.canonical import _carried
+
+    store = BlobStore(tmp_path / "blobs")
+    full = json.loads(_answer_body())["canonical_markdown"]
+    hidden = json.dumps(
+        {"canonical_markdown": full + "​", "citations": [_CITATION]},
+        ensure_ascii=False,
+    )
+    plain = _answer_body(register="T5")
+    first = NodeAttempt(uuid4(), "HANDOFF_MALFORMED", store.put(hidden.encode()))
+    second = NodeAttempt(uuid4(), "HANDOFF_INCOMPLETE", store.put(plain.encode()))
+    assert carried_answer(hidden) is None
+    carried = _carried(store, [first, second], second, lambda _e, _l: True)
+    assert carried == (plain, second.attempt_id)
+    # A carriable earlier answer still displaces it.
+    ok = NodeAttempt(uuid4(), "HANDOFF_MALFORMED", store.put(_answer_body().encode()))
+    carried = _carried(store, [ok, second], second, lambda _e, _l: True)
+    assert carried is not None and carried[1] == ok.attempt_id
