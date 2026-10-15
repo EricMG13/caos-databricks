@@ -2595,10 +2595,14 @@ def test_an_answer_shrank_compares_sections_only_where_registers_cannot_be_read(
 # F649 fix round 1.
 
 
-def _with_padding(markdown: str, line: str) -> str:
+def _with_padding(markdown: str, line: str, under: str | None = None) -> str:
     """`markdown` with `line` followed by a run of spaces past the host's bound
     (`MAX_WHITESPACE_RUN`) and a last word: the shape the vendor's heading
-    expressions read in quadratic time, and `_text` refuses."""
+    expressions read in quadratic time, and `_text` refuses. With `under`, the
+    padded line follows that heading line instead of preceding the audit
+    summary."""
+    if under is not None:
+        return markdown.replace(under, under + "\n" + line + " " * 20_000 + "x\n\n", 1)
     return markdown.replace(
         "## Audit Summary\n", line + " " * 20_000 + "x\n\n## Audit Summary\n", 1
     )
@@ -2614,8 +2618,12 @@ def _transport(markdown: str) -> str:
     return json.dumps({"canonical_markdown": markdown, "citations": [_CITATION]})
 
 
-@pytest.mark.parametrize("line", ["## Note", "#### T1"])
-def test_a_body_the_text_bound_refuses_is_never_read_by_the_vendor(line: str) -> None:
+@pytest.mark.parametrize(
+    ("line", "under"), [("## Note", None), ("#### ", "## Analysis\n")]
+)
+def test_a_body_the_text_bound_refuses_is_never_read_by_the_vendor(
+    line: str, under: str | None
+) -> None:
     """H1: the vendor's heading expressions backtrack quadratically on a long
     whitespace run, which `_text` refuses before any vendor validator sees it
     (AI-1). Measuring must keep that bound: a refused body has no count, so it
@@ -2625,7 +2633,7 @@ def test_a_body_the_text_bound_refuses_is_never_read_by_the_vendor(line: str) ->
     from caos.methodology.handoff import answer_shrank
 
     full = json.loads(_answer_body())["canonical_markdown"]
-    padded = _transport(_with_padding(full, line))
+    padded = _transport(_with_padding(full, line, under))
     started = time.monotonic()
     pair = (_transport(full), padded)
     assert not answer_shrank(CONTRACT, "CP-0", *pair, skill("CP-0"))
@@ -2724,3 +2732,70 @@ def test_an_earlier_answer_that_cannot_be_carried_does_not_displace_a_later_one(
     ok = NodeAttempt(uuid4(), "HANDOFF_MALFORMED", store.put(_answer_body().encode()))
     carried = _carried(store, [ok, second], second, lambda _e, _l: True)
     assert carried is not None and carried[1] == ok.attempt_id
+
+
+# F649 mutation round: survivors of mutmut on the measuring functions.
+
+
+def test_an_answer_without_front_matter_is_still_counted_for_its_registers() -> None:
+    """`_extent`: front matter the vendor will not parse (its `FrontmatterError`
+    is a ValueError) leaves the section count unread, never a fault: the
+    register count is still compared."""
+    from caos.methodology.handoff import answer_shrank
+
+    markdown = json.loads(_answer_body())["canonical_markdown"]
+    bare = markdown.split("\n---\n", 1)[1]
+    assert not bare.startswith("---")
+
+    def shrank(earlier: str, later: str) -> bool:
+        return answer_shrank(CONTRACT, "CP-0", earlier, later, skill("CP-0"))
+
+    full, no_front = _answer_body(), _transport(bare)
+    assert not shrank(full, no_front) and not shrank(no_front, full)
+    assert shrank(full, _transport(_cut(bare, "#### T5\n", "#### ")))
+
+
+def test_a_register_under_a_retired_register_heading_is_not_held() -> None:
+    """`_held_registers` hands the vendor the module's retired IDs: CP-1 retired
+    T4.7, and a prose line above a table headed `#### T4.7 ...` never claims
+    that table for the register it mentions (the vendor's fork r7)."""
+    from caos.methodology.handoff import kept_registers_line
+
+    ident = replace(identity("CP-0"), module_id="CP-1")
+    markdown = handoff_markdown(
+        ident, fields={"module_id": "CP-1"}, omit_register="T4.2"
+    ).decode()
+    markdown += (
+        "\nTies to T4.2.\n\n#### T4.7 Normalized Financials\n\n"
+        "| Item | Value |\n| --- | --- |\n| a | b |\n"
+    )
+    line = kept_registers_line(CONTRACT, "CP-1", _transport(markdown), skill("CP-1"))
+    assert line is not None and "holds 17 of the 18 required registers" in line
+
+
+@pytest.mark.parametrize("fits", ["one", "some", "all"])
+def test_the_keep_line_names_the_largest_prefix_the_limit_allows(
+    fits: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`kept_registers_line` tries the most IDs first and stops at the first
+    line within the limit, the limit itself included."""
+    from caos.methodology import handoff
+
+    markdown = handoff_markdown(
+        replace(identity("CP-0"), module_id="CP-4"), fields={"module_id": "CP-4"}
+    )
+    body = wire(markdown, [_CITATION])
+    kept = list(
+        CONTRACT.completeness_check.load_contract(skill("CP-4").decode(), "CP-4")[
+            "registers"
+        ]
+    )
+    total = len(kept)
+    shown = {"one": 1, "some": total - 3, "all": total}[fits]
+    lengths = [len(handoff._kept_text(kept, n, total)) for n in range(1, total + 1)]
+    limit = lengths[shown - 1]
+    assert all(longer > limit for longer in lengths[shown:])  # no larger one fits
+    monkeypatch.setattr(handoff, "MAX_FEEDBACK_CHARS", limit)
+    assert handoff.kept_registers_line(
+        CONTRACT, "CP-4", body, skill("CP-4")
+    ) == handoff._kept_text(kept, shown, total)
