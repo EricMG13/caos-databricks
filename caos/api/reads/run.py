@@ -34,6 +34,7 @@ from caos.api.deps import (
 )
 from caos.api.identity import Actor, GlobalRole
 from caos.api.reads.analysis import blocked_by_view
+from caos.api.reads.qualification import verdict_state
 from caos.api.wire import (
     ATTEMPTS_MAX,
     RUNS_MAX,
@@ -81,7 +82,7 @@ from caos.methodology.handoff import ADAPTER_ROUTES
 from caos.methodology.invocation import named_objects
 from caos.methodology.vendor import catalog
 from caos.pricing import MAX_MODEL_CHOICES, configured_endpoint, model_choices
-from caos.qualification.store import Evidence, current_verdict
+from caos.qualification.store import Evidence
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
 from caos.store.gates import (
@@ -374,18 +375,7 @@ def _qualification_states(
     states = {model: QualificationState.UNQUALIFIED for model in models}
     for row in rows:
         evidence = Evidence(*row)
-        try:
-            current_verdict(conn, evidence=evidence, now=now)
-        except Refusal as refusal:
-            if refusal.code is RefusalCode.VERDICT_BINDING_INVALID:
-                states[evidence.model] = QualificationState.UNAVAILABLE
-            elif refusal.code not in {
-                RefusalCode.VERDICT_INCOMPLETE,
-                RefusalCode.VERDICT_EXPIRED,
-            }:
-                raise
-        else:
-            states[evidence.model] = QualificationState.QUALIFIED
+        states[evidence.model] = verdict_state(conn, evidence, now)[0]
     return states
 
 

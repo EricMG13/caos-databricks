@@ -20,6 +20,8 @@ from test_model_choice import deployed
 from test_run_commands import ROUTE, _outcome, _path, _send
 
 from caos.api.deps import methodology_bundle
+from caos.api.reads.qualification import verdict_state
+from caos.api.wire import QualificationState
 from caos.copilot import identity_of
 from caos.pricing import MODEL_PRICE_ENV, model_choices
 from caos.qualification.store import record_verdict
@@ -289,3 +291,24 @@ def test_a_reader_is_served_the_state_the_qualification_read_gives_a_reader(
     labels = _labels(command_client, case_id, reader, role="READER")
     assert set(labels.values()) == {"RESTRICTED"}
     assert len(labels) == 3
+
+
+def test_verdict_state_maps_the_validator_as_the_qualification_read_does(
+    case: tuple[StoreConnection, UUID],
+    deployed: None,
+) -> None:
+    """The one mapping both reads share: a current verdict is QUALIFIED and is
+    returned; evidence nothing was signed over is UNQUALIFIED with none."""
+    conn, _case_id = case
+    _verdict(conn, "gpt-6-luna", days=30)
+    signed = qualification_performed(
+        provider=identity_of("gpt-6-luna"),
+        model="gpt-6-luna",
+        build_id=methodology_bundle().build_id,
+        ordinal=list(model_choices()).index("gpt-6-luna") + 1,
+    ).evidence
+    now = datetime.now(UTC)
+    state, verdict = verdict_state(conn, signed, now)
+    assert (state, verdict is not None) == (QualificationState.QUALIFIED, True)
+    unsigned = qualification_performed(model="never-signed").evidence
+    assert verdict_state(conn, unsigned, now) == (QualificationState.UNQUALIFIED, None)
