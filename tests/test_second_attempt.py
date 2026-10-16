@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
@@ -52,13 +52,16 @@ from caos.methodology.handoff import (
     ADVISORY,
     HINT_WORDS,
     MAX_ANCHORING_CHARS,
+    MAX_CITATIONS,
     MAX_FEEDBACK_CHARS,
     MAX_FEEDBACK_CITATIONS,
     MAX_FEEDBACK_MESSAGES,
+    MAX_PAGE,
     HostIdentity,
     LineHint,
     anchoring_line,
     answer_citations,
+    answer_markdown,
     capped,
     carried_answer,
     feedback_lines,
@@ -1531,6 +1534,308 @@ def test_a_repeated_citation_is_named_as_one_and_its_answer_carried() -> None:
     assert carried_answer(body) == body
 
 
+_SOURCE_CLAUSE = (
+    "{} a source_id not spelled as the valid source_id values are"
+    " (36 characters, lower case, hyphenated, nothing around it)"
+)
+_PAGE_CLAUSE = "{} a page that is not a whole number from 1 to 2,147,483,647"
+_QUOTE_CLAUSE = "{} a matched_text that is empty or not a string"
+_FIELD_TAIL = " (numbered from 1 in the order given)"
+
+
+def _field_body(count: int, **faults: Mapping[int, object]) -> str:
+    """A well-formed transport of `count` citations, citation `n` (1-based)
+    carrying `faults[field][n]` in place of its good value."""
+    gate = identity("CP-0")
+    good: dict[str, object] = {
+        "source_id": str(UUID(int=1)),
+        "page": 1,
+        "matched_text": QUOTE,
+    }
+    cited = [
+        {key: faults.get(key, {}).get(n, value) for key, value in good.items()}
+        for n in range(1, count + 1)
+    ]
+    return wire(with_markers(handoff_markdown(gate), count), cited)
+
+
+def _field_lines(body: str) -> tuple[str, ...]:
+    return feedback_lines(
+        CONTRACT, CATALOG, identity("CP-0"), body, skill=skill("CP-0")
+    )
+
+
+def _refused_malformed(body: str) -> None:
+    with pytest.raises(Refusal) as refused:
+        parse_response(body)
+    assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
+
+
+def test_a_citation_whose_source_id_is_not_a_uuid_is_named_by_place() -> None:
+    """Live run 81e89dc3, attempt 2: citation 23 was not a UUID at all, and the
+    retry was told only that the answer was not the JSON object."""
+    body = _field_body(24, source_id={23: "Evidence-23"})
+    assert _field_lines(body) == (
+        "host citation check: "
+        + _SOURCE_CLAUSE.format("citation 23 has")
+        + _FIELD_TAIL,
+    )
+    assert not any("Evidence-23" in line for line in _field_lines(body))
+    assert not any("not the JSON object" in line for line in _field_lines(body))
+    _refused_malformed(body)
+
+
+@pytest.mark.parametrize(
+    "spelled",
+    [
+        str(UUID(int=0xABCDEF)).upper(),
+        "{" + str(UUID(int=0xABCDEF)) + "}",
+        "urn:uuid:" + str(UUID(int=0xABCDEF)),
+        UUID(int=0xABCDEF).hex,
+    ],
+)
+def test_a_non_canonical_uuid_spelling_is_named_by_place(spelled: str) -> None:
+    """Live run 81e89dc3, attempt 3: citation 13 was a UUID spelled another way."""
+    body = _field_body(14, source_id={13: spelled})
+    [line] = _field_lines(body)
+    assert line.startswith("host citation check: citation 13 has a source_id")
+    assert spelled not in line
+    _refused_malformed(body)
+
+
+@pytest.mark.parametrize("page", [0, MAX_PAGE + 1, "3", True, 1.0, None])
+def test_a_page_fault_is_named_by_place(page: object) -> None:
+    body = _field_body(3, page={2: page})
+    assert _field_lines(body) == (
+        "host citation check: " + _PAGE_CLAUSE.format("citation 2 has") + _FIELD_TAIL,
+    )
+    _refused_malformed(body)
+
+
+@pytest.mark.parametrize("quote", ["", "   ", None, 5])
+def test_an_empty_or_non_string_matched_text_is_named_by_place(quote: object) -> None:
+    body = _field_body(3, matched_text={3: quote})
+    assert _field_lines(body) == (
+        "host citation check: " + _QUOTE_CLAUSE.format("citation 3 has") + _FIELD_TAIL,
+    )
+    _refused_malformed(body)
+
+
+def test_mixed_citation_faults_are_named_under_each_field() -> None:
+    body = _field_body(
+        23,
+        source_id={23: "bad"},
+        page={4: 0, 9: 0},
+        matched_text={7: ""},
+    )
+    assert _field_lines(body) == (
+        "host citation check: citation 23 has a source_id not spelled as the"
+        " valid source_id values are (36 characters, lower case, hyphenated,"
+        " nothing around it); citations 4 and 9 have a page that is not a whole"
+        " number from 1 to 2,147,483,647; citation 7 has a matched_text that is"
+        " empty or not a string (numbered from 1 in the order given)",
+    )
+    _refused_malformed(body)
+
+
+def test_the_field_line_stays_within_the_line_limit() -> None:
+    everything = {n: None for n in range(1, MAX_CITATIONS + 1)}
+    body = _field_body(
+        MAX_CITATIONS, source_id=everything, page=everything, matched_text=everything
+    )
+    [line] = _field_lines(body)
+    assert line.startswith("host citation check: citations 1, 2, 3")
+    assert len(line) <= MAX_FEEDBACK_CHARS
+    assert " a source_id " in line and " a page " in line and " a matched_text " in line
+    assert " more " in line and line.endswith(_FIELD_TAIL)
+    _refused_malformed(body)
+
+
+def test_a_page_at_the_largest_whole_number_is_no_field_fault() -> None:
+    body = _field_body(2, page={2: MAX_PAGE})
+    parse_response(body)
+    assert not any("a page that is not" in line for line in _field_lines(body))
+
+
+def test_the_transport_limit_refuses_one_character_past_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from caos.methodology import handoff
+
+    body = _field_body(2, page={2: 2})
+    monkeypatch.setattr(handoff, "MAX_TRANSPORT_CHARS", len(body) + 3)
+    parse_response(body + "   ")  # exactly the limit: JSON whitespace
+    _refused_malformed(body + "    ")  # one past it
+
+
+def test_an_empty_citation_list_is_malformed_and_gets_the_shape_line() -> None:
+    gate = identity("CP-0")
+    body = wire(handoff_markdown(gate), [])
+    _refused_malformed(body)
+    assert carried_answer(body) is None
+    [line] = _field_lines(body)
+    assert line.startswith("host transport check: the answer is not the JSON")
+
+
+def test_the_field_line_is_never_empty_when_no_shortening_fits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from caos.methodology import handoff
+
+    monkeypatch.setattr(handoff, "MAX_FEEDBACK_CHARS", 10)
+    body = _field_body(3, page={1: 0, 2: 0})
+    assert _field_lines(body) == (
+        "host citation check: citations 1 and 1 more have a page that is not a"
+        " whole number from 1 to 2,147,483,647 (numbered from 1 in the order"
+        " given)",
+    )
+
+
+def test_a_shape_fault_still_wins_over_a_citation_field_fault() -> None:
+    gate = identity("CP-0")
+    markdown = with_markers(handoff_markdown(gate), 2)
+    bad = {"source_id": "bad", "page": 1, "matched_text": QUOTE}
+    good = {"source_id": str(UUID(int=1)), "page": 1, "matched_text": QUOTE}
+    shapes = [
+        wire(markdown, [bad, {"source_id": good["source_id"], "page": 1}]),
+        wire(markdown, [bad, {**good, "extra": 1}]),
+        json.dumps({"canonical_markdown": 5, "citations": [bad, good]}),
+        json.dumps({"canonical_markdown": "\ud800", "citations": [bad, good]}),
+    ]
+    for body in shapes:
+        assert carried_answer(body) is None
+        [line] = _field_lines(body)
+        assert line.startswith("host transport check: the answer is not the JSON")
+        _refused_malformed(body)
+
+
+def _field_fault_with(
+    change: Callable[[str], str], **faults: Mapping[int, object]
+) -> str:
+    """Two citations, `faults` in them, the answer changed by `change` (F651)."""
+    return change(_field_body(2, **faults))
+
+
+def test_a_field_fault_answer_is_told_a_marker_naming_no_citation_too() -> None:
+    body = _field_fault_with(_with_a_dangling_marker, page={1: 0})
+    lines = _field_lines(body)
+    assert len(lines) == 2
+    assert lines[0].startswith("host citation check: citation 1 has a page")
+    assert lines[1].startswith(
+        "host marker check: the Markdown body writes [C9], but the answer has 2"
+        " citations, so it names none"
+    )
+
+
+def test_a_field_fault_answer_is_told_a_host_front_matter_fault_too() -> None:
+    body = _field_fault_with(_about_someone_else, page={1: 0})
+    lines = _field_lines(body)
+    assert lines[0].startswith("host citation check: citation 1 has a page")
+    assert any(
+        line.startswith(
+            "host identity check: the host-owned field `issuer_name` is missing"
+        )
+        for line in lines
+    )
+    assert "Someone Else" not in " ".join(lines)
+
+
+def test_a_field_fault_answer_is_told_the_vendors_own_message_too() -> None:
+    body = _field_fault_with(_with_material, page={1: 0})
+    lines = _field_lines(body)
+    assert lines[0].startswith("host citation check: citation 1 has a page")
+    assert VENDOR_LINE in [line.split(";")[0] for line in lines[1:]]
+
+
+def test_a_field_fault_answer_reads_as_its_markdown_without_citations() -> None:
+    body = _field_body(2, page={1: 0})
+    markdown = json.loads(body)["canonical_markdown"].encode()
+    assert answer_markdown(body) == markdown
+    assert answer_citations(body) == ()
+    assert answer_markdown(wire(markdown, [{"page": 1}])) is None
+
+
+def test_the_readiness_set_line_reads_a_field_fault_answer_as_the_fixed_one() -> None:
+    fixed, faulty = _field_body(2), _field_body(2, page={1: 0})
+    assert fixed != faulty
+    route = frozenset({"CP-L10", "CP-5", "CP-1C"})
+    expected = readiness_set_line(CONTRACT, CATALOG, fixed, route)
+    assert expected is not None and "it lacks CP-1C" in expected
+    assert readiness_set_line(CONTRACT, CATALOG, faulty, route) == expected
+
+
+def test_the_citation_checks_wait_until_the_fields_are_fixed() -> None:
+    """The quote check runs on the whole list, so it waits (F651)."""
+    body = _field_body(2, page={1: 0}, matched_text={2: "bell \x07 in the quote"})
+    lines = _field_lines(body)
+    assert lines[0].startswith("host citation check: citation 1 has a page")
+    assert not any("carries a control, bidirectional" in line for line in lines)
+    fixed = _field_body(2, matched_text={2: "bell \x07 in the quote"})
+    assert any(
+        "carries a control, bidirectional" in line for line in _field_lines(fixed)
+    )
+
+
+def _with_an_upper_case_source_id(body: str) -> str:
+    wire_body = json.loads(body)
+    first = wire_body["citations"][0]
+    first["source_id"] = first["source_id"].upper()
+    return json.dumps(wire_body)
+
+
+def test_a_retry_after_a_citation_field_fault_names_the_field(
+    harness: _Harness,
+) -> None:
+    answers = CanonicalCompletions(harness.source_id)
+    flawed = _Flawed(answers, flaw=_with_an_upper_case_source_id)
+    assert _run(harness, flawed) is None
+    second = " ".join(answers.prompts[1].split())
+    assert "host citation check: citation 1 has a source_id" in second
+    assert "not the JSON object" not in second
+    assert REFUSED in second  # F651: carried back like a repeat (D104)
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def _with_a_bad_page(body: str) -> str:
+    wire_body = json.loads(body)
+    wire_body["citations"][0]["page"] = 0
+    return json.dumps(wire_body)
+
+
+def test_an_answer_refused_only_for_a_citation_field_is_carried_back() -> None:
+    body = _field_body(2, page={1: 0})
+    assert carried_answer(body) == body
+    gate = identity("CP-0")
+    markdown = with_markers(handoff_markdown(gate), 2)
+    good = {"source_id": str(UUID(int=1)), "page": 1, "matched_text": QUOTE}
+    bad = {**good, "source_id": "bad"}
+    # A shape fault beside a field fault keeps the shape line: not carried.
+    assert carried_answer(wire(markdown, [bad, {"page": 1}])) is None
+    assert carried_answer(wire(markdown, [bad, {**good, "extra": 1}])) is None
+
+
+def test_the_keep_line_reads_an_answer_refused_only_for_a_citation_field() -> None:
+    from caos.methodology.handoff import kept_registers_line
+
+    fixed = _answer_body(register="T5")
+    faulty = _with_a_bad_page(fixed)
+    assert fixed != faulty
+    expected = kept_registers_line(CONTRACT, "CP-0", fixed, skill("CP-0"))
+    assert expected is not None
+    assert kept_registers_line(CONTRACT, "CP-0", faulty, skill("CP-0")) == expected
+
+
+def test_an_answer_shrank_reads_an_answer_refused_only_for_a_citation_field() -> None:
+    from caos.methodology.handoff import answer_shrank
+
+    def shrank(earlier: str, later: str) -> bool:
+        return answer_shrank(CONTRACT, "CP-0", earlier, later, skill("CP-0"))
+
+    full, fewer = _answer_body(), _answer_body(register="T5")
+    assert shrank(full, _with_a_bad_page(fewer))
+    assert not shrank(full, _with_a_bad_page(full))
+
+
 def test_the_repeat_line_stays_within_the_line_limit() -> None:
     """R45: past what one line holds, the repeats are counted, never cut."""
     gate = identity("CP-0")
@@ -2246,7 +2551,7 @@ def test_a_retry_carrying_its_answer_reserves_for_the_larger_request(
 def test_carried_answer_is_the_transport_across_the_boundary_or_nothing() -> None:
     """D104: only a decodable envelope is carried, NFC as it crosses
     `BoundaryText`; text no reader can see, or that will not cross, is not."""
-    cited = {"source_id": str(UUID(int=7)), "page": 1, "matched_text": "debt"}
+    cited = {"source_id": str(UUID(int=0xABCDEF)), "page": 1, "matched_text": "debt"}
     wire = {"canonical_markdown": "Caf\u0065\u0301 debt", "citations": [cited]}
     body = json.dumps(wire, ensure_ascii=False)
     assert carried_answer(body) == unicodedata.normalize("NFC", body)

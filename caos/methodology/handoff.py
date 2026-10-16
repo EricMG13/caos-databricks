@@ -919,19 +919,55 @@ def _closed(value: object, keys: frozenset[str]) -> dict[str, Any]:
     return value
 
 
-def _requested(item: object) -> Citation:
-    citation = _closed(item, WIRE_CITATION_KEYS)
+def _field_faults(citation: Mapping[str, Any]) -> list[str]:
+    """The fields of a closed citation that break their rule, in the order
+    `_FIELD_CLAUSES` names them: the one source of the three rules."""
     source_id, page = citation["source_id"], citation["page"]
     quote = citation["matched_text"]
+    faults = []
     # Only the canonical spelling of the id the prompt handed over: a UUID
     # accepts braces, a URN prefix and upper case, none of which the host wrote.
-    if not isinstance(source_id, str) or str(UUID(source_id)) != source_id:
-        raise ValueError
+    try:
+        canonical = isinstance(source_id, str) and str(UUID(source_id)) == source_id
+    except ValueError:
+        canonical = False
+    if not canonical:
+        faults.append("source_id")
     if type(page) is not int or not 1 <= page <= MAX_PAGE:
-        raise ValueError
+        faults.append("page")
     if not isinstance(quote, str) or not quote.strip():
+        faults.append("matched_text")
+    return faults
+
+
+def _citation(citation: Mapping[str, Any]) -> Citation:
+    return Citation(
+        source_id=UUID(citation["source_id"]),
+        page=citation["page"],
+        matched_text=citation["matched_text"],
+    )
+
+
+def _requested(item: object) -> Citation:
+    citation = _closed(item, WIRE_CITATION_KEYS)
+    if _field_faults(citation):
         raise ValueError
-    return Citation(source_id=UUID(source_id), page=page, matched_text=quote)
+    return _citation(citation)
+
+
+class _FieldFaults(ValueError):
+    """A transport whole in shape whose citations break field rules: the
+    1-based places per field, never a value (N50). It keeps the Markdown the
+    transport carried, for the carry and the readers of it, and how many
+    citations it listed, for the marker checks (F651)."""
+
+    def __init__(
+        self, faults: Mapping[str, list[int]], markdown: bytes, count: int
+    ) -> None:
+        super().__init__()
+        self.faults = faults
+        self.markdown = markdown
+        self.count = count
 
 
 def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
@@ -952,8 +988,28 @@ def _wire(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
     if len(citations) > MAX_CITATIONS:
         raise ValueError
     # A lone surrogate survives `json.loads` and fails here, inside the guard.
-    requested = tuple(_requested(c) for c in citations)
-    return text.encode("utf-8"), text, requested
+    encoded = text.encode("utf-8")
+    closed = [_closed(c, WIRE_CITATION_KEYS) for c in citations]
+    faults: dict[str, list[int]] = {}
+    for place, citation in enumerate(closed, 1):
+        for name in _field_faults(citation):
+            faults.setdefault(name, []).append(place)
+    if faults:
+        raise _FieldFaults(faults, encoded, len(closed))
+    return encoded, text, tuple(_citation(c) for c in closed)
+
+
+def _shaped(body: str) -> tuple[bytes, int] | None:
+    """The Markdown of a body that is the transport, its citations' fields
+    aside (F651), and how many citations it lists: `_wire`'s, or None when the
+    body is not the transport."""
+    with suppress(Exception):  # not the transport: nothing to carry or read
+        try:
+            parsed = _wire(body)
+        except _FieldFaults as bad:
+            return bad.markdown, bad.count
+        return parsed[0], len(parsed[2])
+    return None
 
 
 def _repeats(citations: Sequence[Citation]) -> list[tuple[int, int]]:
@@ -1076,15 +1132,14 @@ def retry_feedback(
 
 
 def carried_answer(body: str) -> str | None:
-    """The refused answer a guided retry carries back to be corrected (D104):
-    the stored body as it crosses `BoundaryText`, or None when it is not the
-    transport (N50), holds text no reader can see, or will not cross -- then
-    the retry asks for the whole answer again, as before. An answer refused
-    only for a repeated citation is the transport otherwise, and is carried
-    (qualify run b0b6fd10, CP-2). Like the checks' lines it goes into that
-    one request only, never a log, refusal or row."""
-    parsed, _reason = _transport_or_reason(body)
-    if parsed is None or hides_text(body):
+    """The refused answer a guided retry carries back to be corrected (D104): the stored
+    body as it crosses `BoundaryText`, or None when it is not the transport (N50), holds
+    text no reader can see, or will not cross -- then the retry asks for the whole
+    answer again, as before. An answer refused only for a repeated citation is the
+    transport otherwise, and is carried (qualify run b0b6fd10, CP-2); so is one refused
+    only for a citation's source_id, page or matched_text (F651). Like the checks' lines
+    it goes into that one request only, never a log, refusal or row."""
+    if answer_markdown(body) is None or hides_text(body):
         return None
     with suppress(Refusal):
         return BoundaryText.of(body, limit=MAX_TRANSPORT_CHARS).value
@@ -1103,18 +1158,21 @@ def feedback_lines(
     transport, the host's own bounds on the text, the quotes, the front
     matter's host-owned and undeclared fields, the missing IDs, CP-0's blocker
     cells, the register rows a cell short or long, then the vendor's own
-    messages."""
+    messages. An answer refused only for its citations' fields (F651) gets every
+    Markdown check too, its citation checks waiting until its fields are fixed."""
     parsed, reason = _transport_or_reason(body)
-    if parsed is None:
+    shaped = _shaped(body)
+    if shaped is None:
         return (reason,)
-    markdown, text, citations = parsed
+    markdown, count = shaped
+    text = markdown.decode("utf-8")
     checked = _checked(contract, catalog, identity, markdown)
     host = (
-        reason,  # a repeated citation, or empty
+        reason,  # a repeated citation, the citation fields at fault, or empty
         _text_line(markdown),
-        _uncrossed_line(citations),
-        _dangling_line(text, len(citations)),
-        _unmarked_line(text, len(citations)),
+        _uncrossed_line(parsed[2]) if parsed is not None else None,
+        _dangling_line(text, count),
+        _unmarked_line(text, count),
         *_front_matter_lines(contract, identity, getattr(checked, "fields", None)),
         _absent_ids_line(contract, identity.module_id, text, skill),
         _blocker_line(contract, catalog, text)
@@ -1280,12 +1338,12 @@ def readiness_set_line(
     """CP-0's T8 against the modules this route pins (`gate_expects`): the
     host's own readiness check, which refuses `HANDOFF_INCOMPLETE` and until
     now told the second attempt nothing. Names module IDs only."""
-    parsed, _reason = _transport_or_reason(body)
-    if parsed is None or not expects:
+    markdown = answer_markdown(body)
+    if markdown is None or not expects:
         return None
     nav = contract.navigation
     try:
-        rows = nav.parse_t8(parsed[1], nav.validate_catalog(catalog))
+        rows = nav.parse_t8(markdown.decode("utf-8"), nav.validate_catalog(catalog))
     except ValueError:  # the parser's own line already says why
         return None
     named = frozenset(row.module_id for row in rows)
@@ -1351,11 +1409,11 @@ def _unlocated(
 
 
 def _readable(body: str) -> str | None:
-    """The Markdown a stored answer carried, as text, when it is the transport
-    and within the host's bounds on text (`_text_bound`); else None. The
-    vendor's heading and register expressions are read only on such text
-    (AI-1, F649): a body `_text` refuses was never read by a validator, and
-    measuring it must not be the first thing that does."""
+    """The Markdown a stored answer carried, as text, when it is the transport (its
+    citations' fields aside, F651) and within the host's bounds on text (`_text_bound`);
+    else None. The vendor's heading and register expressions are read only on such text
+    (AI-1, F649): a body `_text` refuses was never read by a validator, and measuring it
+    must not be the first thing that does."""
     markdown = answer_markdown(body)
     return None if markdown is None else _text_bound(markdown)[0]
 
@@ -1363,13 +1421,13 @@ def _readable(body: str) -> str | None:
 def _held_registers(
     contract: VendorContract, module_id: str, body: str, skill: bytes
 ) -> tuple[Sequence[str], list[str]] | None:
-    """The module's required registers in contract order, and those of them
-    the vendor's `find_registers` locates in the answer `body` carries; None
-    when `body` is not the transport, the module is CP-MODEL (no register
-    contract), no skill was given, or the contract or its locations cannot be
-    read (a missing profile, KeyError/ValueError). Unrelated locator failures
-    still surface. A body the host's text bound refuses (`_readable`) is not
-    read: the vendor's expressions are quadratic on text `_text` refuses."""
+    """The module's required registers in contract order, and those of them the vendor's
+    `find_registers` locates in the answer `body` carries; None when `body` is not the
+    transport (its citations' fields aside, F651), the module is CP-MODEL (no register
+    contract), no skill was given, or the contract or its locations cannot be read (a
+    missing profile, KeyError/ValueError). Unrelated locator failures still surface. A
+    body the host's text bound refuses (`_readable`) is not read: the vendor's
+    expressions are quadratic on text `_text` refuses."""
     text = _readable(body)
     if text is None or not skill or module_id == MODEL_MODULE:
         return None
@@ -1415,11 +1473,11 @@ def answer_shrank(
     """Whether the answer `later` holds fewer required registers, or fewer
     distinct H2 sections, than the answer `earlier` (D104's amendment of 14
     October 2026, F649), both bodies as stored. Compared only when both are
-    the transport; a count that cannot be read for either (no skill, an
-    unreadable contract, CP-MODEL's registers, front matter the vendor will
-    not parse) is not compared, and the other still is; a body that is not
-    the transport has neither count, so it is never compared. Pure over the
-    two bodies."""
+    the transport (its citations' fields aside, F651); a count that cannot be
+    read for either (no skill, an unreadable contract, CP-MODEL's registers,
+    front matter the vendor will not parse) is not compared, and the other
+    still is; a body that is not the transport has neither count, so it is
+    never compared. Pure over the two bodies."""
     counts = [_extent(contract, module_id, body, skill) for body in (earlier, later)]
     return any(
         before is not None and after is not None and after < before
@@ -1705,9 +1763,11 @@ def _transport_or_reason(
     acceptance still refuses them. No caught exception text is quoted.
     """
     with suppress(Exception):  # any failure is named below, never quoted
-        parsed = _wire(body)
-        repeats = _repeats(parsed[2])
-        return parsed, _repeated_line(repeats)
+        try:
+            parsed = _wire(body)
+        except _FieldFaults as bad:
+            return None, _field_line(bad.faults)
+        return parsed, _repeated_line(_repeats(parsed[2]))
     try:
         json.loads(body)  # diagnostic only; _wire remains the strict parser
     except json.JSONDecodeError as bad:
@@ -1749,6 +1809,43 @@ def _repeat_text(repeats: Sequence[tuple[int, int]], shown: int) -> str:
         " and matched_text); then renumber every marker after a citation you"
         " removed"
     )
+
+
+_FIELD_CLAUSES = (
+    (
+        "source_id",
+        "a source_id not spelled as the valid source_id values are (36"
+        " characters, lower case, hyphenated, nothing around it)",
+    ),
+    (
+        "page",
+        f"a page that is not a whole number from 1 to {MAX_PAGE:,}",
+    ),
+    ("matched_text", "a matched_text that is empty or not a string"),
+)
+
+
+def _field_text(faults: Mapping[str, list[int]], shown: int) -> str:
+    """`_field_line`'s text naming at most `shown` places per clause."""
+    clauses = [
+        f"{_numbered(faults[name], shown=shown)}"
+        f" {'has' if len(faults[name]) == 1 else 'have'} {words}"
+        for name, words in _FIELD_CLAUSES
+        if name in faults
+    ]
+    return (
+        f"host citation check: {'; '.join(clauses)}"
+        " (numbered from 1 in the order given)"
+    )
+
+
+def _field_line(faults: Mapping[str, list[int]]) -> str:
+    """Which citations break which field rule, by place, never quoted. Names
+    as many per clause as `MAX_FEEDBACK_CHARS` holds (the rest counted), and
+    one per clause at least."""
+    return _within_limit(
+        MAX_FEEDBACK_CITATIONS, lambda n: _field_text(faults, n)
+    ) or _field_text(faults, 1)
 
 
 def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
@@ -1845,14 +1942,14 @@ ADVISORY = (
 )
 
 
-def _numbered(failed: Sequence[int]) -> str:
+def _numbered(failed: Sequence[int], *, shown: int = MAX_FEEDBACK_CITATIONS) -> str:
     """`citation 2`, `citations 2 and 5`, `citations 1, 2 and 3`: at most
-    `MAX_FEEDBACK_CITATIONS` numbers, the rest counted."""
-    shown = [str(number) for number in failed[:MAX_FEEDBACK_CITATIONS]]
-    rest = len(failed) - len(shown)
-    named = ", ".join(shown) + (f" and {rest} more" if rest else "")
-    if not rest and len(shown) > 1:
-        named = ", ".join(shown[:-1]) + f" and {shown[-1]}"
+    `shown` numbers, the rest counted."""
+    shown_numbers = [str(number) for number in failed[:shown]]
+    rest = len(failed) - len(shown_numbers)
+    named = ", ".join(shown_numbers) + (f" and {rest} more" if rest else "")
+    if not rest and len(shown_numbers) > 1:
+        named = ", ".join(shown_numbers[:-1]) + f" and {shown_numbers[-1]}"
     return f"citation {named}" if len(failed) == 1 else f"citations {named}"
 
 
@@ -2182,16 +2279,18 @@ def _near_clause(cited: str, hint: LineHint) -> str:
 
 def answer_citations(body: str) -> tuple[Citation, ...]:
     """The citations a stored answer asked for; none when it is not the
-    transport, whose reason `retry_feedback` gives."""
+    transport, whose reason `retry_feedback` gives, or when its citations'
+    fields are at fault: the citation checks wait until they are fixed (F651)."""
     parsed, _reason = _transport_or_reason(body)
     return () if parsed is None else parsed[2]
 
 
 def answer_markdown(body: str) -> bytes | None:
-    """The Markdown a stored answer carried; None when it is not the
-    transport, whose reason `retry_feedback` gives."""
-    parsed, _reason = _transport_or_reason(body)
-    return None if parsed is None else parsed[0]
+    """The Markdown of a stored answer that is the transport, its citations'
+    fields aside (F651); None when it is not, whose reason `retry_feedback`
+    gives."""
+    shaped = _shaped(body)
+    return None if shaped is None else shaped[0]
 
 
 def _vendor_lines(
