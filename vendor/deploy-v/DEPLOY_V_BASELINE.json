@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_BASELINE",
-  "baseline_digest": "fcd7d1151722a99d180a5fc28826f95485df67bb63c9cf72a22f559f1645b8c9",
+  "baseline_digest": "43b2560a8f447abcf2c1e030f2616f7a346e965c6bf2e63963c43430fc514f33",
   "packages": {
     "cp-0-source-readiness": {
       "files": {
@@ -729,8 +729,8 @@
     "cp-4-legal-covenant-interpreter": {
       "files": {
         "SKILL.md": {
-          "bytes": 42147,
-          "sha256": "9a0bad83c3e01115e3db502a402c77b9f2ee40b60f54a69ee2f9edc119679866"
+          "bytes": 42391,
+          "sha256": "40ebb2613562b4fc36d7880aa5ed04a88bbc4648ee9bc157f41f61d77150f6f7"
         },
         "references/CP-4A_RUNBOOK.md": {
           "bytes": 11568,

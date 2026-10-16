@@ -348,9 +348,9 @@ CP-4D's binding rules are CP-4's: the same canon, and every rule in `## Canon Co
 
 1. Every provision is cited to the executed document with a clause locator. An ICA term asserted without a clause reference is not a finding.
 2. Distinguish contractual subordination from structural subordination from lien subordination; they fail differently and CP-4B owns the structural map.
-3. State the standstill period in days or months as drafted, with its trigger and its expiry mechanics. `[Insufficient Information]` where the document is not provided.
+3. State the standstill period in days or months as drafted, with its trigger and its expiry mechanics. Where the document is not provided, write `[Insufficient Information] — ` and name the missing document (for example `[Insufficient Information] — intercreditor agreement not in the source set`), never the bare placeholder.
 4. Never convert a control weakness into a recovery percentage. Name the mechanic and hand it to CP-3A / CP-4C.
-5. Where the ICA is absent from the source set, say so plainly and mark every dependent row `[Insufficient Information]` — an unexamined ICA is not a benign one.
+5. Where the ICA is absent from the source set, say so plainly and write each critical cell of every dependent row as `[Insufficient Information] — ICA not in the source set`, never the bare placeholder; an unexamined ICA is not a benign one.
 
 #### CP-4D method
 
