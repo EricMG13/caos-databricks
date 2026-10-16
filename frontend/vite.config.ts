@@ -102,6 +102,30 @@ function grantedAnalysis(raw: string): string {
   return JSON.stringify(doc);
 }
 
+/** The `wide` fixture (N95): the Covenants module carrying a register of ten
+    columns whose first cell is long, so the clamp has a cell to hold to two
+    lines and the a11y gate has one to scan, closed and open. Derived from
+    `analysis.json` so the two cannot drift. */
+function wideAnalysis(raw: string): string {
+  const doc = JSON.parse(raw);
+  const handoff = doc.body.handoffs.find(
+    (item: { route_node_id: string }) => item.route_node_id === "rn-cp-4",
+  );
+  const heads = Array.from({ length: 10 }, (_, index) => `col_${index}`);
+  const long =
+    "A long covenant definition that runs well past two lines of a narrow column, " +
+    "with its carve-outs, baskets and the tests the lenders apply to each of them.";
+  handoff.model_analysis = [
+    handoff.model_analysis,
+    "### Analytical appendix \u2014 complete canonical registers",
+    "#### T9.1 \u2014 Wide register",
+    `| ${heads.join(" | ")} |`,
+    `| ${heads.map(() => "---").join(" | ")} |`,
+    `| ${[long, ...heads.slice(1).map((_, index) => `s${index}`)].join(" | ")} |`,
+  ].join("\n");
+  return JSON.stringify(doc);
+}
+
 /** The Model's `acts` state: a complete default view the server offers Add to
     Book on (a digest, the run's subject, the action), derived from `model.json`
     so the two cannot drift. */
@@ -154,7 +178,8 @@ async function serveSection(section: string, fixture: string | null, res: Server
         : `${section}.json`;
   const granted = section === "analysis" && fixture === "granted";
   const offered = section === "model" && fixture === "acts";
-  if (granted) path = "analysis.json";
+  const wide = section === "analysis" && fixture === "wide";
+  if (granted || wide) path = "analysis.json";
   else if (offered) path = "model.json";
   else if (fixture && !STREAM_FIXTURES.has(fixture)) path = `states/${section}.${fixture}.json`;
   else if (section === "run" && runFrame > 0) path = `run/frames/${runFrame}.json`;
@@ -163,13 +188,15 @@ async function serveSection(section: string, fixture: string | null, res: Server
   send(
     res,
     200,
-    granted
-      ? grantedAnalysis(body)
-      : offered
-        ? offeredModel(body)
-        : section === "analysis" && staleAdvanced
-          ? advancedAnalysis(body)
-          : body,
+    wide
+      ? wideAnalysis(body)
+      : granted
+        ? grantedAnalysis(body)
+        : offered
+          ? offeredModel(body)
+          : section === "analysis" && staleAdvanced
+            ? advancedAnalysis(body)
+            : body,
   );
 }
 

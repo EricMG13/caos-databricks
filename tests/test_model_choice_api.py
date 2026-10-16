@@ -137,11 +137,10 @@ def test_a_process_with_no_model_configured_pins_none(
     assert _outcome(named) == "400 PROVIDER_NOT_CONFIGURED"
 
 
-def _verdict(  # noqa: PLR0913 -- the model, its identity pins and the verdict's life
+def _verdict(
     conn: StoreConnection,
     model: str,
     *,
-    ordinal: int,
     days: int,
     build_id: str | None = None,
     provider: str | None = None,
@@ -154,7 +153,7 @@ def _verdict(  # noqa: PLR0913 -- the model, its identity pins and the verdict's
         provider=provider or identity_of(model),
         model=model,
         build_id=build_id or methodology_bundle().build_id,
-        ordinal=ordinal,
+        ordinal=list(model_choices()).index(model) + 1,
     )
     record_runs(conn, performed)
     record_performed_earlier(conn, performed)
@@ -197,8 +196,8 @@ def test_each_approved_model_is_labelled_with_its_qualification_state(
     approved model is still listed."""
     conn, case_id = case
     writer = member(conn, case_id)
-    _verdict(conn, "gpt-6-luna", ordinal=1, days=30)
-    _verdict(conn, "claude-sonnet-5-5", ordinal=2, days=-1)
+    _verdict(conn, "gpt-6-luna", days=30)
+    _verdict(conn, "claude-sonnet-5-5", days=-1)
     assert _labels(command_client, case_id, writer) == {
         "claude-opus-5-5": "UNQUALIFIED",
         "claude-sonnet-5-5": "UNQUALIFIED",
@@ -224,7 +223,7 @@ def test_a_verdict_on_another_build_or_identity_does_not_qualify_the_model(
     the worker does not run is another profile (D8): neither is this model's."""
     conn, case_id = case
     writer = member(conn, case_id)
-    _verdict(conn, "gpt-6-luna", ordinal=1, days=30, **stale)
+    _verdict(conn, "gpt-6-luna", days=30, **stale)
     assert _labels(command_client, case_id, writer)["gpt-6-luna"] == "UNQUALIFIED"
 
 
@@ -260,11 +259,15 @@ def test_a_verdict_row_the_validator_refuses_does_not_qualify_the_model(
         (digest,),
     )
     conn.commit()
-    _verdict(conn, "claude-sonnet-5-5", ordinal=2, days=30)
+    _verdict(conn, "claude-sonnet-5-5", days=30)
+    # The status of a run the store holds is fixed once terminal, so the
+    # disagreement is forged the way `record_performed_earlier` moves a date.
+    conn.execute("SET LOCAL session_replication_role = replica")
     conn.execute(
         "UPDATE runs SET status = 'FAILED' WHERE run_id = %s",
         (UUID(int=1 + 2 * 0x100),),
     )
+    conn.execute("SET LOCAL session_replication_role = origin")
     conn.commit()
     assert _labels(command_client, case_id, writer) == {
         "claude-opus-5-5": "UNQUALIFIED",
@@ -282,7 +285,7 @@ def test_a_reader_is_served_the_state_the_qualification_read_gives_a_reader(
     RESTRICTED for every model, qualified or not."""
     conn, case_id = case
     reader = member(conn, case_id, Standing.READER)
-    _verdict(conn, "gpt-6-luna", ordinal=1, days=30)
+    _verdict(conn, "gpt-6-luna", days=30)
     labels = _labels(command_client, case_id, reader, role="READER")
     assert set(labels.values()) == {"RESTRICTED"}
     assert len(labels) == 3

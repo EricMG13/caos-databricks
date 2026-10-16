@@ -289,12 +289,22 @@ function perMillion(rate: string): string {
   return rest ? `${integer}.${rest}` : integer;
 }
 
+/** What each qualification state is called beside a model. A state the caller
+    is not told (RESTRICTED) or the server could not read (UNAVAILABLE) is not
+    "not qualified": that would claim a verdict nobody looked up. */
+const QUALIFICATION_LABEL: Record<ModelChoice["qualification"], string> = {
+  QUALIFIED: "qualified",
+  UNQUALIFIED: "not qualified",
+  RESTRICTED: "qualification not shown",
+  UNAVAILABLE: "qualification unavailable",
+};
+
 /** The model's name as the select offers it: marked where it is the
     configured one, and labelled with its qualification state (N117) -- a label
     only, no model is withheld. */
 function modelLabel(choice: ModelChoice): string {
   const name = choice.configured ? `${choice.model} (configured)` : choice.model;
-  return `${name} \u00b7 ${choice.qualification === "QUALIFIED" ? "qualified" : "not qualified"}`;
+  return `${name} \u00b7 ${QUALIFICATION_LABEL[choice.qualification]}`;
 }
 
 /** The dated price a run on this model is pinned to, per million tokens. */

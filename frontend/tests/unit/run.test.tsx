@@ -1066,6 +1066,30 @@ describe("Run", () => {
     }
   });
 
+  test("test_a_restricted_or_unavailable_state_is_not_called_not_qualified", () => {
+    const caseId = routeNotPinned.body.case_id;
+    const labelled = (qualification: "RESTRICTED" | "UNAVAILABLE") => {
+      const doc: RunSectionDocument = {
+        ...EMPTY_RUN,
+        body: {
+          ...EMPTY_RUN.body,
+          model_choices: MODEL_CHOICES.map((choice) => ({ ...choice, qualification })),
+        },
+      };
+      const { container, unmount } = mountAt(doc, `/run/?case=${caseId}`);
+      const select = container.querySelector("[data-model-select]") as HTMLSelectElement;
+      const labels = [...select.options].map((option) => option.textContent);
+      unmount();
+      return labels;
+    };
+    expect(labelled("RESTRICTED").every((text) => text!.endsWith("qualification not shown"))).toBe(
+      true,
+    );
+    expect(
+      labelled("UNAVAILABLE").every((text) => text!.endsWith("qualification unavailable")),
+    ).toBe(true);
+  });
+
   test("test_with_no_model_offered_there_is_no_select_and_none_is_named", async () => {
     const caseId = routeNotPinned.body.case_id;
     const doc: RunSectionDocument = {
