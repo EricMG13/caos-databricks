@@ -113,11 +113,11 @@ from caos.calculators.credit_model._cells import (
 )
 from caos.calculators.credit_model.debt import (
     COUPON_AS_FRACTION,
-    TERMS_AS_BPS,
     EXCLUDES_FOREIGN,
     EXCLUDES_UNALLOCATED,
     HISTORY_INCOMPLETE,
     SECURED_RANKS,
+    TERMS_AS_BPS,
     carried,
     facility_keys,
     is_operating_lease,

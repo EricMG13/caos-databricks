@@ -117,6 +117,20 @@ def not_stated(part: str) -> str:
     return f"{NOT_STATED_PART} ({part})"
 
 
+# The days a year of 52 or 53 weeks, or a calendar year, spans: twelve months
+# beyond them are accepted (`history._twelve_months` allows a fortnight) but
+# noted by `odd_length`.
+YEAR_DAYS = (364, 371)
+
+
+def odd_length(days: int | None) -> str | None:
+    """The note on twelve months of `days` days outside `YEAR_DAYS` (a 51 or
+    54-week year, a 378-day LTM); None inside them or where unknown."""
+    if days is None or YEAR_DAYS[0] <= days <= YEAR_DAYS[1]:
+        return None
+    return f"twelve months of {days} days"
+
+
 def odd_year(period_id: str, short: bool) -> str:
     """The note on an LTM that is a fiscal year, `period_id`, of fewer
     (`short`) or more than twelve months."""

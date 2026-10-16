@@ -26,6 +26,7 @@ from caos.calculators.credit_model._cells import (
     Footing,
     anchor_period,
     not_stated,
+    odd_length,
     odd_year,
     off_footing,
     treated_as_zero,
@@ -4026,7 +4027,10 @@ def test_a_balance_is_read_across_footings_only_where_none_differs(
     own: tuple[str | None, str | None], other: tuple[str | None, str | None]
 ) -> None:
     cell = _frame(_balance_regs(own, other))["PYTD:H1_2025"]["acct:total_debt"]
-    apart = any(a is not None and b is not None and a != b for a, b in zip(own, other))
+    apart = any(
+        a is not None and b is not None and a != b
+        for a, b in zip(own, other, strict=False)
+    )
     if apart:
         assert cell.value is None and cell.note is not None
     else:
@@ -4053,3 +4057,44 @@ def test_a_sum_refused_for_a_part_not_stated_names_the_part() -> None:
     nulled = _rows_changed(example_registers(), "revenue", {"Q1_2026"}, drop=False)
     summed = _frame(nulled)["YTD:H1_2026"]["acct:revenue"]
     assert (summed.reason, summed.note) == ("COMPONENT_MISSING", not_stated("Q1_2026"))
+
+
+def test_twelve_months_of_other_than_52_or_53_weeks_are_noted() -> None:
+    """N211 (a): four quarters spanning 51 or 54 weeks pass as twelve months
+    (within the fortnight's slack) but say how long they are; 52 and 53
+    weeks and a calendar year say nothing."""
+    assert _four_quarters([95, 94, 95, 94]).note == "twelve months of 378 days"
+    assert _four_quarters([90, 89, 89, 89]).note == "twelve months of 357 days"
+    for lengths in ([91] * 4, [91, 91, 91, 98], [90, 91, 92, 92]):
+        cell = _four_quarters(lengths)
+        assert (cell.value, cell.note) == (Decimal(400), None), lengths
+    assert _four_quarters([95, 94, 95, 94]).value == 400  # still read
+
+
+def test_a_378_day_ltm_is_noted() -> None:
+    """The adversary's MINOR-C residual: FY 2024-12-25..2025-12-31 (372 days)
+    + a 188-day YTD - a 182-day PYTD is 378 days, accepted and noted."""
+    periods = (
+        _days_period("FY2025", "FY", date(2024, 12, 25), 372, None),
+        _days_period("H1_2025", "YTD", date(2024, 12, 25), 182, None),
+        _days_period("H1_2026", "YTD", date(2026, 1, 1), 188, None),
+    )
+    regs = _revenue_on(periods, per_day=True)
+    columns = historical_columns(regs)
+    ltm = next(c for c in columns if c.kind == "LTM")
+    cell = account_frame(regs, columns)[ltm.column_id]["acct:revenue"]
+
+    assert cell.value == 372 + 188 - 182
+    assert cell.note == "twelve months of 378 days"
+    # A calendar year's LTM, and a 53-week one, are not.
+    assert _rolled_ltm(26, 26).note is None
+    assert odd_length(371) is None and odd_length(364) is None
+    assert odd_length(None) is None
+
+
+@settings(max_examples=100, deadline=None)
+@given(days=st.integers(min_value=300, max_value=450))
+def test_twelve_months_are_noted_exactly_outside_52_to_53_weeks(days: int) -> None:
+    assert (odd_length(days) is None) is (364 <= days <= 371)
+    if days not in range(364, 372):
+        assert odd_length(days) == f"twelve months of {days} days"

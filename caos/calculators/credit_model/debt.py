@@ -117,8 +117,8 @@ def notes_of(note: str | None) -> tuple[str, ...]:
 def carried(cells: Iterable[Cell]) -> str | None:
     """What the cells leave out ("excludes facility in another currency",
     "excludes unallocated CP-CF movements"), a coupon they were priced on
-    read as a fraction, a spread or floor read as basis points, then each part taken as nothing: `zeroed`, for a
-    figure read from them."""
+    read as a fraction, a spread or floor read as basis points, then each
+    part taken as nothing: `zeroed`, for a figure read from them."""
     kept = list(cells)
     found = {part for cell in kept for part in notes_of(cell.note)}
     leaves = (note for note in _CARRIED if note in found)

@@ -142,10 +142,11 @@ from caos.calculators.credit_model._cells import (
     footing_of,
     join_notes,
     no_negative_zero,
+    not_stated,
+    odd_length,
     odd_year,
     off_footing,
     refs,
-    not_stated,
     treated_as_zero,
 )
 from caos.calculators.credit_model.frame import Cell, Column, Frame, SourceRef
@@ -1354,7 +1355,8 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
     if total.value is None:
         return Cell(None, total.reason, stated=stated, note=total.note)
     differs = stated is not None and beyond_rounding(stated, total.value)
-    note = join_notes((total.note, DIFFERS if differs else None))
+    length = odd_length(_term_days(spec.terms)) if spec.column.kind == "LTM" else None
+    note = join_notes((total.note, DIFFERS if differs else None, length))
     return replace(total, stated=stated, note=note)
 
 
@@ -1456,6 +1458,7 @@ class _Window:
     earlier: list[_Spec | None]
     tiled: bool
     year: str | None
+    days: int | None = None  # the days the four quarters span, where they tile
 
 
 def _fiscal_year_of(spec: _Spec, register: _Register) -> str | None:
@@ -1475,6 +1478,15 @@ def _fiscal_year_of(spec: _Spec, register: _Register) -> str | None:
         ),
         None,
     )
+
+
+def _window_days(
+    found: list[_Spec], periods: Mapping[str | None, PeriodRow]
+) -> int | None:
+    """The days from the first quarter's start to the last's end, where four
+    quarters tile; None otherwise."""
+    span = _tiled(found, periods) if len(found) == 4 else None
+    return None if span is None else span[1] - span[0] + 1
 
 
 def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
@@ -1505,13 +1517,17 @@ def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
     if recurring and _some_unstated(quarters):
         return Cell(None, "COMPONENT_MISSING", note=PARTLY_STATED)
     names = (_term_name(quarter) for quarter in four)
-    return _named_sum(
+    total = _named_sum(
         series,
         (
             (name, cell, sign)
             for name, (cell, sign) in zip(names, quarters, strict=True)
         ),
     )
+    length = odd_length(window.days)
+    if total.value is None or length is None:
+        return total
+    return replace(total, note=join_notes((total.note, length)))
 
 
 def _some_unstated(cells: list[tuple[Cell, int]]) -> bool:
@@ -1550,11 +1566,13 @@ def ltm_frames(
 ) -> dict[str, dict[str, Cell]]:
     """For each quarter column in `columns`, the cells of the twelve months
     ending with it: flows summed over it and the three quarters before it,
-    `COMPONENT_MISSING` without all four (an add-back's absent quarter adds
-    nothing only where none of the four has a figure: `_ltm_cell`), and noted
-    `UNSPANNED` where the four do not tile, each three whole months starting
-    the day after the one before ends, or their span, from the first's
-    start to the last's end, is not twelve whole months (`_twelve_months`)."""
+    `COMPONENT_MISSING` without all four (an add-back's quarter without a row
+    adds nothing, noted `treated_as_zero`, whether or not the others have a
+    figure: `_ltm_cell`), and noted `UNSPANNED` where the four do not tile,
+    each three whole months starting the day after the one before ends, or
+    their span, from the first's start to the last's end, is not twelve
+    whole months (`_twelve_months`); a span that is whole months but not 364
+    to 371 days is noted `odd_length`."""
     with localcontext(CONTEXT):
         plan = {spec.column.column_id: spec for spec in _plan(regs)}
         quarters = _quarter_index(plan.values())
@@ -1570,6 +1588,7 @@ def ltm_frames(
                 earlier,
                 tiled=len(found) < 4 or _twelve_months(found, periods),
                 year=_fiscal_year_of(spec, register),
+                days=_window_days(found, periods),
             )
             frames[spec.column.column_id] = {
                 key: _ltm_cell(one, register, window) for key, one in series.items()

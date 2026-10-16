@@ -1968,14 +1968,15 @@ def test_explicit_segments_do_not_call_native_growth(
     ],
 )
 def test_a_spread_or_floor_that_reads_like_whole_percent_is_kept_and_noted(
-    terms: dict[str, Decimal], noted: bool
+    terms: dict[str, Any], noted: bool
 ) -> None:
     """N211 (c): CP-1 states integer basis points, so 3 is 3 bp, kept; a
     figure at or below 30 (the largest whole percent a coupon takes) reads
     like a percent, and the rate says it was read as basis points."""
     deck = example_deck()
     row = replace(_row("tlb"), **terms)
-    plain = replace(_row("tlb"), **{k: Decimal(275) for k in terms})
+    plain_terms: dict[str, Any] = dict.fromkeys(terms, Decimal(275))
+    plain = replace(_row("tlb"), **plain_terms)
 
     rate, note = facility_rate(row, deck, "BASE", 1, _NO_IMPLIED)
 

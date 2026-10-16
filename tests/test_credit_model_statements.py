@@ -13,6 +13,7 @@ from hypothesis import strategies as st
 from caos.calculators.credit_model import statements
 from caos.calculators.credit_model._cells import (
     SIGN_NORMALISED,
+    TAX_REFUND,
     TREATED_AS_ZERO,
     UNSPANNED,
     treated_as_zero,
@@ -26,7 +27,6 @@ from caos.calculators.credit_model.history import (
     historical_columns,
 )
 from caos.calculators.credit_model.statements import (
-    TAX_REFUND,
     UNREALISED,
     excluded_addbacks,
     pro_forma_column,
