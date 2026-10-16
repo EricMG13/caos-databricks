@@ -70,8 +70,11 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # (2026-10-10, build d73f4b91) amends CP-1's method only and moves none of
 # the three; fork r15 (D150, build bbcddf3c) amends CP-4's binding rules only
 # and moves none of the three; fork r16 (D151, build 2b86a4de) rewrites CP-4's reference
-# placeholder instructions only and moves none of the three.
-MEASURED = {"CP-0": 135_504, "CP-L10": 137_976, "CP-5": 170_803}
+# placeholder instructions only and moves none of the three; fork r17 (D152,
+# build 80d1cd32) moves CP-0 by +152 (the capacity contract and the lender-deck
+# default, N133) and CP-L10 by +3,290 (ten semantic rules and the reason-form
+# line, N132 and N213), and CP-5 not at all.
+MEASURED = {"CP-0": 135_656, "CP-L10": 141_266, "CP-5": 170_803}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",

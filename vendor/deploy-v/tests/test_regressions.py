@@ -1863,6 +1863,13 @@ class ForkR17Tests(unittest.TestCase):
     def reference(self, slug, name):
         return (ROOT / 'skills' / slug / 'references' / name).read_text(encoding='utf-8')
 
+    def schema_line(self, slug, reg):
+        for path in sorted((ROOT / 'skills' / slug / 'references').glob('*.md')):
+            for line in path.read_text(encoding='utf-8').splitlines():
+                if line.startswith(f'| {reg} |'):
+                    return line
+        self.fail(f'no schema reference line for {reg}')
+
     def columns(self, slug, module_id, reg):
         return complete.load_contract(skill_text(slug), module_id)['registers'][reg]['columns']
 
@@ -1896,7 +1903,7 @@ class ForkR17Tests(unittest.TestCase):
         base = 'The summary below draws on TL10.2.\n\n' + self.grid('Metric', 'Value')
         for caption in ('1. **TL10.2 — Covenant register**', '> **TL10.2 — Covenant register**',
                         '**Table TL10.2 — Covenant register**', 'Table TL10.2 — Covenant register',
-                        '- **TL10.2** Covenant register', '* _TL10.2_ Covenant register', '2) *TL10.2 — recap*',
+                        '- **TL10.2** Covenant register', '* *TL10.2* Covenant register', '2) *TL10.2 — recap*',
                         '> 1. **TL10.2 — Covenant register**', '> Table TL10.2: Covenant register',
                         '*Table `TL10.2` — Covenant register*'):
             with self.subTest(caption=caption):
@@ -1968,12 +1975,12 @@ class ForkR17Tests(unittest.TestCase):
 
             def violations(topic_text, screen_text):
                 return [v for v in complete.check(skill, topic_text + screen_text, 'CP-L10')[0]
-                        if v.startswith((f'TL{phase}.2: cp_', f'TL{phase}.3: cp_'))]
+                        if v.startswith((f'TL{phase}.2', f'TL{phase}.3')) and f': cp_l{phase}.' in v]
             with self.subTest(phase=phase, case='conforming'):
                 self.assertEqual(violations(topics, screens), [])
             with self.subTest(phase=phase, case='a seventh topic'):
                 self.assertEqual(violations(rows(f'TL{phase}.2', 'topic_id', enum + ['SECTOR_OUTLOOK']), screens), [
-                    f"TL{phase}.2: cp_l{phase}.topic_ids_allowed -- column 'topic_id' holds 'SECTOR_OUTLOOK', "
+                    f"TL{phase}.2 row 7: cp_l{phase}.topic_ids_allowed -- column 'topic_id' holds 'SECTOR_OUTLOOK', "
                     "not one of the allowed values"])
             with self.subTest(phase=phase, case='a second OVERALL'):
                 self.assertEqual(violations(topics, rows(f'TL{phase}.3', 'screen_item', ['OVERALL', 'Liquidity', 'OVERALL'])), [
@@ -2018,8 +2025,7 @@ class ForkR17Tests(unittest.TestCase):
                 self.assertNotIn(packed, columns)
                 at = columns.index(split[0])
                 self.assertEqual(columns[at:at + len(split)], split)
-                schema = next((ROOT / 'skills' / slug / 'references').glob('*SCHEMA*.md')).read_text(encoding='utf-8')
-                line = next(l for l in schema.splitlines() if l.startswith(f'| {reg} |'))
+                line = self.schema_line(slug, reg)
                 self.assertNotIn(packed, line)
                 self.assertTrue(line.endswith(', '.join(columns) + ' |'), line)
                 for extra in (skill_text(slug),):
@@ -2053,8 +2059,7 @@ class ForkR17Tests(unittest.TestCase):
                 columns = contract['columns']
                 self.assertEqual(columns[columns.index(after) + 1], unit)
                 self.assertIn(unit, contract['critical_columns'])
-                schema = next((ROOT / 'skills' / slug / 'references').glob('*SCHEMA*.md')).read_text(encoding='utf-8')
-                line = next(l for l in schema.splitlines() if l.startswith(f'| {reg} |'))
+                line = self.schema_line(slug, reg)
                 self.assertTrue(line.endswith(', '.join(columns) + ' |'), line)
         for slug, reg, steps in (('cp-2d-liquidity-cash-flow-bridge', 'T2E.5', 'REF_CP-2D_STEPS.md'),
                                  ('cp-3c-refinancing-lme-risk', 'T3D.2', 'REF_CP-3C_STEPS.md')):
@@ -2105,7 +2110,7 @@ class ForkR17Tests(unittest.TestCase):
         for at in found:
             with self.subTest(offset=at):
                 self.assertEqual(skill[at + len(placeholder):at + len(placeholder) + 3], ' — ')
-        self.assertIn('In a register cell never write the bare `[Insufficient Information]`, which every critical '
+        self.assertIn('In a register cell never write a bare placeholder, which every critical '
                       'column refuses: write `[Insufficient Information] — ` and what is missing and where it '
                       'was sought (for example `[Insufficient Information] — covenant compliance certificate not '
                       'in the source set`), or `—` for a blank value.', skill)

@@ -110,11 +110,11 @@ conclusions, never shorter reasoning or invented filler.
       - **critical_columns**: identical to columns
       - **minimum_body_rows**: 1
     - **T2H.5**: structured below
-      - **columns**: period; case; opening debt/cash; issuance; repayment; interest; closing debt/cash; accessible liquidity
+      - **columns**: period; case; opening debt; opening cash; issuance; repayment; interest; closing debt; closing cash; accessible liquidity
       - **critical_columns**: identical to columns
       - **minimum_body_rows**: 1
     - **T2H.6**: structured below
-      - **columns**: period; case; gross/net leverage; coverage; FCF/debt; liquidity runway; definition IDs
+      - **columns**: period; case; gross leverage; net leverage; coverage; FCF/debt; liquidity runway; definition IDs
       - **critical_columns**: identical to columns
       - **minimum_body_rows**: 1
     - **T2H.7**: structured below
