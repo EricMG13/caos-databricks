@@ -206,12 +206,19 @@ def _refuse_run_hooks_from_tests(config: pytest.Config) -> None:
         "pytest_report_teststatus",
     ):
         for impl in getattr(config.pluginmanager.hook, hook).get_hookimpls():
-            code = getattr(impl.function, "__code__", None)
-            filename = (
-                code.co_filename if code else getattr(impl.plugin, "__file__", "")
-            )
+            # The registering module's file, never the code object's: code
+            # built by `exec` in a conftest is named "<string>".
+            filename = getattr(impl.plugin, "__file__", None)
+            if not filename:
+                code = getattr(impl.function, "__code__", None)
+                filename = code.co_filename if code else ""
             if not filename:
                 continue
+            if filename.startswith("<"):
+                pytest.exit(
+                    f"{hook} is implemented by {impl.plugin_name} of unknown origin",
+                    returncode=3,
+                )
             source = Path(filename).resolve()
             if source.name == "conftest.py" or source.is_relative_to(tests):
                 pytest.exit(

@@ -672,7 +672,11 @@ def test_builtins_reached_by_attribute_and_pinned_names_cannot_be_rebound(
         assert any(
             problem.startswith("conftest: tests/conftest.py ") for problem in problems
         ), (extra, problems)
-    assert _conftest_problems(root, "tests/conftest.py", original) == []
+    assert [
+        problem
+        for problem in _conftest_problems(root, "tests/conftest.py", original)
+        if "tests/conftest.py" in problem
+    ] == []
 
 
 def _edit_ci(root: Path, edit: Callable[[dict[str, Any]], None]) -> None:

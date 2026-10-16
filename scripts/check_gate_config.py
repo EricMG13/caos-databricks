@@ -301,12 +301,19 @@ def _refuse_run_hooks_from_tests(config: pytest.Config) -> None:
         "pytest_report_teststatus",
     ):
         for impl in getattr(config.pluginmanager.hook, hook).get_hookimpls():
-            code = getattr(impl.function, "__code__", None)
-            filename = (
-                code.co_filename if code else getattr(impl.plugin, "__file__", "")
-            )
+            # The registering module's file, never the code object's: code
+            # built by `exec` in a conftest is named "<string>".
+            filename = getattr(impl.plugin, "__file__", None)
+            if not filename:
+                code = getattr(impl.function, "__code__", None)
+                filename = code.co_filename if code else ""
             if not filename:
                 continue
+            if filename.startswith("<"):
+                pytest.exit(
+                    f"{hook} is implemented by {impl.plugin_name} of unknown origin",
+                    returncode=3,
+                )
             source = Path(filename).resolve()
             if source.name == "conftest.py" or source.is_relative_to(tests):
                 pytest.exit(
@@ -327,6 +334,14 @@ CONFTEST_DYNAMIC_NAMES = frozenset(
         "f_globals", "__getattr__", "__dir__",
     }
 )  # fmt: skip
+# What a conftest keeps pinned functions reading, as the one binding each has
+# (an empty kind: none at all): rebinding one swaps what a pinned function
+# runs while its text still matches.
+PINNED_FREE_NAMES = {
+    "Path": "import", "pytest": "import", "os": "import",
+    "reap_session": "import", "POSTGRES_URL": "assign",
+    "_LIVE_CONFIGURATION": "assign", "getattr": "", "hasattr": "",
+}  # fmt: skip
 CONFTEST_DYNAMIC_BUILTINS = frozenset(
     {"vars", "locals", "exec", "eval", "compile", "__import__"}
 )
@@ -844,21 +859,90 @@ def _conftest_tree_problems(
         for function in PINNED_CONFTEST_HOOKS
         if keeper and function not in matched
     ]
+    if keeper:
+        problems += _pinned_name_problems(tree, matched)
     plugin_bindings = 0
     for statement in tree.body:
         problems += _collection_node_problems(name, statement, keeper=keeper)
-        if statement in matched.values():
-            continue
-        for node in ast.walk(statement):
-            problems += _hook_binding_problems(name, node)
-            plugin_bindings += "pytest_plugins" in _bound_names(node)
-            problems += _dynamic_hook_problems(name, node)
+        if statement not in matched.values():
+            found, count = _statement_problems(name, statement)
+            problems += found
+            plugin_bindings += count
     if plugin_bindings and not (keeper and _plugins_pinned(tree, plugin_bindings)):
         problems.append(
             f"conftest: {name} sets pytest_plugins; it can load a module "
             "of hooks the gate does not read"
         )
     return list(dict.fromkeys(problems))
+
+
+def _statement_problems(name: str, statement: ast.stmt) -> tuple[list[str], int]:
+    """Every hook-binding and dynamic-use problem under one statement, and how
+    many times it binds `pytest_plugins`."""
+    problems: list[str] = []
+    plugin_bindings = 0
+    for node in ast.walk(statement):
+        problems += _hook_binding_problems(name, node)
+        plugin_bindings += "pytest_plugins" in _bound_names(node)
+        problems += _dynamic_hook_problems(name, node)
+    return problems, plugin_bindings
+
+
+def _bound_here(node: ast.AST) -> list[tuple[str, str]]:
+    """(name, kind) for what one def, class or import statement binds."""
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return [(node.name, "def")]
+    if isinstance(node, ast.Import | ast.ImportFrom):
+        return [
+            (alias.asname or alias.name.split(".")[0], "import") for alias in node.names
+        ]
+    return []
+
+
+def _module_bindings(statements: Iterable[ast.AST]) -> list[tuple[str, str]]:
+    """(name, kind) for each module-level binding, the bodies of functions and
+    classes left out: kind is "import", "def" or "assign"."""
+    found: list[tuple[str, str]] = []
+    stack = list(statements)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, ast.stmt) and _bound_here(node):
+            found += _bound_here(node)
+            continue
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store):
+                found.append((child.id, "assign"))
+            else:
+                stack.append(child)
+    return found
+
+
+def _pinned_name_problems(
+    tree: ast.Module, matched: dict[str, ast.FunctionDef]
+) -> list[str]:
+    """No binding of a pinned function's name beyond its matched def, and
+    exactly the one binding of each name a pinned function reads: the pin is
+    the text, but the callers run whatever the name is bound to."""
+    rest = [node for node in tree.body if node not in matched.values()]
+    bindings = _module_bindings(rest)
+    problems = [
+        f"conftest: tests/conftest.py rebinds {name}, which a pinned function reads"
+        for name, _ in bindings
+        if name in PINNED_CONFTEST_HOOKS
+    ]
+    for name, kind in PINNED_FREE_NAMES.items():
+        if [k for n, k in bindings if n == name] != ([kind] if kind else []):
+            problems.append(
+                f"conftest: tests/conftest.py rebinds {name}, which a pinned "
+                "function reads"
+            )
+    return problems + [
+        f"conftest: tests/conftest.py rebinds {name}, which a pinned function reads"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Global)
+        for name in node.names
+        if name in PINNED_FREE_NAMES or name in PINNED_CONFTEST_HOOKS
+    ]
 
 
 def _matches_pin(text: str, node: ast.FunctionDef) -> bool:
@@ -930,22 +1014,41 @@ def _plugins_pinned(tree: ast.Module, bindings: int) -> bool:
     return bindings == 1 and values == [repr(PYTEST_PLUGINS_PIN)]
 
 
+def _dynamic_use(node: ast.AST) -> str | None:
+    """The name by which one node can build or install a hook, or None."""
+    attributes = CONFTEST_DYNAMIC_NAMES | CONFTEST_DYNAMIC_BUILTINS
+    if isinstance(node, ast.Name) and node.id in attributes:
+        return node.id
+    if isinstance(node, ast.Attribute) and node.attr in attributes:
+        return node.attr
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        return node.name if node.name in CONFTEST_DYNAMIC_NAMES else None
+    if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names):
+        return "a star import"
+    if isinstance(node, ast.Call):
+        return _getattr_use(node, attributes)
+    return None
+
+
+def _getattr_use(call: ast.Call, attributes: frozenset[str]) -> str | None:
+    """A `getattr` whose name is computed, or names one of `attributes`."""
+    if not (
+        isinstance(call.func, ast.Name)
+        and call.func.id == "getattr"
+        and len(call.args) >= 2
+    ):
+        return None
+    wanted = call.args[1]
+    if not (isinstance(wanted, ast.Constant) and isinstance(wanted.value, str)):
+        return "getattr with a computed name"
+    return f"getattr of {wanted.value}" if wanted.value in attributes else None
+
+
 def _dynamic_hook_problems(name: str, node: ast.AST) -> list[str]:
     """A hook can be installed with no `pytest_` binding: through the module
     namespace, the plugin manager, a frame, a star import or code built at
-    run time."""
-    used = None
-    if isinstance(node, ast.Name):
-        if node.id in CONFTEST_DYNAMIC_NAMES | CONFTEST_DYNAMIC_BUILTINS:
-            used = node.id
-    elif isinstance(node, ast.Attribute):
-        if node.attr in CONFTEST_DYNAMIC_NAMES:
-            used = node.attr
-    elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-        if node.name in CONFTEST_DYNAMIC_NAMES:
-            used = node.name
-    elif isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names):
-        used = "a star import"
+    run time, by name, by attribute (`builtins.exec`) or by `getattr`."""
+    used = _dynamic_use(node)
     if used is None:
         return []
     return [
