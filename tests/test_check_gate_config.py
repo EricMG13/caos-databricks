@@ -550,12 +550,20 @@ def test_pinned_hooks_are_compared_by_their_committed_source_text(
 _GUARD_PROJECT_TEST = "def test_a():\n    assert False\n"
 
 
+_EXEC_HOOK = (
+    "import builtins\n"
+    "builtins.exec('def pytest_' + 'pyfunc_call(pyfuncitem): return True')\n"
+)
+
+
 def _guard_project(
-    tmp_path: Path, *, hook_in: str | None
+    tmp_path: Path, *, hook_in: str | None, workers: int = 0
 ) -> subprocess.CompletedProcess[str]:
-    """A throwaway project whose root conftest carries the repository's own
-    runtime guard, with a hook replacing how a test runs placed in a plugin
-    (`-p`), a nested conftest or nowhere, over one test that fails."""
+    """A throwaway repository whose `tests/conftest.py` carries the
+    repository's own runtime guard, run from the repository root as CI runs
+    it (outside the guarded directory), with a hook replacing how a test runs
+    placed in a plugin (`-p`), a nested conftest, code built by `exec` in a
+    nested conftest, or nowhere, over one test that fails."""
     source = (REPO / "tests" / "conftest.py").read_text(encoding="utf-8")
     [guard] = [
         ast.get_source_segment(source, node)
@@ -563,9 +571,10 @@ def _guard_project(
         if isinstance(node, ast.FunctionDef)
         and node.name == "_refuse_run_hooks_from_tests"
     ]
-    project = tmp_path / "project"
-    (project / "sub").mkdir(parents=True)
-    (project / "conftest.py").write_text(
+    repo = tmp_path / "repo"
+    tests = repo / "tests"
+    (tests / "sub").mkdir(parents=True)
+    (tests / "conftest.py").write_text(
         "from pathlib import Path\n\nimport pytest\n\n\n"
         f"{guard}\n\n\n"
         "def pytest_sessionstart(session):\n"
@@ -574,21 +583,25 @@ def _guard_project(
         "    _refuse_run_hooks_from_tests(config)\n",
         encoding="utf-8",
     )
-    (project / "sub" / "test_a.py").write_text(_GUARD_PROJECT_TEST)
+    (tests / "sub" / "test_a.py").write_text(_GUARD_PROJECT_TEST)
     bad = "def pytest_pyfunc_call(pyfuncitem):\n    return True\n"
     arguments = ["-p", "no:cacheprovider"]
     if hook_in == "plugin":
-        (project / "hooks_plugin.py").write_text(bad)
+        (tests / "hooks_plugin.py").write_text(bad)
         arguments += ["-p", "hooks_plugin"]
     elif hook_in == "nested":
-        (project / "sub" / "conftest.py").write_text(bad)
+        (tests / "sub" / "conftest.py").write_text(bad)
+    elif hook_in == "exec":
+        (tests / "sub" / "conftest.py").write_text(_EXEC_HOOK)
+    if workers:
+        arguments += ["-n", str(workers)]
     environment = {
         key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")
     }
-    environment["PYTHONPATH"] = str(project)
+    environment["PYTHONPATH"] = str(tests)
     return subprocess.run(
-        [sys.executable, "-m", "pytest", *arguments, "-q", "sub"],
-        cwd=project,
+        [sys.executable, "-m", "pytest", *arguments, "-q", "tests"],
+        cwd=repo,
         env=environment,
         capture_output=True,
         text=True,
@@ -600,17 +613,66 @@ def test_the_runtime_guard_ends_a_session_that_replaces_how_a_test_runs(
     tmp_path: Path,
 ) -> None:
     """N109 review: a conftest or a plugin module that implements
-    `pytest_pyfunc_call` can return True and pass `assert False`; the guard in
-    the pinned conftest ends the session, naming the hook, before it can. A
-    clean session is untouched."""
-    clean = _guard_project(tmp_path / "clean", hook_in=None)
-    assert "1 failed" in clean.stdout, clean.stdout + clean.stderr
-    for where in ("plugin", "nested"):
-        ended = _guard_project(tmp_path / where, hook_in=where)
-        output = ended.stdout + ended.stderr
-        assert "pytest_pyfunc_call is implemented by" in output, output
-        assert "passed" not in output, output
-        assert ended.returncode != 0
+    `pytest_pyfunc_call` can return True and pass `assert False`, including
+    one built by `exec` (its code object's file is "<string>", so the guard
+    judges the registering module's file); the guard in the pinned conftest
+    ends the session before it can. A clean session is untouched, with and
+    without xdist workers."""
+    for workers in (0, 2):
+        clean = _guard_project(
+            tmp_path / f"clean{workers}", hook_in=None, workers=workers
+        )
+        assert "1 failed" in clean.stdout, clean.stdout + clean.stderr
+        for where in ("plugin", "nested", "exec"):
+            case = tmp_path / f"{where}{workers}"
+            ended = _guard_project(case, hook_in=where, workers=workers)
+            output = ended.stdout + ended.stderr
+            if not workers:
+                assert "pytest_pyfunc_call is implemented by" in output, output
+            assert "passed" not in output, (where, workers, output)
+            assert ended.returncode != 0, (where, workers, output)
+
+
+def test_builtins_reached_by_attribute_and_pinned_names_cannot_be_rebound(
+    tmp_path: Path,
+) -> None:
+    """N109 re-review: `builtins.exec(...)` and a computed `getattr` build a
+    hook as `exec` by name does; and a later binding of a pinned function's
+    name, or of a name the guard reads, replaces what the pinned callers
+    run while the pinned text still matches."""
+    root = _tree(tmp_path)
+    for index, text in enumerate(
+        (
+            "import builtins\nbuiltins.exec('1')\n",
+            "import builtins\nbuiltins.eval('1')\n",
+            "import builtins\nbuiltins.compile('1', 'x', 'eval')\n",
+            "import builtins\ngetattr(builtins, 'ex' + 'ec')('1')\n",
+            "import builtins\ngetattr(builtins, 'exec')('1')\n",
+        )
+    ):
+        name = f"tests/attr{index}/conftest.py"
+        problems = _conftest_problems(root, name, text)
+        assert any(problem.startswith(f"conftest: {name} ") for problem in problems), (
+            text,
+            problems,
+        )
+    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    for extra in (
+        "\n_refuse_run_hooks_from_tests = lambda config: None\n",
+        "\ndef _refuse_run_hooks_from_tests(config):\n    return None\n",
+        "\nfrom helper import _refuse_run_hooks_from_tests\n",
+        "\nclass Path:\n    pass\n",
+        "\npytest = None\n",
+        "\nPath = str\n",
+        "\nimport os as pytest\n",
+        "\ndef getattr(*arguments):\n    return None\n",
+        "\ndef _rebind():\n    global Path\n    Path = str\n",
+    ):
+        problems = _conftest_problems(root, "tests/conftest.py", original + extra)
+        assert any(
+            problem.startswith("conftest: tests/conftest.py ") for problem in problems
+        ), (extra, problems)
+    assert _conftest_problems(root, "tests/conftest.py", original) == []
 
 
 def _edit_ci(root: Path, edit: Callable[[dict[str, Any]], None]) -> None:
