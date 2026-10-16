@@ -46,7 +46,9 @@ export type RegionStatus<D = WorkspaceDocument> =
           event tail waits it out rather than guessing (finding FE-3). */
       retryAfterSeconds?: number;
     }
-  | { kind: "unavailable" }
+  // `cause: "no-case"` is the client's own knowledge: a case section opened
+  // with no case sends no request, so nothing was refused and nothing is hidden.
+  | { kind: "unavailable"; cause?: "no-case" }
   | { kind: "stale"; document: D }
   | { kind: "offline" }
   | { kind: "partial"; document: D; notes: string[] }

@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { App } from "@/app/App";
+import { Workspace } from "@/app/Workspace";
 import { UNAVAILABLE_WORDING } from "@/app/transport";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { RegionState, UNAVAILABLE_NEXT } from "@/states/RegionState";
@@ -45,6 +46,33 @@ describe("the states", () => {
     );
     expect(screen.getByText(UNAVAILABLE_NEXT)).toBeInTheDocument();
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  test("a case section opened with no case says no case is chosen, never that standing is missing", () => {
+    // N113: the neutral standing sentence answers a private 404, whose cause
+    // the page must not reveal; with no case the cause is known and is ours.
+    vi.stubGlobal("fetch", vi.fn());
+    try {
+      render(
+        <MemoryRouter initialEntries={["/analysis/"]}>
+          <Workspace section="analysis" />
+        </MemoryRouter>,
+      );
+      const region = screen.getByRole("main").querySelector("[data-surface-state='unavailable']")!;
+      expect(region).toHaveTextContent("No case is chosen");
+      expect(region).not.toHaveTextContent(/standing/);
+      expect(region).not.toHaveTextContent(UNAVAILABLE_WORDING);
+      expect(screen.getByRole("link", { name: "All cases" })).toHaveAttribute(
+        "href",
+        "/directory/",
+      );
+      expect(fetch).not.toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/cases"),
+        expect.anything(),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   test("test_observed_empty_requires_timestamp", () => {
