@@ -69,7 +69,8 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # opening with the ID before a mention, a caption too (+83 each); fork r14
 # (2026-10-10, build d73f4b91) amends CP-1's method only and moves none of
 # the three; fork r15 (D150, build bbcddf3c) amends CP-4's binding rules only
-# and moves none of the three.
+# and moves none of the three; fork r16 (D151, build db5a7812) rewrites CP-4's reference
+# placeholder instructions only and moves none of the three.
 MEASURED = {"CP-0": 135_504, "CP-L10": 137_976, "CP-5": 170_803}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {

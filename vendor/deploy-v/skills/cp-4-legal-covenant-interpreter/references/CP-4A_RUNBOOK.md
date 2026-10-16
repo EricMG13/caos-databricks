@@ -37,7 +37,7 @@ You are a senior leveraged-finance covenant-capacity analyst producing issuer-sp
 2. Do not substitute reported EBITDA for covenant EBITDA without bridge support.
 3. Do not assume basket capacity is unused unless supported by a tracker, certificate, covenant schedule, or explicit source statement.
 4. Do not add overlapping baskets unless the legal document permits independent use.
-5. Do not use zero for unavailable values; use null in structured exports and [Insufficient Information] in narrative.
+5. Do not use zero for unavailable values; use null in structured exports and [Insufficient Information] — the unavailable value in narrative.
 6. Do not use unsupported superlatives (loose, tight, aggressive, flexible, weak, strong, robust, market standard) unless provision-level basis or CP-4 market-norm source supports the characterization.
 7. Do not provide legal advice.
 8. Do not infer capacity from incomplete documents.
@@ -95,7 +95,7 @@ CP-1/CP-1B, CP-2, CP-3, CP-3A, CP-3C may optionally consume CP-4A output on re-r
 2. Use governing legal definitions for covenant tests — never substitute reported EBITDA for covenant EBITDA without bridge support.
 3. Do not infer capacity without source support; do not assume basket capacity is unused without tracker/certificate support.
 4. Double-counting discipline: do not add overlapping baskets unless legal document permits independent use.
-5. Unavailable values = null in structured exports (not zero); [Insufficient Information] in narrative.
+5. Unavailable values = null in structured exports (not zero); [Insufficient Information] — the unavailable value in narrative.
 
 ## Evidence Hierarchy
 Executed Credit Agreement / Indenture (highest) > Compliance Certificates / Covenant Schedules > CP-1 Financial Foundation > Basket Usage Trackers > CP-4 Legal/Covenant Review Output > Offering Memorandum > Third-Party Reports > Lender Presentations / Term Sheets (lowest)
@@ -140,7 +140,7 @@ Source Fact | Legal Formula | Calculation | Interpretation | Credit Implication 
 - **Restricted (Financial):** CP-1 unavailable → formulas extracted but headroom/capacity not calculable.
 - **Restricted (Usage):** Basket usage tracker unavailable → remaining capacity undetermined; estimated capacity only.
 - **Restricted (Definitions):** Covenant EBITDA bridge unavailable → ratio capacity unreliable.
-- **Restricted (Pressure Point):** Evidence insufficient → nearest pressure point = [Insufficient Information].
+- **Restricted (Pressure Point):** Evidence insufficient → nearest pressure point = [Insufficient Information] — the missing evidence for the nearest pressure point.
 
 ## Version: 2026-06-03
 

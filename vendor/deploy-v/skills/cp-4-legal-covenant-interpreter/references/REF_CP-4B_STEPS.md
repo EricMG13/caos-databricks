@@ -22,13 +22,13 @@ Original files, in this bundle: REF_CP-4B_01_SourceGateEntityEvidence.md, REF_CP
    - **Completed:** entity perimeter + guarantee + security evidence available.
    - **Completed with Limitations:** partial perimeter (e.g., guarantor schedule present, security docs missing). State each limitation and downstream impact.
    - **Blocked:** no entity/guarantee evidence. Output blocked message and STOP. Do not infer the perimeter.
-7. If CP-1 entity-level debt missing: structural-subordination analysis limited — flag. If CP-4 findings missing: leakage routes carry [Insufficient Information] for enabling provisions — flag.
+7. If CP-1 entity-level debt missing: structural-subordination analysis limited — flag. If CP-4 findings missing: leakage routes carry [Insufficient Information] — naming the missing enabling provisions — flag.
 
 > **Free acquisition lane:** before assigning **Blocked**, attempt the free SEC EDGAR lane — Ex-21 (subsidiaries list), Ex-10.x (credit agreements with guarantor + collateral schedules), Ex-4.x (indentures / supplemental indentures). A pulled-and-vaulted exhibit is an executed primary source; an unfetched full-text hit is `external · unverified` and does **not** satisfy the BLOCKING gate until ingested.
 
 ## Output
 T4D.1: Source gate register (entity-evidence inventory + status + authority rank + limitations) + Module Status: Completed / Completed with Limitations / Blocked
-<!-- Upstream re-anchor (common_rules #10): re-import and verify the specific upstream outputs this module consumes (CP-1 debt-by-entity, CP-1A entity/ownership facts, CP-4 covenant findings); restate the exact datapoints/run_id/period used. If a required upstream value is absent or its run_id/period mismatches, mark [Insufficient Information] and gate the dependent step — do not infer it. -->
+<!-- Upstream re-anchor (common_rules #10): re-import and verify the specific upstream outputs this module consumes (CP-1 debt-by-entity, CP-1A entity/ownership facts, CP-4 covenant findings); restate the exact datapoints/run_id/period used. If a required upstream value is absent or its run_id/period mismatches, mark [Insufficient Information] — the absent or mismatched upstream value and gate the dependent step — do not infer it. -->
 </step_reference>
 ## REF_CP-4B_02_LegalEntityPerimeterRegister.md
 <!-- REF_CP-4B_02 (T2) | PROPOSED | 2026-06-22 -->
@@ -39,7 +39,7 @@ T4D.1: Source gate register (entity-evidence inventory + status + authority rank
 ## Instructions
 1. Build the entity register. For each material legal entity record: name, role (borrower / issuer / holdco / intermediate holdco / restricted subsidiary / unrestricted subsidiary / guarantor / non-guarantor / finance sub / JV), jurisdiction, parent, and ownership %.
 2. Record designation status: currently restricted vs unrestricted, and whether the documents permit designating it unrestricted (capacity, not just current state).
-3. Where sourced, record material assets / EBITDA / debt held at each entity; mark [Insufficient Information] where not disclosed — do not estimate.
+3. Where sourced, record material assets / EBITDA / debt held at each entity; mark [Insufficient Information] — the undisclosed asset, EBITDA or debt figure where not disclosed — do not estimate.
 4. Flag entities holding material value **outside** the credit/guarantee group — these are the structural-subordination candidates carried into Step 5.
 5. Separate documentary fact (definition, schedule) from analyst interpretation (which entities are economically significant).
 
@@ -74,7 +74,7 @@ T4D.3: Guarantor Coverage Matrix (entity × tranche) + non-guarantor material-en
 2. Record excluded assets and excluded subsidiaries — collateral the lenders do **not** reach.
 3. Record collateral **release** mechanics and triggers; flag any permitting material collateral reduction without full-lender consent.
 4. Note perfection and local-law limitations (foreign collateral, real-property carve-outs, IP/equity-pledge limits) where sourced.
-5. Where sourced, indicate pledged vs unpledged value by entity; mark [Insufficient Information] where not disclosed.
+5. Where sourced, indicate pledged vs unpledged value by entity; mark [Insufficient Information] — the undisclosed pledged or unpledged value where not disclosed.
 6. Apply the Standard Finding Format to each material collateral provision; translate coverage into a qualitative recovery-access view (not dollar LGD — that is CP-3A).
 
 ## Output
@@ -174,7 +174,7 @@ Narrative synthesis (1–2 pages) + handoff register naming the artifact passed 
 4. Do not interpret covenant aggressiveness scores — that is CP-4; cite CP-4's provision findings as evidence only.
 5. Do not infer a drop-down or uptier risk from sponsor identity — require provision-level capacity evidence.
 6. Do not cite a source for a claim it does not support.
-7. If org chart, guarantor schedule, or security documents are missing, mark [Insufficient Information] and log the gap — do not infer the perimeter.
+7. If org chart, guarantor schedule, or security documents are missing, mark [Insufficient Information] — the missing org chart, guarantor schedule or security documents and log the gap — do not infer the perimeter.
 ## REF_CP-4B_StyleAndFormat.md
 <!-- REF_CP-4B_StyleAndFormat.md — relocation target created by SEC8 compression | provenance: content moved verbatim from CP-4B_ACTIVE_PROMPT.md | 2026-07-11 -->
 

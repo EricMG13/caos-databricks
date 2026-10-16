@@ -27,7 +27,7 @@ Original files, in this bundle: REF_CP-4A_01_CapacitySourceGate.md, REF_CP-4A_02
 ## Output
 T4C.1: Source gate register (input inventory + availability + quality + limitations)
 + Module Status: Completed / Completed with Limitations / Blocked
-<!-- Upstream re-anchor (common_rules #10): at this gate, re-import and verify the specific upstream module outputs this module consumes (per declared Upstream); restate the exact datapoints/run_id/period used. If a required upstream value is absent or its run_id/period mismatches this run, mark [Insufficient Information] and gate the dependent step — do not re-derive or infer the upstream value from memory. -->
+<!-- Upstream re-anchor (common_rules #10): at this gate, re-import and verify the specific upstream module outputs this module consumes (per declared Upstream); restate the exact datapoints/run_id/period used. If a required upstream value is absent or its run_id/period mismatches this run, mark [Insufficient Information] — the absent or mismatched upstream value and gate the dependent step — do not re-derive or infer the upstream value from memory. -->
 </step_reference>
 ## REF_CP-4A_02_ControllingCapacitySourceMap.md
 <!-- REF_CP-4A_02 (T2) | 2026-06-03 -->
@@ -71,7 +71,7 @@ T4C.3: `Definition / Ratio`|`Source / Clause`|`Formula / Definition Summary`|`Re
 1. Build the Headroom Table for all identified covenant tests.
 2. For max-ratio tests: headroom = covenant threshold − current tested ratio. Identify ratio distance to breach and, where supportable, incremental debt/EBITDA decline implied by threshold.
 3. For min-ratio tests (coverage): headroom = current tested ratio − covenant threshold. Identify cushion to minimum.
-4. If exact headroom unsupported, state [Insufficient Information] and identify whether the missing item is: current tested ratio, covenant definition, denominator, numerator, threshold, or basket usage.
+4. If exact headroom unsupported, state [Insufficient Information] — the missing item, identified as one of: current tested ratio, covenant definition, denominator, numerator, threshold, or basket usage.
 5. Apply Calculation Rules: use governing legal definitions, not reported EBITDA.
 6. Apply null-handling: Not Available / Provisional / Insufficient Information as appropriate.
 7. Include status and limitation for each test.
@@ -90,7 +90,7 @@ T4C.4: `Test`|`Test Type`|`Threshold`|`Current Basis`|`Formula`|`Headroom`|`Stat
 2. For each: record Capacity Type, Basket/Test, Formula, Conditions, Current Input, Usage, Estimated Capacity, Remaining Capacity, Status (7-value), Severity (5-value), Risk Mechanic, Credit Implication, Evidence ID.
 3. Apply Double-Counting Discipline: identify fungibility, shared caps, reclassification constraints.
 4. Apply Calculation Rules: every calculated item must include formula, source inputs, result, period, status, limitation, source trace.
-5. Apply null-handling strictly: null for unavailable numerics, [Insufficient Information] in narrative.
+5. Apply null-handling strictly: null for unavailable numerics, [Insufficient Information] — the unavailable value in narrative.
 
 ## Output
 T4C.5: `Capacity Type`|`Basket / Test`|`Formula`|`Conditions`|`Current Input`|`Usage`|`Estimated Capacity`|`Remaining Capacity`|`Status`|`Severity`|`Risk Mechanic`|`Credit Implication`|`Evidence ID`
@@ -185,7 +185,7 @@ T4C.9: `Flag`|`Supported Fact`|`Creditor Risk`|`Severity`|`Confidence`|`Downstre
    - Credit Implication: [PD / LGD / liquidity / recovery / RV / portfolio impact]
    - Monitoring Signal: [specific observable data or event]
    - Evidence Needed to Tighten View: [specific missing source]
-4. If evidence insufficient: [Insufficient Information] and state what is missing.
+4. If evidence insufficient: [Insufficient Information] — what is missing.
 
 ## Output
 Narrative: single nearest pressure point with 6 required fields. No table.
@@ -203,7 +203,7 @@ Narrative: single nearest pressure point with 6 required fields. No table.
 1. Prioritize supported capacity items by creditor relevance.
 2. For each: record Priority (rank), Capacity Item, Severity, Confidence, Primary Risk Mechanic, PD Effect, LGD/Recovery Effect, Monitoring Action, Evidence ID.
 3. Rank only supported items — do not rank items with [Insufficient Information] unless they can be partially characterized.
-4. If ranking is not supportable, use [Insufficient Information].
+4. If ranking is not supportable, use [Insufficient Information] — what prevents the ranking.
 5. Do not create exact scores unless evidence supports them.
 6. This matrix is a key downstream input for CP-6 (bear legal-control attack) and CP-6A (portfolio sizing constraint).
 
@@ -260,7 +260,7 @@ Narrative synthesis (no table). Module completion statement with Gate Status.
    - Credit Implication: [PD / LGD / liquidity / recovery / RV / portfolio impact]
    - Monitoring Signal: [specific observable data or event]
    - Evidence Needed to Tighten View: [specific missing source]
-4. If evidence insufficient: [Insufficient Information] and state what is missing.
+4. If evidence insufficient: [Insufficient Information] — what is missing.
 
 ## Output
 Narrative: single nearest pressure point with 6 required fields. No table.
@@ -275,7 +275,7 @@ Narrative: single nearest pressure point with 6 required fields. No table.
 1. Prioritize supported capacity items by creditor relevance.
 2. For each: record Priority (rank), Capacity Item, Severity, Confidence, Primary Risk Mechanic, PD Effect, LGD/Recovery Effect, Monitoring Action, Evidence ID.
 3. Rank only supported items — do not rank items with [Insufficient Information] unless they can be partially characterized.
-4. If ranking is not supportable, use [Insufficient Information].
+4. If ranking is not supportable, use [Insufficient Information] — what prevents the ranking.
 5. Do not create exact scores unless evidence supports them.
 6. This matrix is a key downstream input for CP-6 (bear legal-control attack) and CP-6A (portfolio sizing constraint).
 
@@ -404,7 +404,7 @@ Preference order when evidence is comparable:
 3. RP/investment/USub capacity that can leak value from the restricted group.
 4. EBITDA add-back mechanics that inflate all ratio-based capacity.
 5. Amendment/waiver mechanics that weaken lender control.
-If evidence insufficient → [Insufficient Information] and state what is needed.
+If evidence insufficient → [Insufficient Information] — what is needed.
 
 ## Export Detail (relocated from ACTIVE_PROMPT 2026-07-11)
 Markdown handoff Header fields: Issuer · Module (CP-4A · CovenantCapacityCalculator) · Reporting period · Analysis date · run_id. Analysis-narrative numerics: right-aligned with aligned decimals.

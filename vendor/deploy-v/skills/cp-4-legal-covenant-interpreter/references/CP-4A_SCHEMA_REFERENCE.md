@@ -1,7 +1,7 @@
 <!-- CP-4A Schema Reference (T3) | 2026-06-03 -->
 
 ## Required Output Sections (13)
-All 13 sections must be present. If source materials do not support analysis, the section must still appear with [Insufficient Information] and a gap ledger entry.
+All 13 sections must be present. If source materials do not support analysis, the section must still appear with [Insufficient Information] — what the source materials lack, and a gap ledger entry.
 
 ## Required Tables (10)
 | ID | Table Name | Key Columns |
@@ -25,7 +25,7 @@ All 13 sections must be present. If source materials do not support analysis, th
 | 13 | Overall Covenant Capacity View | Required formulation + 3–5 supported bullets + completion statement |
 
 ## QA Checklist
-- [ ] All 13 output sections present and populated (or marked [Insufficient Information] with gap logged)
+- [ ] All 13 output sections present and populated (or marked [Insufficient Information] — what is missing, with gap logged)
 - [ ] Every capacity calculation includes: formula, numerator, denominator, source inputs, result, period, status, limitation, source trace
 - [ ] All severity labels use 5-value framework (Low / Moderate / High / Critical / Insufficient Information)
 - [ ] All confidence labels use 5-value framework (High / Moderate / Low / Formula Only / Insufficient)
@@ -33,9 +33,9 @@ All 13 sections must be present. If source materials do not support analysis, th
 - [ ] Every credit implication uses one of the 8 canonical CP-4A values
 - [ ] Content distinctions maintained: Source Fact | Legal Formula | Calculation | Interpretation | Credit Implication | Gap
 - [ ] Double-counting discipline applied: no overlapping baskets summed without legal support
-- [ ] Null-handling applied: null for unavailable numerics (not zero), [Insufficient Information] in narrative
+- [ ] Null-handling applied: null for unavailable numerics (not zero), [Insufficient Information] — the unavailable value in narrative
 - [ ] Conflict handling applied: CP-1 vs CP-4 definition conflicts logged, legal definition governs
-- [ ] Nearest Pressure Point identifies exactly one item with 6 required fields (or [Insufficient Information])
+- [ ] Nearest Pressure Point identifies exactly one item with 6 required fields (or [Insufficient Information] — what evidence is missing)
 - [ ] All gaps logged in Gaps Ledger with affected downstream modules
 - [ ] Numeric Confidence Score (0–100) computed per `../../../CANON_SHARED.md § CP_CONFIDENCE_SCORE.md` and shown with its band in the Audit Summary
 - [ ] Canonical Markdown valid; every the Markdown handoff passes view-appropriate parity and uses the matching filename

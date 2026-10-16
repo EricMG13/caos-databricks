@@ -13,7 +13,7 @@ NOTE: CP-4B owns the structural-priority map object; its map is referenced by CP
 3. Do not compute dollar recoveries or LGD percentages — output the structural map and qualitative priority; CP-3A owns the dollar waterfall.
 4. Do not interpret covenant aggressiveness — that is CP-4; cite CP-4 findings as evidence only.
 5. Capacity, not identity: a drop-down/uptier risk requires provision-level capacity evidence, never sponsor reputation.
-6. Missing org chart / guarantor schedule / security docs = [Insufficient Information], never an inferred perimeter.
+6. Missing org chart / guarantor schedule / security docs = [Insufficient Information] — the missing org chart / guarantor schedule / security docs, never an inferred perimeter.
 
 ## Owned Object
 structural_priority_map (entity perimeter + guarantee/security packages + structural priority + leakage routes)
@@ -38,7 +38,7 @@ Completed | Completed with Limitations | Blocked
 |--------|-----------------|-------------------|
 | CP-1 | Debt-by-entity schedule | Structural-subordination analysis limited; cannot rank claims by reachable value |
 | CP-1A | Ownership / entity facts, org chart | Entity perimeter incomplete |
-| CP-4 | Covenant findings (RP/investment/USub capacity, releases) | Leakage routes carry [Insufficient Information] for enabling provisions |
+| CP-4 | Covenant findings (RP/investment/USub capacity, releases) | Leakage routes carry [Insufficient Information] — naming the missing enabling provisions |
 
 ## Fail/Restrict
 - **Blocked:** No entity/guarantee evidence available (no credit-agreement schedules and no org chart + guarantor schedule). Module produces blocked statement only. Do not infer the perimeter.

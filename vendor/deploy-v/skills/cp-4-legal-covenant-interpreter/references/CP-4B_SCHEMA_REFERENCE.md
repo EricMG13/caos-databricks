@@ -1,7 +1,7 @@
 <!-- CP-4B Schema Reference (T3) | PROPOSED | 2026-06-22 -->
 
 ## Required Output Sections (9)
-All 9 sections must be present. If source materials do not support analysis, the section must still appear with [Insufficient Information] and a gap ledger entry.
+All 9 sections must be present. If source materials do not support analysis, the section must still appear with [Insufficient Information] — what the source materials lack, and a gap ledger entry.
 
 ## Required Tables (8)
 | ID | Table Name | Key Columns |
@@ -19,10 +19,10 @@ All 9 sections must be present. If source materials do not support analysis, the
 Synthesis weighted to the worst open route + handoff register naming the artifact passed to CP-3A, CP-6, and CP-4A.
 
 ## QA Checklist
-- [ ] All 9 output sections present and populated (or [Insufficient Information] with gap logged)
+- [ ] All 9 output sections present and populated (or [Insufficient Information] — what is missing, with gap logged)
 - [ ] Every structural-subordination finding names the entity gap AND the stranded value
 - [ ] Every claim ranked by reachable value at its obligor entity, not stated lien alone
-- [ ] Every leakage route cites a CP-4 enabling provision (or is marked [Insufficient Information])
+- [ ] Every leakage route cites a CP-4 enabling provision (or is marked [Insufficient Information] — the missing enabling provision)
 - [ ] Leakage-route severity uses only the canonical 1–5 / Not Scorable scale
 - [ ] Demonstrated capacity separated from theoretical capacity
 - [ ] No dollar recoveries / LGD percentages (handed to CP-3A)
