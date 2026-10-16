@@ -625,8 +625,14 @@ export function liquidityBridge(handoff: HandoffView): Figure[] {
   // The opening's scale where it states one, else the first row's that does.
   const unit =
     [opening, ...rows].map((row) => (row ? moneyIn(row) : "")).find(Boolean) || undefined;
+  // An opening total stating no scale draws no step: the deltas would stand
+  // on a base the register does not give, with an invented residual.
+  const unusable = opening !== undefined && unit !== undefined && !moneyIn(opening);
   const amountOf = (row: Row): Cell | undefined => {
     const cell = row["Amount"];
+    if (unusable && cell?.value != null) {
+      return { text: `opening total in no stated scale, not the bridge's ${unit}`, value: null };
+    }
     if (unit === undefined || cell?.value == null || moneyIn(row) === unit) return cell;
     const own = moneyIn(row) || "no currency and scale";
     return {
