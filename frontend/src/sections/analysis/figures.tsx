@@ -51,6 +51,7 @@ import {
   type StackFigure,
   type Wall,
   type WaterfallFigure,
+  APPENDIX_LISTS,
 } from "./figure-core";
 import { registerFigures } from "./register-figures";
 
@@ -783,7 +784,7 @@ export function figuresOf(handoff: HandoffView): Figure[] {
     ...figures.slice(0, MAX_FIGURES - 1),
     {
       ...oversized("more", figures[MAX_FIGURES - 1]!.table, `${rest} more figures`, 0),
-      summary: `${rest} more figures are not drawn. The Appendix tab lists every row.`,
+      summary: `${rest} more figures are not drawn.${APPENDIX_LISTS}`,
     },
   ];
 }
@@ -1052,7 +1053,6 @@ function Unread({ handoff }: { handoff: HandoffView }) {
   );
 }
 
-const APPENDIX_LISTS = " The Appendix tab lists every row.";
 const WRITTEN_SHOWS = " The As written tab shows the module's text.";
 
 /** One figure in a grid: its chart, or past `MAX_MARKS` its title and summary.

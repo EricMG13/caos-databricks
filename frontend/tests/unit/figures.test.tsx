@@ -13,6 +13,7 @@ import {
   datum,
   groupBy,
   nearestOf,
+  APPENDIX_LISTS,
   oversized,
   pair,
   stackFigure,
@@ -634,6 +635,7 @@ test("past MAX_FIGURES a module's figures are stated, the last saying how many m
   const figures = figuresOf({ ...cp1, tables: [kpis] });
   expect(figures).toHaveLength(MAX_FIGURES);
   expect(figures.at(-1)).toMatchObject({ oversized: true, title: "3 more figures" });
+  expect(figures.at(-1)!.summary.endsWith(APPENDIX_LISTS)).toBe(true);
   expect(figures.at(-1)!.summary).toBe(
     "3 more figures are not drawn. The Appendix tab lists every row.",
   );
@@ -1155,4 +1157,11 @@ test("a register stack's table twin heads its first column with what the categor
   const figure = container.querySelector<HTMLElement>("[data-figure='basket-capacity']")!;
   fireEvent.click(within(figure).getByRole("button", { name: "Table" }));
   expect(figure.querySelector("thead th:first-child")).toHaveTextContent("Basket / Test");
+});
+
+test("test_every_stated_figure_closes_on_the_sentence_the_view_swaps", () => {
+  // The Appendix swap replaces this one text; a summary written differently
+  // would keep pointing at an Appendix that lists nothing.
+  expect(oversized("k", "T", "T", 3).summary.endsWith(APPENDIX_LISTS)).toBe(true);
+  expect(APPENDIX_LISTS).toBe(" The Appendix tab lists every row.");
 });

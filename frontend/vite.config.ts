@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { blockedResponse } from "./demo-fixtures";
 import { defineConfig, loadEnv, type Connect, type Plugin, type ProxyOptions } from "vite";
 
 // Explicit demo dev and preview serve fixtures at the v1 wire's routes, for the
@@ -102,21 +103,6 @@ function grantedAnalysis(raw: string): string {
   return JSON.stringify(doc);
 }
 
-/** The `blocked` fixture: the partial analysis of a run that ended BLOCKED, the
-    first pending node's verdict carrying the quotes `run.blocked.json` holds
-    (N141). Derived from the two, so neither can drift from it. */
-function blockedAnalysis(partial: string, run: string): string {
-  const doc = JSON.parse(partial);
-  const [node] = doc.body.pending;
-  doc.body.displayed_run_status = "BLOCKED";
-  doc.body.blocked_by = {
-    ...JSON.parse(run).body.run.blocked_by,
-    route_node_id: node.route_node_id,
-    module_id: node.module_id,
-  };
-  return JSON.stringify(doc);
-}
-
 /** The Model's `acts` state: a complete default view the server offers Add to
     Book on (a digest, the run's subject, the action), derived from `model.json`
     so the two cannot drift. */
@@ -178,7 +164,7 @@ async function serveSection(section: string, fixture: string | null, res: Server
   if (body === null) return send(res, 404, "{}");
   if (section === "analysis" && fixture === "blocked") {
     const run = await readJson("states/run.blocked.json");
-    return send(res, 200, run === null ? "{}" : blockedAnalysis(body, run));
+    return send(res, ...blockedResponse(body, run));
   }
   send(
     res,

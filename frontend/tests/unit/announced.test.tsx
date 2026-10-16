@@ -396,8 +396,12 @@ describe("the a11y matrix measures every confirmed act available (DF-9)", () => 
       expect(STATE_ROUTES).toContain(route);
       expect(new URL(route, "http://localhost").searchParams.get("disclose")).toBe("record");
     }
-    const source = readFileSync(resolve(process.cwd(), "scripts/a11y-axe.mjs"), "utf8");
-    expect(source).toContain("data-artifact-record-disclosure");
+    // The disclosure's behaviour is tested in tests/scripts/a11y-disclose.test.mjs;
+    // the selector it opens must be the one the artifact page renders.
+    const disclosure = readFileSync(resolve(process.cwd(), "scripts/a11y-disclose.mjs"), "utf8");
+    const artifact = readFileSync(resolve(process.cwd(), "src/ds/ArtifactMarkdown.tsx"), "utf8");
+    expect(disclosure).toContain("details[data-artifact-record-disclosure]");
+    expect(artifact).toMatch(/<details[^>]*data-artifact-record-disclosure/);
   });
 
   test("test_the_matrix_routes_the_add_to_book_dialog_and_the_withdraw_panel", () => {

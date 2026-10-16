@@ -28,11 +28,25 @@ import { QUOTE_LABEL } from "@/evidence/TracedLine";
 import { BlockedQuotes, NOT_LINKED, UnverifiedFacts } from "@/evidence/Unverified";
 import { clampExcerpt } from "@/evidence/compact";
 import { HandoffMarkers } from "@/evidence/Markers";
+import type { Severity } from "@/wire";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
 export { PROSE_SHOWN } from "./module";
 
-const SCREENING_NOTICE = "Screening only: a screen, not committee clearance.";
+/** The class a module's QA tag draws by severity (D71). Failed and Blocked are
+    critical; a caveat is not a warning, so `restricted` is deliberately left
+    without a `.tag.restricted` rule and draws as the plain outlined `.tag`
+    (the same as SEVERITY_BADGE.RESTRICTED = "outline"). */
+const HEADER_TAG: Record<Severity, string> = {
+  SUCCESS: "ok",
+  RESTRICTED: "restricted",
+  CRITICAL: "crit",
+  WARNING: "warn",
+  RUNNING: "warn",
+  IDLE: "warn",
+};
+
+const SCREENING_NOTICE ="Screening only: a screen, not committee clearance.";
 
 type Handoffs = AnalysisDocument["body"]["handoffs"];
 
@@ -313,7 +327,7 @@ function ModuleView({
         )}
         <span className="right">
           <span
-            className={`tag ${severity === "SUCCESS" ? "ok" : severity === "RESTRICTED" ? "restricted" : "warn"}`}
+            className={`tag ${HEADER_TAG[severity]}`}
             data-qa-status
           >
             {handoff.qa_status}

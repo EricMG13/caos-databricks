@@ -133,6 +133,15 @@ export function selectionNeeded(section: Section, query: SectionQuery): Selectio
   return section === "committee" && !query.revision ? "revision" : null;
 }
 
+/** The status of a section that sends no request. Only an enabled section
+    waiting on its case has the client's own cause ("no case is chosen"); a
+    disabled one (Admin) is plainly unavailable, whatever the address carries. */
+export function unrequestedStatus(section: Section): RegionStatus {
+  return isEnabledSection(section)
+    ? { kind: "unavailable", cause: "no-case" }
+    : { kind: "unavailable" };
+}
+
 const RESPONSE_INVALID: Refusal = {
   code: "RESPONSE_INVALID",
   clears: "the server answers with a typed refusal",

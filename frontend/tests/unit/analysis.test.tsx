@@ -15,14 +15,11 @@ import { ReaderParts } from "@/sections/analysis/module";
 import { AnalysisSection, PROSE_SHOWN, sourceRegister } from "@/sections/analysis/AnalysisSection";
 import { conclusionOf, handoffSeverity } from "@/sections/analysis/tone";
 import { parseAnalysisDocument } from "@/wire/v1";
+import { blockedAnalysis, blockedResponse } from "../../demo-fixtures";
 import type { AnalysisDocument, HandoffView } from "@/wire/v1";
 
 const load = (path: string): unknown =>
   JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
-
-interface RunBlockedFixture {
-  body: { run: { blocked_by: NonNullable<AnalysisDocument["body"]["blocked_by"]> } };
-}
 
 const complete = parseAnalysisDocument(load("../../fixtures/analysis.json"));
 const partial = parseAnalysisDocument(load("../../fixtures/states/analysis.partial.json"));
@@ -713,6 +710,41 @@ describe("Analysis", () => {
     );
   });
 
+  test("test_header_tag_draws_failed_and_blocked_as_critical (D71)", () => {
+    const base = complete.body.handoffs.find((h) => h.module_id === "CP-1C")!;
+    for (const qa of ["FAILED", "BLOCKED"]) {
+      const failed: AnalysisDocument = {
+        ...complete,
+        body: {
+          ...complete.body,
+          handoffs: complete.body.handoffs.map((h) => (h === base ? { ...h, qa_status: qa } : h)),
+        },
+      };
+      const { container, unmount } = mountAt(failed, "CP-1C");
+      const tag = container.querySelector("[data-qa-status]")!;
+      expect(tag).toHaveTextContent(qa);
+      expect(tag).toHaveClass("crit");
+      expect(tag).not.toHaveClass("warn");
+      unmount();
+    }
+    // A caveat is not a warning: a restricted module stays off both.
+    const { container } = mountAt(
+      {
+        ...complete,
+        body: {
+          ...complete.body,
+          handoffs: complete.body.handoffs.map((h) =>
+            h === base ? { ...h, qa_status: "RESTRICTED", validation_warnings: [] } : h,
+          ),
+        },
+      },
+      "CP-1C",
+    );
+    const caveat = container.querySelector("[data-qa-status]")!;
+    expect(caveat).not.toHaveClass("crit");
+    expect(caveat).not.toHaveClass("warn");
+  });
+
   test("qa status, committee status, decision scope and confidence are all shown", () => {
     const { container } = mountAt(complete, "CP-1C");
     const cp1c = complete.body.handoffs.find((h) => h.module_id === "CP-1C")!;
@@ -842,25 +874,26 @@ describe("Analysis", () => {
   test("test_blocked_quotes_show_under_the_node_that_ended_the_run", () => {
     // N141: the a11y matrix scans `?fixture=blocked`, which the demo server
     // derives from these two files; the same document must render the quotes.
-    const quotes = (load("../../fixtures/states/run.blocked.json") as RunBlockedFixture).body.run
-      .blocked_by;
+    const read = (path: string) => readFileSync(`fixtures/${path}`, "utf8");
+    const blocked = parseAnalysisDocument(
+      JSON.parse(
+        blockedAnalysis(read("states/analysis.partial.json"), read("states/run.blocked.json")),
+      ),
+    );
     const [answered] = partial.body.pending;
-    const blocked: AnalysisDocument = {
-      ...partial,
-      body: {
-        ...partial.body,
-        displayed_run_status: "BLOCKED",
-        blocked_by: {
-          ...quotes,
-          route_node_id: answered!.route_node_id,
-          module_id: answered!.module_id,
-        },
-      },
-    };
-    const { container } = mount(parseAnalysisDocument(JSON.parse(JSON.stringify(blocked))));
+    expect(blocked.body.blocked_by?.module_id).toBe(answered!.module_id);
+    const { container } = mount(blocked);
     const row = container.querySelector('[data-pending-node][data-blocking="yes"]')!;
     expect(row.querySelector('[data-blocked-quotes="recorded"]')).not.toBeNull();
     expect(row.querySelectorAll("[data-blocked-quote]")).toHaveLength(2);
+  });
+
+  test("the blocked demo fixture 404s where run.blocked.json is missing, as every fixture does", () => {
+    const raw = readFileSync("fixtures/states/analysis.partial.json", "utf8");
+    expect(blockedResponse(raw, null)).toEqual([404, "{}"]);
+    expect(blockedResponse(raw, readFileSync("fixtures/states/run.blocked.json", "utf8"))[0]).toBe(
+      200,
+    );
   });
 
   test("a run still working names no blocking node", () => {
