@@ -134,3 +134,26 @@ test("dependency flow preserves keyboard selection and reduced motion at desk an
     }
   }
 });
+
+test("the input step's command form shows the derived scope and checks a value as it is typed", async ({
+  page,
+}) => {
+  // N159 (D109): the `command` fixture's route carries CP-2G and the subject's
+  // period is Q2 2026, so the derived scope is read before the pin.
+  await page.goto(`/run/?case=${CASE}&fixture=command`);
+  const form = page.locator("[data-run-command]");
+  await expect(form).toBeVisible();
+  await expect(form.locator("[data-derived-scope]")).toContainText("FY2026-FY2028");
+  await expect(form.locator("[data-derived-scope]")).toContainText("Q2 2026 LTM");
+  // Keyboard reachable: focus lands on the labelled control and typing works.
+  const horizon = form.getByLabel("Forecast horizon (override)");
+  await horizon.focus();
+  await expect(horizon).toBeFocused();
+  await page.keyboard.type("next year");
+  await expect(horizon).toHaveAttribute("aria-invalid", "true");
+  await expect(form.getByRole("alert")).toContainText("fiscal years");
+  await horizon.fill("FY2027-FY2029");
+  await expect(horizon).not.toHaveAttribute("aria-invalid", "true");
+  await expect(form.getByLabel("Cases")).toBeVisible();
+  await expect(form.getByLabel("Objective")).toBeVisible();
+});

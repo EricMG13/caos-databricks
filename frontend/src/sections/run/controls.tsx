@@ -34,6 +34,14 @@ import {
   sharedRefusal,
 } from "@/controls/RefusedControl";
 import { useAnnouncer } from "@/states/Announcer";
+import {
+  EMPTY_COMMAND_FORM,
+  commandErrors,
+  derivedScope,
+  runCommand,
+  type CommandForm,
+  type CommandRoute,
+} from "@/sections/run/command";
 import type {
   ActionView,
   CreateRun,
@@ -552,6 +560,7 @@ export function PinInputControl({
   action,
   initial,
   requiresResearch,
+  route,
   onPinned,
   onRefetch,
 }: {
@@ -560,12 +569,19 @@ export function PinInputControl({
   action: ActionView | undefined;
   initial: RunSubjectView | null;
   requiresResearch: boolean;
+  /** Which command modules the pinned route carries (N159, D109). */
+  route: CommandRoute;
   onPinned: (fingerprint: string) => void;
   onRefetch: (runId: string | null) => void;
 }) {
   const [subject, setSubject] = useState<RunSubjectView>(initial ?? EMPTY_SUBJECT);
   const [research, setResearch] = useState<ResearchBrief>(EMPTY_RESEARCH);
+  const [command, setCommand] = useState<CommandForm>(EMPTY_COMMAND_FORM);
   const { pending, result, run } = useCommand<RunInputPinned>();
+  const errors = commandErrors(command, route);
+  const invalid = Object.keys(errors).length > 0;
+  const scope = route.forecast ? derivedScope(subject.reporting_period) : null;
+  const errorId = useId();
   const field = (key: keyof RunSubjectView) => ({
     value: subject[key],
     onChange: (event: ChangeEvent<HTMLInputElement>) =>
@@ -590,6 +606,20 @@ export function PinInputControl({
       })),
   });
   const payload = requiresResearch ? research : null;
+  const commandField = (key: keyof CommandForm, field: string) => ({
+    "data-field": field,
+    value: command[key],
+    "aria-invalid": errors[key] ? (true as const) : undefined,
+    "aria-describedby": errors[key] ? `${errorId}-${key}` : undefined,
+    onChange: (event: ChangeEvent<HTMLInputElement>) =>
+      setCommand((current: CommandForm) => ({ ...current, [key]: event.target.value })),
+  });
+  const commandError = (key: keyof CommandForm) =>
+    errors[key] ? (
+      <p className="fld-hint" role="alert" id={`${errorId}-${key}`}>
+        {errors[key]}
+      </p>
+    ) : null;
   return (
     <section className="pnl" data-pin-input>
       <header>
@@ -677,6 +707,50 @@ export function PinInputControl({
             </label>
           </fieldset>
         ) : null}
+        {route.forecast || route.objective ? (
+          <fieldset className="fld" data-run-command>
+            <legend>Command</legend>
+            {route.forecast ? (
+              <>
+                <p className="fld-hint" data-derived-scope>
+                  {scope
+                    ? `Derived from the reporting period: forecast horizon ${scope.forecast_horizon}, base period ${scope.base_period}. Leave a field empty to use it.`
+                    : "The host cannot read this reporting period, so it cannot derive the forecast scope. Write it as FY2025 or Q2 2026, or state both values below."}
+                </p>
+                <label className="fld">
+                  Forecast horizon (override)
+                  <input
+                    placeholder={scope?.forecast_horizon ?? "FY2026-FY2028"}
+                    {...commandField("horizon", "forecast_horizon")}
+                  />
+                </label>
+                {commandError("horizon")}
+                <label className="fld">
+                  Base period (override)
+                  <input
+                    placeholder={scope?.base_period ?? "FY2025"}
+                    {...commandField("base", "base_period")}
+                  />
+                </label>
+                {commandError("base")}
+                <label className="fld">
+                  Cases
+                  <input placeholder="Base/Downside" {...commandField("cases", "cases")} />
+                </label>
+                {commandError("cases")}
+              </>
+            ) : null}
+            {route.objective ? (
+              <>
+                <label className="fld">
+                  Objective
+                  <input {...commandField("objective", "objective")} />
+                </label>
+                {commandError("objective")}
+              </>
+            ) : null}
+          </fieldset>
+        ) : null}
         <RefusedControl
           refusal={action ? action.refusal : null}
           busy={pending}
@@ -685,8 +759,10 @@ export function PinInputControl({
           onClick={
             action
               ? () => {
-                  void run({ subject, research: payload }, (intent) =>
-                    pinRunInput(caseId, runId, subject, payload, intent),
+                  if (invalid) return;
+                  const stated = runCommand(command, route);
+                  void run({ subject, research: payload, ...stated }, (intent) =>
+                    pinRunInput(caseId, runId, subject, payload, intent, stated),
                   ).then((outcome) => {
                     if (outcome?.kind === "ok") {
                       onPinned(outcome.receipt.input_fingerprint);
