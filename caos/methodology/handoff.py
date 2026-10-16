@@ -1348,28 +1348,80 @@ def _absent_ids_line(
     fact about the answer, not a rule. The checker finds a register by its ID
     and says only that it is missing; CP-1A live wrote every register under a
     human title and its second attempt, told eleven were missing, could not see
-    why. At most `MAX_FEEDBACK_CITATIONS` IDs are named, the rest counted."""
+    why. Only an ID the vendor's own `find_registers` also fails to find is
+    named, so the line never contradicts the keep line (QF2-2). At most
+    `MAX_FEEDBACK_CITATIONS` IDs are named, the rest counted."""
     if not skill or module_id == MODEL_MODULE:
         return None
+    loaded = None
     with suppress(Exception):  # a contract it cannot read is nothing to report
-        registers = contract.completeness_check.load_contract(
+        loaded = contract.completeness_check.load_contract(
             skill.decode("utf-8"), module_id
-        )["registers"]
-        absent = sorted(
-            register for register in registers if not _writes_id(text, register)
         )
-        if absent:
-            shown = absent[:MAX_FEEDBACK_CITATIONS]
-            rest = len(absent) - len(shown)
-            named = ", ".join(f"`{register}`" for register in shown)
-            named += f" and {rest} more" if rest else ""
-            subject = "register ID" if len(absent) == 1 else "register IDs"
-            verb = "appears" if len(absent) == 1 else "appear"
-            return (
-                f"host register check: the {subject} {named} {verb} nowhere"
-                " in the answer"
-            )
-    return None
+    if loaded is None:
+        return None
+    absent = _unlocated(contract, text, loaded)  # a locator failure surfaces
+    if not absent:
+        return None
+    shown = absent[:MAX_FEEDBACK_CITATIONS]
+    rest = len(absent) - len(shown)
+    named = ", ".join(f"`{register}`" for register in shown)
+    named += f" and {rest} more" if rest else ""
+    subject = "register ID" if len(absent) == 1 else "register IDs"
+    verb = "appears" if len(absent) == 1 else "appear"
+    return f"host register check: the {subject} {named} {verb} nowhere in the answer"
+
+
+def _unlocated(
+    contract: VendorContract, text: str, loaded: Mapping[str, Any]
+) -> list[str]:
+    """The loaded contract's register IDs `text` never writes whole and the
+    vendor's `find_registers` does not locate either, sorted."""
+    registers = loaded["registers"]
+    unwritten = [r for r in registers if not _writes_id(text, r)]
+    if not unwritten:
+        return []
+    found = contract.completeness_check.find_registers(
+        text, registers, loaded.get("retired_registers", ())
+    )
+    return sorted(register for register in unwritten if register not in found)
+
+
+def _readable(body: str) -> str | None:
+    """The Markdown a stored answer carried, as text, when it is the transport
+    and within the host's bounds on text (`_text_bound`); else None. The
+    vendor's heading and register expressions are read only on such text
+    (AI-1, F649): a body `_text` refuses was never read by a validator, and
+    measuring it must not be the first thing that does."""
+    markdown = answer_markdown(body)
+    return None if markdown is None else _text_bound(markdown)[0]
+
+
+def _held_registers(
+    contract: VendorContract, module_id: str, body: str, skill: bytes
+) -> tuple[Sequence[str], list[str]] | None:
+    """The module's required registers in contract order, and those of them
+    the vendor's `find_registers` locates in the answer `body` carries; None
+    when `body` is not the transport, the module is CP-MODEL (no register
+    contract), no skill was given, or the contract or its locations cannot be
+    read (a missing profile, KeyError/ValueError). Unrelated locator failures
+    still surface. A body the host's text bound refuses (`_readable`) is not
+    read: the vendor's expressions are quadratic on text `_text` refuses."""
+    text = _readable(body)
+    if text is None or not skill or module_id == MODEL_MODULE:
+        return None
+    checker = contract.completeness_check
+    try:
+        loaded = checker.load_contract(skill.decode("utf-8"), module_id)
+        found = checker.find_registers(
+            text,
+            loaded["registers"],
+            loaded.get("retired_registers", ()),
+        )
+    except (KeyError, ValueError):
+        return None
+    required = loaded["registers"]
+    return required, [register for register in required if register in found]
 
 
 def kept_registers_line(
@@ -1381,21 +1433,10 @@ def kept_registers_line(
     unrelated locator failures still surface. The line preserves the largest
     prefix fitting MAX_FEEDBACK_CHARS and counts the remaining held IDs.
     """
-    markdown = answer_markdown(body)
-    if markdown is None or not skill or module_id == MODEL_MODULE:
+    held = _held_registers(contract, module_id, body, skill)
+    if held is None:
         return None
-    checker = contract.completeness_check
-    try:
-        loaded = checker.load_contract(skill.decode("utf-8"), module_id)
-        found = checker.find_registers(
-            markdown.decode("utf-8"),
-            loaded["registers"],
-            loaded.get("retired_registers", ()),
-        )
-    except (KeyError, ValueError):
-        return None
-    required = loaded["registers"]
-    kept = [register for register in required if register in found]
+    required, kept = held
     if not kept:
         return None
     for shown in range(len(kept), 0, -1):
@@ -1403,6 +1444,46 @@ def kept_registers_line(
         if len(line) <= MAX_FEEDBACK_CHARS:
             return line
     return None
+
+
+def answer_shrank(
+    contract: VendorContract, module_id: str, earlier: str, later: str, skill: bytes
+) -> bool:
+    """Whether the answer `later` holds fewer required registers, or fewer
+    distinct H2 sections, than the answer `earlier` (D104's amendment of 14
+    October 2026, F649), both bodies as stored. Compared only when both are
+    the transport; a count that cannot be read for either (no skill, an
+    unreadable contract, CP-MODEL's registers, front matter the vendor will
+    not parse) is not compared, and the other still is; a body that is not
+    the transport has neither count, so it is never compared. Pure over the
+    two bodies."""
+    counts = [_extent(contract, module_id, body, skill) for body in (earlier, later)]
+    return any(
+        before is not None and after is not None and after < before
+        for before, after in zip(*counts, strict=True)
+    )
+
+
+def _extent(
+    contract: VendorContract, module_id: str, body: str, skill: bytes
+) -> tuple[int | None, int | None]:
+    """How many required registers and how many distinct H2 headings (the
+    vendor's own reader, over the answer less its front matter and fenced
+    code, counting only the canonical ones: a heading the vendor refuses is a
+    fault the retry fixes by removing it, not content lost) the answer `body`
+    holds; None for a count that cannot be read."""
+    held = _held_registers(contract, module_id, body, skill)
+    headings: int | None = None
+    text = _readable(body)
+    vendor = contract.validate_handoff
+    if text is not None:
+        # No front matter the vendor parses, or one nested past its parser's
+        # depth: not measured, never a fault (the answer is a refused one).
+        with suppress(ValueError, RecursionError):
+            _fields, rest = vendor.parse_restricted_frontmatter(text)
+            canonical = set(vendor.CANONICAL_HEADINGS)
+            headings = len(canonical.intersection(vendor._canonical_h2s(rest)))
+    return (None if held is None else len(held[1])), headings
 
 
 def _kept_text(kept: Sequence[str], shown: int, required: int) -> str:
@@ -1676,30 +1757,36 @@ def _transport_or_reason(
     return None, _TRANSPORT_SHAPE
 
 
+def _within_limit(shown: int, text_of: Callable[[int], str]) -> str | None:
+    """The first `text_of(n)` from `shown` down that fits `MAX_FEEDBACK_CHARS`
+    (R45); None when none does."""
+    return next(
+        (t for n in range(shown, 0, -1) if len(t := text_of(n)) <= MAX_FEEDBACK_CHARS),
+        None,
+    )
+
+
 def _repeated_line(repeats: Sequence[tuple[int, int]]) -> str:
     """Which citations repeat which, by place, never quoted; empty for none.
     As many pairs as `MAX_FEEDBACK_CHARS` holds (R45), the rest counted."""
-    for shown in range(len(repeats), 0, -1):
-        line = _repeat_text(repeats, shown)
-        if len(line) <= MAX_FEEDBACK_CHARS:
-            return line
-    return ""
+    return _within_limit(len(repeats), lambda n: _repeat_text(repeats, n)) or ""
 
 
 def _repeat_text(repeats: Sequence[tuple[int, int]], shown: int) -> str:
-    """`_repeated_line`'s text naming the first `shown` pairs."""
-    pairs = [f"citation {n} repeats citation {first}" for n, first in repeats[:shown]]
+    """`_repeated_line`'s text naming the first `shown` pairs, each with the
+    exact substitution that removes the repeat."""
+    pairs = [
+        f"citation {n} repeats citation {first}: write [C{first}]"
+        f" wherever the body writes [C{n}], and delete citation {n}"
+        for n, first in repeats[:shown]
+    ]
+    named = "; ".join(pairs)
     if rest := len(repeats) - shown:
-        named = ", ".join(pairs) + f" and {rest} more"
-    else:
-        named = " and ".join(
-            [", ".join(pairs[:-1]), pairs[-1]] if pairs[:-1] else pairs
-        )
+        named += f"; and {rest} more repeats"
     return (
-        f"host citation check: {named}, the same source_id, page and"
-        " matched_text; list each citation once, cite a repeated passage again"
-        " by the marker of its first place, and renumber every marker after a"
-        " citation you remove"
+        f"host citation check: {named} (a repeat has the same source_id, page"
+        " and matched_text); then renumber every marker after a citation you"
+        " removed"
     )
 
 
@@ -1758,23 +1845,39 @@ def _dangling_line(text: str, count: int) -> str | None:
     """The markers that name no citation (D107), each as `[C<n>]` as written
     -- the model's own number, cut past 12 digits, never its text -- and the
     count they must stay within: the check that refused the answer
-    (`parse_response`)."""
+    (`parse_response`), and what to do with each -- re-point it to a listed
+    citation or remove it. As many markers as `MAX_FEEDBACK_CHARS` holds."""
     dangling = _dangling(text, count)
     if not dangling:
         return None
-    shown = [
-        f"[C{n if len(n) <= 12 else n[:12] + '...'}]"
-        for n in dangling[:MAX_FEEDBACK_CITATIONS]
+    marks = [
+        f"[C{n[:12]}{'...' * (len(n) > 12)}]" for n in dangling[:MAX_FEEDBACK_CITATIONS]
     ]
-    rest = len(dangling) - len(shown)
+
+    def text_of(shown: int) -> str:
+        return _dangling_text(marks, shown, len(dangling), count)
+
+    return _within_limit(len(marks), text_of) or text_of(1)
+
+
+def _dangling_text(marks: Sequence[str], shown: int, total: int, count: int) -> str:
+    """`_dangling_line`'s text naming the first `shown` of `total` markers."""
+    one = total == 1
+    rest = total - shown
     more = f" and {rest} more" if rest else ""
-    names = "it names" if len(dangling) == 1 else "they name"
-    cited = "citation" if count == 1 else "citations"
+    head = f"host marker check: the Markdown body writes {', '.join(marks[:shown])}"
+    if count == 0:  # nothing to re-point to
+        return (
+            f"{head}{more}, but the answer has no citations; remove"
+            f" {'it' if one else 'them'}, or add the "
+            + ("citation for its passage" if one else "citations for their passages")
+        )
     return (
-        f"host marker check: the Markdown body writes {', '.join(shown)}{more},"
-        f" but the answer has {count} {cited}, so"
-        f" {names} none; a marker [C<n>] names the citation at place n of the"
-        f" list, from [C1] to [C{count}]"
+        f"{head}{more}, but the answer has {count} citation{'s' * (count != 1)}, so"
+        f" {'it names' if one else 'they name'} none; a marker [C<n>] names the"
+        f" citation at place n of the list, from [C1] to [C{count}]; re-point"
+        f" {'it' if one else 'each of them'} to the citation that carries its"
+        " passage, or remove it; add a citation only for a passage not yet listed"
     )
 
 

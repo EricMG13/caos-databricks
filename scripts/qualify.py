@@ -44,6 +44,7 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import asdict
 from decimal import ROUND_DOWN, Decimal
 from enum import Enum
@@ -59,15 +60,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from caos.blobs import BlobStore
 from caos.copilot import require_ready
+from caos.graph.route import (
+    Edge,
+    NodeState,
+    readiness_from,
+    waiting_on,
+)
+from caos.graph.runtime import accepted_artifacts
 from caos.methodology import CANONICAL_ADAPTER_VERSION
 from caos.methodology.bundle import Bundle
+from caos.methodology.canonical import SECOND_ATTEMPT_CODES
 from caos.methodology.vendor import catalog
 from caos.models import ChatCompletions, from_environment
 from caos.pricing import price_from_environment, worst_case
 from caos.qualification.harness import (
     Harness,
+    Performed,
     PerformedSet,
     PreparedCase,
+    Unrun,
     assert_admissible,
     perform,
     prepare,
@@ -76,10 +87,12 @@ from caos.qualification.matrix import QualificationSet, assert_measurable
 from caos.qualification.on_disk import load_qualification_set
 from caos.qualification.store import performed_evidence, record_evidence
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection, apply_schema, connect
-from caos.store.budget import validate_spend
+from caos.store import RunStatus, StoreConnection, apply_schema, connect
+from caos.store.budget import remaining, validate_spend
 from caos.store.gates import Gate, GateApproval, approve_gate, gate_preview
 from caos.store.members import Standing, grant
+from caos.store.outcomes import execution_reads, node_attempts
+from caos.store.routes import resolved_route
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -123,6 +136,9 @@ def _capture(
     conn: StoreConnection,
     prepared: tuple[PreparedCase, ...],
     performed: PerformedSet,
+    *,
+    blobs: BlobStore,
+    bundle: Bundle,
 ) -> dict[str, object]:
     """Everything a reader needs to re-check the set, as one JSON document.
 
@@ -142,6 +158,7 @@ def _capture(
     explicit, because a reader wants how many keys missed and then which.
     """
     snapshot = performed_evidence(prepared=prepared, performed=performed)
+    stops = {item.run_id: _stop_code(conn, item) for item in performed.performed}
     runs = [item.input.run_id for item in prepared]
     return {
         "adapter_version": CANONICAL_ADAPTER_VERSION,
@@ -153,14 +170,11 @@ def _capture(
         "performed_sha256": snapshot.evidence.performed_sha256,
         "complete": snapshot.complete,
         "result": [
-            {
-                "case_label": item.case_label,
-                "run_id": str(item.run_id),
-                "status": item.status.value,
-                "stopped": None if item.stopped is None else item.stopped.value,
-                "refusal": None if item.refusal is None else item.refusal.value,
-                "proof": None if item.proof is None else _object(asdict(item.proof)),
-            }
+            _result_row(
+                item,
+                stops[item.run_id],
+                _blocked_by(conn, blobs, bundle, item),
+            )
             for item in performed.performed
         ],
         "attempts": _attempts(conn, runs),
@@ -177,6 +191,147 @@ def _capture(
             }
             for row in performed.matrix.rows
         ],
+    }
+
+
+def _result_row(
+    item: Performed, stop: RefusalCode | None, blocked_by: dict[str, Plain] | None
+) -> dict[str, Plain]:
+    """One case's outcome. `stopped` is the capture's corrected reading
+    (`_stop_code`); `raised` is the code the run raised, which
+    `caos/qualification/store.py` persists in the evidence snapshot unchanged,
+    and is None when the two agree. `blocked_by` is `_blocked_by`'s reading of
+    a BLOCKED run and None for any other."""
+    return {
+        "case_label": item.case_label,
+        "run_id": str(item.run_id),
+        "status": item.status.value,
+        "stopped": None if stop is None else stop.value,
+        "raised": None
+        if item.stopped is None or stop is item.stopped
+        else item.stopped.value,
+        "refusal": None if item.refusal is None else item.refusal.value,
+        "proof": None if item.proof is None else _object(asdict(item.proof)),
+        "blocked_by": blocked_by,
+    }
+
+
+def _blocked_by(
+    conn: StoreConnection, blobs: BlobStore, bundle: Bundle, item: Performed
+) -> dict[str, Plain] | None:
+    """What blocked a BLOCKED run, read from the ledger; `path` is the only
+    derived field (QF3-1).
+
+    A run ends BLOCKED two ways and the status says neither. A module's own
+    validated Blocked answer ends it through `block_run(verdict=...)`, which
+    writes the run's one `run_blocking_verdicts` row (`path: "module"`). The
+    route's own rule ends it with no row (`verdict=None`, §39): the frontier
+    emptied while nodes the route holds BLOCKED were unfinished
+    (`path: "route"`). So the row decides the path, and nothing else does.
+
+    Nothing here quotes document text: not an answer, not CP-0's blocker text.
+    """
+    if item.status is not RunStatus.BLOCKED:
+        return None
+    # One read unit, so the capture needs no ordering among its reads: each
+    # needs an idle connection (`_capture` reads `_stop_code` first).
+    with execution_reads(conn):
+        verdict = conn.execute(
+            "SELECT t.route_node_id, t.attempt_id, t.ordinal, v.citations_sha256,"
+            " v.recorded_at FROM run_blocking_verdicts v"
+            " JOIN run_attempts t USING (attempt_id) WHERE v.run_id = %s",
+            (item.run_id,),
+        ).fetchone()
+        if verdict is not None:
+            return {
+                "path": "module",
+                "route_node_id": str(verdict[0]),
+                "attempt_id": str(verdict[1]),
+                "ordinal": verdict[2],
+                "citations_sha256": verdict[3],
+                "recorded_at": verdict[4].isoformat(),
+            }
+        return _route_blocked(conn, blobs, bundle, item)
+
+
+# The explicit marker for a route block over no recorded unrun node.
+_NO_UNRUN: dict[str, Plain] = {"no_unrun_nodes": True}
+
+
+def _route_blocked(
+    conn: StoreConnection, blobs: BlobStore, bundle: Bundle, item: Performed
+) -> dict[str, Plain]:
+    """The nodes the route left BLOCKED at the run's end, each with the verdict
+    CP-0 gave its module and the producers it still waits on."""
+    route = resolved_route(conn, item.run_id)
+    if route is None:
+        # The pin is gone: no node can be named, and an empty list must not
+        # read as "the route held none".
+        return {"path": "route", "nodes": [], "route_pin_missing": True}
+    try:
+        accepted = accepted_artifacts(conn, blobs, route, item.run_id, bundle=bundle)
+    except (Refusal, ValueError) as error:
+        return _readiness_unreadable(item, error)
+    readiness = readiness_from(route, accepted)
+    module_of = {node.route_node_id: node.module_id for node in route.nodes}
+    nodes: list[Plain] = [
+        _blocked_node(
+            unrun,
+            module_of[unrun.route_node_id],
+            readiness,
+            waiting_on(route, accepted, unrun.route_node_id),
+        )
+        for unrun in item.unrun
+        if unrun.state is NodeState.BLOCKED
+    ]
+    # An empty list is not an answer: say when the harness recorded no node.
+    return {"path": "route", "nodes": nodes, **({} if item.unrun else _NO_UNRUN)}
+
+
+def _blocked_node(
+    unrun: Unrun,
+    module_id: str,
+    readiness: Mapping[str, str],
+    waits: tuple[Edge, ...],
+) -> dict[str, Plain]:
+    """One node the route left BLOCKED: CP-0's verdict for its module (None for
+    a module CP-0 did not rule on) and the producers it still waits on."""
+    return {
+        "route_node_id": unrun.route_node_id,
+        "module_id": module_id,
+        "verdict": readiness.get(module_id),
+        "waiting_on": [
+            {
+                "module_id": edge.source,
+                "edge": edge.type.value,
+                "verdict": readiness.get(edge.source),
+            }
+            for edge in waits
+        ],
+    }
+
+
+def _readiness_unreadable(
+    item: Performed, error: Refusal | ValueError
+) -> dict[str, Plain]:
+    """CP-0's record will not load (the case `harness._accepted` guards the
+    same way): the capture of a paid run is not lost to it. That guard has
+    already given up the readiness that separates BLOCKED from RESTRICTED or
+    RUNNABLE, so `item.unrun`'s states were computed without it and the nodes a
+    verdict held may no longer read BLOCKED. Every unrun node is listed, with
+    its state, flagged as such; no verdict is guessed. A ValueError is a fixed
+    marker (its class name), never its text."""
+    return {
+        "path": "route",
+        "readiness_unreadable": error.code.value
+        if isinstance(error, Refusal)
+        else type(error).__name__,
+        "states_without_readiness": True,
+        "nodes": [
+            {"route_node_id": unrun.route_node_id, "state": unrun.state.value}
+            for unrun in item.unrun
+        ],
+        **({} if item.unrun else _NO_UNRUN),
     }
 
 
@@ -266,20 +421,70 @@ def _perform_until(  # noqa: PLR0913 -- one set, one loop, keyword-only tail
     performed = perform(
         conn, blobs, harness, qualification=qualification, prepared=prepared
     )
-    for remaining in range(attempts - 1, 0, -1):
-        if all(record.stopped is None for record in performed.performed):
+    for attempts_left in range(attempts - 1, 0, -1):
+        stopped = [(item, item.stopped) for item in performed.performed if item.stopped]
+        if not stopped:
             return performed
-        stopped = next(
-            record.stopped for record in performed.performed if record.stopped
-        )
+        record, raised = stopped[0]
+        left = _left(conn, record)
+        if _stop_code(conn, record) is RefusalCode.BUDGET_CEILING_REACHED:
+            # The ceiling refused an attempt before it reserved: entering
+            # `perform` again meets the same ceiling and buys nothing.
+            print(
+                json.dumps(
+                    {
+                        "stopped_by": RefusalCode.BUDGET_CEILING_REACHED.value,
+                        "remaining": left,
+                    }
+                ),
+                flush=True,
+            )
+            return performed
         print(
-            json.dumps({"resumed_after": stopped.value, "attempts_left": remaining}),
+            json.dumps(
+                {
+                    "resumed_after": raised.value,
+                    "attempts_left": attempts_left,
+                    "remaining": left,
+                }
+            ),
             flush=True,
         )
         performed = perform(
             conn, blobs, harness, qualification=qualification, prepared=prepared
         )
     return performed
+
+
+def _left(conn: StoreConnection, record: Performed) -> str:
+    """What the record's run may still reserve, as the budget ledger says."""
+    with execution_reads(conn):
+        return str(remaining(conn, record.run_id))
+
+
+def _stop_code(conn: StoreConnection, record: Performed) -> RefusalCode | None:
+    """The code that ended `record`'s run, read back from the ledger.
+
+    `_with_second_attempt` re-raises the refusal before when the ceiling cannot
+    pay for the retry, so `Performed.stopped` names a refusal the retry never
+    answered (CP-5 #4 of qualify run 2). When that refusal is one a retry is
+    owed for and the stopped node's latest attempt never reserved
+    (`NodeAttempt.never_reserved`), the budget is what stopped it. Any other code,
+    a lost lease included, stands as raised. The ledger holds no `reserve`
+    refusal: this is `_with_second_attempt`'s `unpaid` rule read back, so revisit
+    it if that rule changes. A record whose `unrun` could not be read keeps its
+    raised code and may be re-entered once more.
+    """
+    if record.stopped not in SECOND_ATTEMPT_CODES | {RefusalCode.PROVIDER_UNAVAILABLE}:
+        return record.stopped
+    node = next((unrun for unrun in record.unrun if unrun.attempts), None)
+    if node is None:
+        return record.stopped
+    with execution_reads(conn):
+        latest = node_attempts(conn, record.run_id, node.route_node_id)
+    if latest and latest[-1].never_reserved:
+        return RefusalCode.BUDGET_CEILING_REACHED
+    return record.stopped
 
 
 def _configured_provider(expect_identity: str) -> ChatCompletions | None:
@@ -463,7 +668,9 @@ def _performed_capture(
         performed = _perform_until(
             conn, blobs, harness, qualification, prepared, attempts=attempts
         )
-        document = _capture(conn, prepared, performed)
+        document = _capture(
+            conn, prepared, performed, blobs=blobs, bundle=harness.bundle
+        )
         snapshot = performed_evidence(prepared=prepared, performed=performed)
         record_evidence(conn, snapshot.evidence)
         conn.commit()

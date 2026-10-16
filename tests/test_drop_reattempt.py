@@ -45,7 +45,7 @@ from caos.methodology.canonical import (
 from caos.pricing import ModelPrice
 from caos.provider import Completion, CutAfterContentError, DropKind
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection, connect
+from caos.store import RunStatus, StoreConnection, connect
 from caos.store.outcomes import (
     DROP_REATTEMPTS,
     CallOutcome,
@@ -538,6 +538,14 @@ def test_the_ledger_gives_one_re_attempt_after_one_declared_drop() -> None:
     assert not declared_drop(invalid)
     assert not declared_drop(_attempt(unavailable, DropKind.VENDOR))
     assert reattempts_a_drop([invalid, declared])
+    # QF2-1: an attempt that never reserved is passed over; one that did and
+    # was left unexplained is not, and a passed-over row spends no re-attempt.
+    orphan = NodeAttempt(uuid4(), None, None, never_reserved=True)
+    assert reattempts_a_drop([declared, orphan])
+    assert reattempts_a_drop([declared, orphan, orphan])
+    assert not reattempts_a_drop([declared, declared, orphan])
+    assert not reattempts_a_drop([orphan])
+    assert not reattempts_a_drop([declared, _attempt(None)])
     assert reattempts_a_drop([invalid, _attempt(None), declared])
     for kind in (DropKind.VENDOR, DropKind.RAISED, DropKind.ESCAPED, DropKind.DEADLINE):
         assert not reattempts_a_drop([_attempt(unavailable, kind)])
@@ -1286,6 +1294,76 @@ def test_the_declared_bounds_and_a_brief_retry_after() -> None:
     assert models._retry_after(_LimitedBriefly("private")) == 0.5
 
 
+def test_an_attempt_that_never_reserved_hides_neither_a_re_attempt_nor_its_stop(
+    harness: _Harness,
+) -> None:
+    """QF2-1: an attempt that never reserved (a budget refusal, a lost lease or a
+    cancel at `reserve`, or a crash before it; no reservation, outcome or
+    refusal) is passed over, as the guided retry
+    passes it over, so it hides neither the re-attempt a declared drop is owed
+    (`drop_reattempt_due`) nor the stop owed after the re-attempt dropped too
+    (`drop_stop_owed`, F530)."""
+    from caos.methodology.canonical import drop_reattempt_due
+    from caos.store.runs import start_attempt
+    from caos.store.work import enqueue_run
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+
+    def drop() -> None:
+        attempt = start_attempt(conn, harness.run_id, node)
+        assert record_outcome(conn, attempt_id=attempt, outcome=dropped)
+
+    def reattempt_due() -> bool:
+        due = drop_reattempt_due(conn, run_id=harness.run_id, route_node_id=node)
+        conn.rollback()
+        return due
+
+    def stop_owed() -> bool:
+        said = drop_stop_owed(conn, run_id=harness.run_id, route_node_id=node)
+        conn.rollback()
+        return said
+
+    drop()
+    start_attempt(conn, harness.run_id, node)
+    conn.commit()
+    assert reattempt_due()
+    drop()
+    start_attempt(conn, harness.run_id, node)
+    conn.commit()
+    assert not reattempt_due()
+    enqueue_run(conn, harness.run_id)
+    conn.commit()
+    assert stop_owed()
+
+
+def test_a_reserved_attempt_with_no_outcome_is_not_passed_over_after_a_drop(
+    harness: _Harness,
+) -> None:
+    """QF2-1 (review I1): after a declared drop, an attempt that reserved and
+    recorded no outcome is a call in flight; it is the node's latest attempt, so
+    no re-attempt is owed while it stands."""
+    from conftest import reserve_at
+
+    from caos.methodology.canonical import drop_reattempt_due
+    from caos.store.outcomes import node_attempts
+    from caos.store.runs import start_attempt
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    first = start_attempt(conn, harness.run_id, node)
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+    assert record_outcome(conn, attempt_id=first, outcome=dropped)
+    assert drop_reattempt_due(conn, run_id=harness.run_id, route_node_id=node)
+    conn.rollback()
+    attempt = start_attempt(conn, harness.run_id, node)
+    reserve_at(conn, attempt, Decimal("0.01"))
+    assert node_attempts(conn, harness.run_id, node)[-1].never_reserved is False
+    conn.rollback()
+    assert not drop_reattempt_due(conn, run_id=harness.run_id, route_node_id=node)
+
+
 def test_drop_stop_owed_reads_the_park_against_the_latest_drop(
     harness: _Harness,
 ) -> None:
@@ -1339,6 +1417,35 @@ def test_drop_stop_owed_reads_the_park_against_the_latest_drop(
     assert not owed()
     start_attempt(conn, harness.run_id, node, lease=lease)
     assert _drop_kinds(harness) == ["declared"] * 3 + [None]
+
+
+def test_drop_stop_is_not_owed_while_the_one_re_attempt_is_still_due(
+    harness: _Harness,
+) -> None:
+    """F530 (mutation): a single declared drop on an enqueued run is the
+    re-attempt's turn, not the stop's. The stop is owed only once the
+    re-attempt itself dropped (`drops > DROP_REATTEMPTS`), and a latest attempt
+    that is no drop owes none however many dropped before it."""
+    from caos.methodology.canonical import drop_reattempt_due
+    from caos.store.runs import start_attempt
+    from caos.store.work import enqueue_run
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+
+    def owed() -> bool:
+        said = drop_stop_owed(conn, run_id=harness.run_id, route_node_id=node)
+        conn.rollback()
+        return said
+
+    first = start_attempt(conn, harness.run_id, node)
+    assert record_outcome(conn, attempt_id=first, outcome=dropped)
+    enqueue_run(conn, harness.run_id)
+    conn.commit()
+    assert drop_reattempt_due(conn, run_id=harness.run_id, route_node_id=node)
+    conn.rollback()
+    assert not owed(), "one drop: the re-attempt is owed, not the stop"
 
 
 def test_a_drop_billed_after_the_node_moved_on_is_kept_but_not_counted(
@@ -1457,3 +1564,90 @@ def test_a_bill_retried_after_a_lost_ack_and_a_later_start_is_a_no_op(
     canonical.bill(conn, first, dropped)
     assert len(tries) == 2
     assert _drop_kinds(harness) == ["declared", None]
+
+
+def test_both_readers_of_never_reserved_agree_on_each_recording_table(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QF2-1 (whole-branch I1): `node_attempts` and the matrix's `_refusal_met`
+    both read the one `recorded_attempt`. A node whose last attempt holds
+    exactly one row in exactly one of the five tables is that node's last
+    attempt for both readers; the same attempt holding none is passed over by
+    both. A table dropped from the shared definition, or a reader that spells
+    its own, fails here."""
+    import inspect
+
+    from conftest import reserve_at
+
+    from caos.qualification import matrix
+    from caos.qualification.matrix import _refusal_met
+    from caos.store.outcomes import node_attempts, recorded_attempt
+    from caos.store.runs import start_attempt
+
+    unavailable = RefusalCode.PROVIDER_UNAVAILABLE
+    node = _node(harness, "CP-0").route_node_id
+    conn, run_id = harness.conn, harness.run_id
+    # The run stays running so attempts can be added; only the matrix's
+    # ended-run gate is read as ended, to reach the attempt reading under test.
+    monkeypatch.setattr(matrix, "run_status", lambda *_: RunStatus.FAILED)
+    # Both readers take the definition from the one constant.
+    assert 'recorded_attempt("l")' in inspect.getsource(matrix._refusal_met)
+    assert 'recorded_attempt("t")' in inspect.getsource(node_attempts)
+    rendered = recorded_attempt("l").as_string(conn)
+    assert rendered.count("EXISTS") == 5
+    assert '= "l".attempt_id' in rendered
+
+    def record(table: str, attempt: UUID) -> None:
+        if table == "budget_reservations":
+            reserve_at(conn, attempt, Decimal("0.01"))
+        elif table == "attempt_refusals":
+            conn.execute(
+                "INSERT INTO attempt_refusals (attempt_id, code) VALUES (%s, %s)",
+                (attempt, RefusalCode.HANDOFF_MALFORMED.value),
+            )
+        elif table == "call_outcomes":
+            conn.execute(
+                "INSERT INTO call_outcomes (attempt_id, run_id, model)"
+                " VALUES (%s, %s, 'm')",
+                (attempt, run_id),
+            )
+        elif table == "budget_ledger":
+            conn.execute(
+                "INSERT INTO budget_ledger (attempt_id, run_id, amount)"
+                " VALUES (%s, %s, 0)",
+                (attempt, run_id),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO artifacts (attempt_id, run_id, case_id, artifact_sha256,"
+                " model, generation_id) SELECT %s, run_id, case_id, %s, 'legacy',"
+                " 'legacy' FROM runs WHERE run_id = %s",
+                (attempt, "a" * 64, run_id),
+            )
+
+    # artifacts last: a node holding an artifact refuses the matrix's reading
+    # whatever else it holds, so only `node_attempts` can tell that table apart.
+    for table in (
+        "budget_reservations",
+        "attempt_refusals",
+        "call_outcomes",
+        "budget_ledger",
+        "artifacts",
+    ):
+        refused = start_attempt(conn, run_id, node)
+        conn.execute(
+            "INSERT INTO attempt_refusals (attempt_id, code) VALUES (%s, %s)",
+            (refused, unavailable.value),
+        )
+        bare = start_attempt(conn, run_id, node)
+        conn.commit()
+        assert node_attempts(conn, run_id, node)[-1].never_reserved is True, table
+        if table != "artifacts":
+            assert _refusal_met(conn, run_id, unavailable, None) is True, table
+        conn.rollback()
+        record(table, bare)
+        conn.commit()
+        assert node_attempts(conn, run_id, node)[-1].never_reserved is False, table
+        if table != "artifacts":
+            assert _refusal_met(conn, run_id, unavailable, None) is False, table
+        conn.rollback()

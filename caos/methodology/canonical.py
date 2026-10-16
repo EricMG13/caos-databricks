@@ -27,6 +27,7 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
 from fractions import Fraction
+from functools import cache
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -94,6 +95,7 @@ from caos.methodology.handoff import (
     anchoring_line,
     answer_citations,
     answer_markdown,
+    answer_shrank,
     blocked_citations_bytes,
     capped,
     carried_answer,
@@ -173,6 +175,7 @@ from caos.store.outcomes import (
     producer_identifier,
     record_outcome,
     require_idle,
+    without_unreserved,
 )
 from caos.store.run_inputs import load_run_input
 from caos.store.runs import attempt_ordinal
@@ -930,7 +933,7 @@ def _prompt_context(
         # A prompt is built for a call, and a call has a model (D116).
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     context = _context(conn, blobs, bundle, assignment, identity)
-    fed = _feedback_body(conn, blobs, assignment)
+    fed = _feedback_body(conn, blobs, bundle, assignment)
     if fed is None:
         return context
     body, refused = fed
@@ -1294,8 +1297,10 @@ def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
     every later attempt is an ordinary one. Read from the ledger, so a crash
     between a refusal and its retry changes nothing. A drop the provider
     declared is passed over (D110): it answered nothing, so the attempt
-    after it repeats the guided retry it replaced and spends none."""
-    attempts = [a for a in attempts if not declared_drop(a)]
+    after it repeats the guided retry it replaced and spends none. So is an
+    attempt that never reserved (a budget refusal, a lost lease or a cancel at
+    `reserve`, or a crash before it: `without_unreserved`)."""
+    attempts = [a for a in without_unreserved(attempts) if not declared_drop(a)]
     refused = [a for a in attempts if a.refusal in SECOND_ATTEMPT_CODES]
     if not refused or len(refused) > GUIDED_RETRIES or attempts[-1] != refused[-1]:
         return None
@@ -1316,7 +1321,9 @@ def reattempts_a_drop(attempts: Sequence[NodeAttempt]) -> bool:
     provider declared, unexplained or explained `PROVIDER_UNAVAILABLE`, and
     the node holds at most `DROP_REATTEMPTS` such drops in all. Counted on
     the call outcome, not its explanation, so a crash between the two
-    changes nothing; a guided retry neither spends one nor is spent."""
+    changes nothing; a guided retry neither spends one nor is spent. An
+    attempt that never reserved is passed over (`without_unreserved`)."""
+    attempts = without_unreserved(attempts)
     if not attempts:
         return False
     drops = sum(1 for a in attempts if declared_drop(a))
@@ -1332,29 +1339,81 @@ def drop_reattempt_due(
 
 
 def _feedback_body(
-    conn: StoreConnection, blobs: BlobStore, assignment: Assignment
+    conn: StoreConnection, blobs: BlobStore, bundle: Bundle, assignment: Assignment
 ) -> tuple[str, UUID] | None:
     """The refused answer this attempt answers and the attempt that gave it,
     when this is a guided retry (D30, D82), else None.
+
+    That is the answer the attempt just before this one was refused with,
+    unless it holds fewer required registers or fewer H2 sections than the
+    answer that attempt was itself asked to correct: then the more complete
+    earlier answer, and the attempt that gave it, so the lines and the keep
+    line are the earlier answer's (D104's amendment of 14 October 2026, F649;
+    `answer_shrank`). "The answer it was asked to correct" is this same walk
+    over the attempts before it, so a chain of shrinking answers keeps
+    carrying the fullest one.
 
     Counted from the attempts before this one, so the prospective prompt that
     is priced and the attempt's own rebuilt prompt carry the same lines. A body
     that is lost or corrupt leaves the retry a plain one: the lines are
     help, not a verdict, and parking the run over them would cost the attempt.
+    The same fail-open holds for the earlier answer of a shrunk pair: when its
+    body is lost or corrupt the latest answer is carried, as before F649.
     """
     attempts = node_attempts(conn, assignment.run_id, assignment.node.route_node_id)
     ids = [attempt.attempt_id for attempt in attempts]
     before = ids.index(assignment.attempt_id) if assignment.attempt_id in ids else None
     source = _feedback_source(attempts[:before])
-    if source is None or source.diagnostic_sha256 is None:
+    if source is None:
         return None
-    body: str | None = None
+    module_id = assignment.module_id
+
+    @cache
+    def authority() -> bytes:
+        return assemble_authority(bundle, module_id).files[SKILL]
+
+    def shrank(earlier: str, later: str) -> bool:
+        return answer_shrank(_contract(bundle), module_id, earlier, later, authority())
+
+    return _carried(blobs, attempts, source, shrank)
+
+
+def _refused_body(blobs: BlobStore, refused: NodeAttempt) -> str | None:
+    """The stored body of a refused attempt; None when it has none, or it is
+    lost or corrupt (`_BLOB_LOST`): a store fault still raises."""
+    if refused.diagnostic_sha256 is None:
+        return None
     try:
-        body = _stored_body(blobs, source.diagnostic_sha256)
+        return _stored_body(blobs, refused.diagnostic_sha256)
     except Refusal as lost:
         if lost.code not in _BLOB_LOST:
             raise
-    return None if body is None else (body, source.attempt_id)
+    return None
+
+
+def _carried(
+    blobs: BlobStore,
+    attempts: Sequence[NodeAttempt],
+    refused: NodeAttempt,
+    shrank: Callable[[str, str], bool],
+) -> tuple[str, UUID] | None:
+    """The answer a guided retry of `refused` carries and its attempt: the
+    body of `refused`, or what `refused`'s own retry carried when `refused`
+    shrank against it (`_feedback_body`). Depth at most `GUIDED_RETRIES`."""
+    body = _refused_body(blobs, refused)
+    if body is None:
+        return None
+    asked = _feedback_source(attempts[: attempts.index(refused)])
+    earlier = None if asked is None else _carried(blobs, attempts, asked, shrank)
+    # An earlier answer `carried_answer` refuses cannot be carried, so it never
+    # displaces one that can (F649).
+    if (
+        earlier is not None
+        and carried_answer(earlier[0]) is not None
+        and shrank(earlier[0], body)
+    ):
+        return earlier
+    return body, refused.attempt_id
 
 
 def _anchoring_line(
