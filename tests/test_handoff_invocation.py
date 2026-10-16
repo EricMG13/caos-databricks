@@ -1267,6 +1267,17 @@ def test_an_upstream_handoff_past_its_section_bound_refuses_the_prompt() -> None
     assert whole + 1 < MAX_REQUEST_BYTES
 
 
+def test_the_section_bound_is_128_kib_and_carries_the_largest_cp4_answer() -> None:
+    """D152 R32 (N209): live CP-4 answers run 75-99 KB, and retries dropped
+    sections to fit 98,304. The bound is 131,072 bytes and a 99 KB answer is
+    carried whole, with room."""
+    assert MAX_UPSTREAM_HANDOFF_BYTES == 131_072
+    answer = handoff_markdown(identity("CP-0")).ljust(99_000, b" ")
+    ref = upstream_ref(identity("CP-0"), answer)
+    prompt = _prompt(identity("CP-L10", (ref,)), upstream=((ref, answer),))
+    assert answer.decode() in prompt
+
+
 def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> None:
     """Why the declared number is the number: a node's own delivered authority
     beside its direct upstreams at the bound must still leave the request
@@ -1277,9 +1288,9 @@ def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> No
     that asked for this found the single-pair form would pass a bundle whose
     third profile carried a wider node, or whose authority grew, while the
     arithmetic the declared number rests on no longer held. **CP-5** of
-    FULL_CREDIT_32 is the maximum on this bundle (D83): 16 direct upstreams at
-    96 KiB beside 169,493 bytes of authority encode to 1,750,342 bytes against
-    the 4,194,304 ceiling, 2,443,962 left for evidence. CP-3 follows on the
+    FULL_CREDIT_32 is the maximum on this bundle (D83, D152 R32): 16 direct
+    upstreams at 128 KiB beside 170,803 bytes of authority encode to 2,278,276
+    bytes against the 4,194,304 ceiling, 1,916,028 left for evidence. CP-3 follows on the
     heavier authority and fewer upstreams; the assertions hold for whichever
     node is widest, not for CP-5 by name.
 
