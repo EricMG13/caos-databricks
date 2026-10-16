@@ -1918,6 +1918,31 @@ def test_a_bill_retried_on_a_fresh_connection_holds_its_attempt_as_it_writes(
     assert count(run.conn, "call_outcomes", run.run_id) == 1
 
 
+def test_a_bill_with_no_store_to_reconnect_to_still_pauses_between_its_tries(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: only a fault that took its session away is answered by an instant
+    reconnect; a reconnect that itself fails pauses like any other failed try,
+    so a store that is down is not asked `BILL_TRIES` times in a burst."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome
+
+    pauses: list[float] = []
+    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    closed = connect(empty_database)
+    closed.close()
+    monkeypatch.delenv("CAOS_DATABASE_URL", raising=False)
+    for name in ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER"):
+        monkeypatch.delenv(name, raising=False)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        canonical.bill(closed, enqueued.run_id, outcome)
+    assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
+
+
 def test_a_bill_whose_write_closes_the_session_is_retried_held_and_unpaused(
     enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
