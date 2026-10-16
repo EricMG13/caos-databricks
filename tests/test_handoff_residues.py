@@ -12,6 +12,7 @@ the vendor's validator cannot read says so (N218 8).
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from dataclasses import replace
 from types import SimpleNamespace
@@ -266,7 +267,7 @@ def test_a_carried_answer_refused_only_on_a_carriage_return_gets_the_keep_line()
         CONTRACT, "CP-3C", _body(markdown.replace("Debt", "Debt\r")), skill
     )
     assert with_cr == plain
-    decomposed = markdown.replace("Debt", "Débt")
+    decomposed = markdown.replace("Debt", "De\u0301bt")
     assert kept_registers_line(CONTRACT, "CP-3C", _body(decomposed), skill) == plain
 
 
@@ -548,3 +549,66 @@ def test_the_run_bounds_are_named_and_inclusive_of_their_limits() -> None:
     title = "## t" + " " * (handoff.MAX_HEADING_RUN + 1) + "u"
     assert handoff._run_bound(title).startswith("a heading's title carries a run")
     assert handoff._run_bound("## t" + " " * handoff.MAX_HEADING_RUN + "u") == ""
+
+
+# --- fix round 1 ---------------------------------------------------------------
+
+
+def _slow_heading(char: str, count: int = 16_000) -> str:
+    return _t3d2("").replace(
+        "### T3D.2 — Debt maturity",
+        "#" + char * count + "x\n\n### T3D.2 — Debt maturity",
+    )
+
+
+def test_a_control_run_heading_gets_no_keep_line_and_returns_fast() -> None:
+    markdown = _slow_heading("\x1f")
+    started = time.perf_counter()
+    assert _kept(markdown) is None
+    assert handoff._readable(_body(markdown)) is None
+    assert time.perf_counter() - started < 1.0
+
+
+def test_a_control_character_alone_withholds_the_keep_line() -> None:
+    assert _kept(_t3d2("a\x01b\n")) is None
+    assert _kept(_t3d2("plain\n")) is not None
+
+
+def test_a_carriage_return_or_non_nfc_alone_keeps_the_keep_line() -> None:
+    assert _kept(_t3d2("a\rb\n")) is not None
+    assert _kept(_t3d2("e\u0301\n")) is not None
+
+
+@pytest.mark.parametrize("char", ["\u3000", "\u00a0", "\x1f", "\u2003"])
+def test_a_run_of_any_whitespace_is_a_host_bound(char: str) -> None:
+    markdown = _slow_heading(char)
+    started = time.perf_counter()
+    assert handoff._readable(_body(markdown)) is None
+    with pytest.raises(Refusal) as refused:
+        handoff._text(markdown.encode())
+    assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
+    assert time.perf_counter() - started < 1.0
+    run = handoff.MAX_WHITESPACE_RUN
+    assert handoff._run_bound("x" + char * (run + 1)).startswith("a line carries")
+    assert handoff._run_bound("x" + char * run) == ""
+
+
+def test_single_no_break_spaces_and_blank_lines_still_pass() -> None:
+    text = _t3d2("a\u00a0b \u3000 c\n" + "\n" * 400 + "end\n")
+    assert handoff._run_bound(text) == ""
+    assert handoff._readable(_body(text)) == text
+
+
+def test_a_non_transport_body_is_parsed_once_and_not_diagnosed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loads = _Count(monkeypatch, "_not_transport")
+    assert answer_markdown("{bad") is None
+    assert answer_citations("{bad") == ()
+    assert loads.calls == 0
+    assert feedback_lines(CONTRACT, catalog(BUNDLE), identity("CP-0"), "{bad")
+    assert loads.calls == 1
+
+
+def test_the_unused_shaped_helper_is_gone() -> None:
+    assert not hasattr(handoff, "_shaped")
