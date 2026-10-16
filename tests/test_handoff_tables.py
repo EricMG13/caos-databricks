@@ -170,6 +170,7 @@ SPELLINGS = (
     *("-5", "+5", "(-5)", "( 5 )", "(5", "5)", " 5 ", "5x", "5.2X", "10.4%", "(5%)"),
     *("350bps", "350 bp", "350 BPS", "+75bp", "(25 bps)", "1,250 bps", "12.5Bp"),
     *("350bpx", "bps", "bps350", "5,2 bps", "350 bps%", "350bp x", "roughly 350bps"),
+    *("5xbps", "10%bp", "5%bps", "5Xbp"),
     *("5%x", "5x%", "1 234", "1\u00a0234", "1\u202f234", "1\u2009234", ".5", "5."),
     *("0.1", "007", "0.05", "-0.10", "(14)", "$7,125", "197,325", "5.50%", "2026"),
     *("1e3", "1E+3", "1.5e-3", "2.5E2", "1,234e5", "1e400", "0e70", "-0", "(0)"),
@@ -201,7 +202,7 @@ def _vendor(cell: str) -> float | None:
     except reader.AmbiguousFigure:
         number = None
     try:
-        figure = reader.parse_figure(cell)
+        figure = reader.parse_figure(cell, basis_points=True)
     except ValueError:
         figure = None
     assert figure == number  # the two readings of one cell never disagree

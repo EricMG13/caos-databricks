@@ -1878,17 +1878,55 @@ class ForkR17Tests(unittest.TestCase):
         for cell, value in (('350bps', 350.0), ('350 bp', 350.0), ('350 BPS', 350.0), ('+75bp', 75.0),
                             ('(25 bps)', -25.0), ('1,250 bps', 1250.0), ('12.5bp', 12.5), ('350 bps', 350.0)):
             with self.subTest(cell=cell):
-                self.assertEqual(tables.parse_figure(cell), value)
+                self.assertEqual(tables.parse_figure(cell, basis_points=True), value)
                 self.assertEqual(tables.to_number(cell), value)
         for cell in ('bps', '350 bpx', 'bps350', '350 basis', '5 to 6 bps', 'roughly 350bps'):
             with self.subTest(refused=cell):
                 with self.assertRaises(ValueError):
-                    tables.parse_figure(cell)
+                    tables.parse_figure(cell, basis_points=True)
         # Unchanged: a bare number, a percentage and a multiple, and the ambiguous comma.
         self.assertEqual((tables.parse_figure('350'), tables.parse_figure('3.5%'), tables.parse_figure('4.2x')),
                          (350.0, 3.5, 4.2))
         with self.assertRaises(tables.AmbiguousFigure):
-            tables.parse_figure('5,2 bps')
+            tables.parse_figure('5,2 bps', basis_points=True)
+
+    def test_n196_a_calculator_input_never_reads_a_bp_suffix(self):
+        """`600bps` as a coupon is a percentage-point input read as 600 (YTM 609%): the unit is a register
+        figure's, so every calculator `_num` keeps refusing it."""
+        snippet = ('import sys, importlib\n'
+                   'sys.path.insert(0, sys.argv[1])\n'
+                   'num = importlib.import_module(sys.argv[2])._num\n'
+                   'try:\n'
+                   '    num(sys.argv[3], "coupon")\n'
+                   'except ValueError as exc:\n'
+                   '    print(exc)\n')
+        scripts = sorted(path for path in (ROOT / 'skills').glob('*/scripts/*.py')
+                         if 'return parse_figure(value, where)' in path.read_text(encoding='utf-8'))
+        self.assertGreaterEqual(len(scripts), 15)
+        for path in scripts:
+            for cell in ('600bps', '600 bp'):
+                with self.subTest(script=str(path.relative_to(ROOT)), cell=cell):
+                    result = subprocess.run([sys.executable, '-B', '-c', snippet, str(path.parent), path.stem, cell],
+                                            text=True, capture_output=True)
+                    self.assertEqual(result.stdout.strip(), f"coupon: {cell!r} is not a figure", result.stderr)
+
+    def test_n196_bond_analytics_blocks_a_bp_coupon(self):
+        script = ROOT / 'skills/cp-3d-market-implied-risk/scripts/bond_analytics.py'
+        payload = {'price': 98.5, 'coupon': '600bps', 'years_to_maturity': 5, 'benchmark_yield': '4.0'}
+        result = subprocess.run([sys.executable, '-B', str(script)], input=json.dumps(payload), text=True,
+                                capture_output=True)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertEqual(json.loads(result.stderr), {'status': 'blocked', 'error': "coupon: '600bps' is not a figure"})
+
+    def test_n196_the_register_reader_opts_in_to_basis_points(self):
+        for cell in ('350bps', '350 bp'):
+            with self.assertRaises(ValueError):
+                tables.parse_figure(cell)
+            self.assertEqual(tables.parse_figure(cell, basis_points=True), 350.0)
+        for cell in ('5xbps', '10%bp', '5%bps'):
+            with self.subTest(refused=cell):
+                with self.assertRaises(ValueError):
+                    tables.parse_figure(cell, basis_points=True)
 
     # N164
     @staticmethod
@@ -1982,6 +2020,9 @@ class ForkR17Tests(unittest.TestCase):
                 self.assertEqual(violations(rows(f'TL{phase}.2', 'topic_id', enum + ['SECTOR_OUTLOOK']), screens), [
                     f"TL{phase}.2 row 7: cp_l{phase}.topic_ids_allowed -- column 'topic_id' holds 'SECTOR_OUTLOOK', "
                     "not one of the allowed values"])
+            with self.subTest(phase=phase, case='no OVERALL'):
+                self.assertEqual(violations(topics, rows(f'TL{phase}.3', 'screen_item', ['Liquidity'])), [
+                    f"TL{phase}.3: cp_l{phase}.overall_screen_present -- column 'screen_item' lacks 'OVERALL'"])
             with self.subTest(phase=phase, case='a second OVERALL'):
                 self.assertEqual(violations(topics, rows(f'TL{phase}.3', 'screen_item', ['OVERALL', 'Liquidity', 'OVERALL'])), [
                     f"TL{phase}.3: cp_l{phase}.overall_screen_once -- column 'screen_item' must hold 'OVERALL' exactly once"])
@@ -2007,6 +2048,7 @@ class ForkR17Tests(unittest.TestCase):
 
     # N192
     def test_n192_a_packed_column_is_one_column_per_figure(self):
+        self.assertNotIn('gross/net leverage', skill_text('cp-2g-forward-credit-model'))
         cases = (
             ('cp-1c-peer-benchmark', 'CP-1C', 'T4.5', 'Total/Net/Sr Sec Leverage',
              ['Total Leverage', 'Net Leverage', 'Sr Sec Leverage']),

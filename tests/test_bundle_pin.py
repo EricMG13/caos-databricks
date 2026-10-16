@@ -727,8 +727,6 @@ def test_every_absorbed_screen_s_rules_are_enforced(phase: str) -> None:
     assert check(skill, lowered, "CP-L10")[0] == [
         f"TL{phase}.3: cp_l{phase}.overall_screen_present -- column 'screen_item' "
         "lacks 'OVERALL'",
-        f"TL{phase}.3: cp_l{phase}.overall_screen_once -- column 'screen_item' must "
-        "hold 'OVERALL' exactly once",
     ]
     # Fork r17 (N132): the topics are bounded by the payload schema's enum and
     # OVERALL is written once.
