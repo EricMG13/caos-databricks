@@ -1818,6 +1818,31 @@ class ForkR15Tests(unittest.TestCase):
         self.assertTrue(bare, 'the bare placeholder in every critical cell must be refused')
 
 
+class ForkR16Tests(unittest.TestCase):
+    """Deployment fork r16 (owner-authorised 2026-10-16): every CP-4 reference instruction to write the placeholder asks
+    for the reason form too, so no reference contradicts CP-4D's critical-cell blocklist. A mention that only refers to
+    a marker already written (a section marked, items with, 'Every [..] in Steps') is not an instruction."""
+
+    PLACEHOLDER = '[Insufficient Information]'
+    REFERS = ('section marked ', 'items with ', 'Every ')
+
+    def test_every_instruction_to_write_the_placeholder_asks_for_the_reason_form(self):
+        references = ROOT / 'skills/cp-4-legal-covenant-interpreter/references'
+        files = sorted(references.glob('*.md'))
+        self.assertTrue(files)
+        kept = 0
+        for path in files:
+            for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                for found in re.finditer(re.escape(self.PLACEHOLDER), line):
+                    before = line[:found.start()]
+                    if before.endswith(self.REFERS):
+                        kept += 1
+                        continue
+                    with self.subTest(file=path.name, line=number):
+                        self.assertEqual(line[found.end():found.end() + 3], ' \u2014 ')
+        self.assertEqual(kept, 5)
+
+
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
 class IntegrationTests(unittest.TestCase):
     def test_exporter_binds_current_catalyst_owner(self):
