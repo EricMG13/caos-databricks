@@ -354,7 +354,9 @@ def test_a_body_that_is_not_the_transport_is_told_why_in_the_parsers_words() -> 
     assert handoff._not_transport(raw_newline).endswith(handoff._ESCAPES)
     broken = handoff._not_transport("{bad")
     assert broken.startswith("host transport check: the answer is not one JSON")
-    assert handoff._ESCAPES not in broken
+    with pytest.raises(json.JSONDecodeError) as bad:
+        json.loads("{bad")
+    assert broken == handoff._TRANSPORT_JSON.format(bad.value.msg)
     assert handoff._not_transport("[1]") == handoff._TRANSPORT_SHAPE
     assert handoff._not_transport("[" * 100_000) == handoff._TRANSPORT_SHAPE
 
@@ -526,7 +528,8 @@ def test_the_front_matter_bound_is_inclusive_and_only_for_a_front_matter() -> No
     over = exact.replace("p" * pad, "p" * (pad + 1))
     assert handoff._broken_bound(over).startswith("the front matter is longer than")
     # Text that does not open with `---` has no front matter to bound.
-    assert handoff._broken_bound(f"# T\n{body}\n---\n" + "p" * 2000 + "\n") == ""
+    long_body = "\n".join([line] * (limit // 1004 + 5))
+    assert handoff._broken_bound(f"# T\n{long_body}\n---\nend\n") == ""
     assert handoff._broken_bound("---\n---\nbody\n") == ""
 
 
