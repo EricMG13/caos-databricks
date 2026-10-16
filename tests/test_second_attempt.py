@@ -52,6 +52,7 @@ from caos.methodology.handoff import (
     ADVISORY,
     HINT_WORDS,
     MAX_ANCHORING_CHARS,
+    MAX_BLOCKER_CHARS,
     MAX_CITATIONS,
     MAX_FEEDBACK_CHARS,
     MAX_FEEDBACK_CITATIONS,
@@ -1419,12 +1420,6 @@ def test_the_blocker_line_is_the_gates_alone() -> None:
     """The `Why now / blocker` check binds CP-0's T8 only: the same overlong
     cell, in the same Markdown, gets CP-0 its blocker line and gets another
     module's answer none."""
-    from dataclasses import replace
-
-    from canonical_fixtures import CATALOG, CONTRACT, identity
-
-    from caos.methodology.handoff import MAX_BLOCKER_CHARS
-
     cp0 = identity("CP-0")
     markdown = _gate_markdown(
         readiness={"CP-5": "CONDITIONAL"},
