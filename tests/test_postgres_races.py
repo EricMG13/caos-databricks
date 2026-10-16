@@ -15,7 +15,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
-from threading import Barrier, Event
+from threading import Barrier, Event, Thread
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -1631,13 +1631,17 @@ def test_a_held_call_keeps_its_node_only_while_a_live_session_holds_it(
 
 
 def test_a_held_call_keeps_its_node_two_of_the_leases_it_was_claimed_with(
-    empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """N80: the hold is sized from the lease the worker claimed with
-    (`WorkerConfig.lease_seconds`), not from the module default. A one-second
-    lease keeps a held node two seconds past its reservation: a holder silent
-    two leases is wedged, and the 1800 s of the default would keep its node
-    30 minutes for a worker configured for one."""
+    (`WorkerConfig.lease_seconds`), not from the module default. A three-second
+    lease keeps a held node six seconds past its reservation (the call's own
+    deadline, which floors the span, set aside): a holder silent two leases is
+    wedged, and the 1800 s of the default would keep its node 30 minutes for a
+    worker configured for one."""
     _case_id, run_id = prepared_run
     with connect(empty_database) as conn:
         nodes = approved_nodes(conn, run_id, tmp_path)
@@ -1645,15 +1649,109 @@ def test_a_held_call_keeps_its_node_two_of_the_leases_it_was_claimed_with(
     with connect(empty_database) as a:
         attempt = start_attempt(a, run_id, nodes["CP-0"], lease=stale)
         reserve(a, attempt, RESERVED, lease=stale)
-    fresh = replace(_reclaimed(empty_database, run_id), seconds=1)
-    with connect(empty_database) as b, call_hold(connect(empty_database), attempt):
-        _refused(
-            RefusalCode.ATTEMPT_UNSETTLED,
-            lambda: start_attempt(b, run_id, nodes["CP-0"], lease=fresh),
-        )
-        time.sleep(2.2)  # past two one-second leases (a reservation is immutable)
-        start_attempt(b, run_id, nodes["CP-0"], lease=fresh)
-        assert _count(b, "run_attempts", run_id) == 2
+    monkeypatch.setattr(runs, "TIMEOUT_SECONDS", 0.0)
+    fresh = replace(_reclaimed(empty_database, run_id), seconds=3)
+    holder = connect(empty_database)
+    try:
+        with connect(empty_database) as b, call_hold(holder, attempt):
+            # The first refusal must fall inside the hold's six seconds; under
+            # a loaded server the setup alone can use a second or more.
+            age = b.execute(
+                "SELECT extract(epoch FROM now() - reserved_at)"
+                " FROM budget_reservations WHERE attempt_id = %s",
+                (attempt,),
+            ).fetchone()
+            b.rollback()
+            assert age is not None and float(age[0]) < 3.0, "the setup used the margin"
+            _refused(
+                RefusalCode.ATTEMPT_UNSETTLED,
+                lambda: start_attempt(b, run_id, nodes["CP-0"], lease=fresh),
+            )
+            time.sleep(6.2)  # past two three-second leases (a reservation is immutable)
+            start_attempt(b, run_id, nodes["CP-0"], lease=fresh)
+            assert _count(b, "run_attempts", run_id) == 2
+    finally:
+        holder.close()
+
+
+_BILL = CallOutcome(Decimal("0.05"), "a-model/for-the-test", "generation")
+
+
+def _bill_beside_a_live_holder(
+    url: str,
+    run_id: UUID,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[float, int]:
+    """Bill an attempt over a closed connection while a second live session
+    (the old backend a half-open failover left) still holds the attempt's
+    hold. Returns the seconds the bill took and the outcome rows it left."""
+    from caos.methodology import canonical
+
+    with connect(url) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+    lease = _claimed(url, run_id)
+    with connect(url) as a:
+        attempt = start_attempt(a, run_id, nodes["CP-0"], lease=lease)
+        reserve(a, attempt, RESERVED, lease=lease)
+    zombie = connect(url)
+    closed = connect(url)
+    closed.close()
+    monkeypatch.setenv("CAOS_DATABASE_URL", url)
+    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    try:
+        with call_hold(zombie, attempt):
+            started = time.monotonic()
+            biller = Thread(
+                target=canonical.bill, args=(closed, attempt, _BILL), daemon=True
+            )
+            biller.start()
+            biller.join(timeout=5)
+            took = time.monotonic() - started
+            with connect(url) as b:
+                billed = _count(b, "call_outcomes", run_id)
+    finally:
+        zombie.close()
+        biller.join(timeout=10)
+    return took, billed
+
+
+def test_a_reconnected_bill_lands_at_once_beside_a_live_holder_of_the_hold(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N80: the replacement connection takes the hold without waiting for it.
+    A half-open old backend still holding the attempt's lock must not wedge
+    the bill, or the node is started again (invariant 6) while the bill
+    waits, and paid for twice once it lands."""
+    _case_id, run_id = prepared_run
+    took, billed = _bill_beside_a_live_holder(
+        empty_database, run_id, tmp_path, monkeypatch
+    )
+    assert billed == 1 and took < 3
+
+
+def test_a_reconnected_bill_lands_beside_a_live_holder_under_a_lock_timeout(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N80: a database `lock_timeout` (a DBA's setting) cancels a waiting
+    hold; the bill took that for a store fault on every reconnect and was
+    abandoned unbilled. It writes whether or not it obtained the hold."""
+    import psycopg
+
+    dbname = psycopg.conninfo.conninfo_to_dict(empty_database)["dbname"]
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute(f'ALTER DATABASE "{dbname}" SET lock_timeout = 300')
+    _case_id, run_id = prepared_run
+    took, billed = _bill_beside_a_live_holder(
+        empty_database, run_id, tmp_path, monkeypatch
+    )
+    assert billed == 1 and took < 3
 
 
 def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
