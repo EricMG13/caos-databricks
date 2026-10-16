@@ -23,7 +23,11 @@ from caos.calculators.cash_flow import cash_flow_forecast
 from caos.calculators.credit_model import projection as projection_module
 from caos.calculators.credit_model._cells import CONTEXT, UNSPANNED
 from caos.calculators.credit_model.assemble import ModelInputs, credit_model
-from caos.calculators.credit_model.debt import COUPON_AS_FRACTION, HISTORY_INCOMPLETE
+from caos.calculators.credit_model.debt import (
+    COUPON_AS_FRACTION,
+    HISTORY_INCOMPLETE,
+    TERMS_AS_BPS,
+)
 from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.calculators.credit_model.history import account_frame, historical_columns
 from caos.calculators.credit_model.projection import (
@@ -1949,3 +1953,64 @@ def test_explicit_segments_do_not_call_native_growth(
     request, regs = segment_inputs()
     monkeypatch.setattr(projection_module, "_grown", unexpected)
     _frame(_inputs(regs=regs, request=request))
+
+
+@pytest.mark.parametrize(
+    ("terms", "noted"),
+    [
+        ({"spread_bps": Decimal(3)}, True),
+        ({"spread_bps": Decimal("3.00")}, True),
+        ({"floor_bps": Decimal(3)}, True),
+        ({"spread_bps": Decimal(30)}, True),  # the largest whole percent priced
+        ({"spread_bps": Decimal(31)}, False),
+        ({"spread_bps": Decimal(0), "floor_bps": Decimal(0)}, False),
+        ({"spread_bps": Decimal(275), "floor_bps": Decimal(50)}, False),
+    ],
+)
+def test_a_spread_or_floor_that_reads_like_whole_percent_is_kept_and_noted(
+    terms: dict[str, Decimal], noted: bool
+) -> None:
+    """N211 (c): CP-1 states integer basis points, so 3 is 3 bp, kept; a
+    figure at or below 30 (the largest whole percent a coupon takes) reads
+    like a percent, and the rate says it was read as basis points."""
+    deck = example_deck()
+    row = replace(_row("tlb"), **terms)
+    plain = replace(_row("tlb"), **{k: Decimal(275) for k in terms})
+
+    rate, note = facility_rate(row, deck, "BASE", 1, _NO_IMPLIED)
+
+    assert note == (TERMS_AS_BPS if noted else None)
+    assert rate is not None
+    assert facility_rate(plain, deck, "BASE", 1, _NO_IMPLIED)[1] is None
+
+
+@settings(max_examples=60, deadline=None)
+@given(spread=st.integers(min_value=1, max_value=2000))
+def test_a_spread_is_added_in_basis_points_and_noted_only_up_to_thirty(
+    spread: int,
+) -> None:
+    deck = example_deck()
+    base = replace(_row("tlb"), spread_bps=Decimal(0), floor_bps=None)
+    row = replace(base, spread_bps=Decimal(spread))
+
+    rate, note = facility_rate(row, deck, "BASE", 1, _NO_IMPLIED)
+    bare, _ = facility_rate(base, deck, "BASE", 1, _NO_IMPLIED)
+
+    assert rate is not None and bare is not None
+    assert rate - bare == Decimal(spread) / 10000
+    assert (note == TERMS_AS_BPS) is (spread <= 30)
+
+
+def test_a_whole_percent_spread_is_noted_on_the_facility_rate_and_interest() -> None:
+    regs = _terms(example_registers(), "tlb", {"spread_bps": Decimal(3)})
+    first = _frame(_inputs(regs))["BASE:2026"]
+    stated = _frame(_inputs())["BASE:2026"]
+
+    assert first["fac:tlb"].note == TERMS_AS_BPS
+    assert first["wa_rate"].note == TERMS_AS_BPS
+    assert TERMS_AS_BPS in (first["cash_interest"].note or "")
+    assert stated["fac:tlb"].note is None
+    assert stated["wa_rate"].note is None
+    assert stated["cash_interest"].note is None
+    # Kept as 3 bp: dearer debt is not guessed at.
+    assert first["cash_interest"].value != stated["cash_interest"].value

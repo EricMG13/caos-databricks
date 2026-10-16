@@ -286,7 +286,9 @@ def test_uncombined_periods_add_pairs_the_anchor_does_not_state() -> None:
 
 def _footed(basis: str | None, perimeter: str | None = None) -> Footing:
     period = replace(
-        example_registers().periods[0], accounting_basis=basis, entity_perimeter=perimeter
+        example_registers().periods[0],
+        accounting_basis=basis,
+        entity_perimeter=perimeter,
     )
     return footing_of(period)
 
@@ -297,7 +299,11 @@ def test_basis_spellings_differ_only_in_spacing_case_and_separators_are_one() ->
     same = ["US GAAP", "USGAAP", "us-gaap", "US_GAAP", " us  gaap ", "U.S. GAAP"]
     assert len({_footed(text) for text in same}) == 1
     assert _footed("Continuing ops", "Group") == _footed("ContinuingOps", "group")
-    for first, second in (("US GAAP", "IFRS"), ("US GAAP", "GAAP"), ("UK GAAP", "US GAAP")):
+    for first, second in (
+        ("US GAAP", "IFRS"),
+        ("US GAAP", "GAAP"),
+        ("UK GAAP", "US GAAP"),
+    ):
         assert _footed(first) != _footed(second)
     assert _footed(None)[0] is None
 

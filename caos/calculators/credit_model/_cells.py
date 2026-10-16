@@ -210,7 +210,9 @@ def _footing_key(text: str | None) -> str | None:
     standards stay different. None for none."""
     if text is None:
         return None
-    return "".join(c for c in text.casefold() if not c.isspace() and c not in _SEPARATORS)
+    return "".join(
+        c for c in text.casefold() if not c.isspace() and c not in _SEPARATORS
+    )
 
 
 def _differs(text: str | None, anchor: str | None) -> bool:

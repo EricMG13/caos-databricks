@@ -447,7 +447,8 @@ def _unapplied_debt_or_cash(
     return [
         a
         for a in adjustments
-        if not tuple(_pf_keys(a, regs)) and any(w in a.metric_id for w in _NET_DEBT_WORDS)
+        if not tuple(_pf_keys(a, regs))
+        and any(w in a.metric_id for w in _NET_DEBT_WORDS)
     ]
 
 

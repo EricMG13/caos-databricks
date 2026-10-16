@@ -29,7 +29,11 @@ columns the CP-1 fork added (owner-authorised 2026-10-10) are absent from an
 older run's debt register: they read as `NOT_STATED` or no value, never as a
 fault. A rate term written in the wrong unit (a spread or floor written with
 `%` or not a whole number of basis points, a fixed coupon outside 0-30
-percent) is kept as read, the row flagged `terms_out_of_range`. A fixed
+percent) is kept as read, the row flagged `terms_out_of_range`. CP-1 states
+a spread and a floor as integer basis points (`spread_bps`, `floor_bps`): a
+bare figure is read as basis points however small, so "3" or "3.00" is 3 bp,
+never 3 percent; the model notes one above nil and at most 30 as read so
+(`debt.TERMS_AS_BPS`). A fixed
 coupon is CP-1's decimal percent (`6.500`): 0 is a zero-coupon convertible,
 as stated. On a `FIXED` row, a coupon strictly between 0 and 0.5 written
 without `%` is either a decimal fraction written in place of the percent
@@ -274,8 +278,8 @@ class FacilityRow:
     margin_or_coupon: str
     rate_type: str
     reference_rate: str
-    spread_bps: Decimal | None
-    floor_bps: Decimal | None
+    spread_bps: Decimal | None  # integer basis points, as CP-1 states them
+    floor_bps: Decimal | None  # likewise
     fixed_rate: Decimal | None
     annual_amortisation: Decimal | None
     source: SourceRef | None
