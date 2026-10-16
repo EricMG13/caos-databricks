@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import check_gate_config
 import pytest
 import tracked
+import yaml
 from tracked import tracked_files
 
 REPO = Path(__file__).resolve().parents[1]
@@ -464,6 +467,132 @@ def test_a_job_if_for_an_optional_job_is_not_refused(tmp_path: Path) -> None:
     assert check_gate_config._ci_problems(root) == [
         f"ci: {check_gate_config.PR_SIZE!r} runs only when its job's if: allows it"
     ]
+
+
+def _edit_ci(root: Path, edit: Callable[[dict[str, Any]], None]) -> None:
+    """Rewrite the copied workflow after `edit` has changed its parsed jobs."""
+    ci = root / ".github" / "workflows" / "ci.yml"
+    document = yaml.safe_load(ci.read_text(encoding="utf-8"))
+    edit(document["jobs"])
+    ci.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+
+
+def _move_before(steps: list[dict[str, Any]], mover: str, anchor: str) -> None:
+    """Move the step whose `run` holds `mover` to just ahead of the one
+    holding `anchor`."""
+    [moving] = [step for step in steps if mover in str(step.get("run"))]
+    steps.remove(moving)
+    [target] = [step for step in steps if anchor in str(step.get("run"))]
+    steps.insert(steps.index(target), moving)
+
+
+def test_a_floor_check_ahead_of_the_step_that_writes_its_report_is_refused(
+    tmp_path: Path,
+) -> None:
+    """N110: the floor check judges whatever file is on disk, so one moved
+    ahead of its producer (or into another job) judges a stale report a
+    commit force-added. Each must follow its producer in the same job."""
+    root = _tree(tmp_path)
+    assert check_gate_config._ci_problems(root) == []
+
+    _edit_ci(
+        root,
+        lambda jobs: _move_before(
+            jobs["security"]["steps"], "scan_floors.py bandit.json", "-o bandit.json"
+        ),
+    )
+    problems = check_gate_config._ci_problems(root)
+    assert (
+        "ci: job security reads bandit.json before the step that writes it" in problems
+    ), problems
+
+
+def test_the_coverage_floor_ahead_of_its_report_or_in_another_job_is_refused(
+    tmp_path: Path,
+) -> None:
+    root = _tree(tmp_path)
+    _edit_ci(
+        root,
+        lambda jobs: _move_before(
+            jobs["test"]["steps"], "scan_floors.py coverage.xml", "coverage xml"
+        ),
+    )
+    assert (
+        "ci: job test reads coverage.xml before the step that writes it"
+        in check_gate_config._ci_problems(root)
+    )
+
+    root = _tree(tmp_path / "other")
+
+    def to_lint(jobs: dict[str, Any]) -> None:
+        [step] = [
+            step
+            for step in jobs["test"]["steps"]
+            if "scan_floors.py coverage.xml" in str(step.get("run"))
+        ]
+        jobs["test"]["steps"].remove(step)
+        jobs["lint"]["steps"].append(step)
+
+    _edit_ci(root, to_lint)
+    assert (
+        "ci: job lint reads coverage.xml before the step that writes it"
+        in check_gate_config._ci_problems(root)
+    )
+
+
+def test_a_shipped_check_ahead_of_its_deploy_is_refused(tmp_path: Path) -> None:
+    """N110: `--shipped .databricks/bundle/<target>/deployment.json` reads a
+    file the target's deploy writes; ahead of it, a stale file would do."""
+    root = _tree(tmp_path)
+    _edit_ci(
+        root,
+        lambda jobs: _move_before(
+            jobs["bundle"]["steps"],
+            "--shipped .databricks/bundle/prod/deployment.json",
+            "bundle deploy -t prod ",
+        ),
+    )
+    assert (
+        "ci: job bundle reads .databricks/bundle/prod/deployment.json before "
+        "the step that writes it" in check_gate_config._ci_problems(root)
+    )
+
+
+def test_a_job_s_services_are_pinned(tmp_path: Path) -> None:
+    """N110: `services` was free, so a job's store could be swapped for an
+    unpinned image, or one added to a job that has none."""
+    root = _tree(tmp_path)
+
+    def swap(jobs: dict[str, Any]) -> None:
+        jobs["bundle"]["services"]["postgres"]["image"] = "postgres:latest"
+        jobs["lint"]["services"] = {"redis": {"image": "redis"}}
+
+    _edit_ci(root, swap)
+    problems = check_gate_config._ci_problems(root)
+    assert "ci: job bundle's services are not as pinned" in problems, problems
+    assert "ci: job lint's services are not as pinned" in problems, problems
+
+
+def test_a_tracked_report_or_deployment_record_is_refused(tmp_path: Path) -> None:
+    """N110: a tracked `bandit.json`, `coverage.xml` or `.databricks/**` is
+    a stale report the floor checks could judge in place of a fresh one."""
+    root = _tree(tmp_path)
+    assert check_gate_config._report_problems(root) == []
+    (root / "coverage.xml").write_text("<coverage/>")
+    (root / "bandit.json").write_text("{}")
+    deployment = root / ".databricks" / "bundle" / "dev" / "deployment.json"
+    deployment.parent.mkdir(parents=True)
+    deployment.write_text("{}")
+    _git(root, "add", "-f", "coverage.xml", "bandit.json", ".databricks")
+    assert check_gate_config._report_problems(root) == [
+        "report: coverage.xml is tracked; a floor check would judge it stale",
+        "report: bandit.json is tracked; a floor check would judge it stale",
+        "report: .databricks/bundle/dev/deployment.json is tracked; a floor "
+        "check would judge it stale",
+    ]
+    assert set(check_gate_config._report_problems(root)) <= set(
+        check_gate_config.configuration_problems(root)
+    )
 
 
 def test_a_hook_s_own_body_weakened_in_effect_is_named(tmp_path: Path) -> None:
