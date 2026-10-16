@@ -1986,6 +1986,46 @@ def test_a_bill_whose_write_closes_the_session_is_retried_held_and_unpaused(
     assert count(run.conn, "call_outcomes", run.run_id) == 1
 
 
+def test_a_bill_cut_again_on_its_fresh_connection_is_held_and_unpaused_again(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: the fresh connection can be cut too (a second failover); the retry
+    after it reconnects and holds again at once, as the first did."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome, record_outcome
+    from caos.store.runs import start_attempt
+    from caos.store.work import claim_run
+
+    run = enqueued
+    pauses: list[float] = []
+    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    node = run.route.nodes[0].route_node_id
+    lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
+    attempt = start_attempt(run.conn, run.run_id, node, lease=lease)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    worker_conn = connect(empty_database)
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+    seen: list[bool] = []
+
+    def cut_twice(
+        conn: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome
+    ) -> bool:
+        seen.append(_hold_is_taken(empty_database, attempt_id))
+        if len(seen) < 3:
+            conn.close()
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+        return record_outcome(conn, attempt_id=attempt_id, outcome=outcome)
+
+    monkeypatch.setattr(canonical, "record_outcome", cut_twice)
+    canonical.bill(worker_conn, attempt, outcome)
+    assert seen == [False, True, True]
+    assert pauses == []
+    assert count(run.conn, "call_outcomes", run.run_id) == 1
+
+
 def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
     enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
