@@ -129,9 +129,7 @@ def test_the_default_run_ceiling_finishes_the_widest_profile() -> None:
     assert PRICE == values["model_price"]
 
 
-def test_the_default_run_ceiling_covers_the_widest_profile_and_three_guided_retries() -> (
-    None
-):
+def test_the_default_run_ceiling_holds_the_widest_profile_and_three_retries() -> None:
     """R6 (D152, N129): D82 allows three guided retries per node, each a full
     worst-case call, so the default must hold the widest profile plus three
     (96.12 + 3 x 22.61 = 163.95); 120.00 held only one, and a FULL node needing
