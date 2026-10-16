@@ -6,7 +6,7 @@ import os
 import re
 import sys
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit, urlunsplit
@@ -190,8 +190,40 @@ def _development_edge() -> Iterator[None]:
             os.environ[name] = value
 
 
+def _refuse_run_hooks_from_tests(config: pytest.Config) -> None:
+    """End the session if a conftest or a module under tests/ implements a
+    hook that replaces how a test runs or is judged (N109): a
+    `pytest_pyfunc_call` returning True passes `assert False` unrun. The
+    static gate refuses the spellings it can read; this reads what pytest
+    registered. A fixture that rebinds `request.node.runtest` is a limit it
+    does not close."""
+    tests = Path(__file__).resolve().parent
+    for hook in (
+        "pytest_pyfunc_call",
+        "pytest_runtest_protocol",
+        "pytest_runtest_call",
+        "pytest_runtest_makereport",
+        "pytest_report_teststatus",
+    ):
+        for impl in getattr(config.pluginmanager.hook, hook).get_hookimpls():
+            code = getattr(impl.function, "__code__", None)
+            filename = (
+                code.co_filename if code else getattr(impl.plugin, "__file__", "")
+            )
+            if not filename:
+                continue
+            source = Path(filename).resolve()
+            if source.name == "conftest.py" or source.is_relative_to(tests):
+                pytest.exit(
+                    f"{hook} is implemented by {impl.plugin_name} ({source.name}); "
+                    "a conftest or test module may not replace how a test runs",
+                    returncode=3,
+                )
+
+
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Reap leaked databases once: the controller under xdist, never a worker."""
+    _refuse_run_hooks_from_tests(session.config)
     if POSTGRES_URL and not hasattr(session.config, "workerinput"):
         reap_session(POSTGRES_URL)
 
@@ -205,6 +237,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
+    _refuse_run_hooks_from_tests(config)
     live = [item for item in items if item.get_closest_marker("live_provider")]
     if not config.getoption("--live-provider"):
         items[:] = [item for item in items if item not in live]
@@ -469,7 +502,8 @@ def recorded_statements(conn: object) -> Iterator[list[str]]:
     try:
         yield statements
     finally:
-        vars(store).pop("execute", None)
+        with suppress(AttributeError):
+            del store.execute
 
 
 def every_block(conn: object, *sources: UUID) -> dict[UUID, frozenset[str]]:

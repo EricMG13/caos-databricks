@@ -893,7 +893,10 @@ def test_a_conftest_hook_that_can_pass_a_test_is_refused(tmp_path: Path) -> None
     """N109: a conftest.py can define `pytest_pyfunc_call` or
     `pytest_runtest_protocol`, return True and pass a test without running
     it. Every `pytest_*` binding and every `pytest_plugins` in a conftest
-    but the pinned ones is refused, whatever statement form binds it."""
+    but the pinned ones is refused in the statement forms the AST reads (a
+    def, an async def, an assignment, an import alias, nested or not). The
+    runtime guard covers what a name list cannot; a fixture that rebinds
+    `request.node.runtest` is a named limit, open to any test module."""
     root = _tree(tmp_path)
     assert check_gate_config._collection_hook_problems(root) == []
     refused = "it can change what pytest collects or runs"
@@ -977,7 +980,9 @@ def test_a_second_hook_in_the_pinned_conftest_or_a_root_conftest_is_refused(
 
 
 def test_a_conftest_that_registers_a_hook_by_name_is_refused(tmp_path: Path) -> None:
-    """N109: a hook can also be installed without a `pytest_` binding."""
+    """N109: a hook can also be installed without a `pytest_` binding, through
+    the namespace, the plugin manager or frames (the static list; the runtime
+    guard reads what pytest registered)."""
     root = _tree(tmp_path)
     for index, text in enumerate(
         (
