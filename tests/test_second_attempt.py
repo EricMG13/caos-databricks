@@ -1264,7 +1264,7 @@ def _padded_past_the_handoff_bound(markdown: str) -> str:
         ),
         (
             lambda md: md.replace("was recorded.", "SECRETMARK" + " " * 257 + "x", 1),
-            "a run of more than 256 spaces or tabs",
+            "a run of more than 256 whitespace characters",
         ),
         (
             lambda md: md.replace(

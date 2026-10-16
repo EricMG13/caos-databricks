@@ -12,8 +12,7 @@ the vendor's validator cannot read says so (N218 8).
 from __future__ import annotations
 
 import json
-import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any
@@ -561,12 +560,36 @@ def _slow_heading(char: str, count: int = 16_000) -> str:
     )
 
 
-def test_a_control_run_heading_gets_no_keep_line_and_returns_fast() -> None:
+def _vendor_reads() -> tuple[VendorContract, list[str]]:
+    """A contract whose register locator records its calls and delegates, so a
+    test can tell that a host bound refused a text before the vendor's
+    quadratic expressions met it: deterministic, where a wall-clock limit
+    flakes on a loaded runner (N197)."""
+    reads: list[str] = []
+    real = CONTRACT.completeness_check
+
+    def find_registers(
+        text: str, registers: Sequence[str], retired: Sequence[str]
+    ) -> object:
+        reads.append("find_registers")
+        return real.find_registers(text, registers, retired)
+
+    checker = SimpleNamespace(
+        load_contract=real.load_contract, find_registers=find_registers
+    )
+    return replace(CONTRACT, completeness_check=checker), reads
+
+
+def test_a_control_run_heading_gets_no_keep_line_and_never_meets_the_vendor() -> None:
     markdown = _slow_heading("\x1f")
-    started = time.perf_counter()
-    assert _kept(markdown) is None
+    contract, reads = _vendor_reads()
+    skill = _skill("CP-3C")
+    assert kept_registers_line(contract, "CP-3C", _body(markdown), skill) is None
     assert handoff._readable(_body(markdown)) is None
-    assert time.perf_counter() - started < 1.0
+    assert reads == []
+    # The spy is live: a sound text does reach the vendor's locator.
+    assert kept_registers_line(contract, "CP-3C", _body(_t3d2("plain\n")), skill)
+    assert reads == ["find_registers"]
 
 
 def test_a_control_character_alone_withholds_the_keep_line() -> None:
@@ -582,12 +605,15 @@ def test_a_carriage_return_or_non_nfc_alone_keeps_the_keep_line() -> None:
 @pytest.mark.parametrize("char", ["\u3000", "\u00a0", "\x1f", "\u2003"])
 def test_a_run_of_any_whitespace_is_a_host_bound(char: str) -> None:
     markdown = _slow_heading(char)
-    started = time.perf_counter()
+    contract, reads = _vendor_reads()
     assert handoff._readable(_body(markdown)) is None
+    assert (
+        kept_registers_line(contract, "CP-3C", _body(markdown), _skill("CP-3C")) is None
+    )
     with pytest.raises(Refusal) as refused:
         handoff._text(markdown.encode())
     assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
-    assert time.perf_counter() - started < 1.0
+    assert reads == []  # refused by a host bound before the vendor's expressions
     run = handoff.MAX_WHITESPACE_RUN
     assert handoff._run_bound("x" + char * (run + 1)).startswith("a line carries")
     assert handoff._run_bound("x" + char * run) == ""
