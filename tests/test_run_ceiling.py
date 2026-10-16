@@ -129,6 +129,20 @@ def test_the_default_run_ceiling_finishes_the_widest_profile() -> None:
     assert PRICE == values["model_price"]
 
 
+def test_the_default_run_ceiling_covers_the_widest_profile_and_three_guided_retries() -> (
+    None
+):
+    """R6 (D152, N129): D82 allows three guided retries per node, each a full
+    worst-case call, so the default must hold the widest profile plus three
+    (96.12 + 3 x 22.61 = 163.95); 120.00 held only one, and a FULL node needing
+    a second failed closed `BUDGET_CEILING_REACHED`. The owner set 165.00."""
+    values = bundle_defaults.defaults()
+    price = price_from_environment(values["model_endpoint"], values["model_price"])
+    default = Decimal(values["run_ceiling"])
+    assert default == Decimal("165.00")
+    assert default >= _widest_profile_spend(price) + 3 * worst_case(price), default
+
+
 @pytest.mark.parametrize(
     "value",
     [
