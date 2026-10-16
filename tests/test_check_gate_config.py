@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -467,6 +470,147 @@ def test_a_job_if_for_an_optional_job_is_not_refused(tmp_path: Path) -> None:
     assert check_gate_config._ci_problems(root) == [
         f"ci: {check_gate_config.PR_SIZE!r} runs only when its job's if: allows it"
     ]
+
+
+def test_the_namespace_and_import_routes_to_a_hook_are_refused(tmp_path: Path) -> None:
+    """N109 review: `vars()`, `exec`, `__import__`, frame access, a star
+    import and a PEP 562 module `__getattr__` each install a hook with no
+    `pytest_` binding. The runtime guard is the sturdy answer; these are
+    the routes the static gate still names."""
+    root = _tree(tmp_path)
+    for index, text in enumerate(
+        (
+            "vars()['pytest_' + 'pyfunc_call'] = lambda pyfuncitem: True\n",
+            "locals()['x'] = 1\n",
+            "exec('def pytest_pyfunc_call(pyfuncitem): return True')\n",
+            "eval('1')\n",
+            "compile('1', 'x', 'eval')\n",
+            "__import__('builtins')\n",
+            "import sys\nsys._getframe().f_globals['x'] = 1\n",
+            "from helper import *\n",
+            "def __getattr__(name):\n    return None\n",
+            "def __dir__():\n    return ['pytest_pyfunc_call']\n",
+        )
+    ):
+        name = f"tests/route{index}/conftest.py"
+        problems = _conftest_problems(root, name, text)
+        assert any(problem.startswith(f"conftest: {name} ") for problem in problems), (
+            text,
+            problems,
+        )
+
+
+def test_every_binding_of_pytest_plugins_must_be_the_one_pinned_assignment(
+    tmp_path: Path,
+) -> None:
+    """N109 review: `+=`, an annotated assignment and a tuple target each
+    bind `pytest_plugins` yet left the plain pinned assignment standing."""
+    root = _tree(tmp_path)
+    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    for extra in (
+        "\npytest_plugins += ('evil',)\n",
+        "\npytest_plugins: tuple[str, ...] = ('evil',)\n",
+        "\npytest_plugins, _z = ('evil',), 1\n",
+        "\nfor pytest_plugins in [('evil',)]:\n    pass\n",
+    ):
+        problems = _conftest_problems(root, "tests/conftest.py", original + extra)
+        assert any(
+            "conftest: tests/conftest.py sets pytest_plugins" in problem
+            for problem in problems
+        ), (extra, problems)
+    assert _conftest_problems(root, "tests/conftest.py", original) == []
+
+
+def test_pinned_hooks_are_compared_by_their_committed_source_text(
+    tmp_path: Path,
+) -> None:
+    """N109 review: the pin is the source text, readable on a mismatch, and a
+    decorator (`@pytest.hookimpl(tryfirst=True)`) changes a hook's order."""
+    root = _tree(tmp_path)
+    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    for name in check_gate_config.PINNED_CONFTEST_HOOKS:
+        assert check_gate_config.PINNED_CONFTEST_HOOKS[name] in original
+    decorated = original.replace(
+        "def pytest_addoption(",
+        "@pytest.hookimpl(tryfirst=True)\ndef pytest_addoption(",
+    )
+    assert decorated != original
+    assert (
+        "conftest: tests/conftest.py's pytest_addoption no longer matches what is "
+        "committed"
+    ) in _conftest_problems(root, "tests/conftest.py", decorated)
+    removed = original.replace("def _refuse_run_hooks_from_tests(", "def _renamed(")
+    assert removed != original
+    assert any(
+        "_refuse_run_hooks_from_tests" in problem
+        for problem in _conftest_problems(root, "tests/conftest.py", removed)
+    )
+
+
+_GUARD_PROJECT_TEST = "def test_a():\n    assert False\n"
+
+
+def _guard_project(
+    tmp_path: Path, *, hook_in: str | None
+) -> subprocess.CompletedProcess[str]:
+    """A throwaway project whose root conftest carries the repository's own
+    runtime guard, with a hook replacing how a test runs placed in a plugin
+    (`-p`), a nested conftest or nowhere, over one test that fails."""
+    source = (REPO / "tests" / "conftest.py").read_text(encoding="utf-8")
+    [guard] = [
+        ast.get_source_segment(source, node)
+        for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_refuse_run_hooks_from_tests"
+    ]
+    project = tmp_path / "project"
+    (project / "sub").mkdir(parents=True)
+    (project / "conftest.py").write_text(
+        "from pathlib import Path\n\nimport pytest\n\n\n"
+        f"{guard}\n\n\n"
+        "def pytest_sessionstart(session):\n"
+        "    _refuse_run_hooks_from_tests(session.config)\n\n\n"
+        "def pytest_collection_modifyitems(config, items):\n"
+        "    _refuse_run_hooks_from_tests(config)\n",
+        encoding="utf-8",
+    )
+    (project / "sub" / "test_a.py").write_text(_GUARD_PROJECT_TEST)
+    bad = "def pytest_pyfunc_call(pyfuncitem):\n    return True\n"
+    arguments = ["-p", "no:cacheprovider"]
+    if hook_in == "plugin":
+        (project / "hooks_plugin.py").write_text(bad)
+        arguments += ["-p", "hooks_plugin"]
+    elif hook_in == "nested":
+        (project / "sub" / "conftest.py").write_text(bad)
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")
+    }
+    environment["PYTHONPATH"] = str(project)
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", *arguments, "-q", "sub"],
+        cwd=project,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_the_runtime_guard_ends_a_session_that_replaces_how_a_test_runs(
+    tmp_path: Path,
+) -> None:
+    """N109 review: a conftest or a plugin module that implements
+    `pytest_pyfunc_call` can return True and pass `assert False`; the guard in
+    the pinned conftest ends the session, naming the hook, before it can. A
+    clean session is untouched."""
+    clean = _guard_project(tmp_path / "clean", hook_in=None)
+    assert "1 failed" in clean.stdout, clean.stdout + clean.stderr
+    for where in ("plugin", "nested"):
+        ended = _guard_project(tmp_path / where, hook_in=where)
+        output = ended.stdout + ended.stderr
+        assert "pytest_pyfunc_call is implemented by" in output, output
+        assert "passed" not in output, output
+        assert ended.returncode != 0
 
 
 def _edit_ci(root: Path, edit: Callable[[dict[str, Any]], None]) -> None:
