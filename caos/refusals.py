@@ -33,9 +33,12 @@ class RefusalCode(StrEnum):
     RUN_TERMINAL_STALE = "RUN_TERMINAL_STALE"
     ATTEMPT_NOT_FOUND = "ATTEMPT_NOT_FOUND"
     ATTEMPT_LIMIT_REACHED = "ATTEMPT_LIMIT_REACHED"
-    # An earlier attempt at the node may still be billed, or its bill is owed
-    # the verdict the next pass gives: nothing new is paid for until it is.
+    # An earlier attempt at the node may still be billed by a session that holds
+    # its call: nothing new is paid for until it is.
     ATTEMPT_UNSETTLED = "ATTEMPT_UNSETTLED"
+    # The same node, but the earlier attempt is already billed: the bill landed
+    # as this pass started, and the next pass replays it at once (N116).
+    ATTEMPT_BILL_OWED = "ATTEMPT_BILL_OWED"
     CALL_OUTCOME_INVALID = "CALL_OUTCOME_INVALID"
     CALL_OUTCOME_CONFLICT = "CALL_OUTCOME_CONFLICT"
     CALL_OUTCOME_LEGACY = "CALL_OUTCOME_LEGACY"

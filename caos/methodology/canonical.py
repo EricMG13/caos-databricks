@@ -500,16 +500,19 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
     Two windows stay. The attempt is unheld from the loss of the old session
     to the new hold's lock round trip (a connect with no connect timeout of
     its own, then one statement; `idle_session_timeout` is off for these
-    sessions, so idleness never ends them). And after `BILL_TRIES` failed
-    writes, `BILL_PAUSE_SECONDS` apart (a few seconds, a small share of the
-    lease's liveness budget), the bill is abandoned with no session left to
-    hold the attempt, so the next claim may start the node once more under a
+    sessions, so idleness never ends them). And once the tries are spent
+    (`BILL_TRIES` writes, `BILL_PAUSE_SECONDS` apart -- a few seconds, a small
+    share of the lease's liveness budget -- and up to `BILL_TRIES` more after
+    cuts, below), the bill is abandoned with no session left to hold the
+    attempt, so the next claim may start the node once more under a
     reservation of its own (invariant 8); nothing can be written to a store
     that is down, and a longer wait would hold the run's lease for it. The
-    second is inherent to a store that cannot be reached; the first is
-    shortened, never lengthened, by a backend still holding the old hold: the
-    replacement asks for its hold without waiting for it (`wait=False`) and
-    writes whether or not it got it. Both are bounded by tests.
+    second is inherent to a store that cannot be reached. The first is not
+    lengthened by a backend still holding the old hold: the replacement asks
+    for its hold without waiting for it (`wait=False`) and writes whether or
+    not it got it. That leaves the node unheld by this session, though, if
+    the try fails and the old backend then dies before the write commits:
+    no one holds it until the write lands. Both are bounded by tests.
 
     A fault that took its session away is answered by the reconnect at once
     and costs no try: a store that then stays down is paused for

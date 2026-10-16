@@ -169,7 +169,7 @@ def test_a_run_refused_for_an_owed_bill_keeps_its_place_to_be_replayed_at_once(
         worker._refused(conn, lease, Refusal(RefusalCode.ATTEMPT_BILL_OWED))
     again = claim_run(conn, worker=CONFIG.worker, lease_seconds=LEASE_SECONDS)
     assert again is not None and again.run_id == first.run_id
-    assert work_row(conn, first.run_id)[0] == "RUNNING", "released, not parked"
+    assert work_row(conn, first.run_id)[0] == "CLAIMED", "released, not parked"
 
 
 def test_worker_drives_an_enqueued_lite_run_to_complete_with_a_deterministic_provider(

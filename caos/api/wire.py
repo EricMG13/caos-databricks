@@ -195,6 +195,7 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.ATTEMPT_UNSETTLED: (
         "Nothing; the node is tried again once its last attempt settles."
     ),
+    _C.ATTEMPT_BILL_OWED: "Nothing; the next pass settles the bill that landed.",
     _C.STREAM_LIMIT_REACHED: "Close a tail already open, or retry shortly.",
     _C.CALL_OUTCOME_INVALID: "Record a well-formed call outcome.",
     _C.CALL_OUTCOME_CONFLICT: "Nothing; a different outcome is already recorded.",
