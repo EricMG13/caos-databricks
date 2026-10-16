@@ -2472,8 +2472,63 @@ def _t8_messages(
     try:
         nav.parse_t8(text, nav.validate_catalog(catalog))
     except ValueError as refused:  # the vendor's NavigationError
-        return [("navigation", _vendor_said(refused))]
+        return [("navigation", _t8_without_values(contract, catalog, text, refused))]
     return []
+
+
+def _t8_without_values(
+    contract: VendorContract,
+    catalog: Mapping[str, Any],
+    text: str,
+    refused: ValueError,
+) -> str | None:
+    """The T8 parser's message with the answer's own values withheld (N73,
+    D152 R1; F292's rule): a quoted value (`{readiness!r}`) becomes
+    `WITHHELD_VALUE`, and the module id a row's fault leads or ends with
+    (`{id}: ...`, `... module: {id}`) becomes `row N`, N the data row the
+    parser refused (found by parsing the table a row at a time). The fault
+    stays, so the second attempt knows what to fix."""
+    nav = contract.navigation
+    message = _without_values(_vendor_said(refused))
+    row = _t8_fault_row(contract, catalog, text)
+    if message is None or row is None:
+        return message
+    lines = nav._unfenced_lines(text)
+    cells = nav._table_cells(lines[row[0]])
+    with suppress(Exception):
+        module_id = nav._plain_value(cells[1])
+        place = f"row {row[1]}"
+        if module_id and message.startswith(module_id):
+            return place + message[len(module_id) :]
+        if module_id and message.endswith(module_id):
+            return message[: -len(module_id)] + place
+    return message
+
+
+def _t8_fault_row(
+    contract: VendorContract, catalog: Mapping[str, Any], text: str
+) -> tuple[int, int] | None:
+    """The refused row of CP-0's T8 table as (its index among the unfenced
+    lines, its 1-based place among the data rows): the first row after which
+    the parser, given the table cut there, refuses. Nothing when the table
+    cannot be located or the parser refuses before any row."""
+    nav = contract.navigation
+    with suppress(Exception):
+        lines = nav._unfenced_lines(text)
+        head = next(
+            n
+            for n, line in enumerate(lines)
+            if nav._matching_header(nav._table_cells(line)) is not None
+        )
+        checked = nav.validate_catalog(catalog)
+        for place, index in enumerate(range(head + 2, len(lines)), start=1):
+            if not nav._table_cells(lines[index]):
+                break
+            try:
+                nav.parse_t8("\n".join((*lines[: index + 1], "")), checked)
+            except ValueError:
+                return index, place
+    return None
 
 
 def _vendor_said(refused: ValueError) -> str | None:
