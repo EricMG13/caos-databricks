@@ -1480,6 +1480,14 @@ def _fiscal_year_of(spec: _Spec, register: _Register) -> str | None:
     )
 
 
+def _with_length(total: Cell, days: int | None) -> Cell:
+    """`total`, with a figure, noted `odd_length` of the days it spans."""
+    length = odd_length(days)
+    if total.value is None or length is None:
+        return total
+    return replace(total, note=join_notes((total.note, length)))
+
+
 def _window_days(
     found: list[_Spec], periods: Mapping[str | None, PeriodRow]
 ) -> int | None:
@@ -1524,10 +1532,7 @@ def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
             for name, (cell, sign) in zip(names, quarters, strict=True)
         ),
     )
-    length = odd_length(window.days)
-    if total.value is None or length is None:
-        return total
-    return replace(total, note=join_notes((total.note, length)))
+    return _with_length(total, window.days)
 
 
 def _some_unstated(cells: list[tuple[Cell, int]]) -> bool:

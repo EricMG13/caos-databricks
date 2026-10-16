@@ -548,6 +548,20 @@ def _held(row: FacilityRow, opening: Decimal | None, currency: str) -> Cell:
     return _balance_cell(opening, FOREIGN if row.currency != currency else HELD_FLAT)
 
 
+def _read_flags(
+    flags: tuple[bool, bool],
+    rate: Decimal | None,
+    opening: Decimal | None,
+    rate_note: str | None,
+) -> tuple[bool, bool]:
+    """`flags` (a coupon read as a fraction, a spread or floor read as basis
+    points), set by a drawn, priced facility whose rate is noted so."""
+    if rate is None or not opening:
+        return flags
+    found = notes_of(rate_note)
+    return flags[0] or COUPON_AS_FRACTION in found, flags[1] or TERMS_AS_BPS in found
+
+
 def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
     """Each facility's closing balance after the year's amortisation."""
     currency = ctx.regs.currency
@@ -587,14 +601,7 @@ def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
             secured.append((cells[key], 1))
         scheduled.append((_balance_cell(paid, None), 1))
         rated.append((opening, rate))
-        fraction = fraction or (
-            rate is not None
-            and bool(opening)
-            and COUPON_AS_FRACTION in notes_of(rate_note)
-        )
-        bps = bps or (
-            rate is not None and bool(opening) and TERMS_AS_BPS in notes_of(rate_note)
-        )
+        fraction, bps = _read_flags((fraction, bps), rate, opening, rate_note)
         in_total.append((cells[key], 1))
     return _Schedule(
         cells,
