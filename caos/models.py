@@ -39,6 +39,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from openai import APIConnectionError, OpenAIError
 
 from caos import copilot
+from caos.copilot import identity_of as identity_of
 
 # The configuration names live beside the price they configure, so the API,
 # which may not import this module (D4), reads them too.
@@ -67,7 +68,6 @@ from caos.provider import (
 from caos.refusals import Refusal, RefusalCode
 from caos.store.outcomes import producer_identifier
 
-PLATFORM = "databricks"
 HOST_MINTED = "host-"
 # A 429 reached no model, so it is asked again under the same reservation
 # (DP-5): this many tries in all, waiting `Retry-After` up to the cap.
@@ -86,23 +86,6 @@ RETRY_AFTER_CAP_SECONDS = 20.0
 MIN_RESEND_SECONDS = TIMEOUT_SECONDS / 2
 _sleep = time.sleep
 _clock = time.monotonic
-
-
-def identity_of(model: str, reasoning_effort: str | None = None) -> str:
-    """The execution profile a verdict binds (D8), from the names alone, so a
-    caller can refuse an unexpected one before any client is built. A Copilot
-    model names its own platform, its runtime model id, the effort its name
-    pins and its output cap (D77), so it qualifies apart from the same model
-    on a gateway; a Copilot name that does not parse, or whose transport is
-    not built, is refused `PROVIDER_NOT_CONFIGURED`."""
-    target = copilot.parsed(model)
-    if target is None:
-        parts = (PLATFORM, model, reasoning_effort or "none")
-        cap = MAX_COMPLETION_TOKENS
-    else:
-        parts = (target.platform, target.name, target.reasoning_effort or "none")
-        cap = copilot.output_cap(model)
-    return "/".join((*parts, str(cap)))
 
 
 def chat_model(*, endpoint: str | None = None) -> BaseChatModel:
