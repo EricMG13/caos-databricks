@@ -20,5 +20,12 @@
     "types": ["node", "vitest/globals", "@testing-library/jest-dom/vitest"],
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src", "tests", "vite.config.ts", "demo-fixtures.ts", "vitest.config.ts", "playwright.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    "vite.config.ts",
+    "demo-fixtures.ts",
+    "vitest.config.ts",
+    "playwright.config.ts"
+  ]
 }

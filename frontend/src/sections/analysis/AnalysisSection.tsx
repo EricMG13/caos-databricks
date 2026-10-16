@@ -46,7 +46,7 @@ const HEADER_TAG: Record<Severity, string> = {
   IDLE: "warn",
 };
 
-const SCREENING_NOTICE ="Screening only: a screen, not committee clearance.";
+const SCREENING_NOTICE = "Screening only: a screen, not committee clearance.";
 
 type Handoffs = AnalysisDocument["body"]["handoffs"];
 
@@ -326,10 +326,7 @@ function ModuleView({
           <span className="code">{handoff.module_id}</span>
         )}
         <span className="right">
-          <span
-            className={`tag ${HEADER_TAG[severity]}`}
-            data-qa-status
-          >
+          <span className={`tag ${HEADER_TAG[severity]}`} data-qa-status>
             {handoff.qa_status}
           </span>
         </span>
