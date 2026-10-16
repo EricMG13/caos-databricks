@@ -49,6 +49,7 @@ def _tree(tmp_path: Path) -> Path:
         ".github/workflows/gitleaks.yml",
         ".github/workflows/secrets-weekly.yml",
         "tests/conftest.py",
+        *(f"tests/{module}.py" for module in check_gate_config.PYTEST_PLUGINS_PIN),
     ):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / name, root / name)

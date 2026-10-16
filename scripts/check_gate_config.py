@@ -27,11 +27,13 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib.util
+import io
 import json
 import re
 import shlex
 import sys
 import tempfile
+import tokenize
 import tomllib
 from collections.abc import Callable, Iterable, Iterator
 from hashlib import sha256
@@ -260,7 +262,7 @@ COLLECTION_HOOKS = frozenset(
 # does not cover: no hook, no `pytest_plugins`, no `del`, no attribute or
 # item store, no dynamic route.
 PYTEST_PLUGINS_PIN = ("test_lite_deep_research_route",)
-CONFTEST_PIN = "da9f0c89d83247e425b9e79580f39190436a2270120538d15ca12416a0d86ebd"
+CONFTEST_PIN = "664d99d52e80e8b13ac8a34be6c68f4dca51d409785540dd8692877766b404ba"
 # Names a conftest uses to install a hook without binding a `pytest_` name:
 # the module namespace, the plugin manager, frames and PEP 562 module
 # attributes, and the builtins that run or rebuild code, each as a name or
@@ -734,22 +736,26 @@ def _collection_hook_problems(root: Path) -> list[str]:
 
     `tests/conftest.py` is pinned whole by digest. Every other conftest.py
     (at the root or anywhere under `tests/`) and the module the pinned
-    `pytest_plugins` names are read as an AST and refused for a `pytest_*`
-    binding, `collect_ignore`, any `pytest_plugins`, a `del`, an attribute or
-    item store, a star import, or a name that rebuilds a namespace or runs
-    code (`CONFTEST_DYNAMIC_*`). This is not a proof. The pinned conftest ends
-    a session at run time when a conftest or test module implements a hook
-    that runs a test. Its limit: the gate reads only these files, and any
-    code run by a module it does not read (a helper a conftest imports, at
-    import or later) can rewrite the guard's names (`_EXIT`) or register a
-    hook into a conftest's namespace through `sys.modules` or a frame before
-    the guard runs; a fixture can also rebind `request.node.runtest` from any
-    test module. Review of what a conftest imports is the control for both.
+    `pytest_plugins` names are read as their bytes decode, as the importer
+    reads them (a coding cookie other than utf-8 is refused by
+    `_encoding_problems`), and refused for a `pytest_*` binding,
+    `collect_ignore`, any `pytest_plugins`, a `del`, an attribute or item
+    store, a star import, or a name that rebuilds a namespace or runs code
+    (`CONFTEST_DYNAMIC_*`). This is not a proof. The pinned conftest ends a
+    session at run time when a conftest or test module implements a hook that
+    runs a test. Its limit: the gate reads only these files, and any code run
+    by a module it does not read -- a helper a conftest imports, a test
+    module, a fixture -- at import or at any later time (including
+    `config.pluginmanager.register` after both guard calls) can rewrite the
+    guard (`_EXIT`), register a hook, or rebind `request.node.runtest`.
+    Nothing here closes that; review of such code is the control.
     """
     problems: list[str] = []
     names = tracked_files(
         root, "conftest.py", "tests/conftest.py", ":(glob)tests/**/conftest.py"
     )
+    if "tests/conftest.py" in names:
+        names += [f"tests/{module}.py" for module in PYTEST_PLUGINS_PIN]
     for name in dict.fromkeys(names):
         if name == "tests/conftest.py":
             problems += _pinned_conftest_problems(root)
@@ -759,12 +765,6 @@ def _collection_hook_problems(root: Path) -> list[str]:
             problems.append(f"conftest: {name} could not be parsed")
             continue
         problems += _conftest_tree_problems(name, tree)
-    if "tests/conftest.py" in names:
-        for module in PYTEST_PLUGINS_PIN:
-            plugin = f"tests/{module}.py"
-            tree = _parsed(root, plugin)
-            if tree is not None:
-                problems += _conftest_tree_problems(plugin, tree)
     return problems
 
 
@@ -782,10 +782,50 @@ def _pinned_conftest_problems(root: Path) -> list[str]:
 
 
 def _parsed(root: Path, name: str) -> ast.Module | None:
+    """The module as the importer reads it: from its bytes, so a PEP 263
+    coding cookie decodes the same code pytest would run. Bytes that do not
+    decode are a SyntaxError here, so None, never an uncaught decode error."""
     try:
-        return ast.parse((root / name).read_text(encoding="utf-8"), filename=name)
+        return ast.parse((root / name).read_bytes(), filename=name)
     except (OSError, SyntaxError):
         return None
+
+
+# What a text read with `encoding="utf-8"` and the importer agree on. Any
+# other PEP 263 cookie lets one file carry code (a hook) or a comment (a
+# `noqa`) that every gate reading it as utf-8 text cannot see.
+UTF8_ENCODINGS = frozenset({"utf-8", "utf-8-sig"})
+
+
+def _encoding_problems(root: Path) -> list[str]:
+    """Every tracked .py file declares utf-8 or nothing and decodes as it."""
+    problems: list[str] = []
+    for name in tracked_files(root, "*.py"):
+        problem = _file_encoding_problem(root / name)
+        if problem:
+            problems.append(f"encoding: {name} {problem}")
+    return problems
+
+
+def _file_encoding_problem(path: Path) -> str | None:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return "could not be read"
+    try:
+        encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
+    except SyntaxError:
+        return "declares an encoding Python cannot read"
+    if encoding not in UTF8_ENCODINGS:
+        return (
+            f"declares {encoding}; a coding cookie other than utf-8 hides code "
+            "from every gate that reads the file as text"
+        )
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "could not be read as utf-8"
+    return None
 
 
 def _conftest_tree_problems(name: str, tree: ast.Module) -> list[str]:
@@ -1618,6 +1658,7 @@ def configuration_problems(root: Path = REPO) -> list[str]:
         + _python_problems(root, project)
         + _hook_problems(root)
         + _gitleaks_ci_problems(root)
+        + _encoding_problems(root)
         + _collection_hook_problems(root)
         + _parity_problems(root)
         + _bundle_problems(root)
