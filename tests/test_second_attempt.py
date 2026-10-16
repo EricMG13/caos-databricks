@@ -1650,6 +1650,46 @@ def test_the_field_line_stays_within_the_line_limit() -> None:
     _refused_malformed(body)
 
 
+def test_a_page_at_the_largest_whole_number_is_no_field_fault() -> None:
+    body = _field_body(2, page={2: MAX_PAGE})
+    parse_response(body)
+    assert not any("a page that is not" in line for line in _field_lines(body))
+
+
+def test_the_transport_limit_refuses_one_character_past_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from caos.methodology import handoff
+
+    body = _field_body(2, page={2: 2})
+    monkeypatch.setattr(handoff, "MAX_TRANSPORT_CHARS", len(body) + 3)
+    parse_response(body + "   ")  # exactly the limit: JSON whitespace
+    _refused_malformed(body + "    ")  # one past it
+
+
+def test_an_empty_citation_list_is_malformed_and_gets_the_shape_line() -> None:
+    gate = identity("CP-0")
+    body = wire(handoff_markdown(gate), [])
+    _refused_malformed(body)
+    assert carried_answer(body) is None
+    [line] = _field_lines(body)
+    assert line.startswith("host transport check: the answer is not the JSON")
+
+
+def test_the_field_line_is_never_empty_when_no_shortening_fits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from caos.methodology import handoff
+
+    monkeypatch.setattr(handoff, "MAX_FEEDBACK_CHARS", 10)
+    body = _field_body(3, page={1: 0, 2: 0})
+    assert _field_lines(body) == (
+        "host citation check: citations 1 and 1 more have a page that is not a"
+        " whole number from 1 to 2,147,483,647 (numbered from 1 in the order"
+        " given)",
+    )
+
+
 def test_a_shape_fault_still_wins_over_a_citation_field_fault() -> None:
     gate = identity("CP-0")
     markdown = with_markers(handoff_markdown(gate), 2)
