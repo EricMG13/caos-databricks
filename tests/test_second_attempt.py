@@ -1659,8 +1659,10 @@ def test_a_shape_fault_still_wins_over_a_citation_field_fault() -> None:
         wire(markdown, [bad, {"source_id": good["source_id"], "page": 1}]),
         wire(markdown, [bad, {**good, "extra": 1}]),
         json.dumps({"canonical_markdown": 5, "citations": [bad, good]}),
+        json.dumps({"canonical_markdown": "\ud800", "citations": [bad, good]}),
     ]
     for body in shapes:
+        assert carried_answer(body) is None
         [line] = _field_lines(body)
         assert line.startswith("host transport check: the answer is not the JSON")
         _refused_malformed(body)
