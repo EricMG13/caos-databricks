@@ -473,56 +473,6 @@ def test_a_job_if_for_an_optional_job_is_not_refused(tmp_path: Path) -> None:
     ]
 
 
-def test_the_namespace_and_import_routes_to_a_hook_are_refused(tmp_path: Path) -> None:
-    """N109 review: `vars()`, `exec`, `__import__`, frame access, a star
-    import and a PEP 562 module `__getattr__` each install a hook with no
-    `pytest_` binding. The runtime guard is the sturdy answer; these are
-    the routes the static gate still names."""
-    root = _tree(tmp_path)
-    for index, text in enumerate(
-        (
-            "vars()['pytest_' + 'pyfunc_call'] = lambda pyfuncitem: True\n",
-            "locals()['x'] = 1\n",
-            "exec('def pytest_pyfunc_call(pyfuncitem): return True')\n",
-            "eval('1')\n",
-            "compile('1', 'x', 'eval')\n",
-            "__import__('builtins')\n",
-            "import sys\nsys._getframe().f_globals['x'] = 1\n",
-            "from helper import *\n",
-            "def __getattr__(name):\n    return None\n",
-            "def __dir__():\n    return ['pytest_pyfunc_call']\n",
-        )
-    ):
-        name = f"tests/route{index}/conftest.py"
-        problems = _conftest_problems(root, name, text)
-        assert any(problem.startswith(f"conftest: {name} ") for problem in problems), (
-            text,
-            problems,
-        )
-
-
-def test_every_binding_of_pytest_plugins_in_another_conftest_is_refused(
-    tmp_path: Path,
-) -> None:
-    """N109 review: `+=`, an annotated assignment, a tuple target and a loop
-    target each bind `pytest_plugins`."""
-    root = _tree(tmp_path)
-    for index, text in enumerate(
-        (
-            "pytest_plugins += ('evil',)\n",
-            "pytest_plugins: tuple[str, ...] = ('evil',)\n",
-            "pytest_plugins, _z = ('evil',), 1\n",
-            "for pytest_plugins in [('evil',)]:\n    pass\n",
-        )
-    ):
-        name = f"tests/binds{index}/conftest.py"
-        problems = _conftest_problems(root, name, text)
-        assert any(
-            problem.startswith(f"conftest: {name} sets pytest_plugins")
-            for problem in problems
-        ), (text, problems)
-
-
 _GUARD_PROJECT_TEST = "def test_a():\n    assert False\n"
 
 
@@ -610,27 +560,6 @@ def test_the_runtime_guard_ends_a_session_that_replaces_how_a_test_runs(
             assert ended.returncode != 0, (where, workers, output)
 
 
-def test_builtins_reached_by_attribute_are_refused(tmp_path: Path) -> None:
-    """N109 re-review: `builtins.exec(...)` and a computed `getattr` build a
-    hook as `exec` by name does."""
-    root = _tree(tmp_path)
-    for index, text in enumerate(
-        (
-            "import builtins\nbuiltins.exec('1')\n",
-            "import builtins\nbuiltins.eval('1')\n",
-            "import builtins\nbuiltins.compile('1', 'x', 'eval')\n",
-            "import builtins\ngetattr(builtins, 'ex' + 'ec')('1')\n",
-            "import builtins\ngetattr(builtins, 'exec')('1')\n",
-        )
-    ):
-        name = f"tests/attr{index}/conftest.py"
-        problems = _conftest_problems(root, name, text)
-        assert any(problem.startswith(f"conftest: {name} ") for problem in problems), (
-            text,
-            problems,
-        )
-
-
 def test_the_pinned_conftest_is_pinned_whole(tmp_path: Path) -> None:
     """N109 re-review: pinning each function by name left the module's other
     statements free to disarm the guard (`del` of a hook, a store on
@@ -655,14 +584,11 @@ def test_the_pinned_conftest_is_pinned_whole(tmp_path: Path) -> None:
         ), (extra, problems)
 
 
-def test_the_pytest_plugins_module_is_read_with_stores_refused(
-    tmp_path: Path,
-) -> None:
+def test_the_pytest_plugins_module_is_read_like_a_conftest(tmp_path: Path) -> None:
     """N109 re-review: the module the pinned `pytest_plugins` names is loaded
-    as a plugin before the guard runs, so a store into `sys.modules` or into
-    its own module object there disarms the guard and installs a hook with no
-    `pytest_` binding; it is read like every other conftest-loaded module the
-    pin does not cover, with stores refused. The committed module passes."""
+    as a plugin before the guard runs, so a store there (`sys.modules`, its
+    own module object) disarms the guard; it is read with stores refused, and
+    reported, not skipped, when it does not parse. The committed one passes."""
     root = _tree(tmp_path)
     [module] = check_gate_config.PYTEST_PLUGINS_PIN
     plugin = f"tests/{module}.py"
@@ -673,11 +599,13 @@ def test_the_pytest_plugins_module_is_read_with_stores_refused(
         '_sys.modules["conftest"]._EXIT = lambda *a, **k: None\n'
         "_sys.modules[__name__].pytest_pyfunc_call = lambda pyfuncitem: True\n"
     )
-    problems = _conftest_problems(root, plugin, tampered)
     assert any(
         problem.startswith(f"conftest: {plugin} stores into an attribute or item")
-        for problem in problems
-    ), problems
+        for problem in _conftest_problems(root, plugin, tampered)
+    )
+    assert f"conftest: {plugin} could not be parsed" in _conftest_problems(
+        root, plugin, "def (\n"
+    )
 
 
 def _tracked_bytes(root: Path, name: str, data: bytes) -> None:
@@ -690,85 +618,55 @@ def _tracked_bytes(root: Path, name: str, data: bytes) -> None:
 # A utf-7 conftest whose hook sits inside what a utf-8 read sees as one
 # comment line: `+AAo-` is a utf-7 newline, so the importer reads a `def`.
 _UTF7_HOOK = (
-    b"# coding: utf-7\n"
-    b'"""Probe conftest."""\n'
-    b"# +AAo-def pytest_pyfunc_call(pyfuncitem):+AAo-    return True\n"
+    b"# coding: utf-7\n# +AAo-def pytest_pyfunc_call(pyfuncitem):+AAo-    return True\n"
 )
 
 
 def test_a_coding_cookie_other_than_utf_8_is_refused_in_every_tracked_file(
     tmp_path: Path,
 ) -> None:
-    """N109 r4 re-review: Python's importer honours a PEP 263 coding cookie,
-    so a utf-7 file carries code that a utf-8 text read sees as a comment --
-    a hook in a conftest, or a `noqa` under the suppression budget. The gate
-    reads a conftest-loaded module as its bytes decode, as the importer
-    does, and refuses a cookie other than utf-8 in any tracked .py file."""
+    """N109 r4 re-review: the importer honours a PEP 263 cookie, so a utf-7
+    file carries code a utf-8 text read sees as a comment (a hook; a `noqa`
+    under the suppression budget). Conftest-loaded modules are read from
+    their bytes; a cookie other than utf-8 is refused in any tracked .py; an
+    unknown codec or bytes that do not decode are typed problems."""
     root = _tree(tmp_path)
     assert any(
         isinstance(node, ast.FunctionDef) and node.name == "pytest_pyfunc_call"
         for node in ast.parse(_UTF7_HOOK).body
     )
-    _tracked_bytes(root, "tests/zz/conftest.py", _UTF7_HOOK)
-    problems = check_gate_config._collection_hook_problems(root)
-    assert any(
-        problem.startswith("conftest: tests/zz/conftest.py defines pytest_pyfunc_call")
-        for problem in problems
-    ), problems
-    for name in ("scripts/u7.py", "caos/u7.py"):
-        _tracked_bytes(root, name, b"# coding: utf-7\n# +AAo-x = 1\n")
-    refused = check_gate_config._encoding_problems(root)
-    for name in ("tests/zz/conftest.py", "scripts/u7.py", "caos/u7.py"):
-        assert any(
-            problem.startswith(f"encoding: {name} declares utf-7") for problem in refused
-        ), (name, refused)
-    assert set(refused) <= set(check_gate_config.configuration_problems(root))
-
-
-def test_a_utf_8_cookie_passes_and_undecodable_bytes_are_a_typed_problem(
-    tmp_path: Path,
-) -> None:
-    """N109 r4 re-review: the one cookie the importer and a text read agree
-    on passes; bytes that do not decode, or an encoding Python has no codec
-    for, are each a typed problem, in the encoding check and in the conftest
-    read, never an uncaught decode error."""
-    root = _tree(tmp_path)
     _tracked_bytes(root, "scripts/declared.py", b"# -*- coding: utf-8 -*-\nx = 1\n")
     assert check_gate_config._encoding_problems(root) == []
+    _tracked_bytes(root, "tests/zz/conftest.py", _UTF7_HOOK)
+    for name in ("scripts/u7.py", "caos/u7.py"):
+        _tracked_bytes(root, name, b"# coding: utf-7\n# +AAo-x = 1\n")
     _tracked_bytes(root, "scripts/broken.py", b"# coding: utf-8\nx = '\xff'\n")
     _tracked_bytes(root, "scripts/unknown.py", b"# coding: no-such-codec\nx = 1\n")
     _tracked_bytes(root, "tests/broken/conftest.py", b"# coding: utf-8\n\xff\n")
-    problems = check_gate_config._encoding_problems(root)
-    assert "encoding: scripts/broken.py could not be read as utf-8" in problems
-    assert "encoding: tests/broken/conftest.py could not be read as utf-8" in problems
+    refused = check_gate_config._encoding_problems(root)
+    for name in ("tests/zz/conftest.py", "scripts/u7.py", "caos/u7.py"):
+        assert any(
+            problem.startswith(f"encoding: {name} declares utf-7")
+            for problem in refused
+        ), (name, refused)
+    assert "encoding: scripts/broken.py could not be read as utf-8" in refused
+    assert "encoding: tests/broken/conftest.py could not be read as utf-8" in refused
     assert (
         "encoding: scripts/unknown.py declares an encoding Python cannot read"
-        in problems
+        in refused
     )
-    assert (
-        "conftest: tests/broken/conftest.py could not be parsed"
-        in check_gate_config._collection_hook_problems(root)
-    )
-
-
-def test_a_pytest_plugins_module_that_does_not_parse_is_reported(
-    tmp_path: Path,
-) -> None:
-    """N109 r4 re-review: the module the pinned `pytest_plugins` names was
-    skipped silently when it did not parse; it is reported like any other
-    conftest-loaded module."""
-    root = _tree(tmp_path)
-    [module] = check_gate_config.PYTEST_PLUGINS_PIN
-    plugin = f"tests/{module}.py"
-    assert f"conftest: {plugin} could not be parsed" in _conftest_problems(
-        root, plugin, "def (\n"
-    )
+    conftests = check_gate_config._collection_hook_problems(root)
+    assert "conftest: tests/broken/conftest.py could not be parsed" in conftests
+    assert any(
+        problem.startswith("conftest: tests/zz/conftest.py defines pytest_")
+        for problem in conftests
+    ), conftests
+    assert set(refused) <= set(check_gate_config.configuration_problems(root))
 
 
 def test_the_pinned_conftest_is_byte_pinned_in_gitattributes() -> None:
-    """N109 re-review: `tests/conftest.py` is pinned by digest, so a checkout
-    that converts its line endings fails the gate; `.gitattributes` must hold
-    its bytes as it does the other byte-pinned files (`-text`)."""
+    """N109 re-review: a checkout converting line endings would fail the
+    sha256 pin; `.gitattributes` holds the bytes (`-text`)."""
     git = shutil.which("git")
     assert git is not None
     attribute = subprocess.run(
@@ -779,30 +677,6 @@ def test_the_pinned_conftest_is_byte_pinned_in_gitattributes() -> None:
         text=True,
     ).stdout.strip()
     assert attribute == "tests/conftest.py: text: unset"
-
-
-def test_a_store_or_a_del_in_another_conftest_is_refused(tmp_path: Path) -> None:
-    """N109 re-review: an attribute or subscript store, an augmented one or
-    a `del` can disarm a guard or a hook from a conftest the pin does not
-    cover."""
-    root = _tree(tmp_path)
-    for index, text in enumerate(
-        (
-            "import os\nos.environ = {}\n",
-            "import os\nos.environ['x'] = '1'\n",
-            "import os\nos.counter += 1\n",
-            "import os\nos.counter: int = 1\n",
-            "x = 1\ndel x\n",
-            "import os\ndel os.environ['x']\n",
-            "def f(o):\n    o.x = 1\n",
-        )
-    ):
-        name = f"tests/store{index}/conftest.py"
-        problems = _conftest_problems(root, name, text)
-        assert any(problem.startswith(f"conftest: {name} ") for problem in problems), (
-            text,
-            problems,
-        )
 
 
 def _edit_ci(root: Path, edit: Callable[[dict[str, Any]], None]) -> None:
@@ -1087,79 +961,80 @@ def _conftest_problems(root: Path, name: str, text: str) -> list[str]:
     return check_gate_config._collection_hook_problems(root)
 
 
-def test_a_conftest_hook_that_can_pass_a_test_is_refused(tmp_path: Path) -> None:
-    """N109: a conftest.py can define `pytest_pyfunc_call` or
-    `pytest_runtest_protocol`, return True and pass a test without running
-    it. Every `pytest_*` binding and every `pytest_plugins` in a conftest
-    but the pinned ones is refused in the statement forms the AST reads (a
-    def, an async def, an assignment, an import alias, nested or not). The
-    runtime guard covers what a name list cannot; a fixture that rebinds
-    `request.node.runtest` is a named limit, open to any test module."""
+# Every `pytest_*` binding form the AST reads: a def, an async def, an
+# assignment, an import alias, nested or not ("it can change what pytest
+# collects or runs").
+_HOOK_CONFTESTS = (
+    "def pytest_pyfunc_call(pyfuncitem):\n    return True\n",
+    "def pytest_runtest_protocol(item, nextitem):\n    return True\n",
+    "async def pytest_runtest_call(item):\n    return True\n",
+    "pytest_runtest_protocol = lambda item, nextitem: True\n",
+    "import os\nif os:\n    def pytest_pyfunc_call(pyfuncitem):\n        return True\n",
+    "from helper import pytest_pyfunc_call\n",
+    "from helper import hook as pytest_runtest_protocol\n",
+)
+# Every binding of `pytest_plugins`: plain, augmented, annotated, a tuple
+# target, a loop target ("sets pytest_plugins").
+_PLUGINS_CONFTESTS = (
+    'pytest_plugins = ["evil"]\n',
+    "pytest_plugins += ('evil',)\n",
+    "pytest_plugins: tuple[str, ...] = ('evil',)\n",
+    "pytest_plugins, _z = ('evil',), 1\n",
+    "for pytest_plugins in [('evil',)]:\n    pass\n",
+)
+# A hook installed with no `pytest_` binding (the namespace, the plugin
+# manager, frames, PEP 562, a star import, the builtins that run code by
+# name or by attribute), and a store or `del` that can disarm the guard.
+_DYNAMIC_CONFTESTS = (
+    "globals()['pytest_' + 'pyfunc_call'] = lambda pyfuncitem: True\n",
+    "import sys\nsetattr(sys.modules[__name__], 'x', 1)\n",
+    "def pytest_configure(config):\n    config.pluginmanager.register(1)\n",
+    "vars()['pytest_' + 'pyfunc_call'] = lambda pyfuncitem: True\n",
+    "locals()['x'] = 1\n",
+    "exec('def pytest_pyfunc_call(pyfuncitem): return True')\n",
+    "eval('1')\n",
+    "compile('1', 'x', 'eval')\n",
+    "__import__('builtins')\n",
+    "import sys\nsys._getframe().f_globals['x'] = 1\n",
+    "from helper import *\n",
+    "def __getattr__(name):\n    return None\n",
+    "def __dir__():\n    return ['pytest_pyfunc_call']\n",
+    "import builtins\nbuiltins.exec('1')\n",
+    "import builtins\nbuiltins.eval('1')\n",
+    "import builtins\nbuiltins.compile('1', 'x', 'eval')\n",
+    "import builtins\ngetattr(builtins, 'ex' + 'ec')('1')\n",
+    "import builtins\ngetattr(builtins, 'exec')('1')\n",
+    "import os\nos.environ = {}\n",
+    "import os\nos.environ['x'] = '1'\n",
+    "import os\nos.counter += 1\n",
+    "import os\nos.counter: int = 1\n",
+    "x = 1\ndel x\n",
+    "import os\ndel os.environ['x']\n",
+    "def f(o):\n    o.x = 1\n",
+)
+
+
+def test_a_conftest_that_can_pass_a_test_unrun_is_refused(tmp_path: Path) -> None:
+    """N109 and its reviews: a conftest.py (at the root or anywhere under
+    `tests/`) can define `pytest_pyfunc_call`, return True and pass a test
+    without running it, load a module of hooks through `pytest_plugins`,
+    install a hook with no `pytest_` binding, or disarm the guard with a
+    store; each form is refused. The runtime guard covers what a name list
+    cannot."""
     root = _tree(tmp_path)
     assert check_gate_config._collection_hook_problems(root) == []
-    refused = "it can change what pytest collects or runs"
-    for index, text in enumerate(
-        (
-            "def pytest_pyfunc_call(pyfuncitem):\n    return True\n",
-            "def pytest_runtest_protocol(item, nextitem):\n    return True\n",
-            "async def pytest_runtest_call(item):\n    return True\n",
-            "pytest_runtest_protocol = lambda item, nextitem: True\n",
-            "import os\nif os:\n    def pytest_pyfunc_call(pyfuncitem):\n"
-            "        return True\n",
-            "from helper import pytest_pyfunc_call\n",
-            "from helper import hook as pytest_runtest_protocol\n",
-        )
-    ):
-        name = f"tests/hooks{index}/conftest.py"
+    cases = [
+        *((t, "it can change what pytest collects or runs") for t in _HOOK_CONFTESTS),
+        *((t, "sets pytest_plugins") for t in _PLUGINS_CONFTESTS),
+        *((t, "; it can ") for t in _DYNAMIC_CONFTESTS),
+    ]
+    for index, (text, expected) in enumerate(cases):
+        name = "conftest.py" if index == 0 else f"tests/case{index}/conftest.py"
         problems = _conftest_problems(root, name, text)
         assert any(
-            problem.startswith(f"conftest: {name} ") and refused in problem
+            problem.startswith(f"conftest: {name} ") and expected in problem
             for problem in problems
         ), (text, problems)
-
-
-def test_pytest_plugins_is_refused_in_another_conftest(tmp_path: Path) -> None:
-    """N109: `pytest_plugins` loads any module's hooks; the one value
-    `tests/conftest.py` carries is pinned with that file, and nowhere else."""
-    root = _tree(tmp_path)
-    for index, text in enumerate(
-        ('pytest_plugins = ["evil"]\n', 'pytest_plugins += ["evil"]\n')
-    ):
-        name = f"tests/plugins{index}/conftest.py"
-        problems = _conftest_problems(root, name, text)
-        assert any(
-            problem.startswith(f"conftest: {name} ") and "pytest_plugins" in problem
-            for problem in problems
-        ), (text, problems)
-
-
-def test_a_root_conftest_is_read_too(tmp_path: Path) -> None:
-    """N109: a conftest.py at the repository root is read by pytest as well."""
-    root = _tree(tmp_path)
-    problems = _conftest_problems(
-        root, "conftest.py", "def pytest_pyfunc_call(pyfuncitem):\n    return True\n"
-    )
-    assert any(problem.startswith("conftest: conftest.py ") for problem in problems)
-
-
-def test_a_conftest_that_registers_a_hook_by_name_is_refused(tmp_path: Path) -> None:
-    """N109: a hook can also be installed without a `pytest_` binding, through
-    the namespace, the plugin manager or frames (the static list; the runtime
-    guard reads what pytest registered)."""
-    root = _tree(tmp_path)
-    for index, text in enumerate(
-        (
-            "globals()['pytest_' + 'pyfunc_call'] = lambda pyfuncitem: True\n",
-            "import sys\nsetattr(sys.modules[__name__], 'x', 1)\n",
-            "def pytest_configure(config):\n    config.pluginmanager.register(1)\n",
-        )
-    ):
-        name = f"tests/dyn{index}/conftest.py"
-        problems = _conftest_problems(root, name, text)
-        assert any(problem.startswith(f"conftest: {name} ") for problem in problems), (
-            text,
-            problems,
-        )
 
 
 def test_the_ci_file_s_commands_are_read_as_the_runner_runs_them() -> None:
