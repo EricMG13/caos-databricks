@@ -29,7 +29,15 @@ import { SeverityMark } from "@/chrome/SeverityMark";
 import { scopeOf, words } from "@/chrome/compose";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MarkdownBlocks, MdCell, MdHead, MdInline, MdTableView } from "@/ds/ModelMarkdown";
+import {
+  CitationMarkerLink,
+  MarkdownBlocks,
+  MdCell,
+  MdHead,
+  MdInline,
+  MdTableView,
+  ModuleRefLink,
+} from "@/ds/ModelMarkdown";
 import { plainHead, plainName, stamp } from "@/ds/format";
 import { FORMATTED_MAX, readMarkdown, type Block, type MdTable } from "@/ds/markdown";
 import type { Severity } from "@/wire";
@@ -237,9 +245,23 @@ function OpenRegister({ register, label, id }: { register: Register; label: stri
   const [all, setAll] = useState(false);
   const { table } = register;
   const cut = !all && table.rows.length > ROWS_FIRST;
+  // "Show all" unmounts with the press, and focus would drop to <body>
+  // (WCAG 2.4.3): it moves to the register, named for what it now holds.
+  const self = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (all) self.current?.focus({ preventScroll: true });
+  }, [all]);
   return (
     <div
+      ref={self}
       id={id}
+      {...(all
+        ? {
+            role: "region",
+            "aria-label": `${label}, all ${rowsSaid(table.rows.length)}`,
+            tabIndex: -1,
+          }
+        : {})}
       className="reg"
       data-register={register.id ?? register.title}
       data-shape={register.shape}
@@ -297,7 +319,14 @@ function RegisterIndex({
                 onClick={() => onOpen(shown ? null : key)}
               >
                 <span className="nm">
-                  <RegisterName register={register} />
+                  {/* A reference or a citation chip in a title is a control;
+                      none may sit inside this one (nested interactive, WCAG
+                      4.1.2), so here a bracket stays as the model wrote it. */}
+                  <ModuleRefLink value={null}>
+                    <CitationMarkerLink value={null}>
+                      <RegisterName register={register} />
+                    </CitationMarkerLink>
+                  </ModuleRefLink>
                 </span>
                 <span className="n">{rowsSaid(register.table.rows.length)}</span>
                 <span className="chev" aria-hidden="true" />

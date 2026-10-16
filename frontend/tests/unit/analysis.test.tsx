@@ -455,6 +455,72 @@ describe("Analysis", () => {
     expect(panel.querySelector("[data-register-rest]")).toBeNull();
   });
 
+  test("a reference in a register's title is no control inside the index button (N113)", () => {
+    const [first, target] = [complete.body.handoffs[0]!, complete.body.handoffs[1]!];
+    const indexed = {
+      ...first,
+      model_analysis: [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        `#### T4.14 — Period register [${target.module_id} T2] [C1]`,
+        "| period_id | Revenue |",
+        "| --- | --- |",
+        "| FY1 | 1 |",
+      ].join("\n"),
+    };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [indexed, target] } }}
+        tab={indexed.route_node_id}
+      />,
+    );
+    const button = container.querySelector<HTMLElement>("[data-register-open]")!;
+    expect(button).toHaveTextContent(`[${target.module_id} T2]`);
+    // Nothing interactive inside the button: a link or a chip in it is a
+    // control nested in a control (WCAG 4.1.2), and unreachable by name.
+    expect(button.querySelectorAll("a, button, [role='button'], [tabindex]")).toHaveLength(0);
+  });
+
+  test("Show all N rows keeps focus in the register it revealed (N113, 2.4.3)", () => {
+    const rows = Array.from({ length: 10 }, (_, index) => `| FY${index} | ${index} |`);
+    const indexed = {
+      ...complete.body.handoffs[0]!,
+      model_analysis: [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### T4.14 — Period register",
+        "| period_id | Revenue |",
+        "| --- | --- |",
+        ...rows,
+      ].join("\n"),
+    };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [indexed] } }}
+        tab={indexed.route_node_id}
+      />,
+    );
+    const open = container.querySelector<HTMLElement>("[data-register-open]")!;
+    fireEvent.click(open);
+    const more = container.querySelector<HTMLElement>("[data-register-rest]")!;
+    more.focus();
+    expect(document.activeElement).toBe(more);
+    fireEvent.click(more);
+    expect(container.querySelector("[data-register-rest]")).toBeNull();
+    // The button that was pressed is gone: focus lands on the register itself,
+    // named for what it now holds, not on <body>.
+    const panel = container.querySelector<HTMLElement>(
+      `#${CSS.escape(open.getAttribute("aria-controls")!)}`,
+    )!;
+    expect(document.activeElement).toBe(panel);
+    expect(panel).toHaveAttribute("role", "region");
+    expect(panel).toHaveAccessibleName(/T4\.14.*all 10 rows/);
+  });
+
   test("the opening leads, its drivers are key points, the contrary view sits beside it", () => {
     const [cp1b, target] = [complete.body.handoffs[0]!, complete.body.handoffs[1]!];
     const opening = {
