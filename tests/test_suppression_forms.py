@@ -73,6 +73,34 @@ def test_a_prefixed_skip_is_counted_once_not_twice() -> None:
     assert _counts(sample)["skip"] == 2
 
 
+def test_the_skipped_exception_and_a_getattr_skip_are_counted() -> None:
+    """N109: raising `Skipped` from the implementation module, reaching skip
+    through `getattr`, or through the skip function's `Exception` attribute ends a test as a
+    skip without the names the patterns read."""
+    sample = "\n".join(
+        [
+            f"import {PYTEST}",
+            f"import {PYTEST} as pt",
+            "import _pytest.outcomes",
+            "from _pytest import outcomes",
+            "from _pytest.outcomes import Skipped",
+            "def test_one() -> None:",
+            "    raise Skipped('x')",
+            "def test_two() -> None:",
+            f"    getattr({PYTEST}, 'skip')('x')",
+            "def test_three() -> None:",
+            "    getattr(pt, 'sk' + 'ip')('x')",
+            "def test_four() -> None:",
+            "    _pytest.outcomes.skip('x')",
+            "def test_five() -> None:",
+            "    outcomes.skip('x')",
+            "def test_six() -> None:",
+            f"    raise {PYTEST}.skip.Exception('x')",
+        ]
+    )
+    assert _counts(sample)["skip"] == 6
+
+
 def test_a_live_provider_marker_is_its_own_budget() -> None:
     """CI's `-m "not live_provider"` deselects these; each is budgeted."""
     sample = "\n".join(

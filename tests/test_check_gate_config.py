@@ -605,6 +605,120 @@ def test_a_conftest_collection_hook_is_refused_unless_pinned(tmp_path: Path) -> 
     )
 
 
+def _conftest_problems(root: Path, name: str, text: str) -> list[str]:
+    """What the gate says once the tracked `name` holds `text`."""
+    target = root / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    _git(root, "add", name)
+    return check_gate_config._collection_hook_problems(root)
+
+
+def test_a_conftest_hook_that_can_pass_a_test_is_refused(tmp_path: Path) -> None:
+    """N109: a conftest.py can define `pytest_pyfunc_call` or
+    `pytest_runtest_protocol`, return True and pass a test without running
+    it. Every `pytest_*` binding and every `pytest_plugins` in a conftest
+    but the pinned ones is refused, whatever statement form binds it."""
+    root = _tree(tmp_path)
+    assert check_gate_config._collection_hook_problems(root) == []
+    refused = "it can change what pytest collects or runs"
+    for index, text in enumerate(
+        (
+            "def pytest_pyfunc_call(pyfuncitem):\n    return True\n",
+            "def pytest_runtest_protocol(item, nextitem):\n    return True\n",
+            "async def pytest_runtest_call(item):\n    return True\n",
+            "pytest_runtest_protocol = lambda item, nextitem: True\n",
+            "import os\nif os:\n    def pytest_pyfunc_call(pyfuncitem):\n"
+            "        return True\n",
+            "from helper import pytest_pyfunc_call\n",
+            "from helper import hook as pytest_runtest_protocol\n",
+        )
+    ):
+        name = f"tests/hooks{index}/conftest.py"
+        problems = _conftest_problems(root, name, text)
+        assert any(
+            problem.startswith(f"conftest: {name} ") and refused in problem
+            for problem in problems
+        ), (text, problems)
+
+
+def test_pytest_plugins_is_refused_unless_pinned(tmp_path: Path) -> None:
+    """N109: `pytest_plugins` loads any module's hooks; only the one value
+    `tests/conftest.py` carries is allowed, and nowhere else."""
+    root = _tree(tmp_path)
+    conftest = root / "tests" / "conftest.py"
+    original = conftest.read_text(encoding="utf-8")
+    assert "pytest_plugins = (" in original
+    changed = original.replace(
+        'pytest_plugins = ("test_lite_deep_research_route",)',
+        'pytest_plugins = ("test_lite_deep_research_route", "evil")',
+    )
+    assert changed != original
+    problems = _conftest_problems(root, "tests/conftest.py", changed)
+    assert any("pytest_plugins" in problem for problem in problems), problems
+
+    conftest.write_text(original, encoding="utf-8")
+    for index, text in enumerate(
+        ('pytest_plugins = ["evil"]\n', 'pytest_plugins += ["evil"]\n')
+    ):
+        name = f"tests/plugins{index}/conftest.py"
+        problems = _conftest_problems(root, name, text)
+        assert any(
+            problem.startswith(f"conftest: {name} ") and "pytest_plugins" in problem
+            for problem in problems
+        ), (text, problems)
+
+
+def test_a_second_hook_in_the_pinned_conftest_or_a_root_conftest_is_refused(
+    tmp_path: Path,
+) -> None:
+    """N109: the pinned file keeps its three hooks and no more; a
+    conftest.py at the repository root is read by pytest too."""
+    root = _tree(tmp_path)
+    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    problems = _conftest_problems(
+        root,
+        "tests/conftest.py",
+        original + "\n\ndef pytest_pyfunc_call(pyfuncitem):\n    return True\n",
+    )
+    assert any("defines pytest_pyfunc_call" in problem for problem in problems)
+
+    tampered = original.replace(
+        "    if POSTGRES_URL and not hasattr(session.config, \"workerinput\"):\n",
+        "    if True:\n",
+    )
+    assert tampered != original
+    problems = _conftest_problems(root, "tests/conftest.py", tampered)
+    assert any(
+        "pytest_sessionstart no longer matches what is committed" in problem
+        for problem in problems
+    ), problems
+
+    (root / "tests" / "conftest.py").write_text(original, encoding="utf-8")
+    problems = _conftest_problems(
+        root, "conftest.py", "def pytest_pyfunc_call(pyfuncitem):\n    return True\n"
+    )
+    assert any(problem.startswith("conftest: conftest.py ") for problem in problems)
+
+
+def test_a_conftest_that_registers_a_hook_by_name_is_refused(tmp_path: Path) -> None:
+    """N109: a hook can also be installed without a `pytest_` binding."""
+    root = _tree(tmp_path)
+    for index, text in enumerate(
+        (
+            "globals()['pytest_' + 'pyfunc_call'] = lambda pyfuncitem: True\n",
+            "import sys\nsetattr(sys.modules[__name__], 'x', 1)\n",
+            "def pytest_configure(config):\n    config.pluginmanager.register(1)\n",
+        )
+    ):
+        name = f"tests/dyn{index}/conftest.py"
+        problems = _conftest_problems(root, name, text)
+        assert any(problem.startswith(f"conftest: {name} ") for problem in problems), (
+            text,
+            problems,
+        )
+
+
 def test_the_ci_file_s_commands_are_read_as_the_runner_runs_them() -> None:
     """A folded block is one command, a literal block one per line with its
     continuations joined, and the keys after a block are not part of it."""
