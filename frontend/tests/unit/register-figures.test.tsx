@@ -3247,12 +3247,24 @@ test("liquidityBridge: with no opening total, the first stated scale is the brid
   expect(figure!.steps.map((step) => step.value)).toEqual(["-8", null, "92"]);
 });
 
-test("liquidityBridge: an opening total without a scale does not gap every scaled step", () => {
+test("liquidityBridge: an opening total without a scale draws no step, none stands on a missing base", () => {
   const [figure] = liquidityBridgeOf(SCALED_LIQUIDITY, [
     t2e5Scaled("Beginning accessible liquidity", c("100", "100"), ""),
     t2e5Scaled("Cash interest", c("8", "8"), "USD m"),
     t2e5Scaled("Cash taxes", c("2", "2"), "USD m"),
   ]);
   expect(figure!.unit).toBe("USD m");
-  expect(figure!.steps.map((step) => step.value)).toEqual([null, "-8", "-2"]);
+  expect(figure!.steps.map((step) => step.value)).toEqual([null, null, null]);
+  expect(figure!.steps[1]).toMatchObject({
+    reason: "opening total in no stated scale, not the bridge's USD m",
+  });
+});
+
+test("liquidityBridge: steps in another scale than the opening total are gaps beside it", () => {
+  const [figure] = liquidityBridgeOf(SCALED_LIQUIDITY, [
+    t2e5Scaled("Beginning accessible liquidity", c("100", "100"), "USD bn"),
+    t2e5Scaled("Cash interest", c("8", "8"), "USD m"),
+  ]);
+  expect(figure!.unit).toBe("USD bn");
+  expect(figure!.steps.map((step) => step.value)).toEqual(["100", null]);
 });
