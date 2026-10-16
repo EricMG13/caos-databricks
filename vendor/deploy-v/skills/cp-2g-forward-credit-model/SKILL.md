@@ -197,7 +197,7 @@ Entry: validated history. Separate sourced guidance, consensus or user-supplied 
 
 #### Phase 3 — forecast engine
 
-Entry: locked assumptions. Build quarterly periods when source precision permits and annual periods otherwise. Forecast revenue, EBITDA, CFO, capex, FCF, cash interest, debt movement, cash, accessible liquidity, gross/net leverage and interest/fixed-charge coverage. Keep industrial/company and finance-company perimeters separate. Roll forward balance identities and expose every residual. Exit: auditable forecast engine per `REF_CP-2G_C_ForecastEngine.md`.
+Entry: locked assumptions. Build quarterly periods when source precision permits and annual periods otherwise. Forecast revenue, EBITDA, CFO, capex, FCF, cash interest, debt movement, cash, accessible liquidity, gross leverage, net leverage and interest/fixed-charge coverage. Keep industrial/company and finance-company perimeters separate. Roll forward balance identities and expose every residual. Exit: auditable forecast engine per `REF_CP-2G_C_ForecastEngine.md`.
 
 #### Phase 4 — scenarios and breakpoints
 

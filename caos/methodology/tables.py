@@ -61,7 +61,9 @@ TablesUnavailable = Literal["TABLES_MALFORMED", "TABLES_TOO_LARGE"]
 # (fork r3 added the thin space U+2009).
 _SPACES = str.maketrans("", "", "\u00a0\u2009\u202f ")
 _CURRENCY = re.compile("^[\u20ac$\u00a3\u00a5\u20b9]|[\u20ac$\u00a3\u00a5\u20b9]$")
-# A spread written with its unit is a figure in basis points (fork r17, N196).
+# A spread written with its unit is a figure in basis points (fork r17, N196):
+# a register reader's reading, `basis_points=True` in the bundle; a calculator
+# input never reads it.
 _BASIS_POINTS = re.compile(r"(?<=[0-9])bps?$", re.IGNORECASE)
 _MULTIPLE = re.compile(r"[xX]$")
 _PERCENT = re.compile(r"%$")
@@ -219,7 +221,7 @@ def figure_value(contract: VendorContract, cell: str) -> str | None:
     if value is None:
         return None
     try:
-        read = contract.cp_tables.parse_figure(cell)
+        read = contract.cp_tables.parse_figure(cell, basis_points=True)
     except ValueError:  # `AmbiguousFigure` among them: a separator it will not guess
         return None
     # `None` is the bundle's null vocabulary: null, never zero.
@@ -318,7 +320,8 @@ def _exact(cell: str) -> Decimal | None:
     if negative:
         text = text[1:-1].strip()
     core = _CURRENCY.sub("", text.translate(_SPACES))
-    core = _PERCENT.sub("", _MULTIPLE.sub("", _BASIS_POINTS.sub("", core)))
+    unit = _BASIS_POINTS.search(core)  # the unit ends the figure: `5xbps` is no 5
+    core = core[: unit.start()] if unit else _PERCENT.sub("", _MULTIPLE.sub("", core))
     plain = _separated(core) if _FIGURE.fullmatch(core) else None
     if plain is None:
         return None

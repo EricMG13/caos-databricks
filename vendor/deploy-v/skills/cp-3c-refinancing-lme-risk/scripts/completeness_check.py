@@ -665,6 +665,22 @@ def _leads_with(cell, value):
     return bool(value) and re.match(rf"{re.escape(value)}(?:[\s(\-–—]|$)", cell) is not None
 
 
+def _required_elsewhere(rules, rule, value):
+    """Whether another rule is a `required_values` on the same register and
+    column, with the same case rule and exact matching, naming `value`."""
+    sensitive = rule.get("case_sensitive", True)
+    want = value.strip().strip("`*").strip()
+    return any(
+        other.get("rule") == "required_values"
+        and other.get("register_id") == rule.get("register_id")
+        and other.get("column") == rule.get("column")
+        and other.get("case_sensitive", True) == sensitive
+        and str(other.get("match", "")).strip().casefold() != "leading_word"
+        and want in (v.strip().strip("`*").strip() for v in other.get("values", []))
+        for other in rules
+    )
+
+
 def _semantic_violations(rules, present, blocklist=frozenset()):
     """The profile's `semantic_rules`, each over one located register.
 
@@ -673,7 +689,8 @@ def _semantic_violations(rules, present, blocklist=frozenset()):
     column); `allowed_values` (every cell of the column is a declared value);
     `exact_values` (the column holds each declared value exactly once and
     nothing else); `exactly_once_values` (the column holds each declared value
-    exactly once, other cells free, fork r17); `at_least_one_row_populates` (some row fills every named
+    exactly once, other cells free, fork r17; it reports only a count above 1 for a value a
+    `required_values` rule on the same column already demands); `at_least_one_row_populates` (some row fills every named
     column with a value that is not a disqualifying placeholder). Comparison
     is case-sensitive unless the rule says otherwise. A `required_values` rule
     declaring `match: leading_word` also finds a value as a cell's leading
@@ -720,7 +737,12 @@ def _semantic_violations(rules, present, blocklist=frozenset()):
                            f"{rule.get('values', [])!r} once each")
         elif kind == "exactly_once_values":
             for value in rule.get("values", []):
-                if cells.count(fold(value)) != 1:
+                count = cells.count(fold(value))
+                # A value a `required_values` rule on the same column already
+                # demands (same exact match) is reported missing there, not twice.
+                if count == 0 and _required_elsewhere(rules, rule, value):
+                    continue
+                if count != 1:
                     out.append(f"{reg_id}: {rule_id} -- column {col!r} must hold {value!r} exactly once")
         elif kind == "at_least_one_row_populates":
             columns = rule.get("columns", [])

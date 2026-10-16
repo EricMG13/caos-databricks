@@ -53,7 +53,7 @@ CATALOG = (
 )
 
 # A run pinned to one build never executes under another.
-BUILD_ID = "80d1cd32b6e5f5fa81a2f7b12b6f1fc240f52ec31b99fcdafdf10016114c50be"
+BUILD_ID = "7a77e6af979a0dfee3a4460ec7e828f6d19597cae5bc630470207feb16095724"
 
 
 def _load(path: Path) -> dict[str, object]:
@@ -655,8 +655,6 @@ def test_the_vendor_enforces_cp_l10s_semantic_rules() -> None:
     lowered = _with_register_cell(handoff, "TL10.3", 1, "screen_item", "overall")
     assert check(skill, lowered, "CP-L10")[0] == [
         "TL10.3: cp_l10.overall_screen_present -- column 'screen_item' lacks 'OVERALL'",
-        "TL10.3: cp_l10.overall_screen_once -- column 'screen_item' must hold "
-        "'OVERALL' exactly once",
     ]
 
 
