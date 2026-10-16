@@ -190,13 +190,20 @@ def _development_edge() -> Iterator[None]:
             os.environ[name] = value
 
 
+# What the guard below calls, taken once at import: a later attribute store
+# on `pytest` or `Path` cannot neuter it.
+_EXIT = pytest.exit
+_IS_RELATIVE_TO = Path.is_relative_to
+
+
 def _refuse_run_hooks_from_tests(config: pytest.Config) -> None:
     """End the session if a conftest or a module under tests/ implements a
     hook that replaces how a test runs or is judged (N109): a
     `pytest_pyfunc_call` returning True passes `assert False` unrun. The
-    static gate refuses the spellings it can read; this reads what pytest
-    registered. A fixture that rebinds `request.node.runtest` is a limit it
-    does not close."""
+    static gate pins this file whole (`CONFTEST_PIN`); this reads what pytest
+    registered. Limits it does not close: a fixture that rebinds
+    `request.node.runtest`, and routes through imported non-conftest modules
+    (`sys.modules`, frames) that act after collection."""
     tests = Path(__file__).resolve().parent
     for hook in (
         "pytest_pyfunc_call",
@@ -215,13 +222,13 @@ def _refuse_run_hooks_from_tests(config: pytest.Config) -> None:
             if not filename:
                 continue
             if filename.startswith("<"):
-                pytest.exit(
+                _EXIT(
                     f"{hook} is implemented by {impl.plugin_name} of unknown origin",
                     returncode=3,
                 )
             source = Path(filename).resolve()
-            if source.name == "conftest.py" or source.is_relative_to(tests):
-                pytest.exit(
+            if source.name == "conftest.py" or _IS_RELATIVE_TO(source, tests):
+                _EXIT(
                     f"{hook} is implemented by {impl.plugin_name} ({source.name}); "
                     "a conftest or test module may not replace how a test runs",
                     returncode=3,

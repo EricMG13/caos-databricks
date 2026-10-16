@@ -241,7 +241,7 @@ PRE_COMMIT_HOOK_BODY: dict[str, list[dict[str, object]]] = {
 # notice (N46): `collect_ignore`/`collect_ignore_glob` drop a file from
 # collection outright, and a collection hook can deselect items the same
 # way pytest_collection_modifyitems already does for `live_provider`. That
-# one use is legitimate and pinned below; anything else is refused.
+# one use is legitimate and pinned with its file; anything else is refused.
 COLLECTION_ASSIGNMENTS = frozenset({"collect_ignore", "collect_ignore_glob"})
 COLLECTION_HOOKS = frozenset(
     {
@@ -250,98 +250,24 @@ COLLECTION_HOOKS = frozenset(
         "pytest_collectstart",
     }
 )  # fmt: skip
-# What `tests/conftest.py` keeps besides fixtures, each function as the
-# source text it is committed with (N109): hooks that cannot pass or drop a
-# test, and the runtime guard that ends a session whose conftest or test
-# modules implement the hooks that run one. Text, so a mismatch reads.
+# `tests/conftest.py` is pinned whole (N109), as CI's parallel jobs are: its
+# hooks, the runtime guard that ends a session whose conftest or test
+# modules implement the hooks that run a test, and every statement that
+# could disarm them. Any edit to it fails the gate until this digest is
+# updated in the same change, where review sees it. The module its
+# `pytest_plugins` names is held to the rules below with no hook allowed.
 PYTEST_PLUGINS_PIN = ("test_lite_deep_research_route",)
-_PINNED_SOURCES = {
-    "pytest_sessionstart": '''
-def pytest_sessionstart(session: pytest.Session) -> None:
-    """Reap leaked databases once: the controller under xdist, never a worker."""
-    _refuse_run_hooks_from_tests(session.config)
-    if POSTGRES_URL and not hasattr(session.config, "workerinput"):
-        reap_session(POSTGRES_URL)
-''',
-    "pytest_addoption": """
-def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption(
-        "--live-provider", action="store_true", help="run live provider tests"
-    )
-""",
-    "pytest_collection_modifyitems": """
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
-    _refuse_run_hooks_from_tests(config)
-    live = [item for item in items if item.get_closest_marker("live_provider")]
-    if not config.getoption("--live-provider"):
-        items[:] = [item for item in items if item not in live]
-        config.hook.pytest_deselected(items=live)
-        return
-
-    missing = [name for name in _LIVE_CONFIGURATION if not os.environ.get(name)]
-    if live and missing:
-        raise pytest.UsageError("live provider tests require: " + ", ".join(missing))
-""",
-    "_refuse_run_hooks_from_tests": '''
-def _refuse_run_hooks_from_tests(config: pytest.Config) -> None:
-    """End the session if a conftest or a module under tests/ implements a
-    hook that replaces how a test runs or is judged (N109): a
-    `pytest_pyfunc_call` returning True passes `assert False` unrun. The
-    static gate refuses the spellings it can read; this reads what pytest
-    registered. A fixture that rebinds `request.node.runtest` is a limit it
-    does not close."""
-    tests = Path(__file__).resolve().parent
-    for hook in (
-        "pytest_pyfunc_call",
-        "pytest_runtest_protocol",
-        "pytest_runtest_call",
-        "pytest_runtest_makereport",
-        "pytest_report_teststatus",
-    ):
-        for impl in getattr(config.pluginmanager.hook, hook).get_hookimpls():
-            # The registering module's file, never the code object's: code
-            # built by `exec` in a conftest is named "<string>".
-            filename = getattr(impl.plugin, "__file__", None)
-            if not filename:
-                code = getattr(impl.function, "__code__", None)
-                filename = code.co_filename if code else ""
-            if not filename:
-                continue
-            if filename.startswith("<"):
-                pytest.exit(
-                    f"{hook} is implemented by {impl.plugin_name} of unknown origin",
-                    returncode=3,
-                )
-            source = Path(filename).resolve()
-            if source.name == "conftest.py" or source.is_relative_to(tests):
-                pytest.exit(
-                    f"{hook} is implemented by {impl.plugin_name} ({source.name}); "
-                    "a conftest or test module may not replace how a test runs",
-                    returncode=3,
-                )
-''',
-}
-PINNED_CONFTEST_HOOKS = {k: v.strip() for k, v in _PINNED_SOURCES.items()}
+CONFTEST_PIN = "fb715846d7f12604cfcd8e39b090b37c55aa0fbadc85a9bf9c2b653b58eb6643"
 # Names a conftest uses to install a hook without binding a `pytest_` name:
 # the module namespace, the plugin manager, frames and PEP 562 module
-# attributes (as a name or an attribute), and the builtins that run or
-# rebuild code (as a name only: `re.compile` is not one).
+# attributes, and the builtins that run or rebuild code, each as a name or
+# an attribute (`builtins.exec`; so `re.compile` is refused in a conftest).
 CONFTEST_DYNAMIC_NAMES = frozenset(
     {
         "globals", "setattr", "pluginmanager", "__dict__", "_getframe",
         "f_globals", "__getattr__", "__dir__",
     }
 )  # fmt: skip
-# What a conftest keeps pinned functions reading, as the one binding each has
-# (an empty kind: none at all): rebinding one swaps what a pinned function
-# runs while its text still matches.
-PINNED_FREE_NAMES = {
-    "Path": "import", "pytest": "import", "os": "import",
-    "reap_session": "import", "POSTGRES_URL": "assign",
-    "_LIVE_CONFIGURATION": "assign", "getattr": "", "hasattr": "",
-}  # fmt: skip
 CONFTEST_DYNAMIC_BUILTINS = frozenset(
     {"vars", "locals", "exec", "eval", "compile", "__import__"}
 )
@@ -801,159 +727,76 @@ def _gitleaks_ci_problems(root: Path) -> list[str]:
 
 def _collection_hook_problems(root: Path) -> list[str]:
     """Refuse a `conftest.py` that can drop or pass a test with nothing to
-    notice, in the spellings an AST can read (N109).
+    notice (N109).
 
-    `tests/conftest.py`'s own functions are legitimate -- the collection hook
-    is what makes `-m "not live_provider"` a floor rather than an opt-out --
-    and each is pinned to the source it is committed with. Any other
-    `collect_ignore`, `collect_ignore_glob`, `pytest_*` binding or
-    `pytest_plugins`, there or in a conftest.py at the root or anywhere else
-    under `tests/`, is refused, as are a star import and the names that
-    rebuild a namespace or run code (`CONFTEST_DYNAMIC_*`). The module the
-    pinned `pytest_plugins` names is held to the same rule with no hook
-    allowed. This is not a proof: a hook can still be installed through code
-    the list does not name, which is why the pinned conftest also ends the
-    session at run time when a conftest or test module implements a hook that
-    runs a test. A fixture that rebinds `request.node.runtest` passes a test
-    unrun and is open to any test module: a limit, not closed here.
+    `tests/conftest.py` is pinned whole by digest. Every other conftest.py
+    (at the root or anywhere under `tests/`) is read as an AST and refused for
+    a `pytest_*` binding, `collect_ignore`, any `pytest_plugins`, a `del`, an
+    attribute or item store, a star import, or a name that rebuilds a
+    namespace or runs code (`CONFTEST_DYNAMIC_*`); the module the pinned
+    `pytest_plugins` names is read the same way with stores allowed. This is
+    not a proof. The pinned conftest ends a session at run time when a
+    conftest or test module implements a hook that runs a test, but two routes
+    stay open and are not closed here: a fixture that rebinds
+    `request.node.runtest` (open to any test module), and code in an imported
+    non-conftest module that acts after collection (`sys.modules`, frames).
     """
     problems: list[str] = []
     names = tracked_files(
         root, "conftest.py", "tests/conftest.py", ":(glob)tests/**/conftest.py"
     )
     for name in dict.fromkeys(names):
-        parsed = _parsed(root, name)
-        if parsed is None:
+        if name == "tests/conftest.py":
+            problems += _pinned_conftest_problems(root)
+            continue
+        tree = _parsed(root, name)
+        if tree is None:
             problems.append(f"conftest: {name} could not be parsed")
             continue
-        problems += _conftest_tree_problems(name, *parsed)
+        problems += _conftest_tree_problems(name, tree, stores=True)
     if "tests/conftest.py" in names:
         for module in PYTEST_PLUGINS_PIN:
             plugin = f"tests/{module}.py"
-            parsed = _parsed(root, plugin)
-            if parsed is not None:
-                problems += _conftest_tree_problems(plugin, *parsed, pinned=False)
+            tree = _parsed(root, plugin)
+            if tree is not None:
+                problems += _conftest_tree_problems(plugin, tree, stores=False)
     return problems
 
 
-def _parsed(root: Path, name: str) -> tuple[str, ast.Module] | None:
+def _pinned_conftest_problems(root: Path) -> list[str]:
     try:
-        text = (root / name).read_text(encoding="utf-8")
-        return text, ast.parse(text, filename=name)
+        digest = sha256((root / "tests" / "conftest.py").read_bytes()).hexdigest()
+    except OSError:
+        return ["conftest: tests/conftest.py could not be read"]
+    if digest == CONFTEST_PIN:
+        return []
+    return [
+        f"conftest: tests/conftest.py changed (sha256 {digest}); review it, then "
+        "update CONFTEST_PIN in the same change"
+    ]
+
+
+def _parsed(root: Path, name: str) -> ast.Module | None:
+    try:
+        return ast.parse((root / name).read_text(encoding="utf-8"), filename=name)
     except (OSError, SyntaxError):
         return None
 
 
-def _conftest_tree_problems(
-    name: str, text: str, tree: ast.Module, *, pinned: bool = True
-) -> list[str]:
-    """`pinned` is False for a plugin module: it keeps no function at all."""
-    keeper = pinned and name == "tests/conftest.py"
-    matched = {
-        node.name: node
-        for node in tree.body
-        if keeper and isinstance(node, ast.FunctionDef) and _matches_pin(text, node)
-    }
-    problems = [
-        f"conftest: tests/conftest.py's {function} no longer matches what is committed"
-        for function in PINNED_CONFTEST_HOOKS
-        if keeper and function not in matched
-    ]
-    if keeper:
-        problems += _pinned_name_problems(tree, matched)
-    plugin_bindings = 0
+def _conftest_tree_problems(name: str, tree: ast.Module, *, stores: bool) -> list[str]:
+    """`stores` is False for a plugin module, which is a test module."""
+    problems: list[str] = []
     for statement in tree.body:
-        problems += _collection_node_problems(name, statement, keeper=keeper)
-        if statement not in matched.values():
-            found, count = _statement_problems(name, statement)
-            problems += found
-            plugin_bindings += count
-    if plugin_bindings and not (keeper and _plugins_pinned(tree, plugin_bindings)):
-        problems.append(
-            f"conftest: {name} sets pytest_plugins; it can load a module "
-            "of hooks the gate does not read"
-        )
+        problems += _collection_node_problems(name, statement)
+        for node in ast.walk(statement):
+            problems += _hook_binding_problems(name, node)
+            problems += _dynamic_hook_problems(name, node)
+            if stores:
+                problems += _store_problems(name, node)
     return list(dict.fromkeys(problems))
 
 
-def _statement_problems(name: str, statement: ast.stmt) -> tuple[list[str], int]:
-    """Every hook-binding and dynamic-use problem under one statement, and how
-    many times it binds `pytest_plugins`."""
-    problems: list[str] = []
-    plugin_bindings = 0
-    for node in ast.walk(statement):
-        problems += _hook_binding_problems(name, node)
-        plugin_bindings += "pytest_plugins" in _bound_names(node)
-        problems += _dynamic_hook_problems(name, node)
-    return problems, plugin_bindings
-
-
-def _bound_here(node: ast.AST) -> list[tuple[str, str]]:
-    """(name, kind) for what one def, class or import statement binds."""
-    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-        return [(node.name, "def")]
-    if isinstance(node, ast.Import | ast.ImportFrom):
-        return [
-            (alias.asname or alias.name.split(".")[0], "import") for alias in node.names
-        ]
-    return []
-
-
-def _module_bindings(statements: Iterable[ast.AST]) -> list[tuple[str, str]]:
-    """(name, kind) for each module-level binding, the bodies of functions and
-    classes left out: kind is "import", "def" or "assign"."""
-    found: list[tuple[str, str]] = []
-    stack = list(statements)
-    while stack:
-        node = stack.pop()
-        if isinstance(node, ast.stmt) and _bound_here(node):
-            found += _bound_here(node)
-            continue
-        for child in ast.iter_child_nodes(node):
-            if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store):
-                found.append((child.id, "assign"))
-            else:
-                stack.append(child)
-    return found
-
-
-def _pinned_name_problems(
-    tree: ast.Module, matched: dict[str, ast.FunctionDef]
-) -> list[str]:
-    """No binding of a pinned function's name beyond its matched def, and
-    exactly the one binding of each name a pinned function reads: the pin is
-    the text, but the callers run whatever the name is bound to."""
-    rest = [node for node in tree.body if node not in matched.values()]
-    bindings = _module_bindings(rest)
-    problems = [
-        f"conftest: tests/conftest.py rebinds {name}, which a pinned function reads"
-        for name, _ in bindings
-        if name in PINNED_CONFTEST_HOOKS
-    ]
-    for name, kind in PINNED_FREE_NAMES.items():
-        if [k for n, k in bindings if n == name] != ([kind] if kind else []):
-            problems.append(
-                f"conftest: tests/conftest.py rebinds {name}, which a pinned "
-                "function reads"
-            )
-    return problems + [
-        f"conftest: tests/conftest.py rebinds {name}, which a pinned function reads"
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Global)
-        for name in node.names
-        if name in PINNED_FREE_NAMES or name in PINNED_CONFTEST_HOOKS
-    ]
-
-
-def _matches_pin(text: str, node: ast.FunctionDef) -> bool:
-    """A top-level function exactly as `PINNED_CONFTEST_HOOKS` gives it, with
-    no decorator: `@pytest.hookimpl(tryfirst=True)` reorders a hook."""
-    return not node.decorator_list and PINNED_CONFTEST_HOOKS.get(
-        node.name
-    ) == ast.get_source_segment(text, node)
-
-
-def _collection_node_problems(name: str, node: ast.stmt, *, keeper: bool) -> list[str]:
+def _collection_node_problems(name: str, node: ast.stmt) -> list[str]:
     if isinstance(node, ast.Assign | ast.AnnAssign):
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
         return [
@@ -963,8 +806,6 @@ def _collection_node_problems(name: str, node: ast.stmt, *, keeper: bool) -> lis
             if isinstance(target, ast.Name) and target.id in COLLECTION_ASSIGNMENTS
         ]
     if isinstance(node, ast.FunctionDef) and node.name in COLLECTION_HOOKS:
-        if keeper and node.name in PINNED_CONFTEST_HOOKS:
-            return []  # held to its pinned text by the caller
         return [_refused_hook(name, node.name)]
     return []
 
@@ -973,6 +814,21 @@ def _refused_hook(name: str, hook: str) -> str:
     return (
         f"conftest: {name} defines {hook}; it can change what pytest collects or runs"
     )
+
+
+def _store_problems(name: str, node: ast.AST) -> list[str]:
+    """A `del`, or a store into an attribute or an item (plain, annotated or
+    augmented): each can swap or remove what a guard or a hook calls."""
+    if isinstance(node, ast.Delete):
+        return [f"conftest: {name} uses del; it can remove a hook or a guard"]
+    if isinstance(node, ast.Attribute | ast.Subscript) and not isinstance(
+        node.ctx, ast.Load
+    ):
+        return [
+            f"conftest: {name} stores into an attribute or item; it can swap "
+            "what a hook or a guard calls"
+        ]
+    return []
 
 
 def _bound_names(node: ast.AST) -> list[str]:
@@ -988,30 +844,15 @@ def _bound_names(node: ast.AST) -> list[str]:
 
 
 def _hook_binding_problems(name: str, node: ast.AST) -> list[str]:
-    """A `pytest_*` binding that is not a pinned function (those are skipped
-    by the caller); one of the pinned names reads as a changed pin."""
+    """A `pytest_*` binding, or any binding of `pytest_plugins`."""
     return [
-        f"conftest: {name}'s {bound} no longer matches what is committed"
-        if bound in PINNED_CONFTEST_HOOKS and name == "tests/conftest.py"
+        f"conftest: {name} sets pytest_plugins; it can load a module of hooks "
+        "the gate does not read"
+        if bound == "pytest_plugins"
         else _refused_hook(name, bound)
         for bound in _bound_names(node)
-        if bound.startswith("pytest_") and bound != "pytest_plugins"
+        if bound.startswith("pytest_")
     ]
-
-
-def _plugins_pinned(tree: ast.Module, bindings: int) -> bool:
-    """Every binding of `pytest_plugins` -- stored at any depth, augmented,
-    annotated, in a tuple target, imported or defined -- is the one
-    module-level assignment of the pinned value."""
-    values = [
-        ast.unparse(node.value)
-        for node in tree.body
-        if isinstance(node, ast.Assign)
-        and len(node.targets) == 1
-        and isinstance(node.targets[0], ast.Name)
-        and node.targets[0].id == "pytest_plugins"
-    ]
-    return bindings == 1 and values == [repr(PYTEST_PLUGINS_PIN)]
 
 
 def _dynamic_use(node: ast.AST) -> str | None:

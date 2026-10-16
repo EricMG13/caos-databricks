@@ -500,51 +500,26 @@ def test_the_namespace_and_import_routes_to_a_hook_are_refused(tmp_path: Path) -
         )
 
 
-def test_every_binding_of_pytest_plugins_must_be_the_one_pinned_assignment(
+def test_every_binding_of_pytest_plugins_in_another_conftest_is_refused(
     tmp_path: Path,
 ) -> None:
-    """N109 review: `+=`, an annotated assignment and a tuple target each
-    bind `pytest_plugins` yet left the plain pinned assignment standing."""
+    """N109 review: `+=`, an annotated assignment, a tuple target and a loop
+    target each bind `pytest_plugins`."""
     root = _tree(tmp_path)
-    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
-    for extra in (
-        "\npytest_plugins += ('evil',)\n",
-        "\npytest_plugins: tuple[str, ...] = ('evil',)\n",
-        "\npytest_plugins, _z = ('evil',), 1\n",
-        "\nfor pytest_plugins in [('evil',)]:\n    pass\n",
+    for index, text in enumerate(
+        (
+            "pytest_plugins += ('evil',)\n",
+            "pytest_plugins: tuple[str, ...] = ('evil',)\n",
+            "pytest_plugins, _z = ('evil',), 1\n",
+            "for pytest_plugins in [('evil',)]:\n    pass\n",
+        )
     ):
-        problems = _conftest_problems(root, "tests/conftest.py", original + extra)
+        name = f"tests/binds{index}/conftest.py"
+        problems = _conftest_problems(root, name, text)
         assert any(
-            "conftest: tests/conftest.py sets pytest_plugins" in problem
+            problem.startswith(f"conftest: {name} sets pytest_plugins")
             for problem in problems
-        ), (extra, problems)
-    assert _conftest_problems(root, "tests/conftest.py", original) == []
-
-
-def test_pinned_hooks_are_compared_by_their_committed_source_text(
-    tmp_path: Path,
-) -> None:
-    """N109 review: the pin is the source text, readable on a mismatch, and a
-    decorator (`@pytest.hookimpl(tryfirst=True)`) changes a hook's order."""
-    root = _tree(tmp_path)
-    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
-    for name in check_gate_config.PINNED_CONFTEST_HOOKS:
-        assert check_gate_config.PINNED_CONFTEST_HOOKS[name] in original
-    decorated = original.replace(
-        "def pytest_addoption(",
-        "@pytest.hookimpl(tryfirst=True)\ndef pytest_addoption(",
-    )
-    assert decorated != original
-    assert (
-        "conftest: tests/conftest.py's pytest_addoption no longer matches what is "
-        "committed"
-    ) in _conftest_problems(root, "tests/conftest.py", decorated)
-    removed = original.replace("def _refuse_run_hooks_from_tests(", "def _renamed(")
-    assert removed != original
-    assert any(
-        "_refuse_run_hooks_from_tests" in problem
-        for problem in _conftest_problems(root, "tests/conftest.py", removed)
-    )
+        ), (text, problems)
 
 
 _GUARD_PROJECT_TEST = "def test_a():\n    assert False\n"
@@ -576,6 +551,7 @@ def _guard_project(
     (tests / "sub").mkdir(parents=True)
     (tests / "conftest.py").write_text(
         "from pathlib import Path\n\nimport pytest\n\n\n"
+        "_EXIT = pytest.exit\n_IS_RELATIVE_TO = Path.is_relative_to\n\n\n"
         f"{guard}\n\n\n"
         "def pytest_sessionstart(session):\n"
         "    _refuse_run_hooks_from_tests(session.config)\n\n\n"
@@ -633,13 +609,9 @@ def test_the_runtime_guard_ends_a_session_that_replaces_how_a_test_runs(
             assert ended.returncode != 0, (where, workers, output)
 
 
-def test_builtins_reached_by_attribute_and_pinned_names_cannot_be_rebound(
-    tmp_path: Path,
-) -> None:
+def test_builtins_reached_by_attribute_are_refused(tmp_path: Path) -> None:
     """N109 re-review: `builtins.exec(...)` and a computed `getattr` build a
-    hook as `exec` by name does; and a later binding of a pinned function's
-    name, or of a name the guard reads, replaces what the pinned callers
-    run while the pinned text still matches."""
+    hook as `exec` by name does."""
     root = _tree(tmp_path)
     for index, text in enumerate(
         (
@@ -656,27 +628,6 @@ def test_builtins_reached_by_attribute_and_pinned_names_cannot_be_rebound(
             text,
             problems,
         )
-    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
-    for extra in (
-        "\n_refuse_run_hooks_from_tests = lambda config: None\n",
-        "\ndef _refuse_run_hooks_from_tests(config):\n    return None\n",
-        "\nfrom helper import _refuse_run_hooks_from_tests\n",
-        "\nclass Path:\n    pass\n",
-        "\npytest = None\n",
-        "\nPath = str\n",
-        "\nimport os as pytest\n",
-        "\ndef getattr(*arguments):\n    return None\n",
-        "\ndef _rebind():\n    global Path\n    Path = str\n",
-    ):
-        problems = _conftest_problems(root, "tests/conftest.py", original + extra)
-        assert any(
-            problem.startswith("conftest: tests/conftest.py ") for problem in problems
-        ), (extra, problems)
-    assert [
-        problem
-        for problem in _conftest_problems(root, "tests/conftest.py", original)
-        if "tests/conftest.py" in problem
-    ] == []
 
 
 def test_the_pinned_conftest_is_pinned_whole(tmp_path: Path) -> None:
@@ -951,10 +902,11 @@ def test_the_gitleaks_dir_scan_of_the_uncommitted_tree_is_required(
 
 def test_a_conftest_collection_hook_is_refused_unless_pinned(tmp_path: Path) -> None:
     """N46: `tests/conftest.py`'s `pytest_collection_modifyitems` is what
-    makes `-m "not live_provider"` a floor rather than an opt-out, so it is
-    pinned rather than banned outright; a change to it, a `collect_ignore`
-    anywhere, or a second collection hook elsewhere under `tests/` all drop
-    a test from a run with nothing in the tally to notice, and are refused."""
+    makes `-m "not live_provider"` a floor rather than an opt-out, so the
+    file is pinned whole rather than banned outright (a change to it fails
+    until the pin moves); a `collect_ignore` or a collection hook in any
+    other conftest under `tests/` drops a test from a run with nothing in the
+    tally to notice, and is refused."""
     root = _tree(tmp_path)
     assert check_gate_config._collection_hook_problems(root) == []
 
@@ -967,19 +919,22 @@ def test_a_conftest_collection_hook_is_refused_unless_pinned(tmp_path: Path) -> 
     )
     assert tampered != original
     conftest.write_text(tampered, encoding="utf-8")
-    assert (
-        "conftest: tests/conftest.py's pytest_collection_modifyitems no longer "
-        "matches what is committed" in check_gate_config._collection_hook_problems(root)
-    )
+    [problem] = check_gate_config._collection_hook_problems(root)
+    assert problem.startswith("conftest: tests/conftest.py changed (sha256 ")
+    assert problem.endswith("update CONFTEST_PIN in the same change")
 
-    conftest.write_text(original + "\ncollect_ignore = ['test_security.py']\n")
+    conftest.write_text(original, encoding="utf-8")
+    other = root / "tests" / "other" / "conftest.py"
+    other.parent.mkdir(parents=True)
+    other.write_text("collect_ignore = ['test_security.py']\n", encoding="utf-8")
+    _git(root, "add", "tests/other/conftest.py")
     assert (
-        "conftest: tests/conftest.py sets collect_ignore; it can drop a file "
+        "conftest: tests/other/conftest.py sets collect_ignore; it can drop a file "
         "from collection with nothing reported"
         in check_gate_config._collection_hook_problems(root)
     )
+    other.write_text("", encoding="utf-8")
 
-    conftest.write_text(original, encoding="utf-8")
     nested = root / "tests" / "sub" / "conftest.py"
     nested.parent.mkdir(parents=True)
     nested.write_text(
@@ -1034,22 +989,10 @@ def test_a_conftest_hook_that_can_pass_a_test_is_refused(tmp_path: Path) -> None
         ), (text, problems)
 
 
-def test_pytest_plugins_is_refused_unless_pinned(tmp_path: Path) -> None:
-    """N109: `pytest_plugins` loads any module's hooks; only the one value
-    `tests/conftest.py` carries is allowed, and nowhere else."""
+def test_pytest_plugins_is_refused_in_another_conftest(tmp_path: Path) -> None:
+    """N109: `pytest_plugins` loads any module's hooks; the one value
+    `tests/conftest.py` carries is pinned with that file, and nowhere else."""
     root = _tree(tmp_path)
-    conftest = root / "tests" / "conftest.py"
-    original = conftest.read_text(encoding="utf-8")
-    assert "pytest_plugins = (" in original
-    changed = original.replace(
-        'pytest_plugins = ("test_lite_deep_research_route",)',
-        'pytest_plugins = ("test_lite_deep_research_route", "evil")',
-    )
-    assert changed != original
-    problems = _conftest_problems(root, "tests/conftest.py", changed)
-    assert any("pytest_plugins" in problem for problem in problems), problems
-
-    conftest.write_text(original, encoding="utf-8")
     for index, text in enumerate(
         ('pytest_plugins = ["evil"]\n', 'pytest_plugins += ["evil"]\n')
     ):
@@ -1061,32 +1004,9 @@ def test_pytest_plugins_is_refused_unless_pinned(tmp_path: Path) -> None:
         ), (text, problems)
 
 
-def test_a_second_hook_in_the_pinned_conftest_or_a_root_conftest_is_refused(
-    tmp_path: Path,
-) -> None:
-    """N109: the pinned file keeps its three hooks and no more; a
-    conftest.py at the repository root is read by pytest too."""
+def test_a_root_conftest_is_read_too(tmp_path: Path) -> None:
+    """N109: a conftest.py at the repository root is read by pytest as well."""
     root = _tree(tmp_path)
-    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
-    problems = _conftest_problems(
-        root,
-        "tests/conftest.py",
-        original + "\n\ndef pytest_pyfunc_call(pyfuncitem):\n    return True\n",
-    )
-    assert any("defines pytest_pyfunc_call" in problem for problem in problems)
-
-    tampered = original.replace(
-        '    if POSTGRES_URL and not hasattr(session.config, "workerinput"):\n',
-        "    if True:\n",
-    )
-    assert tampered != original
-    problems = _conftest_problems(root, "tests/conftest.py", tampered)
-    assert any(
-        "pytest_sessionstart no longer matches what is committed" in problem
-        for problem in problems
-    ), problems
-
-    (root / "tests" / "conftest.py").write_text(original, encoding="utf-8")
     problems = _conftest_problems(
         root, "conftest.py", "def pytest_pyfunc_call(pyfuncitem):\n    return True\n"
     )
