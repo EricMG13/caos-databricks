@@ -88,6 +88,8 @@ def call_hold_seconds(lease: Lease | None) -> int:
 # attempt with no outcome whose call another session still holds
 # (`call_hold`), for at most `call_hold_seconds` past its reservation. The
 # hold is tried on those alone; a try that takes it lets go at this unit's end.
+# The owed rows are read first (the order sits inside the barrier subquery), so
+# the outer `LIMIT 1` stops at an owed row before any hold is tried on another.
 _UNSETTLED = (
     "SELECT earlier.owed FROM (SELECT t.attempt_id, r.reserved_at,"
     "   o.attempt_id IS NOT NULL AS recorded,"
@@ -102,14 +104,15 @@ _UNSETTLED = (
     " LEFT JOIN call_outcomes o ON o.attempt_id = t.attempt_id"
     " LEFT JOIN budget_ledger l"
     "   ON (l.run_id, l.attempt_id) = (o.run_id, o.charged_attempt_id)"
-    " WHERE t.run_id = %(run)s AND t.route_node_id = %(node)s OFFSET 0) earlier"
+    " WHERE t.run_id = %(run)s AND t.route_node_id = %(node)s"
+    " ORDER BY owed DESC OFFSET 0) earlier"
     " WHERE CASE WHEN earlier.owed THEN true"
     "   WHEN earlier.recorded OR earlier.reserved_at IS NULL"
     "     OR earlier.reserved_at <= now() - make_interval(secs => %(hold)s)"
     "   THEN false"
     "   ELSE NOT pg_try_advisory_xact_lock(%(lock)s::integer,"
     "     hashtext(earlier.attempt_id::text)) END"
-    " ORDER BY earlier.owed DESC LIMIT 1"
+    " LIMIT 1"
 )
 # `0025_supersedes.sql`: the partial unique index that holds one successor per
 # predecessor. A violation is mapped to `RUN_ALREADY_SUPERSEDED` by this name
@@ -278,9 +281,9 @@ def start_attempt(
     `ATTEMPT_UNSETTLED` (a call another session holds), with nothing written,
     while an earlier attempt at the node may still be paid for or is owed a
     verdict (`_UNSETTLED`): the pass that decided to start read the ledger
-    before this lock, and a bill
-    that landed since -- or a call another worker still holds past its lapsed
-    lease -- would otherwise have the node paid for twice.
+    before this lock, and a bill that landed since -- or a call another worker
+    still holds past its lapsed lease -- would otherwise have the node paid
+    for twice.
     """
     try:
         require_running(conn, run_id, lease)
