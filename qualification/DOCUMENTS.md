@@ -201,14 +201,27 @@ a row typed here is a row that fails. -->
 | `mgm-finra-trace-552953ck5-2026-10-02-full-credit-assessment` | MGM | FINRA TRACE observation for MGM Resorts International 6.125% notes due 2029, CUSIP 552953CK5 (FULL credit-assessment set copy) | in_hand | CP-3 | FULL_CREDIT_ASSESSMENT | 1277 | yes | `e17cea1bb90debde…` |
 | `penn-finra-trace-707569av1-2026-10-02-full-credit-assessment` | PENN | FINRA TRACE observation for PENN Entertainment 4.125% notes due 2029, CUSIP 707569AV1 (FULL credit-assessment set copy) | in_hand | CP-3 | FULL_CREDIT_ASSESSMENT | 1354 | yes | `666c0f36ace32336…` |
 | `test-clo-i-mandate-2026-10-02-full-credit-assessment` | Test CLO I (synthetic) | SYNTHETIC test mandate: Test CLO I Ltd mandate, exposure report and compliance monitor, with the owner-adopted CZR position adaptation of 2 October 2026 (text extract, FULL credit-assessment set copy) | in_hand | CP-0, CP-6 | FULL_CREDIT_ASSESSMENT | 10979 | yes | `864ee90ab21372bc…` |
+| `czr-2024-credit-agreement-fourth-amendment-portfolio` | CZR | Caesars Entertainment, Inc. Fourth Amendment to Credit Agreement dated 9 May 2024 (SEC exhibit text extract, FULL portfolio set copy) | in_hand | CP-4 | PORTFOLIO_DECISION | 25431 | yes | `32f91de6ef3ff93d…` |
+| `czr-2024-credit-agreement-fifth-amendment-portfolio` | CZR | Caesars Entertainment, Inc. Fifth Amendment to Credit Agreement dated 25 November 2024 (SEC exhibit text extract, FULL portfolio set copy) | in_hand | CP-4 | PORTFOLIO_DECISION | 38797 | yes | `7f2b5c777dc33479…` |
+| `czr-q2-2026-earnings-portfolio` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, FULL portfolio set copy) | in_hand | CP-0, CP-1 | PORTFOLIO_DECISION | 15590 | yes | `b385f76ff631243d…` |
+| `czr-2026-merger-8k-portfolio` | CZR | Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract, FULL portfolio set copy) | in_hand | CP-4, CP-5 | PORTFOLIO_DECISION | 30809 | yes | `6808734cfbb19b56…` |
+| `czr-2026-merger-press-release-portfolio` | CZR | Caesars Entertainment, Inc. press release announcing the Fertitta Entertainment merger agreement, Exhibit 99.1, 28 May 2026 (SEC exhibit text extract, FULL portfolio set copy) | in_hand | CP-4, CP-5 | PORTFOLIO_DECISION | 19048 | yes | `4fbecbd5f5a10b15…` |
+| `mgm-q2-2026-earnings-portfolio` | MGM | MGM Resorts International second quarter 2026 earnings release, Exhibit 99.1, 29 July 2026 (SEC exhibit text extract, FULL portfolio set copy) | in_hand | CP-3 | PORTFOLIO_DECISION | 29214 | yes | `795ac68aa1c51a7e…` |
+| `penn-q2-2026-earnings-portfolio` | PENN | PENN Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 6 August 2026 (SEC exhibit text extract, FULL portfolio set copy) | in_hand | CP-3 | PORTFOLIO_DECISION | 33608 | yes | `4d12fff94b066f73…` |
+| `mgm-finra-trace-552953ck5-2026-10-02-portfolio` | MGM | FINRA TRACE observation for MGM Resorts International 6.125% notes due 2029, CUSIP 552953CK5 (FULL portfolio set copy) | in_hand | CP-3D, CP-3 | PORTFOLIO_DECISION | 1277 | yes | `e17cea1bb90debde…` |
+| `penn-finra-trace-707569av1-2026-10-02-portfolio` | PENN | FINRA TRACE observation for PENN Entertainment 4.125% notes due 2029, CUSIP 707569AV1 (FULL portfolio set copy) | in_hand | CP-3D, CP-3 | PORTFOLIO_DECISION | 1354 | yes | `666c0f36ace32336…` |
+| `czr-fy2025-10k-lite-portfolio` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 405745 | yes | `172309048af2a6a2…` |
+| `czr-2026-merger-8k-lite-portfolio` | CZR | Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 30809 | yes | `6808734cfbb19b56…` |
+| `czr-fy2025-10k-lite-relative-value` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, LITE relative-value set copy) | in_hand | CP-0, CP-L10 | LITE_RELATIVE_VALUE | 405745 | yes | `172309048af2a6a2…` |
+| `czr-fy2025-10k-lite-full-credit-screen` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, LITE full-credit-screen set copy) | in_hand | CP-0, CP-L10, CP-1A, CP-2A, CP-5 | LITE_FULL_CREDIT_SCREEN | 405745 | yes | `172309048af2a6a2…` |
+| `czr-2026-merger-agreement-lite-full-credit-screen` | CZR | Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract, LITE full-credit-screen set copy) | in_hand | CP-1A, CP-3C, CP-4C | LITE_FULL_CREDIT_SCREEN | 411229 | yes | `e01077c1ed37c5b0…` |
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-One hundred and sixty documents: one hundred and fifty-five `in_hand`,
-four `to_source`, and one `to_author`; plus one key source. One hundred and
-eleven of the one hundred and fifty-five in hand are byte-identical route-local
+One hundred and seventy-four documents: one hundred and sixty-nine `in_hand`,
+four `to_source`, and one `to_author`; plus one key source. One hundred and twenty-five of the one hundred and sixty-nine in hand are byte-identical route-local
 copies of already admitted evidence: eleven from the earlier sets, nineteen added
-for the Phase 2 route inventory, and eighty-one in the CZR earnings-update, liquidity,
+for the Phase 2 route inventory, and ninety-five in the CZR earnings-update, liquidity,
 FULL and LITE covenant-refinancing, FULL and LITE relative-value, LITE
 full-credit-screen, FULL and LITE portfolio, and FULL credit-assessment sets.
 Fifteen more are the documents admitted on 2 October 2026: the three CZR Q2
@@ -226,7 +239,7 @@ approved on 6 October 2026 (D115, F541, F542): the full Merger Agreement
 (`czr-2026-merger-agreement` and its copies in five sets) and the Federated
 Hermes Sustainable High Yield Bond Fund's N-PORT schedule and its prospectus
 and SAI (`fhsuhy-nport-2026-06-30`, `fhsuhy-prospectus-sai-2026-05-26` and
-their copies in three sets). Three more are the legal exhibits admitted on 5 October
+their copies in three sets). Fourteen more byte-identical copies were added on 16 October 2026 on the owner's ruling R27 (D152, N147), with no download: to `czr-2026q2-portfolio` the Fourth and Fifth Amendments, the Q2 2026 earnings release, the merger 8-K and press release, the MGM and PENN releases and their two TRACE observations; the FY2025 10-K to `czr-2026q2-lite-portfolio`, `-lite-relative-value` and `-lite-full-credit-screen`; the merger 8-K to `czr-2026q2-lite-portfolio`; and the Merger Agreement to `czr-2026q2-lite-full-credit-screen`. Three more are the legal exhibits admitted on 5 October
 2026 on the owner's ruling (F508), first in `czr-2026q2-covenant-refinancing`:
 Incremental Assumption Agreement No. 3, whose Exhibit A is the credit agreement
 conformed through it, and the 2032 notes' First and Second Supplemental

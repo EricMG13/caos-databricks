@@ -22,7 +22,9 @@
         "documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
         "documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
         "documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt",
-        "documents/CZR_FINRA_TRACE_12769GAD2_2026-10-02.txt"
+        "documents/CZR_FINRA_TRACE_12769GAD2_2026-10-02.txt",
+        "documents/CZR_FY2025_10K.txt",
+        "documents/CZR_2026_Merger_Agreement.txt"
       ],
       "expects": [
         {
