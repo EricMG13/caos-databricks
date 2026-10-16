@@ -622,13 +622,15 @@ export function liquidityBridge(handoff: HandoffView): Figure[] {
   const opening = rows.find((row) =>
     nameOf(row, "Bridge Item").toLowerCase().startsWith(LIQUIDITY_TOTALS[0]),
   );
-  const unit = opening ? moneyIn(opening) : undefined;
+  // The opening's scale where it states one, else the first row's that does.
+  const unit =
+    [opening, ...rows].map((row) => (row ? moneyIn(row) : "")).find(Boolean) || undefined;
   const amountOf = (row: Row): Cell | undefined => {
     const cell = row["Amount"];
     if (unit === undefined || cell?.value == null || moneyIn(row) === unit) return cell;
     const own = moneyIn(row) || "no currency and scale";
     return {
-      text: `${cell.text} in ${own}, not the opening total's ${unit || "none"}`,
+      text: `${cell.text} in ${own}, not the bridge's ${unit}`,
       value: null,
     };
   };
@@ -725,8 +727,8 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
     const [first, last] = [group[0]!.row, group.at(-1)!.row];
     const stating = group.map(({ row }) => row);
     const scenario = text(first, "scenario");
-    const entityCount = new Set(scenarios.get(scenario)!.map((g) => text(g[0]!.row, "entity")));
-    const entity = entityCount.size > 1 ? text(first, "entity") : "";
+    const entitiesOf = new Set(scenarios.get(scenario)!.map((g) => text(g[0]!.row, "entity")));
+    const entity = entitiesOf.size > 1 ? text(first, "entity") : "";
     const money = moneyIn(first);
     const unitNamed = units.get(pair(scenario, text(first, "entity")))!.length > 1 ? money : "";
     const fulcrum = fulcrumOf(fulcrums, scenario);
@@ -1507,8 +1509,8 @@ const triggerIdentity = (row: Row): string =>
     naming it), each trigger's value (read at its own `case` and `period`,
     columns of their own since fork r17, N192) against its threshold, the
     headroom as served. A trigger stated twice (one metric, rating type,
-    direction, case and period) is one row, each value a gap naming each text where they
-    differ, and the summary names it. */
+    direction, case and period) is one row, each value a gap naming each
+    text where they differ, and the summary names it. */
 export function ratingTriggers(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2H", "T2R.4");
   if (!rows?.length) return [];

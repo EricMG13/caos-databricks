@@ -3207,7 +3207,7 @@ test("liquidityBridge: a step in another scale than the opening total is a gap, 
   expect(figure!.unit).toBe("USD m");
   expect(figure!.steps.map((step) => step.value)).toEqual(["100", "-8", null, "92"]);
   expect(figure!.steps[2]).toMatchObject({
-    reason: "0.002 in USD bn, not the opening total's USD m",
+    reason: "0.002 in USD bn, not the bridge's USD m",
   });
 });
 
