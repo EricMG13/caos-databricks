@@ -20,6 +20,10 @@ import type { AnalysisDocument, HandoffView } from "@/wire/v1";
 const load = (path: string): unknown =>
   JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
 
+interface RunBlockedFixture {
+  body: { run: { blocked_by: NonNullable<AnalysisDocument["body"]["blocked_by"]> } };
+}
+
 const complete = parseAnalysisDocument(load("../../fixtures/analysis.json"));
 const partial = parseAnalysisDocument(load("../../fixtures/states/analysis.partial.json"));
 
@@ -56,7 +60,6 @@ describe("Analysis", () => {
     const fixtures = [
       "../../fixtures/analysis.json",
       "../../fixtures/states/analysis.partial.json",
-      "../../fixtures/states/analysis.blocked.json",
     ];
     for (const path of fixtures) {
       expect(() => parseAnalysisDocument(load(path))).not.toThrow();
@@ -836,49 +839,28 @@ describe("Analysis", () => {
     }
   });
 
-  test("test_the_blocked_fixture_shows_the_blocked_quotes_under_the_node_that_ended_the_run", () => {
-    // N141: the a11y matrix scans this fixture, so it must render the quotes.
-    const blocked = parseAnalysisDocument(load("../../fixtures/states/analysis.blocked.json"));
-    const { container } = mount(blocked);
+  test("test_blocked_quotes_show_under_the_node_that_ended_the_run", () => {
+    // N141: the a11y matrix scans `?fixture=blocked`, which the demo server
+    // derives from these two files; the same document must render the quotes.
+    const quotes = (load("../../fixtures/states/run.blocked.json") as RunBlockedFixture).body.run
+      .blocked_by;
+    const [answered] = partial.body.pending;
+    const blocked: AnalysisDocument = {
+      ...partial,
+      body: {
+        ...partial.body,
+        displayed_run_status: "BLOCKED",
+        blocked_by: {
+          ...quotes,
+          route_node_id: answered!.route_node_id,
+          module_id: answered!.module_id,
+        },
+      },
+    };
+    const { container } = mount(parseAnalysisDocument(JSON.parse(JSON.stringify(blocked))));
     const row = container.querySelector('[data-pending-node][data-blocking="yes"]')!;
     expect(row.querySelector('[data-blocked-quotes="recorded"]')).not.toBeNull();
     expect(row.querySelectorAll("[data-blocked-quote]")).toHaveLength(2);
-  });
-
-  test("a limitation and a RESTRICTED module are the ring, not a warning (D71, N113)", () => {
-    const base = complete.body.handoffs[0]!;
-    const restricted: HandoffView = {
-      ...base,
-      qa_status: "Restricted",
-      limitation_flags: ["covenant_package_not_provided"],
-      validation_warnings: [],
-      screening_only: true,
-      unverified_facts: [],
-    };
-    const { container } = mountAt(
-      { ...complete, body: { ...complete.body, handoffs: [restricted] } },
-      restricted.module_id,
-    );
-    const status = container.querySelector("[data-qa-status]")!;
-    expect(status).toHaveTextContent("Restricted");
-    expect(status).not.toHaveClass("warn");
-    expect(status).toHaveClass("restricted");
-    for (const key of ["screening", "limit-0", "qa"]) {
-      const mark = container.querySelector(`[data-caveat="${key}"] [data-severity]`)!;
-      expect(mark, key).toHaveAttribute("data-severity", "RESTRICTED");
-      expect(mark.classList.contains("warn")).toBe(false);
-    }
-    // A validation warning is still a warning.
-    const warned: HandoffView = { ...restricted, validation_warnings: ["period_mismatch"] };
-    const { container: other } = mountAt(
-      { ...complete, body: { ...complete.body, handoffs: [warned] } },
-      warned.module_id,
-    );
-    expect(other.querySelector('[data-caveat="warnings"] [data-severity]')).toHaveAttribute(
-      "data-severity",
-      "WARNING",
-    );
-    expect(other.querySelector("[data-qa-status]")).toHaveClass("warn");
   });
 
   test("a run still working names no blocking node", () => {

@@ -102,6 +102,21 @@ function grantedAnalysis(raw: string): string {
   return JSON.stringify(doc);
 }
 
+/** The `blocked` fixture: the partial analysis of a run that ended BLOCKED, the
+    first pending node's verdict carrying the quotes `run.blocked.json` holds
+    (N141). Derived from the two, so neither can drift from it. */
+function blockedAnalysis(partial: string, run: string): string {
+  const doc = JSON.parse(partial);
+  const [node] = doc.body.pending;
+  doc.body.displayed_run_status = "BLOCKED";
+  doc.body.blocked_by = {
+    ...JSON.parse(run).body.run.blocked_by,
+    route_node_id: node.route_node_id,
+    module_id: node.module_id,
+  };
+  return JSON.stringify(doc);
+}
+
 /** The Model's `acts` state: a complete default view the server offers Add to
     Book on (a digest, the run's subject, the action), derived from `model.json`
     so the two cannot drift. */
@@ -156,10 +171,15 @@ async function serveSection(section: string, fixture: string | null, res: Server
   const offered = section === "model" && fixture === "acts";
   if (granted) path = "analysis.json";
   else if (offered) path = "model.json";
+  else if (section === "analysis" && fixture === "blocked") path = "states/analysis.partial.json";
   else if (fixture && !STREAM_FIXTURES.has(fixture)) path = `states/${section}.${fixture}.json`;
   else if (section === "run" && runFrame > 0) path = `run/frames/${runFrame}.json`;
   const body = await readJson(path);
   if (body === null) return send(res, 404, "{}");
+  if (section === "analysis" && fixture === "blocked") {
+    const run = await readJson("states/run.blocked.json");
+    return send(res, 200, run === null ? "{}" : blockedAnalysis(body, run));
+  }
   send(
     res,
     200,
