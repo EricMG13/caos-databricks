@@ -210,3 +210,28 @@ def test_a_width_line_with_long_column_names_stays_within_the_bound() -> None:
     message = _width_message("T3D.2", 1, cells, header)
     assert len(message) <= MAX_FEEDBACK_CHARS
     assert message.endswith("reads empty)"), message
+
+
+def test_the_width_line_reads_the_profile_of_the_answers_own_module() -> None:
+    """The contract is read for the answer's module ID, never for any profile
+    the skill happens to carry: a CP-3C answer under CP-3C's skill gets its
+    width line, the same answer as CP-3D's under that skill (which declares no
+    CP-3D profile) gets none."""
+    rows = [_row(12), _row(11)]
+    assert _table_lines(_lines(rows)) == [SHORT_LINE]
+    markdown = (
+        "---\nmodule_id: CP-3D\n---\n\n### T3D.2 — Debt maturity\n\n"
+        + "| "
+        + " | ".join(HEADER)
+        + " |\n"
+        + "|---" * len(HEADER)
+        + "|\n"
+        + "\n".join(rows)
+        + "\n"
+    )
+    citation = {"source_id": str(UUID(int=1)), "page": 1, "matched_text": "value 2"}
+    body = json.dumps({"canonical_markdown": markdown, "citations": [citation]})
+    skill = assemble_authority(BUNDLE, "CP-3C").files[SKILL]
+    ident = replace(identity("CP-0"), module_id="CP-3D")
+    lines = feedback_lines(CONTRACT, catalog(BUNDLE), ident, body, skill=skill)
+    assert _table_lines(lines) == []

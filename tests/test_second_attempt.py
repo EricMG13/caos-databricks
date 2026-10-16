@@ -1415,6 +1415,35 @@ def test_a_blocker_cell_past_its_bound_is_named_by_its_row_never_quoted() -> Non
         assert not any(line.startswith("host readiness check:") for line in others)
 
 
+def test_the_blocker_line_is_the_gates_alone() -> None:
+    """The `Why now / blocker` check binds CP-0's T8 only: the same overlong
+    cell, in the same Markdown, gets CP-0 its blocker line and gets another
+    module's answer none."""
+    from dataclasses import replace
+
+    from canonical_fixtures import CATALOG, CONTRACT, identity
+
+    from caos.methodology.handoff import MAX_BLOCKER_CHARS
+
+    cp0 = identity("CP-0")
+    markdown = _gate_markdown(
+        readiness={"CP-5": "CONDITIONAL"},
+        blockers={"CP-5": "SECRETMARK " + "x" * MAX_BLOCKER_CHARS},
+    )
+    body = _gate_body(markdown.encode())
+    line = (
+        "host readiness check: a CONDITIONAL or BLOCKED row's `Why now / blocker`"
+        f" cell holds at most {MAX_BLOCKER_CHARS} characters and no control or"
+        " bidirectional character; the row for CP-5 breaks it"
+    )
+    assert line in feedback_lines(CONTRACT, CATALOG, cp0, body)
+    other = replace(cp0, module_id="CP-1")
+    assert not any(
+        row.startswith("host readiness check:")
+        for row in feedback_lines(CONTRACT, CATALOG, other, body)
+    )
+
+
 def test_the_ledger_read_orders_a_nodes_attempts_oldest_first(
     harness: _Harness,
 ) -> None:

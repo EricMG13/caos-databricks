@@ -178,3 +178,26 @@ def test_a_locator_failure_surfaces_and_is_not_swallowed(
     )
     with pytest.raises(LocatorBug):
         _cp1a_lines(markdown)
+
+
+def test_the_register_line_reads_the_profile_of_the_answers_own_module() -> None:
+    """The contract is read for the answer's module ID, never for any profile
+    the skill happens to carry: CP-1B's answer, given CP-1's skill (which
+    declares no CP-1B profile), is told nothing about registers, while CP-1's
+    own answer to the same skill is told which one it lacks."""
+    markdown = _answer("CP-1", omit_register="T4.2")
+    body = wire(
+        markdown, [{"source_id": str(UUID(int=1)), "page": 1, "matched_text": "x"}]
+    )
+
+    def register_lines(module_id: str) -> list[str]:
+        ident = replace(identity("CP-0"), module_id=module_id)
+        lines = feedback_lines(
+            CONTRACT, catalog(BUNDLE), ident, body, skill=skill("CP-1")
+        )
+        return [line for line in lines if "appears nowhere" in line]
+
+    assert register_lines("CP-1") == [
+        "host register check: the register ID `T4.2` appears nowhere in the answer"
+    ]
+    assert register_lines("CP-1B") == []
