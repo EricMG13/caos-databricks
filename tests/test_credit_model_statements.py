@@ -1157,10 +1157,35 @@ def test_a_positive_cash_tax_served_as_a_refund_says_so() -> None:
     assert q1.note == TAX_REFUND
     ltm = _cells(positive, "LTM Q2 26")["cash_taxes"]
     assert ltm.value == 8
-    assert notes_of(ltm.note) == ("differs from CP-1 stated", TAX_REFUND)
+    assert set(notes_of(ltm.note)) == {"differs from CP-1 stated", TAX_REFUND}
     # Paid (negative) or nil: no note; any figure above nil is a refund.
     assert _cells(regs, "Q1 26")["cash_taxes"].note is None
     assert _cells(positive, "Q2 25")["cash_taxes"].note is None
     for written, note in (("0", None), ("1", TAX_REFUND), ("0.01", TAX_REFUND)):
         taxed = with_figures(regs, "Q1_2026", {"cash_taxes_paid": Decimal(written)})
         assert _cells(taxed, "Q1 26")["cash_taxes"].note == note, written
+
+
+def test_a_positive_interim_netted_into_a_negative_ltm_carries_the_refund_note() -> (
+    None
+):
+    """N211 (b): Q2 2026's cash tax written +20 is a refund (CP-1's sign). The
+    YTD (-22) and the LTM (-98) are negative, but sums of it: they carry the
+    note."""
+    regs = example_registers()
+    positive = with_figures(regs, "Q2_2026", {"cash_taxes_paid": Decimal(20)})
+
+    assert _cells(positive, "Q2 26")["cash_taxes"].note == TAX_REFUND
+    ytd = _cells(positive, "YTD H1 26")["cash_taxes"]
+    assert ytd.value == -22 and TAX_REFUND in notes_of(ytd.note)
+    ltm = _cells(positive, "LTM Q2 26")["cash_taxes"]
+    assert ltm.value == -98
+    assert TAX_REFUND in notes_of(ltm.note)
+    # Only the sums that took it; and only cash taxes.
+    assert _cells(positive, "Q1 26")["cash_taxes"].note is None
+    assert _cells(positive, "Q3 25")["cash_taxes"].note is None
+    assert _cells(regs, "LTM Q2 26")["cash_taxes"].note is None
+    assert TAX_REFUND not in (_cells(positive, "LTM Q2 26")["capex"].note or "")
+    # A positive prior interim is subtracted, and noted all the same.
+    prior = with_figures(regs, "Q1_2025", {"cash_taxes_paid": Decimal(10)})
+    assert TAX_REFUND in notes_of(_cells(prior, "LTM Q2 26")["cash_taxes"].note)

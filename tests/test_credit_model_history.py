@@ -409,7 +409,9 @@ def test_a_derived_column_with_a_missing_component_is_component_missing() -> Non
     frame = _frame(regs)
 
     ltm = frame["LTM:LTM_Q2_2026"]
-    assert ltm["acct:revenue"] == Cell(None, "COMPONENT_MISSING", stated=Decimal(420))
+    assert ltm["acct:revenue"] == Cell(
+        None, "COMPONENT_MISSING", stated=Decimal(420), note=not_stated("H1_2025")
+    )
     assert ltm["acct:cogs"].value == Decimal(-110)
     # H1 2025's revenue row has no figure: not stated, not absent.
     assert frame["PYTD:H1_2025"]["acct:revenue"] == Cell(None, "NOT_STATED")
@@ -441,7 +443,9 @@ def test_a_calculated_quarter_with_a_missing_component_is_component_missing() ->
 
     frame = _frame(regs)
 
-    assert frame["Q:FY2025-9M_2025"]["acct:revenue"] == Cell(None, "COMPONENT_MISSING")
+    assert frame["Q:FY2025-9M_2025"]["acct:revenue"] == Cell(
+        None, "COMPONENT_MISSING", note=not_stated("9M_2025")
+    )
 
 
 def test_a_stated_ltm_that_differs_beyond_rounding_is_noted() -> None:
@@ -1129,7 +1133,7 @@ def test_an_absent_row_is_not_sourced_and_a_null_row_not_stated_or_missing() -> 
         None, "NOT_SOURCED", stated=Decimal(5885)
     )
     assert cell(nulled, "YTD:H1_2026", "acct:revenue") == Cell(
-        None, "COMPONENT_MISSING", stated=Decimal(5885)
+        None, "COMPONENT_MISSING", stated=Decimal(5885), note=not_stated("Q2_2026")
     )
     # A balance: the first figure at the date; a null row there is missing.
     ending = {"Q2_2026", "H1_2026", "LTM_Q2_2026"}

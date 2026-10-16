@@ -66,6 +66,7 @@ from caos.calculators.credit_model._cells import (
     FOREIGN,
     RESIDUAL,
     SIGN_NORMALISED,
+    TAX_REFUND,
     beyond_rounding,
     calc,
     join_notes,
@@ -85,8 +86,6 @@ from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.methodology.model_inputs import Cp1Registers, PfAdjustmentRow
 
 _EXCLUDED = "excluded"
-# A positive cash tax: CP-1 writes inflows positive, so it is a refund.
-TAX_REFUND = "positive: read as a tax refund"
 # The realisation statuses "exclude unrealised" leaves out (spec M7).
 UNREALISED = frozenset({"UNREALIZED", "NOT_STATED"})
 

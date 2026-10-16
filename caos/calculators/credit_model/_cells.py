@@ -41,6 +41,9 @@ FOREIGN = "different currency, not converted"
 RESIDUAL = "residual"
 # An outflow CP-1 wrote positive, read as minus its absolute value.
 SIGN_NORMALISED = "sign normalised"
+# A positive cash tax: CP-1 writes inflows positive, so it is a refund; and a
+# sum that took one.
+TAX_REFUND = "positive: read as a tax refund"
 # A derived period whose components are not distinct, contiguous and its
 # exact span; or an LTM whose fiscal year does not meet its YTD and PYTD.
 UNSPANNED = "components do not span the period"

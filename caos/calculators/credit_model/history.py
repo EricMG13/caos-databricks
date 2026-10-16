@@ -130,6 +130,7 @@ from caos.calculators.credit_model._cells import (
     DIFFERS,
     OTHER_FOOTING,
     SIGN_NORMALISED,
+    TAX_REFUND,
     UNSPANNED,
     UNSTATED_FOOTING,
     Footing,
@@ -272,6 +273,9 @@ class _Series:
     # An add-back: a one-off, so twelve months take an interim or a quarter
     # without a row as nothing, noted (never `PARTLY_STATED`).
     one_off: bool = False
+    # Cash taxes, signed: a sum with a positive part (a refund, CP-1's sign)
+    # is noted `TAX_REFUND` whatever its own sign.
+    signed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -954,9 +958,9 @@ def _series(regs: Cp1Registers) -> dict[str, _Series]:
     series: dict[str, _Series] = {}
     for key, kind, period_id, cell in _entries(regs):
         one_off = key.startswith("addback:")
-        series.setdefault(key, _Series(kind, {}, one_off=one_off)).rows[period_id] = (
-            cell
-        )
+        signed = key == _CASH_TAXES
+        made = _Series(kind, {}, one_off=one_off, signed=signed)
+        series.setdefault(key, made).rows[period_id] = cell
     return series
 
 
@@ -987,6 +991,7 @@ def _register(regs: Cp1Registers) -> _Register:
     return _Register(periods, ending, starting, shortest, off_footing(regs), footings)
 
 
+_CASH_TAXES = "acct:cash_taxes_paid"
 _MISSING = Cell(None, "COMPONENT_MISSING")  # a part not stated, or no period
 _FROM_PARTS = "differs from components"
 # Twelve months whose parts (FY, YTD and PYTD; or four quarters) are stated
@@ -1021,10 +1026,25 @@ def _sum(series: _Series, parts: Iterable[tuple[Cell, int]]) -> Cell:
     return calc((cell, sign) for cell, sign in cells if cell.value is not None)
 
 
+def _with_refund(series: _Series, parts: Iterable[Cell], total: Cell) -> Cell:
+    """`total`, noted `TAX_REFUND` where the series is cash taxes and a part
+    is a refund (positive, or itself a sum that took one): a negative sum of
+    a positive interim would otherwise say nothing (N211 b)."""
+    if not series.signed or total.value is None:
+        return total
+    if not any(
+        (cell.value is not None and cell.value > 0)
+        or (cell.note is not None and TAX_REFUND in cell.note.split("; "))
+        for cell in parts
+    ):
+        return total
+    return replace(total, note=join_notes((total.note, TAX_REFUND)))
+
+
 def _named_sum(series: _Series, parts: Iterable[tuple[str, Cell, int]]) -> Cell:
     """`_sum` of the named parts; with a figure, noted with each part it took
     as nothing (`treated_as_zero`: in a sparse series, a part without a
-    row)."""
+    row), and, for cash taxes, a refund among them (`_with_refund`)."""
     named = list(parts)
     total = _sum(series, ((cell, sign) for _, cell, sign in named))
     if total.reason == "COMPONENT_MISSING" and total.note is None:
@@ -1032,17 +1052,17 @@ def _named_sum(series: _Series, parts: Iterable[tuple[str, Cell, int]]) -> Cell:
             (
                 name
                 for name, cell, _ in named
-                if cell.value is None and cell.reason not in (None, "NOT_SOURCED")
+                if cell.value is None and cell.reason == "NOT_STATED"
             ),
             None,
         )
         if unstated is not None:
             return replace(total, note=not_stated(unstated))
     nothing = [name for name, cell, _ in named if cell.reason == "NOT_SOURCED"]
-    if total.value is None or not nothing:
-        return total
-    notes = (total.note, *map(treated_as_zero, nothing))
-    return replace(total, note=join_notes(notes))
+    if total.value is not None and nothing:
+        notes = (total.note, *map(treated_as_zero, nothing))
+        total = replace(total, note=join_notes(notes))
+    return _with_refund(series, (cell for _, cell, _ in named), total)
 
 
 def _spans(register: _Register, period: PeriodRow) -> bool:
