@@ -103,6 +103,13 @@ describe("the client checks what the server checks", () => {
     expect(commandErrors({ ...form, horizon: "FY26-FY28", base: "FY2025" }, BOTH)).toEqual({});
   });
 
+  test("a decomposed accent passes and is sent composed, as the server composes first", () => {
+    const decomposed = "Re\u0301sume\u0301 the credit";
+    const form = { ...EMPTY_COMMAND_FORM, objective: decomposed };
+    expect(commandErrors(form, BOTH)).toEqual({});
+    expect(runCommand(form, BOTH).objective).toBe(decomposed.normalize("NFC"));
+  });
+
   test("a value longer than the wire, or over two lines, is refused", () => {
     expect(
       commandErrors({ ...EMPTY_COMMAND_FORM, objective: "a".repeat(1025) }, BOTH),

@@ -3,7 +3,9 @@
 // `forecast_horizon`, `base_period` and `cases` as `qualifiers`, and CP-0's
 // `objective`. The server (`caos/methodology/qualifiers.py`) is the authority:
 // this mirrors its grammars so a value it would refuse is named before the
-// pin, and anything else it refuses comes back as a typed refusal.
+// pin. What it does not mirror -- the server's `hides_text` rule and any
+// Unicode-version difference in the letter and digit classes -- is left to the
+// server's typed refusal, which comes back as it does for any other value.
 
 export const FORECAST_MODULE = "CP-2G";
 
@@ -67,11 +69,14 @@ function validHorizon(value: string): boolean {
   return matched !== null && matched[1]! <= matched[2]!;
 }
 
+/** A value as the server judges it: trimmed, then composed to NFC. */
+function composed(raw: string): string {
+  return raw.trim().normalize("NFC");
+}
+
 function oneLine(value: string): boolean {
   return (
-    !/[\r\n\u2028\u2029\t]/.test(value) &&
-    value === value.normalize("NFC") &&
-    new TextEncoder().encode(value).length <= TEXT_BYTES
+    !/[\r\n\u2028\u2029\t]/.test(value) && new TextEncoder().encode(value).length <= TEXT_BYTES
   );
 }
 
@@ -84,7 +89,7 @@ export function commandErrors(form: CommandForm, route: CommandRoute): CommandEr
     ok: (value: string) => boolean,
     message: string,
   ) => {
-    const value = form[key].trim();
+    const value = composed(form[key]);
     if (offered && value !== "" && !(oneLine(value) && ok(value))) errors[key] = message;
   };
   check(
@@ -126,10 +131,10 @@ export function runCommand(form: CommandForm, route: CommandRoute): RunCommand {
       ["cases", form.cases],
     ];
     for (const [name, raw] of stated) {
-      const value = raw.trim();
+      const value = composed(raw);
       if (value !== "") qualifiers.push({ module_id: FORECAST_MODULE, name, value });
     }
   }
-  const objective = route.objective ? form.objective.trim() : "";
+  const objective = route.objective ? composed(form.objective) : "";
   return { qualifiers, objective: objective === "" ? null : objective };
 }

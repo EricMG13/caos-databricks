@@ -582,6 +582,14 @@ export function PinInputControl({
   const invalid = Object.keys(errors).length > 0;
   const scope = route.forecast ? derivedScope(subject.reporting_period) : null;
   const errorId = useId();
+  const hintId = `${errorId}-scope`;
+  const commandRef = useRef<HTMLFieldSetElement>(null);
+  // A value is flagged once its field is left, and every invalid one once a
+  // pin is attempted; only then does an error become an assertive alert.
+  const [left, setLeft] = useState<ReadonlySet<keyof CommandForm>>(new Set());
+  const [attempted, setAttempted] = useState(false);
+  const shown = (key: keyof CommandForm) =>
+    errors[key] !== undefined && (attempted || left.has(key));
   const field = (key: keyof RunSubjectView) => ({
     value: subject[key],
     onChange: (event: ChangeEvent<HTMLInputElement>) =>
@@ -609,14 +617,21 @@ export function PinInputControl({
   const commandField = (key: keyof CommandForm, field: string) => ({
     "data-field": field,
     value: command[key],
-    "aria-invalid": errors[key] ? (true as const) : undefined,
-    "aria-describedby": errors[key] ? `${errorId}-${key}` : undefined,
+    "aria-invalid": shown(key) ? (true as const) : undefined,
+    "aria-describedby":
+      [
+        (key === "horizon" || key === "base") && route.forecast ? hintId : null,
+        shown(key) ? `${errorId}-${key}` : null,
+      ]
+        .filter(Boolean)
+        .join(" ") || undefined,
+    onBlur: () => setLeft((current) => new Set(current).add(key)),
     onChange: (event: ChangeEvent<HTMLInputElement>) =>
       setCommand((current: CommandForm) => ({ ...current, [key]: event.target.value })),
   });
   const commandError = (key: keyof CommandForm) =>
-    errors[key] ? (
-      <p className="fld-hint" role="alert" id={`${errorId}-${key}`}>
+    shown(key) ? (
+      <p className="fld-hint" role={attempted ? "alert" : undefined} id={`${errorId}-${key}`}>
         {errors[key]}
       </p>
     ) : null;
@@ -708,11 +723,11 @@ export function PinInputControl({
           </fieldset>
         ) : null}
         {route.forecast || route.objective ? (
-          <fieldset className="fld" data-run-command>
+          <fieldset className="fld" data-run-command ref={commandRef}>
             <legend>Command</legend>
             {route.forecast ? (
               <>
-                <p className="fld-hint" data-derived-scope>
+                <p className="fld-hint" data-derived-scope id={hintId}>
                   {scope
                     ? `Derived from the reporting period: forecast horizon ${scope.forecast_horizon}, base period ${scope.base_period}. Leave a field empty to use it.`
                     : "The host cannot read this reporting period, so it cannot derive the forecast scope. Write it as FY2025 or Q2 2026, or state both values below."}
@@ -759,7 +774,22 @@ export function PinInputControl({
           onClick={
             action
               ? () => {
-                  if (invalid) return;
+                  if (invalid) {
+                    setAttempted(true);
+                    const first = (["horizon", "base", "cases", "objective"] as const).find(
+                      (key) => errors[key] !== undefined,
+                    );
+                    const names = {
+                      horizon: "forecast_horizon",
+                      base: "base_period",
+                      cases: "cases",
+                      objective: "objective",
+                    };
+                    commandRef.current
+                      ?.querySelector<HTMLInputElement>(`[data-field="${names[first!]}"]`)
+                      ?.focus();
+                    return;
+                  }
                   const stated = runCommand(command, route);
                   void run({ subject, research: payload, ...stated }, (intent) =>
                     pinRunInput(caseId, runId, subject, payload, intent, stated),

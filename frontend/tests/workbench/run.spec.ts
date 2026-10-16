@@ -150,8 +150,12 @@ test("the input step's command form shows the derived scope and checks a value a
   await horizon.focus();
   await expect(horizon).toBeFocused();
   await page.keyboard.type("next year");
+  await expect(horizon).not.toHaveAttribute("aria-invalid", "true");
+  await page.keyboard.press("Tab");
   await expect(horizon).toHaveAttribute("aria-invalid", "true");
+  await page.locator('[data-action="PIN_RUN_INPUT"]').click();
   await expect(form.getByRole("alert")).toContainText("fiscal years");
+  await expect(horizon).toBeFocused();
   await horizon.fill("FY2027-FY2029");
   await expect(horizon).not.toHaveAttribute("aria-invalid", "true");
   await expect(form.getByLabel("Cases")).toBeVisible();

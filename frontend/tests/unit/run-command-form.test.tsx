@@ -134,19 +134,52 @@ describe("the run input's command form", () => {
     expect(container.querySelector('[data-field="objective"]')).not.toBeNull();
   });
 
-  test("test_an_invalid_value_is_announced_and_not_sent", () => {
+  test("test_an_invalid_value_is_flagged_on_blur_announced_on_pin_and_not_sent", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     const { container } = mount(withCp2g(running));
+    const input = container.querySelector<HTMLInputElement>('[data-field="forecast_horizon"]')!;
+    // Typing alone raises nothing: no flag and no alert on a keystroke.
     set(container, "forecast_horizon", "next year");
-    const input = container.querySelector('[data-field="forecast_horizon"]')!;
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(container.querySelector('[data-run-command] [role="alert"]')).toBeNull();
+    // Leaving the field flags it, still without an assertive alert.
+    fireEvent.blur(input);
     expect(input).toHaveAttribute("aria-invalid", "true");
-    const message = container.querySelector(`#${input.getAttribute("aria-describedby")}`)!;
-    expect(message).toHaveAttribute("role", "alert");
+    const message = container.querySelector(
+      `#${input.getAttribute("aria-describedby")!.split(" ").pop()}`,
+    )!;
+    expect(message).not.toHaveAttribute("role", "alert");
+    // A pin attempt sends nothing, raises the alert and focuses the field.
+    set(container, "cases", "Base 1");
     pin(container);
     expect(fetchSpy).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-run-command] [role="alert"]')).not.toBeNull();
+    expect(input).toHaveFocus();
     set(container, "forecast_horizon", "");
     expect(input).not.toHaveAttribute("aria-invalid");
+    // The next invalid field is the one focused.
+    pin(container);
+    expect(container.querySelector('[data-field="cases"]')).toHaveFocus();
+  });
+
+  test("test_the_derived_scope_hint_describes_the_override_inputs", () => {
+    const { container } = mount(withCp2g(running));
+    const hint = container.querySelector("[data-derived-scope]")!;
+    expect(hint.id).not.toBe("");
+    for (const field of ["forecast_horizon", "base_period"]) {
+      const input = container.querySelector(`[data-field="${field}"]`)!;
+      expect(input.getAttribute("aria-describedby")!.split(" ")).toContain(hint.id);
+    }
+  });
+
+  test("test_a_decomposed_accent_in_the_objective_is_sent_composed", async () => {
+    const decomposed = "Re\u0301sume\u0301 of the credit";
+    const sent = await pinned(withCp2g(running), (root) => {
+      set(root, "objective", decomposed);
+    });
+    expect(sent.objective).toBe(decomposed.normalize("NFC"));
+    expect(sent.objective).toContain("\u00e9");
   });
 
   test("test_the_servers_typed_refusal_is_shown_in_plain_words", async () => {
@@ -156,9 +189,9 @@ describe("the run input's command form", () => {
         jsonResponse(
           {
             code: "REPORTING_PERIOD_UNREADABLE",
-            clears: "the reporting period is one the scope rule reads",
+            clears: "State the reporting period as FY2025 or Q2 2026, or pin the forecast scope.",
           },
-          422,
+          400,
         ),
       ),
     );
