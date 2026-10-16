@@ -209,6 +209,15 @@ async function scan(page, route, viewport) {
         .locator(`[data-depth-panel="${params.get("open")}"]`)
         .waitFor({ state: "visible", timeout: 15_000 });
     }
+    // The signed record is closed by default (D107, F506): open it so its
+    // region is scanned as a reader who asks for it meets it.
+    if (params.get("disclose") === "record") {
+      const disclosure = page.locator("details[data-artifact-record-disclosure]").first();
+      await disclosure.locator("summary").click();
+      await disclosure.locator("pre").first().waitFor({ state: "visible", timeout: 15_000 });
+    } else if (params.get("disclose")) {
+      throw new Error(`unknown disclosure "${params.get("disclose")}"`);
+    }
     if (params.get("pick")) {
       const picker = page.locator("#figure-citation");
       const value = await picker

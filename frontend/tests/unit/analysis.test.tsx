@@ -56,6 +56,7 @@ describe("Analysis", () => {
     const fixtures = [
       "../../fixtures/analysis.json",
       "../../fixtures/states/analysis.partial.json",
+      "../../fixtures/states/analysis.blocked.json",
     ];
     for (const path of fixtures) {
       expect(() => parseAnalysisDocument(load(path))).not.toThrow();
@@ -767,6 +768,15 @@ describe("Analysis", () => {
       expect(row).toHaveAttribute("data-blocking", "no");
       expect(row).not.toHaveTextContent("its verdict ended the run");
     }
+  });
+
+  test("test_the_blocked_fixture_shows_the_blocked_quotes_under_the_node_that_ended_the_run", () => {
+    // N141: the a11y matrix scans this fixture, so it must render the quotes.
+    const blocked = parseAnalysisDocument(load("../../fixtures/states/analysis.blocked.json"));
+    const { container } = mount(blocked);
+    const row = container.querySelector('[data-pending-node][data-blocking="yes"]')!;
+    expect(row.querySelector('[data-blocked-quotes="recorded"]')).not.toBeNull();
+    expect(row.querySelectorAll("[data-blocked-quote]")).toHaveLength(2);
   });
 
   test("a run still working names no blocking node", () => {
