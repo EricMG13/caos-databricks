@@ -289,6 +289,14 @@ function perMillion(rate: string): string {
   return rest ? `${integer}.${rest}` : integer;
 }
 
+/** The model's name as the select offers it: marked where it is the
+    configured one, and labelled with its qualification state (N117) -- a label
+    only, no model is withheld. */
+function modelLabel(choice: ModelChoice): string {
+  const name = choice.configured ? `${choice.model} (configured)` : choice.model;
+  return `${name} \u00b7 ${choice.qualification === "QUALIFIED" ? "qualified" : "not qualified"}`;
+}
+
 /** The dated price a run on this model is pinned to, per million tokens. */
 function modelPrice(choice: ModelChoice): string {
   return `${perMillion(choice.input_per_token)} in / ${perMillion(choice.output_per_token)} out per 1M tokens, priced ${choice.as_of}`;
@@ -402,7 +410,7 @@ export function CreateRunControl({
                 >
                   {models.map((model, index) => (
                     <option key={model.model} value={index}>
-                      {model.configured ? `${model.model} (configured)` : model.model}
+                      {modelLabel(model)}
                     </option>
                   ))}
                 </select>

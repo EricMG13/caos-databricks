@@ -82,6 +82,7 @@ def test_a_new_run_is_pinned_to_the_model_it_names_or_the_configured_one(
         "output_per_token": "0.000025",
         "as_of": "2026-09-22",
         "configured": True,
+        "qualification": "UNQUALIFIED",
     }
     assert [choice["configured"] for choice in listed["body"]["model_choices"]] == [
         True,
@@ -123,3 +124,45 @@ def test_a_process_with_no_model_configured_pins_none(
         command_client, _path(case_id), writer, {**ROUTE, "model": "gpt-6-luna"}
     )
     assert _outcome(named) == "400 PROVIDER_NOT_CONFIGURED"
+
+
+def _verdict(conn: StoreConnection, model: str, *, seed: str, days: int) -> None:
+    """One recorded verdict bound to `model`'s evidence, decided yesterday and
+    expiring in `days` days (negative: already expired)."""
+    digest = seed * 64
+    conn.execute(
+        "INSERT INTO qualification_evidence (evidence_sha256,"
+        " qualification_set_sha256,performed_sha256,build_id,adapter_version,"
+        " provider,model) VALUES (%s,%s,%s,'b','a',%s,%s)",
+        (digest, digest, digest, f"databricks/{model}/none/65536", model),
+    )
+    conn.execute(
+        "INSERT INTO qualification_verdicts"
+        " (evidence_sha256,reviewer_id,reviewer,decided_at,expires_at)"
+        " VALUES (%s,gen_random_uuid(),'Reviewer',now() - interval '30 days',"
+        " now() + make_interval(days => %s))",
+        (digest, days),
+    )
+    conn.commit()
+
+
+def test_each_approved_model_is_labelled_with_its_qualification_state(
+    command_client: TestClient,
+    case: tuple[StoreConnection, UUID],
+    deployed: None,
+) -> None:
+    """N117: a model with a current verdict is QUALIFIED; one with none, or
+    only an expired one, is UNQUALIFIED; every approved model is still listed."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    _verdict(conn, "gpt-6-luna", seed="a", days=30)
+    _verdict(conn, "claude-sonnet-5-5", seed="b", days=-1)
+    listed = _send(command_client, f"/api/v1/cases/{case_id}/run", writer).json()
+    assert {
+        choice["model"]: choice["qualification"]
+        for choice in listed["body"]["model_choices"]
+    } == {
+        "claude-opus-5-5": "UNQUALIFIED",
+        "claude-sonnet-5-5": "UNQUALIFIED",
+        "gpt-6-luna": "QUALIFIED",
+    }

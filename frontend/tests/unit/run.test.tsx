@@ -96,6 +96,7 @@ const MODEL_CHOICES = [
     output_per_token: "0.00001",
     as_of: "2026-09-22",
     configured: false,
+    qualification: "QUALIFIED" as const,
   },
   {
     model: "databricks-claude-opus-5",
@@ -103,6 +104,7 @@ const MODEL_CHOICES = [
     output_per_token: "0.000025",
     as_of: "2026-09-22",
     configured: true,
+    qualification: "UNQUALIFIED" as const,
   },
 ];
 
@@ -1043,9 +1045,11 @@ describe("Run", () => {
       const select = container.querySelector("[data-model-select]") as HTMLSelectElement;
       // Rates are read off the server's exact strings, never through a float.
       expect([...select.options].map((option) => option.textContent)).toEqual([
-        "databricks-claude-sonnet-5",
-        "databricks-claude-opus-5 (configured)",
+        "databricks-claude-sonnet-5 · qualified",
+        "databricks-claude-opus-5 (configured) · not qualified",
       ]);
+      // A label, never a gate (N117): every approved model stays selectable.
+      expect([...select.options].some((option) => option.disabled)).toBe(false);
       expect(select.value).toBe("1");
       const price = container.querySelector("[data-model-price]")!;
       expect(price).toHaveTextContent("5 in / 25 out per 1M tokens, priced 2026-09-22");
@@ -1075,13 +1079,14 @@ describe("Run", () => {
             output_per_token: "5",
             as_of: "2026-09-22",
             configured: true,
+            qualification: "UNQUALIFIED" as const,
           },
         ],
       },
     };
     const { container, unmount } = mountAt(doc, `/run/?case=${caseId}`);
     const [option] = (container.querySelector("[data-model-select]") as HTMLSelectElement).options;
-    expect(option!.textContent).toBe("tiny (configured)");
+    expect(option!.textContent).toBe("tiny (configured) · not qualified");
     expect(container.querySelector("[data-model-price]")).toHaveTextContent(
       "0.1 in / 5000000 out per 1M tokens, priced 2026-09-22",
     );

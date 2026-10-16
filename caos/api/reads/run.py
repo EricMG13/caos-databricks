@@ -43,6 +43,7 @@ from caos.api.wire import (
     GateView,
     ModelChoice,
     NodeView,
+    QualificationState,
     RouteChoice,
     RouteEdgeView,
     RunBody,
@@ -145,12 +146,16 @@ READINESS_ROWS = 2
 BLOCKED_BY_IO = 1
 # Its kept quotes' sources (D106, D107): one query beside that row.
 BLOCKED_QUOTES_IO = 1
+# Each approved model's qualification state (N117): one grouped read of the
+# verdicts bound to those models, whatever their number.
+QUALIFICATION_IO = 1
 IO_BUDGET = (
     SECTION_READ_IO
     + BEYOND_LIST_IO
     + READINESS_ROWS * CANONICAL_READINESS_IO
     + BLOCKED_BY_IO
     + BLOCKED_QUOTES_IO
+    + QUALIFICATION_IO
 )
 # N35's remainder: `accepted_artifacts` reads two blobs -- the artifact and
 # its record -- per readiness row (`caos.graph.runtime`), the same shape
@@ -220,7 +225,7 @@ def read_run_section(  # noqa: PLR0913 -- identity, two ids, store, blobs, bundl
             runs=runs,
             run=view,
             route_choices=_route_choices(bundle),
-            model_choices=_model_choices(),
+            model_choices=_model_choices(conn),
         ),
         observed_at=observed_at,
         observed_empty=not runs,
@@ -332,16 +337,34 @@ def _route_choices(bundle: Bundle) -> list[RouteChoice]:
     return choices
 
 
-def _model_choices() -> list[ModelChoice]:
+def _qualified_models(conn: StoreConnection, models: Sequence[str]) -> set[str]:
+    """The models among these with a recorded verdict that has not expired at
+    the store's `now()` (N117): a verdict is bound to a model's evidence
+    (`qualification_evidence.model`), and the table only ever holds a reviewer's
+    signed, dated verdict (`record_verdict`), so one that is current is the
+    state QUALIFIED and any other model has none. One grouped read."""
+    rows = conn.execute(
+        "SELECT DISTINCT e.model FROM qualification_verdicts q"
+        " JOIN qualification_evidence e USING (evidence_sha256)"
+        " WHERE e.model = ANY(%s) AND q.expires_at > now()",
+        (list(models),),
+    ).fetchall()
+    return {row[0] for row in rows}
+
+
+def _model_choices(conn: StoreConnection) -> list[ModelChoice]:
     """Every model the deployment approves for a new run (F468), the
-    configured one first; none when the process configures no model, or one
-    it cannot read -- the create command then refuses `PROVIDER_NOT_CONFIGURED`
-    on its own, and health reports the worker that could not start."""
+    configured one first, each with its qualification state (N117; a label,
+    never a gate: every approved model stays selectable); none when the
+    process configures no model, or one it cannot read -- the create command
+    then refuses `PROVIDER_NOT_CONFIGURED` on its own, and health reports the
+    worker that could not start."""
     try:
         choices = model_choices()
     except Refusal:
         return []
     configured = configured_endpoint()
+    qualified = _qualified_models(conn, list(choices)) if choices else set()
     return [
         ModelChoice(
             model=price.model,
@@ -349,6 +372,11 @@ def _model_choices() -> list[ModelChoice]:
             output_per_token=format(price.output_per_token, "f"),
             as_of=price.as_of.isoformat(),
             configured=price.model == configured,
+            qualification=(
+                QualificationState.QUALIFIED
+                if price.model in qualified
+                else QualificationState.UNQUALIFIED
+            ),
         )
         for price in choices.values()
     ]
