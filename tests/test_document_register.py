@@ -304,6 +304,8 @@ def test_the_committed_table_is_the_one_the_script_emits() -> None:
         160: "One hundred and sixty",
         169: "One hundred and sixty-nine",
         174: "One hundred and seventy-four",
+        211: "Two hundred and eleven",
+        216: "Two hundred and sixteen",
     }
     total = spelled.get(len(register.documents))
     in_hand = spelled.get(by_status.get("in_hand", 0))

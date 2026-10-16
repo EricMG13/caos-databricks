@@ -1,0 +1,110 @@
+Exhibit 10.18
+SIXTH AMENDMENT TO LEASE
+This SIXTH AMENDMENT TO LEASE (this “Amendment”) is entered into as of November 1, 2021, by and among HARRAH’S JOLIET LANDCO LLC, a Delaware limited liability company (together with its successors and assigns, “Landlord”), DES PLAINES DEVELOPMENT LIMITED PARTNERSHIP, a Delaware limited partnership (together with its successors and assigns, “Tenant”) and, solely for the purposes of the last paragraph of Section 1.1 of the Lease (as defined below), Propco TRS LLC, a Delaware limited liability company (“Propco TRS”).
+RECITALS
+WHEREAS, Landlord, Tenant and, solely for the purposes of the last paragraph of Section 1.1 of the Lease, Propco TRS are parties to that certain Lease (Joliet), dated as of October 6, 2017, as amended by that certain First Amendment to Lease (Joliet), dated as of December 26, 2018, as amended by that certain Omnibus Amendment to Leases, dated as of June 1, 2020, as amended by that certain Second Amendment to Lease (Joliet), dated as of July 20, 2020, as amended by that certain Third Amendment to Lease, dated as of September 30, 2020, as amended by that certain Amended and Restated Omnibus Amendment to Leases, dated as of October 27, 2020, as amended by that certain Fourth Amendment to Lease, dated as of November 18, 2020, and as amended by that certain Fifth Amendment to Lease, dated as of September 3, 2021 (collectively, as amended, the “Lease”), pursuant to which Landlord leases to Tenant, and Tenant leases from Landlord, certain real property as more particularly described in the Lease;
+WHEREAS, on June 30, 2021, Propco TRS conveyed to Arlington Turfway, LLC, an Alabama limited liability company, certain real property located in Florence, Kentucky that was (prior to such conveyance) subject to the “Regional Lease” (as defined in the Lease) and a portion of the real property associated with the Turfway Park Facility (as defined in the amendment to the Regional Lease being entered into concurrently with this Amendment in connection with the Turfway Park Parcel Transaction (as defined below) and the LAD Transaction (as defined below)) (the “Turfway Park Parcel Transaction”), and the Turfway Park Parcel (as defined in the amendment to the Regional Lease being entered into concurrently with this Amendment in connection with the Turfway Park Parcel Transaction and the LAD Transaction) was severed from the Regional Lease as of such date;
+WHEREAS, on the date hereof,
+(x) Harrah’s Bossier City LLC, Harrah’s Shreveport/Bossier City Investment Company, LLC (“Operator Parent”), Harrah’s Bossier City Investment Company, L.L.C. (“Operator”), Rubico Gaming, LLC (“Purchaser”) and Rubico Acquisition Corp (“Purchaser Parent” and together with Purchaser, collectively, “Rubico”) are closing a purchase and sale transaction under that certain Agreement of Sale, dated as of September 3, 2020, with respect to certain real property associated with the gaming and entertainment facility known as Harrah’s Bossier City (Louisiana Downs) located in Bossier City, Louisiana, and
+(y) Operator Parent, Operator and Rubico are closing a purchase and sale transaction under that certain Equity Purchase Agreement, dated as of September 3, 2020, with respect to Operator Parent’s one hundred percent (100%) equity interest in Operator, which entity operates the facility described in the immediately preceding clause (x) and, prior to the effectiveness of this Amendment, leased such facility pursuant to the terms of the Regional Lease (the transactions described in the preceding clauses (x) and (y) are referred to herein collectively as the “LAD Transaction”); and
+WHEREAS, in connection with the Turfway Park Parcel Transaction and the LAD Transaction, the parties hereto desire to amend the Lease as set forth herein.
+|US-DOCS\120833123.7||
+NOW THEREFORE, in consideration of the mutual covenants and agreements hereinafter set forth and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the parties hereto, intending to be legally bound hereby, agree as follows:
+1.Definitions.
+Except as otherwise defined herein, all capitalized terms used herein without definition shall have the meanings applicable to such terms, respectively, as set forth in the Lease.
+2.Amendments to the Lease.
+a.Annual Minimum Cap Ex Amount.
+Article II of the Lease is hereby amended such that the definition of “Annual Minimum Cap Ex Amount” is hereby revised and modified to replace the reference therein to “One Hundred Eight Million Six Hundred Thousand and No/100 Dollars ($108,600,000.00)” with a reference to “One Hundred Seven Million Five Hundred Thousand and No/100 Dollars ($107,500,000.00)”.
+b.Annual Minimum Per-Lease B&I Cap Ex Requirement.
+The Annual Minimum Per-Lease B&I Cap Ex Requirement shall be unchanged by this Amendment.
+Further, Landlord and Tenant hereby acknowledge, for the avoidance of doubt, that the Net Revenue attributable to the LAD Facility (as defined in the amendment to the Regional Lease being entered into concurrently with this Amendment in connection with the Turfway Park Parcel Transaction and the LAD Transaction) during the period the LAD Facility was included in the Regional Lease (i.e., during the period from the “Commencement Date” (as defined in the Regional Lease) until the date of this Amendment) shall be included for purposes of calculating the Capital Expenditures required under Section 10.5(a)(ii) of the Lease (i.e., the Annual Minimum Per-Lease B&I Cap Ex Requirement).
+c.Triennial Allocated Minimum Cap Ex Amount B Floor.
+Article II of the Lease is hereby amended such that the definition of “Triennial Allocated Minimum Cap Ex Amount B Floor” is hereby revised and modified to replace the reference therein to “Two Hundred Ninety Million and No/100 Dollars ($290,000,000.00)” with a reference to “Two Hundred Eighty-Six Million and No/100 Dollars ($286,000,000.00)”.
+d.Triennial Minimum Cap Ex Amount A. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount A” is hereby revised and modified to replace the reference therein to “Five Hundred Thirty-Seven Million Five Hundred Thousand and No/100 Dollars ($537,500,000.00)” with a reference to “Five Hundred Thirty-One Million Nine Hundred Thousand and No/100 Dollars ($531,900,000.00)”.
+e.Triennial Minimum Cap Ex Amount B. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount B” is hereby revised and modified to replace the reference therein to “Three Hundred Eighty-Four Million Three Hundred Thousand and No/100 Dollars ($384,300,000.00)” with a reference to “Three Hundred Eighty Million Three Hundred Thousand and No/100 Dollars ($380,300,000.00)”.
+f.Partial Periods.
+i.Section 10.5(a)(v)(b) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Thirty-Seven Million Five Hundred
+2
+|US-DOCS\120833123.7||
+Thousand and No/100 Dollars ($537,500,000.00)” with a reference to “Five Hundred Thirty-One Million Nine Hundred Thousand and No/100 Dollars ($531,900,000.00)” and (b) replace the reference therein to “One Hundred Seventy-Nine Million One Hundred Sixty-Six Thousand Six Hundred Sixty-Seven and No/100 Dollars ($179,166,667.00)” with a reference to “One Hundred Seventy-Seven Million Three Hundred Thousand and No/100 Dollars ($177,300,000.00)”,
+ii.Section 10.5(a)(v)(c) of the Lease is hereby amended to (a) replace the reference therein to “Three Hundred Eighty-Four Million Three Hundred Thousand and No/100 Dollars ($384,300,000.00)” with a reference to “Three Hundred Eighty Million Three Hundred Thousand and No/100 Dollars ($380,300,000.00)” and (b) replace the reference therein to “One Hundred Twenty-Eight Million One Hundred Thousand and No/100 Dollars ($128,100,000.00)” with a reference to “One Hundred Twenty-Six Million Seven Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($126,766,666.67)”, and
+iii.The second sentence of Section 10.5(a)(v) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Thirty-Seven Million Five Hundred Thousand and No/100 Dollars ($537,500,000.00)” with a reference to “Five Hundred Thirty-One Million Nine Hundred Thousand and No/100 Dollars ($531,900,000.00)”,
+(b) replace the reference therein to “One Hundred Seventy-Nine Million One Hundred Sixty-Six Thousand Six Hundred Sixty-Seven and No/100 Dollars ($179,166,667.00)” with a reference to “One Hundred Seventy-Seven Million Three Hundred Thousand and No/100 Dollars ($177,300,000.00)”,
+(c) replace the reference therein to “Three Hundred Eighty-Four Million Three Hundred Thousand and No/100 Dollars ($384,300,000.00)” with a reference to “Three Hundred Eighty Million Three Hundred Thousand and No/100 Dollars ($380,300,000.00)” and (d) replace the reference therein to “One Hundred Twenty-Eight Million One Hundred Thousand and No/100 Dollars ($128,100,000.00)” with a reference to “One Hundred Twenty-Six Million Seven Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($126,766,666.67)”.
+g.Regional Lease Section 22.2(ix) Transfer.
+i.Landlord and Tenant hereby acknowledge and agree that the LAD Transaction shall be deemed to be, and treated as, a transfer and sale of the entire “Leased Property” (as defined in the Regional Lease) with respect to a “Facility” (as defined in the Regional Lease) pursuant to Section 22.2(ix) of the Regional Lease.
+ii.The 2018 Facility EBITDAR of Regional Tenant for the LAD Facility is as set forth on Schedule C annexed to the Eighth Amendment to the Regional Lease.
+iii.The amount of the 2018 EBITDAR Pool shall not be reduced as a result of the LAD Facility no longer being a Regional Facility under the Regional Lease, and the removal of the LAD Facility from the Regional Lease shall not constitute a L1 Transfer or a L2 Transfer under the Regional Lease.
+3
+|US-DOCS\120833123.7||
+iv.The treatment of the LAD Transaction hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under any applicable provision of the Regional Lease.
+h.Turfway Park Parcel Transaction.
+i.Landlord and Tenant hereby acknowledge and agree that the removal of the Turfway Park Parcel from the Regional Lease was made in connection with Regional Landlord’s conveyance of the Turfway Park Parcel pursuant to Section 18.3 of the Regional Lease.
+ii.The treatment of the Turfway Park Parcel Transaction hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under any applicable provision of the Regional Lease.
+3.No Other Modification or Amendment to the Lease.
+The Lease shall remain in full force and effect except as expressly amended or modified by this Amendment.
+From and after the date of this Amendment, all references in the Lease to the “Lease” shall be deemed to refer to the Lease as amended by this Amendment.
+4.Governing Law; Jurisdiction.
+This Amendment shall be construed according to and governed by the laws of the jurisdiction(s) specified by the Lease without regard to its or their conflicts of law principles.
+The parties hereto hereby irrevocably submit to the jurisdiction of any court of competent jurisdiction located in such applicable jurisdiction in connection with any proceeding arising out of or relating to this Amendment.
+5.Counterparts.
+This Amendment may be executed by one or more of the parties hereto on any number of separate counterparts, and all of such counterparts taken together shall be deemed to constitute one and the same instrument.
+Facsimile and/or .pdf signatures shall be deemed to be originals for all purposes.
+6.Effectiveness.
+This Amendment shall be effective, as of the date hereof, only upon execution and delivery by each of the parties hereto.
+7.Miscellaneous.
+If any provision of this Amendment is adjudicated to be invalid, illegal or unenforceable, in whole or in part, it will be deemed omitted to that extent and all other provisions of this Amendment will remain in full force and effect.
+Neither this Amendment nor any provision hereof may be changed, modified, waived, discharged or terminated orally, but only by an instrument in writing signed by the party against whom enforcement of such change, modification, waiver, discharge or termination is sought.
+The paragraph headings and captions contained in this Amendment are for convenience of reference only and in no event define, describe or limit the scope or intent of this Amendment or any of the provisions or terms hereof.
+This Amendment shall be binding upon and inure to the benefit of the parties and their respective heirs, legal representatives, successors and permitted assigns.
+[Signature Page Follows]
+4
+|US-DOCS\120833123.7||
+IN WITNESS WHEREOF, the parties hereto have caused this Amendment to be duly executed by their duly authorized representatives, all as of the date hereof.
+LANDLORD:
+HARRAH’S JOLIET LANDCO LLC,
+a Delaware limited liability company
+By:___________________________________
+Name: David Kieske
+Title: Treasurer
+[Signatures Continue on Following Pages]
+[Signature Page to Sixth Amendment to Joliet Lease]
+TENANT:
+DES PLAINES DEVELOPMENT LIMITED PARTNERSHIP,
+a Delaware limited partnership
+By: Harrah’s Illinois LLC,
+a Nevada limited liability company,
+its general partner
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signatures Continue on Following Pages]
+[Signature Page to Sixth Amendment to Joliet Lease]
+Acknowledged and agreed, solely for the purposes of the last paragraph of Section 1.1 of the Lease:
+PROPCO TRS LLC,
+a Delaware limited liability company
+By: Name: David Kieske
+Title: Treasurer
+[Signatures Continue on Following Pages]
+[Signature Page to Sixth Amendment to Joliet Lease]
+CEOC, LLC hereby acknowledges this Amendment and reaffirms its joinder attached to the Lease.
+CEOC, LLC,
+a Delaware limited liability company
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Sixth Amendment to Joliet Lease]
+ACKNOWLEDGMENT AND AGREEMENT OF GUARANTOR
+The undersigned (“Guarantor”) hereby:
+(a) acknowledges receipt of the Sixth Amendment to Lease (the “Amendment”; capitalized terms used herein without definition having the meanings set forth in the Amendment), dated as of November 1, 2021, by and among Harrah’s Joliet Landco LLC, a Delaware limited liability company, as Landlord, Des Plaines Development Limited Partnership, a Delaware limited partnership, as Tenant, and the other parties party thereto;
+(b) consents to the terms and execution thereof;
+(c) ratifies and reaffirms Guarantor’s obligations to Landlord pursuant to the terms of that certain Guaranty of Lease, dated as of July 20, 2020 (the “Guaranty”), by and between Guarantor and Landlord, and agrees that nothing in the Amendment in any way impairs or lessens the Guarantor’s obligations under the Guaranty; and
+(d) acknowledges and agrees that the Guaranty is in full force and effect and is valid, binding and enforceable in accordance with its terms.
+IN WITNESS WHEREOF, the undersigned has caused this Acknowledgment and Agreement of Guarantor to be duly executed as of November 1, 2021.
+[Acknowledgment and Agreement of Guarantor]
+|US-DOCS\120833123.7||
+CAESARS ENTERTAINMENT, INC.
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Acknowledgment and Agreement of Guarantor]

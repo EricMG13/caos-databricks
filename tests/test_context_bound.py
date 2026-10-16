@@ -260,9 +260,33 @@ def test_the_gate_starts_from_its_per_source_bound() -> None:
 # --- through the host's builders ---------------------------------------------
 
 
+# The lease documents R27 (N147) added to FCA. The tests below measure the pack
+# FCA3-dec was refused on (D116), so they leave the leases out: admitting 4.3 MB
+# more text into the shared test database is heavy enough to have its backend
+# killed on a small docker VM, and the test below holds what the leases change.
+LEASE_PREFIXES = ("CZR_GLPI_", "CZR_VICI_")
+
+
+def test_the_regional_lease_alone_is_past_the_per_source_bound() -> None:
+    """R27 (N147): of the lease documents FCA carries, only the conformed
+    Regional Lease is larger than the gate's per-source bound, so it alone is
+    shown as a page map on a model of no declared context; the rest reach
+    CP-0 whole, and the set's `RESULT.md` records the measured sizes."""
+    [listed] = json.loads((FCA / "qualification.json").read_text())["cases"]
+    leases = {
+        Path(n).name: len((FCA / n).read_bytes())
+        for n in listed["documents"]
+        if Path(n).name.startswith(LEASE_PREFIXES)
+    }
+    assert len(leases) == 21
+    past = {name for name, size in leases.items() if size > GATE_SOURCE_BYTES}
+    assert past == {"CZR_VICI_Regional_Lease_Conformed_Fifth_Amendment.txt"}
+
+
 @pytest.fixture
 def fca(case: tuple[StoreConnection, UUID], tmp_path: Path) -> _Harness:
-    """FCA's committed CP-0 pack, admitted and pinned on its FULL route."""
+    """FCA's CP-0 pack as D116 measured it (without the R27 lease documents),
+    admitted and pinned on its FULL route."""
     conn, case_id = case
     root = tmp_path / "bundle"
     shutil.copytree(VENDORED, root)
@@ -272,6 +296,7 @@ def fca(case: tuple[StoreConnection, UUID], tmp_path: Path) -> _Harness:
     documents = [
         Document(filename=BoundaryText.of(Path(n).name), data=(FCA / n).read_bytes())
         for n in listed["documents"]
+        if not Path(n).name.startswith(LEASE_PREFIXES)
     ]
     admit_pack(conn, blobs, case_id=case_id, documents=documents)
     run_id = start_run(conn, case_id)
