@@ -346,6 +346,7 @@ function ModuleView({
       <Figures
         handoff={handoff}
         calculation={<HostCalculation handoff={handoff} model={model} />}
+        appendix={(read?.placed ?? []).some(({ place }) => place === "appendix")}
         onPick={(next) => setPick({ at: "figures", pick: next })}
       />
       {pick?.at === "figures" ? <Picked pick={pick.pick} /> : null}

@@ -1001,7 +1001,12 @@ export function Depth({
               </h3>
               <div className="figgrid">
                 {counts.map((figure) => (
-                  <FigureCell key={figure.key} figure={figure} onPick={onPick} />
+                  <FigureCell
+                    key={figure.key}
+                    figure={figure}
+                    onPick={onPick}
+                    appendix={appendix.length > 0}
+                  />
                 ))}
               </div>
               {picked}

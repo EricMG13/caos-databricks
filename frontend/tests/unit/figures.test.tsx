@@ -639,6 +639,43 @@ test("past MAX_FIGURES a module's figures are stated, the last saying how many m
   );
 });
 
+test("a stated figure points to the Appendix only when the Appendix lists rows (N113)", () => {
+  const rows = Array.from({ length: MAX_FIGURES + 2 }, (_, index) => [`K${index}`, "FY", "1"]);
+  const kpis = table("cp1.operating_kpi_schedule", ["kpi_id", "period_id", "value"], rows);
+  const stated = (model_analysis: string) => {
+    const handoff = { ...cp1, tables: [kpis], model_analysis };
+    const { container } = render(
+      <MemoryRouter>
+        <AnalysisSection
+          document={{ ...document, body: { ...document.body, handoffs: [handoff] } }}
+          tab={handoff.route_node_id}
+        />
+      </MemoryRouter>,
+    );
+    return container.querySelector("[data-figure-oversized]")!;
+  };
+  // Text the page does not format has no appendix: the sentence must not send
+  // the reader to an empty tab.
+  const unformatted = stated("## Analysis\n```\nnever closed");
+  expect(unformatted).toHaveTextContent("3 more figures are not drawn.");
+  expect(unformatted).not.toHaveTextContent("Appendix");
+  expect(unformatted).toHaveTextContent("The As written tab shows the module's text.");
+  // With an appendix register, the Appendix does list the rows.
+  const formatted = stated(
+    [
+      "## Analysis",
+      "### View",
+      "Prose.",
+      "### Analytical appendix — complete canonical registers",
+      "#### T4.14 — Period register",
+      "| period_id | Revenue |",
+      "| --- | --- |",
+      "| FY1 | 1 |",
+    ].join("\n"),
+  );
+  expect(formatted).toHaveTextContent("The Appendix tab lists every row.");
+});
+
 test("forecastDrivers: one figure a division, base against downside, in percent", () => {
   const figures = forecastDrivers(handoffOf("CP-2G").tables);
   expect(figures.map((figure) => figure.title)).toEqual([
