@@ -56,17 +56,30 @@ if TYPE_CHECKING:
 # The vendor's `envelope.MAX_ATTEMPT_ORDINAL`: a run folder holds at most 256.
 MAX_ATTEMPT_ORDINAL = 256
 # How long past its reservation a held call keeps its node (`call_hold`): the
-# lease a worker claims with (`LEASE_SECONDS`, renewed by the reservation),
-# then one lease more. A holder still silent that long past its own lease has
-# stopped -- a wedged process, a host gone without closing its socket -- and
-# the node is not kept for it for ever.
-CALL_HOLD_SECONDS = 2 * LEASE_SECONDS
+# lease the worker claimed with (renewed by the reservation), then one lease
+# more -- `CALL_HOLD_LEASES` of them, counted in the claim's own seconds
+# (`call_hold_seconds`, N80), so a worker configured for a shorter lease does
+# not keep a vanished holder's node for the module default's 30 minutes. A
+# holder still silent that long past its own lease has stopped -- a wedged
+# process, a host gone without closing its socket -- and the node is not kept
+# for it for ever. `CALL_HOLD_SECONDS` is that span at the default lease, for
+# a start made without one.
+CALL_HOLD_LEASES = 2
+CALL_HOLD_SECONDS = CALL_HOLD_LEASES * LEASE_SECONDS
+
+
+def call_hold_seconds(lease: Lease | None) -> int:
+    """The span a held call keeps its node past its reservation, in the
+    seconds the lease was claimed with (`WorkerConfig.lease_seconds`)."""
+    return CALL_HOLD_LEASES * (LEASE_SECONDS if lease is None else lease.seconds)
+
+
 # An earlier attempt at the node that must settle before a new one is paid for
 # (invariant 6), read under the run lock in the unit that would start it: a
 # charged answer owed a verdict -- exactly what `replay_billed` settles or
 # `unexplained_charge` parks, so the next pass acts on it -- or a reserved
 # attempt with no outcome whose call another session still holds
-# (`call_hold`), for at most `CALL_HOLD_SECONDS` past its reservation. The
+# (`call_hold`), for at most `call_hold_seconds` past its reservation. The
 # hold is tried on those alone; a try that takes it lets go at this unit's end.
 _UNSETTLED = (
     "SELECT 1 FROM (SELECT t.attempt_id, r.reserved_at,"
@@ -290,7 +303,7 @@ def _start(
             {
                 "run": run_id,
                 "node": route_node_id,
-                "hold": CALL_HOLD_SECONDS,
+                "hold": call_hold_seconds(lease),
                 "lock": CALL_HOLD_LOCK,
             },
         ).fetchone()
