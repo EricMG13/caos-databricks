@@ -132,7 +132,7 @@ describe("every command says when it succeeded (DF-6)", () => {
       jsonResponse(doc),
     );
     const { container } = inUpload(doc);
-    fireEvent.change(screen.getByLabelText("Documents to admit"), {
+    fireEvent.change(screen.getByLabelText("Choose documents"), {
       target: { files: [new File(["x"], "a.pdf", { type: "application/pdf" })] },
     });
     fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
@@ -321,7 +321,7 @@ describe("focus after a confirmed act takes its own control away (DF-7)", () => 
     fireEvent.click(row.querySelector("[data-confirm-open]")!);
     fireEvent.click(row.querySelector("[data-confirm-yes]")!);
     // The reader moves on before the answer arrives.
-    const elsewhere = screen.getByLabelText("Documents to admit");
+    const elsewhere = screen.getByLabelText("Choose documents");
     elsewhere.focus();
     await settled();
     expect(document.activeElement).toBe(elsewhere);
