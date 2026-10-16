@@ -1617,7 +1617,7 @@ def test_a_held_call_keeps_its_node_only_while_a_live_session_holds_it(
             )
             assert _count(b, "run_attempts", run_id) == 3, "nothing written"
             start_attempt(b, run_id, nodes["CP-L10"], lease=fresh)
-            monkeypatch.setattr(runs, "CALL_HOLD_LEASES", 0)
+            monkeypatch.setattr(runs, "call_hold_seconds", lambda _lease: 0)
             start_attempt(b, run_id, nodes["CP-5"], lease=fresh)
             monkeypatch.undo()
         _refused(

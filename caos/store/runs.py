@@ -17,6 +17,7 @@ import re
 import sys
 from dataclasses import dataclass
 from decimal import Decimal
+from math import ceil
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -25,6 +26,7 @@ from psycopg import sql
 
 from caos import methodology
 from caos.boundary_text import BoundaryText
+from caos.provider import TIMEOUT_SECONDS
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, committed_unit, rollback_or_close
 from caos.store.budget import CEILING, overspent, validate_spend
@@ -59,7 +61,8 @@ MAX_ATTEMPT_ORDINAL = 256
 # lease the worker claimed with (renewed by the reservation), then one lease
 # more -- `CALL_HOLD_LEASES` of them, counted in the claim's own seconds
 # (`call_hold_seconds`, N80), so a worker configured for a shorter lease does
-# not keep a vanished holder's node for the module default's 30 minutes. A
+# not keep a vanished holder's node for the module default's 30 minutes -- but
+# never less than the call's deadline plus one lease (D117). A
 # holder still silent that long past its own lease has stopped -- a wedged
 # process, a host gone without closing its socket -- and the node is not kept
 # for it for ever. `CALL_HOLD_SECONDS` is that span at the default lease, for
@@ -70,8 +73,12 @@ CALL_HOLD_SECONDS = CALL_HOLD_LEASES * LEASE_SECONDS
 
 def call_hold_seconds(lease: Lease | None) -> int:
     """The span a held call keeps its node past its reservation, in the
-    seconds the lease was claimed with (`WorkerConfig.lease_seconds`)."""
-    return CALL_HOLD_LEASES * (LEASE_SECONDS if lease is None else lease.seconds)
+    seconds the lease was claimed with (`WorkerConfig.lease_seconds`): two of
+    them, but never less than the call's own deadline and one whole lease
+    more (D117), so a lease shorter than the call cannot let a live holder's
+    hold expire before its bill."""
+    seconds = LEASE_SECONDS if lease is None else lease.seconds
+    return max(CALL_HOLD_LEASES * seconds, ceil(TIMEOUT_SECONDS) + seconds)
 
 
 # An earlier attempt at the node that must settle before a new one is paid for

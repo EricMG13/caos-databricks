@@ -21,8 +21,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import UNANCHORED, CanonicalCompletions
-from conftest import login_role, priced
-from conftest import reserve_at
+from conftest import login_role, priced, reserve_at
 from lite_route_fixtures import RealisticLiteCompletions
 from test_runtime import (
     ESTIMATE,
@@ -474,7 +473,7 @@ def test_a_call_hold_is_two_of_the_leases_the_claim_was_made_with() -> None:
     from caos.store.runs import CALL_HOLD_SECONDS, call_hold_seconds
 
     assert call_hold_seconds(None) == CALL_HOLD_SECONDS
-    assert call_hold_seconds(Lease(uuid4(), 1, 60)) == 120
+    assert call_hold_seconds(Lease(uuid4(), 1, 3000)) == 6000
     assert call_hold_seconds(Lease(uuid4(), 1, LEASE_SECONDS)) == CALL_HOLD_SECONDS
 
 
