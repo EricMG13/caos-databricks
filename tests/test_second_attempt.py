@@ -1682,7 +1682,48 @@ def test_a_retry_after_a_citation_field_fault_names_the_field(
     second = " ".join(answers.prompts[1].split())
     assert "host citation check: citation 1 has a source_id" in second
     assert "not the JSON object" not in second
+    assert REFUSED in second  # F651: carried back like a repeat (D104)
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def _with_a_bad_page(body: str) -> str:
+    wire_body = json.loads(body)
+    wire_body["citations"][0]["page"] = 0
+    return json.dumps(wire_body)
+
+
+def test_an_answer_refused_only_for_a_citation_field_is_carried_back() -> None:
+    body = _field_body(2, page={1: 0})
+    assert carried_answer(body) == body
+    gate = identity("CP-0")
+    markdown = with_markers(handoff_markdown(gate), 2)
+    good = {"source_id": str(UUID(int=1)), "page": 1, "matched_text": QUOTE}
+    bad = {**good, "source_id": "bad"}
+    # A shape fault beside a field fault keeps the shape line: not carried.
+    assert carried_answer(wire(markdown, [bad, {"page": 1}])) is None
+    assert carried_answer(wire(markdown, [bad, {**good, "extra": 1}])) is None
+
+
+def test_the_keep_line_reads_an_answer_refused_only_for_a_citation_field() -> None:
+    from caos.methodology.handoff import kept_registers_line
+
+    fixed = _answer_body(register="T5")
+    faulty = _with_a_bad_page(fixed)
+    assert fixed != faulty
+    expected = kept_registers_line(CONTRACT, "CP-0", fixed, skill("CP-0"))
+    assert expected is not None
+    assert kept_registers_line(CONTRACT, "CP-0", faulty, skill("CP-0")) == expected
+
+
+def test_an_answer_shrank_reads_an_answer_refused_only_for_a_citation_field() -> None:
+    from caos.methodology.handoff import answer_shrank
+
+    def shrank(earlier: str, later: str) -> bool:
+        return answer_shrank(CONTRACT, "CP-0", earlier, later, skill("CP-0"))
+
+    full, fewer = _answer_body(), _answer_body(register="T5")
+    assert shrank(full, _with_a_bad_page(fewer))
+    assert not shrank(full, _with_a_bad_page(full))
 
 
 def test_the_repeat_line_stays_within_the_line_limit() -> None:

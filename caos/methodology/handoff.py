@@ -957,11 +957,13 @@ def _requested(item: object) -> Citation:
 
 class _FieldFaults(ValueError):
     """A transport whole in shape whose citations break field rules: the
-    1-based places per field, never a value (N50)."""
+    1-based places per field, never a value (N50). It keeps the Markdown the
+    transport carried, for the carry and the readers of it (F651)."""
 
-    def __init__(self, faults: Mapping[str, list[int]]) -> None:
+    def __init__(self, faults: Mapping[str, list[int]], markdown: bytes) -> None:
         super().__init__()
         self.faults = faults
+        self.markdown = markdown
 
 
 def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
@@ -989,8 +991,19 @@ def _wire(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
         for name in _field_faults(citation):
             faults.setdefault(name, []).append(place)
     if faults:
-        raise _FieldFaults(faults)
+        raise _FieldFaults(faults, encoded)
     return encoded, text, tuple(_citation(c) for c in closed)
+
+
+def _shaped(body: str) -> bytes | None:
+    """The Markdown of a body that is the transport, its citations' fields
+    aside (F651): `_wire`'s, or None when the body is not the transport."""
+    with suppress(Exception):  # not the transport: nothing to carry or read
+        try:
+            return _wire(body)[0]
+        except _FieldFaults as bad:
+            return bad.markdown
+    return None
 
 
 def _repeats(citations: Sequence[Citation]) -> list[tuple[int, int]]:
@@ -1118,10 +1131,10 @@ def carried_answer(body: str) -> str | None:
     transport (N50), holds text no reader can see, or will not cross -- then
     the retry asks for the whole answer again, as before. An answer refused
     only for a repeated citation is the transport otherwise, and is carried
-    (qualify run b0b6fd10, CP-2). Like the checks' lines it goes into that
+    (qualify run b0b6fd10, CP-2); so is one refused only for a citation's
+    source_id, page or matched_text (F651). Like the checks' lines it goes into that
     one request only, never a log, refusal or row."""
-    parsed, _reason = _transport_or_reason(body)
-    if parsed is None or hides_text(body):
+    if _shaped(body) is None or hides_text(body):
         return None
     with suppress(Refusal):
         return BoundaryText.of(body, limit=MAX_TRANSPORT_CHARS).value
@@ -1389,11 +1402,12 @@ def _unlocated(
 
 def _readable(body: str) -> str | None:
     """The Markdown a stored answer carried, as text, when it is the transport
-    and within the host's bounds on text (`_text_bound`); else None. The
-    vendor's heading and register expressions are read only on such text
+    (its citations' fields aside, F651) and within the host's bounds on text
+    (`_text_bound`); else None. The vendor's heading and register expressions
+    are read only on such text
     (AI-1, F649): a body `_text` refuses was never read by a validator, and
     measuring it must not be the first thing that does."""
-    markdown = answer_markdown(body)
+    markdown = _shaped(body)
     return None if markdown is None else _text_bound(markdown)[0]
 
 
@@ -1402,7 +1416,8 @@ def _held_registers(
 ) -> tuple[Sequence[str], list[str]] | None:
     """The module's required registers in contract order, and those of them
     the vendor's `find_registers` locates in the answer `body` carries; None
-    when `body` is not the transport, the module is CP-MODEL (no register
+    when `body` is not the transport (its citations' fields aside, F651), the
+    module is CP-MODEL (no register
     contract), no skill was given, or the contract or its locations cannot be
     read (a missing profile, KeyError/ValueError). Unrelated locator failures
     still surface. A body the host's text bound refuses (`_readable`) is not
@@ -1452,11 +1467,11 @@ def answer_shrank(
     """Whether the answer `later` holds fewer required registers, or fewer
     distinct H2 sections, than the answer `earlier` (D104's amendment of 14
     October 2026, F649), both bodies as stored. Compared only when both are
-    the transport; a count that cannot be read for either (no skill, an
-    unreadable contract, CP-MODEL's registers, front matter the vendor will
-    not parse) is not compared, and the other still is; a body that is not
-    the transport has neither count, so it is never compared. Pure over the
-    two bodies."""
+    the transport (its citations' fields aside, F651); a count that cannot be
+    read for either (no skill, an unreadable contract, CP-MODEL's registers,
+    front matter the vendor will not parse) is not compared, and the other
+    still is; a body that is not the transport has neither count, so it is
+    never compared. Pure over the two bodies."""
     counts = [_extent(contract, module_id, body, skill) for body in (earlier, later)]
     return any(
         before is not None and after is not None and after < before
