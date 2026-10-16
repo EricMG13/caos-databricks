@@ -22,6 +22,7 @@ import psycopg
 import pytest
 from canonical_fixtures import UNANCHORED, CanonicalCompletions
 from conftest import login_role, priced
+from conftest import reserve_at
 from lite_route_fixtures import RealisticLiteCompletions
 from test_runtime import (
     ESTIMATE,
@@ -488,6 +489,20 @@ def test_a_call_hold_outlives_the_lease_and_a_whole_call_past_it() -> None:
 
     assert CALL_HOLD_SECONDS == 2 * LEASE_SECONDS == 1800
     assert CALL_HOLD_SECONDS - provider_module.TIMEOUT_SECONDS >= LEASE_SECONDS
+
+
+@pytest.mark.parametrize("lease_seconds", [1, 60, 180, LEASE_SECONDS, 86_400])
+def test_a_call_hold_never_expires_under_a_holder_whose_call_may_still_run(
+    lease_seconds: int,
+) -> None:
+    """D117 at every allowed lease, not the default alone: the hold outlasts
+    the call's deadline by at least one whole lease, so a live holder whose
+    call ran to the deadline and whose bill then waits is never overtaken."""
+    from caos.store.runs import call_hold_seconds
+
+    held = call_hold_seconds(Lease(uuid4(), 1, lease_seconds))
+    assert held - provider_module.TIMEOUT_SECONDS >= lease_seconds
+    assert held >= 2 * lease_seconds
 
 
 FORBIDDEN_MODULES = frozenset(
@@ -2026,6 +2041,38 @@ def test_a_bill_cut_again_on_its_fresh_connection_is_held_and_unpaused_again(
     assert count(run.conn, "call_outcomes", run.run_id) == 1
 
 
+def test_a_bill_cut_then_met_by_a_down_store_keeps_every_pause(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: the instant reconnect after a cut spends no try, so a store that
+    goes down behind the cut still gets `BILL_TRIES - 1` pauses, as on any
+    other path (the failover path: session cut, then the store is down)."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome
+
+    pauses: list[float] = []
+    writes: list[int] = []
+    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    for name in ("CAOS_DATABASE_URL", "PGHOST", "PGPORT", "PGDATABASE", "PGUSER"):
+        monkeypatch.delenv(name, raising=False)
+
+    def cut(conn: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome) -> bool:
+        writes.append(1)
+        conn.close()
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(canonical, "record_outcome", cut)
+    worker_conn = connect(empty_database)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        canonical.bill(worker_conn, enqueued.run_id, outcome)
+    assert writes == [1]
+    assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
+
+
 def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
     enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2040,7 +2087,7 @@ def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
 
     from caos.methodology import canonical
     from caos.store import connect
-    from caos.store.outcomes import CallOutcome
+    from caos.store.outcomes import CallOutcome, call_hold
     from caos.store.runs import start_attempt
     from caos.store.work import claim_run
 
@@ -2051,6 +2098,8 @@ def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
     lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
     attempt = start_attempt(run.conn, run.run_id, node, lease=lease)
     outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    reserve_at(run.conn, attempt, Decimal("0.25"), lease=lease)
+    run.conn.commit()
     tries: list[int] = []
 
     def store_down(*_args: object, **_kwargs: object) -> bool:
@@ -2067,7 +2116,19 @@ def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
     assert not _hold_is_taken(empty_database, attempt), "the window: nothing holds it"
     worker_conn.close()
     start_attempt(run.conn, run.run_id, node, lease=lease)
-    assert count(run.conn, "run_attempts", run.run_id) == 2, "one more, no more"
+    assert count(run.conn, "run_attempts", run.run_id) == 2, "one more"
+    second = run.conn.execute(
+        "SELECT attempt_id FROM run_attempts WHERE run_id = %s AND attempt_id <> %s",
+        (run.run_id, attempt),
+    ).fetchone()
+    run.conn.rollback()
+    assert second is not None
+    reserve_at(run.conn, second[0], Decimal("0.25"), lease=lease)
+    run.conn.commit()
+    with connect(empty_database) as holder, call_hold(holder, second[0]):
+        with pytest.raises(Refusal, match=r"^ATTEMPT_UNSETTLED$"):
+            start_attempt(run.conn, run.run_id, node, lease=lease)
+    assert count(run.conn, "run_attempts", run.run_id) == 2, "no more"
 
 
 # How long another session holds the run's case row in the test below: past
