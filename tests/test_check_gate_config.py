@@ -654,6 +654,47 @@ def test_the_pinned_conftest_is_pinned_whole(tmp_path: Path) -> None:
         ), (extra, problems)
 
 
+def test_the_pytest_plugins_module_is_read_with_stores_refused(
+    tmp_path: Path,
+) -> None:
+    """N109 re-review: the module the pinned `pytest_plugins` names is loaded
+    as a plugin before the guard runs, so a store into `sys.modules` or into
+    its own module object there disarms the guard and installs a hook with no
+    `pytest_` binding; it is read like every other conftest-loaded module the
+    pin does not cover, with stores refused. The committed module passes."""
+    root = _tree(tmp_path)
+    [module] = check_gate_config.PYTEST_PLUGINS_PIN
+    plugin = f"tests/{module}.py"
+    committed = (REPO / plugin).read_text(encoding="utf-8")
+    assert _conftest_problems(root, plugin, committed) == []
+    tampered = committed + (
+        "\nimport sys as _sys\n\n"
+        '_sys.modules["conftest"]._EXIT = lambda *a, **k: None\n'
+        "_sys.modules[__name__].pytest_pyfunc_call = lambda pyfuncitem: True\n"
+    )
+    problems = _conftest_problems(root, plugin, tampered)
+    assert any(
+        problem.startswith(f"conftest: {plugin} stores into an attribute or item")
+        for problem in problems
+    ), problems
+
+
+def test_the_pinned_conftest_is_byte_pinned_in_gitattributes() -> None:
+    """N109 re-review: `tests/conftest.py` is pinned by digest, so a checkout
+    that converts its line endings fails the gate; `.gitattributes` must hold
+    its bytes as it does the other byte-pinned files (`-text`)."""
+    git = shutil.which("git")
+    assert git is not None
+    attribute = subprocess.run(
+        [git, "check-attr", "text", "tests/conftest.py"],
+        cwd=REPO,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert attribute == "tests/conftest.py: text: unset"
+
+
 def test_a_store_or_a_del_in_another_conftest_is_refused(tmp_path: Path) -> None:
     """N109 re-review: an attribute or subscript store, an augmented one or
     a `del` can disarm a guard or a hook from a conftest the pin does not
@@ -921,7 +962,9 @@ def test_a_conftest_collection_hook_is_refused_unless_pinned(tmp_path: Path) -> 
     conftest.write_text(tampered, encoding="utf-8")
     [problem] = check_gate_config._collection_hook_problems(root)
     assert problem.startswith("conftest: tests/conftest.py changed (sha256 ")
-    assert problem.endswith("update CONFTEST_PIN in the same change")
+    assert problem.endswith(
+        "update CONFTEST_PIN in scripts/check_gate_config.py in the same change"
+    )
 
     conftest.write_text(original, encoding="utf-8")
     other = root / "tests" / "other" / "conftest.py"
