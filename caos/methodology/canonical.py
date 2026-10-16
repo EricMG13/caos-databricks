@@ -497,19 +497,30 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
     with the bill (N80). A store that stays down still refuses
     `STORE_UNAVAILABLE`, and the run is released as before.
 
-    Two windows stay, and both are inherent to a store that cannot be
-    reached. The attempt is unheld from the loss of the old session to the
-    new hold's lock round trip (one connect and one statement). And after
-    `BILL_TRIES` failed writes, `BILL_PAUSE_SECONDS` apart (a few seconds, a
-    small share of the lease's liveness budget), the bill is abandoned with no
-    session left to hold the attempt, so the next claim may start the node
-    once more under a reservation of its own (invariant 8); nothing can be
-    written to a store that is down, and a longer wait would hold the run's
-    lease for it. Both are bounded by tests.
+    Two windows stay. The attempt is unheld from the loss of the old session
+    to the new hold's lock round trip (a connect with no connect timeout of
+    its own, then one statement; `idle_session_timeout` is off for these
+    sessions, so idleness never ends them). And after `BILL_TRIES` failed
+    writes, `BILL_PAUSE_SECONDS` apart (a few seconds, a small share of the
+    lease's liveness budget), the bill is abandoned with no session left to
+    hold the attempt, so the next claim may start the node once more under a
+    reservation of its own (invariant 8); nothing can be written to a store
+    that is down, and a longer wait would hold the run's lease for it. The
+    second is inherent to a store that cannot be reached; the first is
+    shortened, never lengthened, by a backend still holding the old hold: the
+    replacement asks for its hold without waiting for it (`wait=False`) and
+    writes whether or not it got it. Both are bounded by tests.
+
+    A fault that took its session away is answered by the reconnect at once
+    and costs no try: a store that then stays down is paused for
+    `BILL_TRIES - 1` times, as on every other path. Such a cut-and-reconnect
+    is itself bounded (`BILL_TRIES` of them), so a store that cuts every
+    fresh session cannot loop the bill.
     """
+    pauses_left, free_cuts = BILL_TRIES - 1, BILL_TRIES
     with ExitStack() as sessions:
         target, connecting = conn, False
-        for tries_left in range(BILL_TRIES - 1, -1, -1):
+        while True:
             try:
                 if target.closed:
                     connecting = True
@@ -517,25 +528,31 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
                     connecting = False
                 record_outcome(target, attempt_id=attempt_id, outcome=outcome)
             except Refusal as refused:
-                if refused.code is not RefusalCode.STORE_UNAVAILABLE or not tries_left:
+                if refused.code is not RefusalCode.STORE_UNAVAILABLE:
                     raise
-                # A fault that took its session with it is answered by the
-                # reconnect, not by a pause that leaves the attempt unheld.
-                if connecting or not target.closed:
-                    _pause(BILL_PAUSE_SECONDS)
+                if not connecting and target.closed and free_cuts:
+                    # The session went with the fault: reconnect and hold at
+                    # once, not after a pause that leaves the attempt unheld.
+                    free_cuts -= 1
+                    continue
+                if not pauses_left:
+                    raise
+                pauses_left -= 1
+                _pause(BILL_PAUSE_SECONDS)
                 continue
             return
 
 
 @contextmanager
 def _held_fresh(attempt_id: UUID) -> Iterator[StoreConnection]:
-    """A fresh connection to the same store, holding the attempt (`call_hold`)."""
+    """A fresh connection to the same store, holding the attempt (`call_hold`)
+    when the hold is free; it writes either way (N80)."""
     try:
         fresh = connect(store_url())
     except (psycopg.Error, Refusal):
         # No store to retry against: the fault that closed it stands.
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
-    with fresh, call_hold(fresh, attempt_id):
+    with fresh, call_hold(fresh, attempt_id, wait=False):
         yield fresh
 
 
