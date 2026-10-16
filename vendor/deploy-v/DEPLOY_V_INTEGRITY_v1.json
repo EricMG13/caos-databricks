@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_INTEGRITY_v1",
-  "build_id": "d73f4b91a090baa82e4cf8388ceba7dbb2fdf9741f82571cf94bb0582fdcc8be",
+  "build_id": "bbcddf3cfc3d6a847b430938e2fc401c611e210b2bdaaca7ce3988c4b630000e",
   "root_file_hashes": {
     ".gitignore": {
       "bytes": 83,
@@ -24,7 +24,7 @@
     },
     "CP_DEPLOY_V_RETRIEVAL_INDEX_v1.json": {
       "bytes": 5437,
-      "sha256": "1247957e0d0cb45493ebd70aa74d51dfc6e836bb33f3285382e326fb210a4708"
+      "sha256": "494adcca5f8df3b4308bd9beeb09408af9f75133a606da9817751ccc6bdf54d2"
     },
     "CP_MODULE_PAYLOAD_BASE.schema.txt": {
       "bytes": 1930,
@@ -32,19 +32,19 @@
     },
     "DEPLOY_V_BASELINE.json": {
       "bytes": 58204,
-      "sha256": "61611c5c4e7c70fb978b2de2bcbf26379a6bbed16aacd74f8ccd67cda6c14448"
+      "sha256": "e6fbecb49039a631840cd93b1ccfccf9cfb65fd7cb7061d2161a3aa1b67a7c79"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT.md": {
       "bytes": 11934,
-      "sha256": "39497ddc64836a28e8dc3bc82b9ca3463d1fb5ff0fa65f764ee74c50e45f67d3"
+      "sha256": "75c43b80d4658a54d3c3801d922bc3b7196e231d5f87253c6826a7f24a6caced"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT_URL_BOUND.md": {
       "bytes": 12653,
-      "sha256": "3dbbb391eb6ec056912859c6d476eaaeb2e722503a5f5156845a08b97ea69dcb"
+      "sha256": "ce49fd41e076427c2028f406f1197244ab7dc4119521d0390e29e7242f77226f"
     },
     "DEPLOY_V_MANIFEST.json": {
       "bytes": 70399,
-      "sha256": "b06c3a62823677fa990ca070adb8e575b0f7aaa12a7e7bf5189403249012554d"
+      "sha256": "3d75e8cfe1bdeb4c34ba6146a5fa5f657247f445ba6d57c2b80ade70ad6e167f"
     },
     "README.md": {
       "bytes": 7233,
@@ -55,8 +55,8 @@
       "sha256": "71fc109b3f90aaba15712c3a80b185115a016a583e827fd50accba1d1a223fc6"
     },
     "tests/test_regressions.py": {
-      "bytes": 125837,
-      "sha256": "a7af1977866e2c4717cd3078e52f2fa804615bf041e5c4daea89b2f9507283be"
+      "bytes": 127600,
+      "sha256": "f013020f8de005e70e56355c4ed2cfa9b769e11e15d59b85d47f4854fc1e0814"
     },
     "tests/test_research_workflow.py": {
       "bytes": 19397,
@@ -784,14 +784,14 @@
       "companion_count": 18,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 42147,
-      "entry_sha256": "9a0bad83c3e01115e3db502a402c77b9f2ee40b60f54a69ee2f9edc119679866",
+      "entry_bytes": 42391,
+      "entry_sha256": "40ebb2613562b4fc36d7880aa5ed04a88bbc4648ee9bc157f41f61d77150f6f7",
       "folder_slug": "cp-4-legal-covenant-interpreter",
       "module_id": "CP-4",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 42147,
-          "sha256": "9a0bad83c3e01115e3db502a402c77b9f2ee40b60f54a69ee2f9edc119679866"
+          "bytes": 42391,
+          "sha256": "40ebb2613562b4fc36d7880aa5ed04a88bbc4648ee9bc157f41f61d77150f6f7"
         },
         "references/CP-4A_RUNBOOK.md": {
           "bytes": 11568,
@@ -1720,8 +1720,8 @@
     }
   ],
   "source_hashes": {
-    "deployed_baseline": "61611c5c4e7c70fb978b2de2bcbf26379a6bbed16aacd74f8ccd67cda6c14448",
+    "deployed_baseline": "e6fbecb49039a631840cd93b1ccfccf9cfb65fd7cb7061d2161a3aa1b67a7c79",
     "deployed_child_schema_registry": "6b1766e5698632e277ede71037bee2fcd3e02b726c43b76fc4fe0f8b47c5ef48",
-    "deployed_manifest": "b06c3a62823677fa990ca070adb8e575b0f7aaa12a7e7bf5189403249012554d"
+    "deployed_manifest": "3d75e8cfe1bdeb4c34ba6146a5fa5f657247f445ba6d57c2b80ade70ad6e167f"
   }
 }
