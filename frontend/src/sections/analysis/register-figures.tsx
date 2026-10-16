@@ -92,7 +92,7 @@ export const nameOf = (row: Row, ...columns: string[]) =>
     .join(" ") || `row ${placeOf(row)}, ${columns[0]} not stated`;
 
 /** A figure's unit as written: the currency signs it starts or ends with,
-    then the `x` or `%` it ends in: "$", "%", "€ x". */
+    then the `x`, `%` or `bp` it ends in: "$", "%", "€ x", "bp". */
 type Unit = string;
 
 /** A citation marker standing alone, as `ds/markdown` reads one in model text. */
@@ -115,7 +115,10 @@ const CURRENCY = /^[$€£¥₹]|[$€£¥₹]$/g;
 /** The unit a figure cell is written in, past its citation markers, a
     negative's brackets and digit-group spaces, as the host's reader strips
     them (caos/methodology/tables.py): a currency sign at either end, then
-    an `x` or `%`; none for a cell the host read no figure from. */
+    an `x`, a `%` or a `bp`/`bps` hugging its digit (`350bps`, `350 bp`: basis
+    points, as the host reads them); none for a cell the host read no figure
+    from, and none for a basis-point mark after an `x` or `%` (`5xbps`,
+    `10%bp`), which the host refuses. */
 function suffixOf(cell: Cell | undefined): Unit | undefined {
   if (cell?.value == null) return undefined;
   const written = unmarked(cell.text).trim();
@@ -123,15 +126,16 @@ function suffixOf(cell: Cell | undefined): Unit | undefined {
   const bare = inner.replace(/[\u00a0\u2009\u202f ]/g, "");
   const signs = unique(bare.match(CURRENCY) ?? []).join("");
   const core = bare.replace(CURRENCY, "");
-  const suffix = /[xX]$/.test(core) ? "x" : core.endsWith("%") ? "%" : "";
+  const points = /(?<=[0-9])bps?$/i.exec(core);
+  if (points && /[xX%]$/.test(core.slice(0, points.index))) return undefined;
+  const suffix = points ? "bp" : /[xX]$/.test(core) ? "x" : core.endsWith("%") ? "%" : "";
   return [signs, suffix].filter(Boolean).join(" ") || undefined;
 }
 
-/** A cell's `x` or `%` alone, its currency sign dropped: where a register
-    states a currency column, that column names the currency. */
+/** A cell's `x`, `%` or `bp` alone, its currency sign dropped: where a
+    register states a currency column, that column names the currency. */
 function suffixAlone(cell: Cell | undefined): Unit | undefined {
-  const unit = suffixOf(cell);
-  return unit && /[x%]$/.test(unit) ? unit.slice(-1) : undefined;
+  return suffixOf(cell)?.match(/(?:[x%]|bp)$/)?.[0];
 }
 
 /** A cell as a summary says it: its figure as served, else n/a and its text. */
@@ -178,10 +182,10 @@ interface Grouping<G extends string> {
 }
 
 // Each sign a unit is written with, and how a figure's key says it.
-const SIGNS = ["$", "€", "£", "¥", "₹", "x", "%"];
-const SIGN_KEYS = ["dollar", "euro", "pound", "yen", "rupee", "x", "percent"];
+const SIGNS = ["$", "€", "£", "¥", "₹", "x", "%", "bp"];
+const SIGN_KEYS = ["dollar", "euro", "pound", "yen", "rupee", "x", "percent", "bp"];
 const unitKey = (unit: Unit) =>
-  [...unit].flatMap((sign) => SIGN_KEYS[SIGNS.indexOf(sign)] ?? []).join("-");
+  (unit.match(/bp|./g) ?? []).flatMap((sign) => SIGN_KEYS[SIGNS.indexOf(sign)] ?? []).join("-");
 
 const BY_UNIT = {
   key: unitKey,
@@ -1035,11 +1039,10 @@ export function basketCapacity(handoff: HandoffView): Figure[] {
 
 /** CP-4C's recovery by class (`T4E.7`): per scenario and currency, each
     class's allowed claim beside its total recovery, a cell written in `x` or
-    `%` drawn in its own unit's figure. The packed
-    `cash/debt/equity/warrant value` holds several figures the bundle's
-    reader cannot split (N192): a mark's source states it, nothing draws it.
-    CP-4C's `T4E.2` draws nothing for the same reason: its one amount column,
-    `principal/accrued/PIK`, packs three. */
+    `%` drawn in its own unit's figure. The four value columns (`cash value`,
+    `debt value`, `equity value`, `warrant value`, split by fork r17, N192)
+    are a mark's source: it states them, nothing draws them. CP-4C's `T4E.2`
+    draws nothing: its `principal`, `accrued` and `PIK` are no recovery. */
 export function recoveryByClass(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-4C", "T4E.7");
   if (!rows?.length) return [];
@@ -1064,7 +1067,7 @@ export function recoveryByClass(handoff: HandoffView): Figure[] {
         { key: "recovery", label: "total recovery", column: "total recovery" },
       ],
       noun: "Recovery",
-      source: ["timing", "cash/debt/equity/warrant value"],
+      source: ["timing", "cash value", "debt value", "equity value", "warrant value"],
     };
     const rows = group.map(({ row }) => row);
     return byUnitFigures(rows, base, spec, currency || undefined);
@@ -1080,7 +1083,7 @@ interface CaseLines {
   source: string;
 }
 
-/** A metric as a figure's key part: "gross/net leverage" is "gross-net-leverage". */
+/** A metric as a figure's key part: "FCF/debt" is "fcf-debt". */
 const slug = (metric: string) => metric.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
 /** The point the rows stating one category give a column: their cell, as
@@ -1217,14 +1220,13 @@ export function forecastCases(handoff: HandoffView): Figure[] {
   });
 }
 
-/** CP-2G's credit path (`T2H.6`): leverage, coverage and FCF/debt, base
-    against downside. A leverage cell packing gross and net (`4.2x / 3.9x`)
-    is a gap carrying its text: the host reads no figure from it (N192). */
+/** CP-2G's credit path (`T2H.6`): gross leverage, net leverage (two columns
+    since fork r17, N192), coverage and FCF/debt, base against downside. */
 export function creditPath(handoff: HandoffView): Figure[] {
   return caseLines(handoff, {
     register: "T2H.6",
     key: "credit-path",
-    metrics: ["gross/net leverage", "coverage", "FCF/debt"],
+    metrics: ["gross leverage", "net leverage", "coverage", "FCF/debt"],
     source: "definition IDs",
   });
 }
@@ -1422,28 +1424,36 @@ export function riskMatrix(handoff: HandoffView): Figure[] {
 }
 
 /** A trigger's label, which is also its identity: "Leverage (Issuer,
-    downgrade)", its stated direction read trimmed and casefolded past its
-    citation markers, so an upgrade and a downgrade trigger on one metric
-    stay two triggers; its metric and rating type too. A blank rating type
-    or direction is left out; a blank metric is named by its row. */
+    downgrade, BASE, FY26)", its stated direction read trimmed and casefolded
+    past its citation markers, so an upgrade and a downgrade trigger on one
+    metric stay two triggers; its metric and rating type too, and since fork
+    r17 (N192) the `case` and `period` its `value` is read at, so one trigger
+    tested in two cases is two bullets, not one stated twice. A blank rating
+    type, direction, case or period is left out; a blank metric is named by
+    its row. */
 function triggerLabel(row: Row): string {
   const metric = nameOf(row, "metric");
   const direction = unmarked(text(row, "trigger direction")).trim().toLowerCase();
-  const parts = [unmarked(text(row, "rating type")).trim(), direction].filter(Boolean);
+  const parts = [
+    unmarked(text(row, "rating type")).trim(),
+    direction,
+    unmarked(text(row, "case")).trim(),
+    unmarked(text(row, "period")).trim(),
+  ].filter(Boolean);
   return parts.length ? `${metric} (${parts.join(", ")})` : metric;
 }
 
 /** CP-2H's quantitative triggers (`T2R.4`): a bullet figure per agency and
-    unit its threshold and case/period value are written in (one in another
-    unit a gap naming it), each trigger's case/period value against its threshold, the
-    headroom as served. A packed case/period value is a gap carrying its
-    text (N192). A trigger stated twice (one metric, rating type and
+    unit its threshold and value are written in (one in another unit a gap
+    naming it), each trigger's value (read at its own `case` and `period`,
+    columns of their own since fork r17, N192) against its threshold, the
+    headroom as served. A trigger stated twice (one metric, rating type and
     direction) is one row, each value a gap naming each text where they
     differ, and the summary names it. */
 export function ratingTriggers(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2H", "T2R.4");
   if (!rows?.length) return [];
-  const values = ["threshold", "case/period value", "headroom"];
+  const values = ["threshold", "value", "headroom"];
   const agencies = [...groupBy(rows, (row) => text(row, "agency").trim())];
   return agencies.flatMap(([agency, group], n) => {
     const base = {
@@ -1460,7 +1470,7 @@ export function ratingTriggers(handoff: HandoffView): Figure[] {
         label,
         direction: directionOf(same[0]!, "trigger direction"),
         threshold: pointOf(same, "threshold", read),
-        current: pointOf(same, "case/period value", read),
+        current: pointOf(same, "value", read),
         headroom: pointOf(same, "headroom", datum),
         origin: "model",
       }));
