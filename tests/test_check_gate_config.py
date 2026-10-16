@@ -679,6 +679,91 @@ def test_the_pytest_plugins_module_is_read_with_stores_refused(
     ), problems
 
 
+def _tracked_bytes(root: Path, name: str, data: bytes) -> None:
+    target = root / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    _git(root, "add", name)
+
+
+# A utf-7 conftest whose hook sits inside what a utf-8 read sees as one
+# comment line: `+AAo-` is a utf-7 newline, so the importer reads a `def`.
+_UTF7_HOOK = (
+    b"# coding: utf-7\n"
+    b'"""Probe conftest."""\n'
+    b"# +AAo-def pytest_pyfunc_call(pyfuncitem):+AAo-    return True\n"
+)
+
+
+def test_a_coding_cookie_other_than_utf_8_is_refused_in_every_tracked_file(
+    tmp_path: Path,
+) -> None:
+    """N109 r4 re-review: Python's importer honours a PEP 263 coding cookie,
+    so a utf-7 file carries code that a utf-8 text read sees as a comment --
+    a hook in a conftest, or a `noqa` under the suppression budget. The gate
+    reads a conftest-loaded module as its bytes decode, as the importer
+    does, and refuses a cookie other than utf-8 in any tracked .py file."""
+    root = _tree(tmp_path)
+    assert any(
+        isinstance(node, ast.FunctionDef) and node.name == "pytest_pyfunc_call"
+        for node in ast.parse(_UTF7_HOOK).body
+    )
+    _tracked_bytes(root, "tests/zz/conftest.py", _UTF7_HOOK)
+    problems = check_gate_config._collection_hook_problems(root)
+    assert any(
+        problem.startswith("conftest: tests/zz/conftest.py defines pytest_pyfunc_call")
+        for problem in problems
+    ), problems
+    for name in ("scripts/u7.py", "caos/u7.py"):
+        _tracked_bytes(root, name, b"# coding: utf-7\n# +AAo-x = 1\n")
+    refused = check_gate_config._encoding_problems(root)
+    for name in ("tests/zz/conftest.py", "scripts/u7.py", "caos/u7.py"):
+        assert any(
+            problem.startswith(f"encoding: {name} declares utf-7") for problem in refused
+        ), (name, refused)
+    assert set(refused) <= set(check_gate_config.configuration_problems(root))
+
+
+def test_a_utf_8_cookie_passes_and_undecodable_bytes_are_a_typed_problem(
+    tmp_path: Path,
+) -> None:
+    """N109 r4 re-review: the one cookie the importer and a text read agree
+    on passes; bytes that do not decode, or an encoding Python has no codec
+    for, are each a typed problem, in the encoding check and in the conftest
+    read, never an uncaught decode error."""
+    root = _tree(tmp_path)
+    _tracked_bytes(root, "scripts/declared.py", b"# -*- coding: utf-8 -*-\nx = 1\n")
+    assert check_gate_config._encoding_problems(root) == []
+    _tracked_bytes(root, "scripts/broken.py", b"# coding: utf-8\nx = '\xff'\n")
+    _tracked_bytes(root, "scripts/unknown.py", b"# coding: no-such-codec\nx = 1\n")
+    _tracked_bytes(root, "tests/broken/conftest.py", b"# coding: utf-8\n\xff\n")
+    problems = check_gate_config._encoding_problems(root)
+    assert "encoding: scripts/broken.py could not be read as utf-8" in problems
+    assert "encoding: tests/broken/conftest.py could not be read as utf-8" in problems
+    assert (
+        "encoding: scripts/unknown.py declares an encoding Python cannot read"
+        in problems
+    )
+    assert (
+        "conftest: tests/broken/conftest.py could not be parsed"
+        in check_gate_config._collection_hook_problems(root)
+    )
+
+
+def test_a_pytest_plugins_module_that_does_not_parse_is_reported(
+    tmp_path: Path,
+) -> None:
+    """N109 r4 re-review: the module the pinned `pytest_plugins` names was
+    skipped silently when it did not parse; it is reported like any other
+    conftest-loaded module."""
+    root = _tree(tmp_path)
+    [module] = check_gate_config.PYTEST_PLUGINS_PIN
+    plugin = f"tests/{module}.py"
+    assert f"conftest: {plugin} could not be parsed" in _conftest_problems(
+        root, plugin, "def (\n"
+    )
+
+
 def test_the_pinned_conftest_is_byte_pinned_in_gitattributes() -> None:
     """N109 re-review: `tests/conftest.py` is pinned by digest, so a checkout
     that converts its line endings fails the gate; `.gitattributes` must hold
