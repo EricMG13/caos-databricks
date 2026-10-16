@@ -4101,6 +4101,28 @@ def test_a_378_day_ltm_is_noted() -> None:
     assert odd_length(None) is None
 
 
+def test_the_stated_day_counts_win_over_the_dated_spans_for_the_length() -> None:
+    """Dated as a calendar year, but stating day counts of 378 days: the
+    stated ones are the length (the dated spans are only the fallback)."""
+    periods = tuple(
+        replace(p, day_count=n)
+        for p, n in zip(
+            (
+                _days_period("FY2025", "FY", date(2025, 1, 1), 365, None),
+                _days_period("H1_2025", "YTD", date(2025, 1, 1), 181, None),
+                _days_period("H1_2026", "YTD", date(2026, 1, 1), 181, None),
+            ),
+            (372, 182, 188),
+            strict=True,
+        )
+    )
+    regs = _revenue_on(periods, per_day=False)
+    columns = historical_columns(regs)
+    ltm = next(c for c in columns if c.kind == "LTM")
+    cell = account_frame(regs, columns)[ltm.column_id]["acct:revenue"]
+    assert cell.note == "twelve months of 378 days"
+
+
 def test_a_378_day_ltm_is_noted_without_a_day_count() -> None:
     """N211 Minor 5: with CP-1 stating no day count, both dates still say how
     long the twelve months are."""
