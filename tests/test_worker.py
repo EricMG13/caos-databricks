@@ -1851,7 +1851,13 @@ def test_a_bill_on_a_closed_connection_is_written_on_a_fresh_one(
     from caos.store.work import claim_run
 
     run = enqueued
-    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    paused: list[float] = []
+
+    def pause(seconds: float) -> None:
+        paused.append(seconds)
+        assert len(paused) < 20, "the bill must stop"
+
+    monkeypatch.setattr(canonical, "_pause", pause)
     node = run.route.nodes[0].route_node_id
     lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
     attempt = start_attempt(run.conn, run.run_id, node, lease=lease)
@@ -1945,7 +1951,21 @@ def test_a_bill_with_no_store_to_reconnect_to_still_pauses_between_its_tries(
     from caos.store.outcomes import CallOutcome
 
     pauses: list[float] = []
-    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    events: list[str] = []
+
+    def paused(seconds: float) -> None:
+        pauses.append(seconds)
+        events.append("pause")
+
+    def asked_for_the_store() -> str:
+        events.append("connect")
+        assert len(events) < 30, "the bill must stop"
+        return real_store_url()
+
+    from caos.store.lakebase import store_url as real_store_url
+
+    monkeypatch.setattr(canonical, "_pause", paused)
+    monkeypatch.setattr(canonical, "store_url", asked_for_the_store, raising=True)
     closed = connect(empty_database)
     closed.close()
     monkeypatch.delenv("CAOS_DATABASE_URL", raising=False)
@@ -1955,6 +1975,7 @@ def test_a_bill_with_no_store_to_reconnect_to_still_pauses_between_its_tries(
     with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
         canonical.bill(closed, enqueued.run_id, outcome)
     assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
+    assert events == ["connect", "pause"] * (canonical.BILL_TRIES - 1) + ["connect"]
 
 
 def test_a_bill_whose_write_closes_the_session_is_retried_held_and_unpaused(
@@ -2054,7 +2075,12 @@ def test_a_bill_cut_then_met_by_a_down_store_keeps_every_pause(
 
     pauses: list[float] = []
     writes: list[int] = []
-    monkeypatch.setattr(canonical, "_pause", pauses.append)
+
+    def paused(seconds: float) -> None:
+        pauses.append(seconds)
+        assert len(pauses) < 20, "the bill must stop"
+
+    monkeypatch.setattr(canonical, "_pause", paused)
     for name in ("CAOS_DATABASE_URL", "PGHOST", "PGPORT", "PGDATABASE", "PGUSER"):
         monkeypatch.delenv(name, raising=False)
 
@@ -2069,6 +2095,37 @@ def test_a_bill_cut_then_met_by_a_down_store_keeps_every_pause(
     with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
         canonical.bill(worker_conn, enqueued.run_id, outcome)
     assert writes == [1]
+    assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
+
+
+def test_a_store_that_cuts_every_session_is_asked_a_bounded_number_of_times(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: the reconnect after a cut costs no try, but it is bounded: a store
+    that cuts every fresh session gets `BILL_TRIES` instant reconnects and then
+    the ordinary `BILL_TRIES` tries, `BILL_TRIES - 1` pauses among them."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome
+
+    pauses: list[float] = []
+    writes: list[int] = []
+    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+
+    def cut(conn: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome) -> bool:
+        writes.append(1)
+        assert len(writes) < 30, "the bill must stop"
+        conn.close()
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(canonical, "record_outcome", cut)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        canonical.bill(connect(empty_database), enqueued.run_id, outcome)
+    assert len(writes) == 2 * canonical.BILL_TRIES
     assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
 
 
@@ -2103,6 +2160,7 @@ def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
 
     def store_down(*_args: object, **_kwargs: object) -> bool:
         tries.append(1)
+        assert len(tries) < 20, "the bill must stop"
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
 
     monkeypatch.setattr(canonical, "record_outcome", store_down)

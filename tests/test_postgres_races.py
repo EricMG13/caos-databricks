@@ -1716,6 +1716,50 @@ def _bill_beside_a_live_holder(
     return took, billed
 
 
+def _hold_is_free(url: str, attempt: UUID) -> bool:
+    """Whether a session of its own could take the attempt's hold now."""
+    from caos.store.outcomes import CALL_HOLD_LOCK
+
+    with connect(url) as probe:
+        row = probe.execute(
+            "SELECT pg_try_advisory_lock(%s::integer, hashtext(%s))",
+            (CALL_HOLD_LOCK, str(attempt)),
+        ).fetchone()
+        probe.rollback()
+    return row is not None and row[0] is True
+
+
+def test_a_hold_not_waited_for_runs_beside_its_holder_and_lets_go_only_of_its_own(
+    empty_database: str,
+) -> None:
+    """`call_hold(wait=False)` asks for the hold and runs the scope whether or
+    not it got it, where the default waits (a `lock_timeout` cuts that wait
+    short as a store fault). It lets go of a hold it obtained, never of the
+    holder's."""
+    attempt = uuid4()
+    holder, other = connect(empty_database), connect(empty_database)
+    try:
+        other.execute("SET lock_timeout = 200")
+        other.commit()
+        with call_hold(holder, attempt):
+            ran: list[str] = []
+            with call_hold(other, attempt, wait=False):
+                ran.append("beside the holder")
+            assert ran == ["beside the holder"]
+            assert not _hold_is_free(empty_database, attempt), "the holder's stands"
+            _refused(
+                RefusalCode.STORE_UNAVAILABLE,
+                lambda: call_hold(other, attempt).__enter__(),
+            )
+        assert _hold_is_free(empty_database, attempt)
+        with call_hold(other, attempt, wait=False):
+            assert not _hold_is_free(empty_database, attempt), "taken when free"
+        assert _hold_is_free(empty_database, attempt), "and let go at the scope's end"
+    finally:
+        holder.close()
+        other.close()
+
+
 def test_a_reconnected_bill_lands_at_once_beside_a_live_holder_of_the_hold(
     empty_database: str,
     prepared_run: tuple[UUID, UUID],
