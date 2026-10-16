@@ -1360,21 +1360,20 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
     return replace(total, stated=stated, note=note)
 
 
-def _stated_footing(register: _Register, period_id: str | None) -> str:
-    """The period's id with its basis and perimeter as written, `not stated`
-    for one it does not state."""
-    period = register.periods.get(period_id)
-    basis = period.accounting_basis if period else None
-    perimeter = period.entity_perimeter if period else None
-    return f"{period_id} ({basis or 'not stated'}, {perimeter or 'not stated'})"
+def _stated_footing(register: _Register, period_id: str) -> str:
+    """The register period's id with its basis and perimeter as written,
+    `not stated` for one it does not state."""
+    period = register.periods[period_id]
+    basis = period.accounting_basis or "not stated"
+    perimeter = period.entity_perimeter or "not stated"
+    return f"{period_id} ({basis}, {perimeter})"
 
 
 def _apart(register: _Register, own: str | None, other: str) -> bool:
     """Whether the two periods state a different basis or perimeter (not
-    stated matches anything)."""
+    stated matches anything); `other` is a register period."""
     first = register.footings.get(own, UNSTATED_FOOTING)
-    second = register.footings.get(other, UNSTATED_FOOTING)
-    return combined_footing((first, second)) is None
+    return combined_footing((first, register.footings[other])) is None
 
 
 def _balance(series: _Series, register: _Register, spec: _Spec) -> Cell:
@@ -1382,29 +1381,29 @@ def _balance(series: _Series, register: _Register, spec: _Spec) -> Cell:
     any period's ending that day, in register order; none on another footing
     than the anchor's, and only its own where it is. A period ending that day
     on a footing that differs from the column's own period's (both stated)
-    is not read: where it alone has the figure, the cell is
+    is skipped: where none other has the figure, the cell is
     `COMPONENT_MISSING`, its note naming both footings (R7, N206)."""
     ending = register.ending.get(spec.column.end_date, ())
     if spec.own in register.off:
         ending = ()
     on = (period_id for period_id in ending if period_id not in register.off)
-    ids = (spec.own, *on)
-    cells = [_reported(series, period_id) for period_id in ids]
     refused: Cell | None = None
-    for period_id, cell in zip(ids, cells, strict=True):
+    cells: list[Cell] = []
+    for period_id in (spec.own, *on):
+        cell = _reported(series, period_id)
+        cells.append(cell)
         if cell.value is None:
             continue
-        if period_id != spec.own and _apart(register, spec.own, str(period_id)):
-            refused = refused or Cell(
-                None,
-                "COMPONENT_MISSING",
-                note=(
-                    f"{OTHER_FOOTING}: {_stated_footing(register, spec.own)} and "
-                    f"{_stated_footing(register, period_id)}"
-                ),
-            )
-            continue
-        return cell
+        if period_id == spec.own or not _apart(register, spec.own, str(period_id)):
+            return cell
+        refused = refused or Cell(
+            None,
+            "COMPONENT_MISSING",
+            note=(
+                f"{OTHER_FOOTING}: {_stated_footing(register, str(spec.own))} and "
+                f"{_stated_footing(register, str(period_id))}"
+            ),
+        )
     if refused is not None:
         return refused
     return _UNSTATED if _UNSTATED in cells else ABSENT
@@ -1491,9 +1490,10 @@ def _with_length(total: Cell, days: int | None) -> Cell:
 def _window_days(
     found: list[_Spec], periods: Mapping[str | None, PeriodRow]
 ) -> int | None:
-    """The days from the first quarter's start to the last's end, where four
-    quarters tile; None otherwise."""
-    span = _tiled(found, periods) if len(found) == 4 else None
+    """The days from the first quarter's start to the last's end, where they
+    tile; None otherwise. (With fewer than four the total has no figure, so
+    its days are never read.)"""
+    span = _tiled(found, periods)
     return None if span is None else span[1] - span[0] + 1
 
 

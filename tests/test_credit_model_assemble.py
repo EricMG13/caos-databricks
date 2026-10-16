@@ -1233,6 +1233,18 @@ def test_the_pf_net_debt_is_noted_where_an_unapplied_adjustment_touches_debt() -
     assert _cell(model, "net_debt", _PF).value == _cell(base, "net_debt", _PF).value
     assert f"{NOT_APPLIED}: nd label" in model.limitations
 
+    two = replace(
+        regs,
+        pro_forma=(
+            *regs.pro_forma,
+            _adjustment("nd", "net_debt", 40),
+            _adjustment("cn", "cash_net", 1),
+        ),
+    )
+    assert _cell(_model(regs=two), "net_debt", _PF).note == (
+        f"{PF_NET_DEBT_EXCLUDES}: nd label, cn label"
+    )
+
     elsewhere = replace(
         regs,
         pro_forma=(*regs.pro_forma, _adjustment("capex", "capex", -5)),
