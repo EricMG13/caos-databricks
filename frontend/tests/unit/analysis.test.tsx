@@ -779,6 +779,42 @@ describe("Analysis", () => {
     expect(row.querySelectorAll("[data-blocked-quote]")).toHaveLength(2);
   });
 
+  test("a limitation and a RESTRICTED module are the ring, not a warning (D71, N113)", () => {
+    const base = complete.body.handoffs[0]!;
+    const restricted: HandoffView = {
+      ...base,
+      qa_status: "Restricted",
+      limitation_flags: ["covenant_package_not_provided"],
+      validation_warnings: [],
+      screening_only: true,
+      unverified_facts: [],
+    };
+    const { container } = mountAt(
+      { ...complete, body: { ...complete.body, handoffs: [restricted] } },
+      restricted.module_id,
+    );
+    const status = container.querySelector("[data-qa-status]")!;
+    expect(status).toHaveTextContent("Restricted");
+    expect(status).not.toHaveClass("warn");
+    expect(status).toHaveClass("restricted");
+    for (const key of ["screening", "limit-0", "qa"]) {
+      const mark = container.querySelector(`[data-caveat="${key}"] [data-severity]`)!;
+      expect(mark, key).toHaveAttribute("data-severity", "RESTRICTED");
+      expect(mark.classList.contains("warn")).toBe(false);
+    }
+    // A validation warning is still a warning.
+    const warned: HandoffView = { ...restricted, validation_warnings: ["period_mismatch"] };
+    const { container: other } = mountAt(
+      { ...complete, body: { ...complete.body, handoffs: [warned] } },
+      warned.module_id,
+    );
+    expect(other.querySelector('[data-caveat="warnings"] [data-severity]')).toHaveAttribute(
+      "data-severity",
+      "WARNING",
+    );
+    expect(other.querySelector("[data-qa-status]")).toHaveClass("warn");
+  });
+
   test("a run still working names no blocking node", () => {
     const { container } = mount(partial);
     const rows = [...container.querySelectorAll("[data-pending-node]")];

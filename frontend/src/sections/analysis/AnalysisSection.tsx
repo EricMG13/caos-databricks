@@ -312,7 +312,10 @@ function ModuleView({
           <span className="code">{handoff.module_id}</span>
         )}
         <span className="right">
-          <span className={`tag ${severity === "SUCCESS" ? "ok" : "warn"}`} data-qa-status>
+          <span
+            className={`tag ${severity === "SUCCESS" ? "ok" : severity === "RESTRICTED" ? "restricted" : "warn"}`}
+            data-qa-status
+          >
             {handoff.qa_status}
           </span>
         </span>

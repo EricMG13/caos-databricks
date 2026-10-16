@@ -388,7 +388,11 @@ test("a compact summary is one line, its brief on request", () => {
 });
 
 test("a compact summary of a partial document shows its notes without the Brief (N113)", () => {
-  const verdict = { severity: "WARNING" as const, conclusion: "Partial · Ready.", blocked_on: null };
+  const verdict = {
+    severity: "WARNING" as const,
+    conclusion: "Partial · Ready.",
+    blocked_on: null,
+  };
   const quiet = { chips: [], execution: null, persistence: null, approval: null, actions: [] };
   const brief = { change: "Changed.", impact: null, action: null, evidence: null, headline: null };
   const { container, rerender } = render(
