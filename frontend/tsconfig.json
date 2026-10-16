@@ -17,6 +17,7 @@
     "checkJs": false,
     "skipLibCheck": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "types": ["node", "vitest/globals", "@testing-library/jest-dom/vitest"],
     "paths": { "@/*": ["./src/*"] }
   },

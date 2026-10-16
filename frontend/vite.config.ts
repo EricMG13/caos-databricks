@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { blockedResponse } from "./demo-fixtures";
+import { blockedResponse } from "./demo-fixtures.ts";
 import { defineConfig, loadEnv, type Connect, type Plugin, type ProxyOptions } from "vite";
 
 // Explicit demo dev and preview serve fixtures at the v1 wire's routes, for the
