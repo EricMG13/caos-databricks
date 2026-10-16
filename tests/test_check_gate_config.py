@@ -679,6 +679,54 @@ def test_builtins_reached_by_attribute_and_pinned_names_cannot_be_rebound(
     ] == []
 
 
+def test_the_pinned_conftest_is_pinned_whole(tmp_path: Path) -> None:
+    """N109 re-review: pinning each function by name left the module's other
+    statements free to disarm the guard (`del` of a hook, a store on
+    `pytest.exit`, a swapped `__code__`, an edit of `__builtins__`). The
+    whole file is pinned instead: any edit to it fails the gate until
+    `CONFTEST_PIN` is updated in the same change."""
+    root = _tree(tmp_path)
+    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    assert _conftest_problems(root, "tests/conftest.py", original) == []
+    for extra in (
+        "\ndel pytest_sessionstart, pytest_collection_modifyitems\n",
+        "\npytest.exit = lambda *a, **k: None\n",
+        "\n_refuse_run_hooks_from_tests.__code__ = (lambda config: None).__code__\n",
+        "\n__builtins__['getattr'] = None\n",
+        "\n_refuse_run_hooks_from_tests.__defaults__ = None\n",
+        "\nPath.is_relative_to = lambda *arguments: False\n",
+    ):
+        problems = _conftest_problems(root, "tests/conftest.py", original + extra)
+        assert any(
+            problem.startswith("conftest: tests/conftest.py changed")
+            for problem in problems
+        ), (extra, problems)
+
+
+def test_a_store_or_a_del_in_another_conftest_is_refused(tmp_path: Path) -> None:
+    """N109 re-review: an attribute or subscript store, an augmented one or
+    a `del` can disarm a guard or a hook from a conftest the pin does not
+    cover."""
+    root = _tree(tmp_path)
+    for index, text in enumerate(
+        (
+            "import os\nos.environ = {}\n",
+            "import os\nos.environ['x'] = '1'\n",
+            "import os\nos.counter += 1\n",
+            "import os\nos.counter: int = 1\n",
+            "x = 1\ndel x\n",
+            "import os\ndel os.environ['x']\n",
+            "def f(o):\n    o.x = 1\n",
+        )
+    ):
+        name = f"tests/store{index}/conftest.py"
+        problems = _conftest_problems(root, name, text)
+        assert any(problem.startswith(f"conftest: {name} ") for problem in problems), (
+            text,
+            problems,
+        )
+
+
 def _edit_ci(root: Path, edit: Callable[[dict[str, Any]], None]) -> None:
     """Rewrite the copied workflow after `edit` has changed its parsed jobs."""
     ci = root / ".github" / "workflows" / "ci.yml"
