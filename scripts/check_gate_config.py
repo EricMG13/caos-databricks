@@ -255,9 +255,12 @@ COLLECTION_HOOKS = frozenset(
 # modules implement the hooks that run a test, and every statement that
 # could disarm them. Any edit to it fails the gate until this digest is
 # updated in the same change, where review sees it. The module its
-# `pytest_plugins` names is held to the rules below with no hook allowed.
+# `pytest_plugins` names is loaded as a plugin before the guard runs, so it
+# is read under the same rules as every other conftest-loaded module the pin
+# does not cover: no hook, no `pytest_plugins`, no `del`, no attribute or
+# item store, no dynamic route.
 PYTEST_PLUGINS_PIN = ("test_lite_deep_research_route",)
-CONFTEST_PIN = "fb715846d7f12604cfcd8e39b090b37c55aa0fbadc85a9bf9c2b653b58eb6643"
+CONFTEST_PIN = "da9f0c89d83247e425b9e79580f39190436a2270120538d15ca12416a0d86ebd"
 # Names a conftest uses to install a hook without binding a `pytest_` name:
 # the module namespace, the plugin manager, frames and PEP 562 module
 # attributes, and the builtins that run or rebuild code, each as a name or
@@ -730,16 +733,18 @@ def _collection_hook_problems(root: Path) -> list[str]:
     notice (N109).
 
     `tests/conftest.py` is pinned whole by digest. Every other conftest.py
-    (at the root or anywhere under `tests/`) is read as an AST and refused for
-    a `pytest_*` binding, `collect_ignore`, any `pytest_plugins`, a `del`, an
-    attribute or item store, a star import, or a name that rebuilds a
-    namespace or runs code (`CONFTEST_DYNAMIC_*`); the module the pinned
-    `pytest_plugins` names is read the same way with stores allowed. This is
-    not a proof. The pinned conftest ends a session at run time when a
-    conftest or test module implements a hook that runs a test, but two routes
-    stay open and are not closed here: a fixture that rebinds
-    `request.node.runtest` (open to any test module), and code in an imported
-    non-conftest module that acts after collection (`sys.modules`, frames).
+    (at the root or anywhere under `tests/`) and the module the pinned
+    `pytest_plugins` names are read as an AST and refused for a `pytest_*`
+    binding, `collect_ignore`, any `pytest_plugins`, a `del`, an attribute or
+    item store, a star import, or a name that rebuilds a namespace or runs
+    code (`CONFTEST_DYNAMIC_*`). This is not a proof. The pinned conftest ends
+    a session at run time when a conftest or test module implements a hook
+    that runs a test. Its limit: the gate reads only these files, and any
+    code run by a module it does not read (a helper a conftest imports, at
+    import or later) can rewrite the guard's names (`_EXIT`) or register a
+    hook into a conftest's namespace through `sys.modules` or a frame before
+    the guard runs; a fixture can also rebind `request.node.runtest` from any
+    test module. Review of what a conftest imports is the control for both.
     """
     problems: list[str] = []
     names = tracked_files(
@@ -753,13 +758,13 @@ def _collection_hook_problems(root: Path) -> list[str]:
         if tree is None:
             problems.append(f"conftest: {name} could not be parsed")
             continue
-        problems += _conftest_tree_problems(name, tree, stores=True)
+        problems += _conftest_tree_problems(name, tree)
     if "tests/conftest.py" in names:
         for module in PYTEST_PLUGINS_PIN:
             plugin = f"tests/{module}.py"
             tree = _parsed(root, plugin)
             if tree is not None:
-                problems += _conftest_tree_problems(plugin, tree, stores=False)
+                problems += _conftest_tree_problems(plugin, tree)
     return problems
 
 
@@ -772,7 +777,7 @@ def _pinned_conftest_problems(root: Path) -> list[str]:
         return []
     return [
         f"conftest: tests/conftest.py changed (sha256 {digest}); review it, then "
-        "update CONFTEST_PIN in the same change"
+        "update CONFTEST_PIN in scripts/check_gate_config.py in the same change"
     ]
 
 
@@ -783,16 +788,16 @@ def _parsed(root: Path, name: str) -> ast.Module | None:
         return None
 
 
-def _conftest_tree_problems(name: str, tree: ast.Module, *, stores: bool) -> list[str]:
-    """`stores` is False for a plugin module, which is a test module."""
+def _conftest_tree_problems(name: str, tree: ast.Module) -> list[str]:
+    """One conftest-loaded module the pin does not cover: a conftest, or the
+    module the pinned `pytest_plugins` names."""
     problems: list[str] = []
     for statement in tree.body:
         problems += _collection_node_problems(name, statement)
         for node in ast.walk(statement):
             problems += _hook_binding_problems(name, node)
             problems += _dynamic_hook_problems(name, node)
-            if stores:
-                problems += _store_problems(name, node)
+            problems += _store_problems(name, node)
     return list(dict.fromkeys(problems))
 
 

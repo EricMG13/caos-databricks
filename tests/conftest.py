@@ -201,9 +201,12 @@ def _refuse_run_hooks_from_tests(config: pytest.Config) -> None:
     hook that replaces how a test runs or is judged (N109): a
     `pytest_pyfunc_call` returning True passes `assert False` unrun. The
     static gate pins this file whole (`CONFTEST_PIN`); this reads what pytest
-    registered. Limits it does not close: a fixture that rebinds
-    `request.node.runtest`, and routes through imported non-conftest modules
-    (`sys.modules`, frames) that act after collection."""
+    registered. Its limit: any code run by a module the gate does not read
+    (a helper a conftest imports, at import or later) can rebind `_EXIT`
+    through `sys.modules` or register a hook into a conftest's namespace
+    through a frame before this runs, and a fixture can rebind
+    `request.node.runtest` from any test module. Neither is closed here;
+    review of what a conftest imports is the control."""
     tests = Path(__file__).resolve().parent
     for hook in (
         "pytest_pyfunc_call",
