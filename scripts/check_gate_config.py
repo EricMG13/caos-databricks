@@ -1114,11 +1114,11 @@ CI_CONDITIONS: dict[tuple[str, ...], str] = {
 # Each action step exactly, by its SHA and its inputs: a tag, a fork's
 # commit or an input such as `ref:` or a `version:` runs something else.
 _CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
-_SETUP_UV = "astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7"
-_SETUP_NODE = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+_SETUP_UV = "astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884"
+_SETUP_NODE = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1"
 CI_ACTIONS: tuple[dict[object, object], ...] = (
     {
-        "uses": "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f",
+        "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
         "with": {
             "name": "coverage-${{ matrix.shard }}",
             "path": ".coverage.shard-*",
@@ -1135,7 +1135,7 @@ CI_ACTIONS: tuple[dict[object, object], ...] = (
     {"uses": _CHECKOUT, "with": {"fetch-depth": 0}},
     {"uses": _SETUP_UV, "with": {"version": "0.12.5", "enable-cache": True}},
     {
-        "uses": "databricks/setup-cli@9230f12203ef173d0b901846f62a55ce997efef7",
+        "uses": "databricks/setup-cli@9b64c94a6d2b2e830592d80e9f14c26d32b42ad7",
         "with": {"version": "1.17.0"},
     },
     {
@@ -1177,14 +1177,14 @@ JOB_KEYS = frozenset({"runs-on", "timeout-minutes", "services", "steps", "if"})
 # Pin the whole parsed jobs so strategy/needs/always cannot disable a gate.
 # Deliberate changes update these hashes after reviewing the workflow diff.
 CI_PARALLEL_JOBS = {
-    "test-shards": "9bb821fc047b9e80dc51f9e0868a666262e2b5bc1306a9ca59a8f29b66499c74",
-    "test": "6aa3eaf40e78967d3fa312e4665c7033dd415bc2fc0d8faf574882c701e76f9a",
+    "test-shards": "7ed96bf28bd7b32a41bcc313b46b87ad89003cb79ca78aa28ef73dba3d952b1f",
+    "test": "ec997378e3f5e076ae6db4597c7e3e2743dfcd39ea8cf024d1f13bcdd32ac5ce",
     "frontend-checks": (
-        "5e3dee3c5f88eb0414710dc1751bb8607a5b1d7f0e7e2466d97595891fa585cf"
+        "88a828459677b6d82540e60c3c4ddd5ab093c22b5b4cec0c5a159b48989f368d"
     ),
-    "frontend-a11y": "83461599c1ad91e514fb1d7b4a510f445a188fe123149b80113893dd6170ad2d",
+    "frontend-a11y": "40877dcece2f160666aeec29fa3c800eb99c0c74de8c83057eadac470e593f40",
     "frontend-workbench": (
-        "887cc6b26ef366f94fae6c3d48f6f25254cbc69d2cb2a1daa9d8171ad6a23068"
+        "5e3ca698f9b64b62441d94b9380c2acad77f292ef5e30476898b17c26261e074"
     ),
     "frontend": "f7bc9dc48458e68c4a41d3d9183ca9374b7c660147c1c9dc895662059382c4e2",
 }
