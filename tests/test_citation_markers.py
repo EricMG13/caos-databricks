@@ -269,13 +269,49 @@ def test_a_marker_that_splits_a_figure_leaves_no_figure() -> None:
     assert unmarked("4[C1]5") == "4 | 5" and unmarked("1,2[C1]50") == "1,2 | 50"
     read = {
         "(45)[C1]": "-45",
-        "-[C1]45": "-45",
         "(45[C1])": "-45",
         "45 [C1] %": "45",
         "1,250.0 \\[C1\\, C2\\]": "1250.0",
     }
     for cell, figure in read.items():
         assert figure_value(CONTRACT, cell) == figure, cell
+
+
+@pytest.mark.parametrize(
+    ("cell", "read"),
+    [
+        ("4 [C1]5", "4 | 5"),
+        ("4  [C1]5", "4 | 5"),
+        ("1,2 [C1]50", "1,2 | 50"),
+        ("4 [C1].5", "4 | .5"),
+        ("4 [C1],5", "4 | ,5"),
+        ("-[C1]45", "- | 45"),
+        ("- [C1]45", "- | 45"),
+        ("+[C1]45", "+ | 45"),
+        # Prose punctuation after a spaced marker is not a figure's start.
+        ("12 [C1], 3", "12, 3"),
+        ("12 [C1]. Next", "12. Next"),
+        ("12 [C1]%", "12%"),
+        ("-[C1] x", "- x"),
+        ("a -[C1]", "a -"),
+    ],
+)
+def test_a_marker_that_splits_a_figure_across_a_space_or_a_sign_leaves_none(
+    cell: str, read: str
+) -> None:
+    """N142: `4 [C1]5` joined into 45 and `-[C1]45` into -45, figures nobody
+    wrote. A marker between a figure and the rest of one stands as ` | ` even
+    when spaces sit before it or only a sign sits before it; a marker followed
+    by prose punctuation or a space is removed as before."""
+    from caos.methodology.citation_markers import unmarked
+    from caos.methodology.forecast import driver_value
+    from caos.methodology.tables import figure_value
+
+    assert unmarked(cell) == read
+    if " | " in read:
+        assert figure_value(CONTRACT, cell) is None
+        with pytest.raises(ValueError):
+            driver_value(unmarked(cell))
 
 
 def test_qualified_rewrites_exactly_the_markers_the_body_reads() -> None:
