@@ -1496,21 +1496,34 @@ def test_a_bill_landing_after_a_pass_read_the_ledger_is_replayed_not_paid_twice(
     _paid_once_per_node(run.conn, run.run_id, completions)
 
 
+@pytest.mark.parametrize("held_sorts_first", [True, False])
 def test_an_owed_bill_is_refused_by_its_own_code_even_beside_a_held_call(
-    empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    held_sorts_first: bool,
 ) -> None:
     """N116: a node with a bill owed its verdict and another attempt whose call
     a live session still holds refuses `ATTEMPT_BILL_OWED`: the next pass
-    settles the owed bill at once, whatever else waits on the node."""
+    settles the owed bill first, whatever else waits on the node. The store
+    reads attempts in id order, so the ids are pinned to meet the held attempt
+    first and last: the owed code must not depend on which row comes first."""
     _case_id, run_id = prepared_run
     with connect(empty_database) as conn:
         nodes = approved_nodes(conn, run_id, tmp_path)
     lease = _claimed(empty_database, run_id)
     node = nodes["CP-0"]
+    ids = iter(
+        [UUID(int=1), UUID(int=2)] if held_sorts_first else [UUID(int=2), UUID(int=1)]
+    )
+    monkeypatch.setattr(runs, "uuid4", lambda: next(ids))
     with connect(empty_database) as a:
         held = start_attempt(a, run_id, node, lease=lease)
         reserve(a, held, RESERVED, lease=lease)
         owing = start_attempt(a, run_id, node, lease=lease)
+    monkeypatch.undo()
+    with connect(empty_database) as a:
         record_outcome(
             a,
             attempt_id=owing,
@@ -1519,11 +1532,10 @@ def test_an_owed_bill_is_refused_by_its_own_code_even_beside_a_held_call(
     holder = connect(empty_database)
     try:
         with connect(empty_database) as b, call_hold(holder, held):
-            for _ in range(2):  # whichever row the query meets first
-                _refused(
-                    RefusalCode.ATTEMPT_BILL_OWED,
-                    lambda: start_attempt(b, run_id, node, lease=lease),
-                )
+            _refused(
+                RefusalCode.ATTEMPT_BILL_OWED,
+                lambda: start_attempt(b, run_id, node, lease=lease),
+            )
     finally:
         holder.close()
 
@@ -1862,7 +1874,7 @@ def test_a_reconnected_bill_lands_beside_a_live_holder_under_a_lock_timeout(
 def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
     empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
 ) -> None:
-    """The owed half of `ATTEMPT_UNSETTLED` is the set `replay_billed` settles
+    """The owed half of `ATTEMPT_BILL_OWED` is the set `replay_billed` settles
     or `unexplained_charge` parks, and nothing else: an attempt either
     refuses but no pass settles would stop the node for ever, and one a pass
     settles that no start refuses is paid for twice. Each outcome shape is

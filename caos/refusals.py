@@ -37,7 +37,10 @@ class RefusalCode(StrEnum):
     # its call: nothing new is paid for until it is.
     ATTEMPT_UNSETTLED = "ATTEMPT_UNSETTLED"
     # The same node, but the earlier attempt is already billed: the bill landed
-    # as this pass started, and the next pass replays it at once (N116).
+    # as this pass started. The run keeps its place, so the next pass is first
+    # in line once the worker has reconnected (~1 s) and settles it: replayed,
+    # or parked `CALL_OUTCOME_UNEXPLAINED` when the charge has no stored body
+    # (N116).
     ATTEMPT_BILL_OWED = "ATTEMPT_BILL_OWED"
     CALL_OUTCOME_INVALID = "CALL_OUTCOME_INVALID"
     CALL_OUTCOME_CONFLICT = "CALL_OUTCOME_CONFLICT"
