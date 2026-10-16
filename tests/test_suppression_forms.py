@@ -75,8 +75,8 @@ def test_a_prefixed_skip_is_counted_once_not_twice() -> None:
 
 def test_the_skipped_exception_and_a_getattr_skip_are_counted() -> None:
     """N109: raising `Skipped` from the implementation module, reaching skip
-    through `getattr`, or through the skip function's `Exception` attribute ends a test as a
-    skip without the names the patterns read."""
+    through `getattr`, or through the skip function's `Exception` attribute
+    ends a test as a skip without the names the patterns read."""
     sample = "\n".join(
         [
             f"import {PYTEST}",

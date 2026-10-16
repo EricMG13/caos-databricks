@@ -684,7 +684,7 @@ def test_a_second_hook_in_the_pinned_conftest_or_a_root_conftest_is_refused(
     assert any("defines pytest_pyfunc_call" in problem for problem in problems)
 
     tampered = original.replace(
-        "    if POSTGRES_URL and not hasattr(session.config, \"workerinput\"):\n",
+        '    if POSTGRES_URL and not hasattr(session.config, "workerinput"):\n',
         "    if True:\n",
     )
     assert tampered != original
