@@ -1318,8 +1318,8 @@ const t3d2 = (
   lien: string,
   scale = "",
 ) =>
-  [name, amount, currency, scale, date, "", lien, "", "", "", "", "", `Trace ${name}`].map((cell) =>
-    typeof cell === "string" ? c(cell) : cell,
+  [name, amount, currency, scale, date, "", lien, "", "", "", "", "", `Trace ${name}`].map(
+    (cell) => (typeof cell === "string" ? c(cell) : cell),
   );
 const cp3cWith = (rows: Served[][]): HandoffView => ({
   ...cp2dWith([register("T3D.2", WALL, rows)]),
@@ -1546,9 +1546,9 @@ test("recoveryByClass: claim beside recovery per scenario and currency; the four
     ]),
   ).map(bars);
   expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
-    ["recovery-by-class-0", "Recovery by class, Base, USD", "USD"],
-    ["recovery-by-class-1", "Recovery by class, Base, EUR", "EUR"],
-    ["recovery-by-class-2", "Recovery by class, Downside", "USD"],
+    ["recovery-by-class-0", "Recovery by class, Base, USD millions", "USD millions"],
+    ["recovery-by-class-1", "Recovery by class, Base, EUR millions", "EUR millions"],
+    ["recovery-by-class-2", "Recovery by class, Downside", "USD millions"],
   ]);
   const [usd, , downside] = figures;
   expect(usd).toMatchObject({ table: "T4E.7", categoryLabel: "class/instrument" });
@@ -1584,7 +1584,7 @@ test("a blank scenario leaves its part out of a title", () => {
       t4e7("", "Senior", c("1", "1"), c("1", "1"), "USD"),
       t4e7("", "Euro notes", c("1", "1"), c("1", "1"), "EUR"),
     ]),
-  ).toEqual(["Recovery by class, USD", "Recovery by class, EUR"]);
+  ).toEqual(["Recovery by class, USD millions", "Recovery by class, EUR millions"]);
 });
 
 test("a recovery written in % or x draws in its own unit's figure, not on the currency's", () => {
@@ -1593,7 +1593,7 @@ test("a recovery written in % or x draws in its own unit's figure, not on the cu
     t4e7("Base", "Junior", c("50", "50"), c("10", "10"), "USD"),
   ]);
   expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
-    ["recovery-by-class-0", "Recovery by class, Base", "USD"],
+    ["recovery-by-class-0", "Recovery by class, Base", "USD millions"],
     ["recovery-by-class-0-percent", "Recovery by class, Base, %", "%"],
   ]);
   const elsewhere = (text: string) => ({
@@ -2972,7 +2972,7 @@ test("a currency column wins over a written sign: a USD group of $100 and 250 is
     t4e7("Base", "Junior", c("250", "250"), c("1", "1"), "USD"),
   ]);
   expect(figures.map((figure) => [figure.key, figure.unit, figure.categories])).toEqual([
-    ["recovery-by-class-0", "USD", ["Senior", "Junior"]],
+    ["recovery-by-class-0", "USD millions", ["Senior", "Junior"]],
   ]);
 });
 
@@ -3174,7 +3174,10 @@ const scaled = (row: Served[], scale: string) => [...row.slice(0, 6), c(scale), 
 test("valueAllocation: one entity in two scales is two waterfalls, never subtracting across them", () => {
   const rows = [
     scaled(t4e5("Base", "HoldCo", c("90", "90"), "Senior", c("60", "60"), c("30", "30")), "USD m"),
-    scaled(t4e5("Base", "HoldCo", c("1.2", "1.2"), "Notes", c("1", "1"), c("0.2", "0.2")), "USD bn"),
+    scaled(
+      t4e5("Base", "HoldCo", c("1.2", "1.2"), "Notes", c("1", "1"), c("0.2", "0.2")),
+      "USD bn",
+    ),
   ];
   const figures = valueAllocation(
     cp4cWith([register("T4E.5", SCALED_ALLOCATION, rows), register("T4E.6", FULCRUM, [])]),
@@ -3213,7 +3216,10 @@ const liquidityBridgeOf = (columns: string[], rows: Served[][]) =>
 
 test("ratingTriggers: Base and BASE are one case; a case-only and a period-only row stay apart", () => {
   const same = (kase: string) =>
-    t2r4("A", "", "ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1"), "OK", [kase, "FY26"]);
+    t2r4("A", "", "ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1"), "OK", [
+      kase,
+      "FY26",
+    ]);
   const [merged] = triggers([same("Base"), same("BASE")]);
   expect(merged!.bullets).toHaveLength(1);
   const withOnly = (kase: string, period: string) =>

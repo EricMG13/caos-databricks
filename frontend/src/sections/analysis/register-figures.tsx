@@ -221,13 +221,22 @@ function inUnit(cell: Cell | undefined, at: Unit | undefined, unitOf = suffixOf)
   return datum(cell);
 }
 
-/** Rows grouped by their `Currency`, as written: one currency's amounts
-    never share an axis with another's. */
+/** A currency and its scale as written, joined: "USD m". A blank part is
+    left out; none at all is no unit. */
+const moneyOf = (currency: string, scale: string) =>
+  [currency, scale]
+    .map((part) => unmarked(part).trim())
+    .filter(Boolean)
+    .join(" ");
+
+/** Rows grouped by their `Currency` and `Scale` (fork r17, N192), as written:
+    one currency in two scales is two figures, and no amount of one is ever
+    summed with another's. */
 const BY_CURRENCY: Grouping<string> = {
-  of: (row) => [text(row, "Currency") || undefined],
-  key: (currency) => currency,
-  title: (currency) => currency,
-  unit: (currency) => currency,
+  of: (row) => [moneyOf(text(row, "Currency"), text(row, "Scale")) || undefined],
+  key: (money) => money.replace(/\s+/g, "-"),
+  title: (money) => money,
+  unit: (money) => money,
 };
 
 /** A register's rows split by `grouping`, in the order each group first
@@ -607,17 +616,34 @@ const LIQUIDITY_USES = [
 export function liquidityBridge(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2D", "T2E.5");
   if (!rows?.length) return [];
+  // The bridge is in the scale its opening total is written in (fork r17,
+  // N192); a step written in another is a gap, never added or subtracted.
+  const moneyIn = (row: Row) => unmarked(text(row, "Currency and Scale")).trim();
+  const opening = rows.find((row) =>
+    nameOf(row, "Bridge Item").toLowerCase().startsWith(LIQUIDITY_TOTALS[0]),
+  );
+  const unit = opening ? moneyIn(opening) : undefined;
+  const amountOf = (row: Row): Cell | undefined => {
+    const cell = row["Amount"];
+    if (unit === undefined || cell?.value == null || moneyIn(row) === unit) return cell;
+    const own = moneyIn(row) || "no currency and scale";
+    return {
+      text: `${cell.text} in ${own}, not the opening total's ${unit || "none"}`,
+      value: null,
+    };
+  };
   const steps = rows.map((row, index): WaterfallStep => {
     const label = nameOf(row, "Bridge Item");
     const item = label.toLowerCase();
     const base = { key: `${index}`, label, origin: "model" as const };
+    const amount = amountOf(row);
     if (LIQUIDITY_TOTALS.some((total) => item.startsWith(total))) {
-      return { ...base, kind: "total", ...datum(row["Amount"]) };
+      return { ...base, kind: "total", ...datum(amount) };
     }
     if (LIQUIDITY_USES.some((use) => item.startsWith(use))) {
-      return decrease(row["Amount"], { ...base, kind: "delta" }, "a use the method subtracts");
+      return decrease(amount, { ...base, kind: "delta" }, "a use the method subtracts");
     }
-    return { ...base, kind: "delta", ...datum(row["Amount"]) };
+    return { ...base, kind: "delta", ...datum(amount) };
   });
   const total = (which: string) =>
     steps.filter((step) => step.kind === "total" && step.label.toLowerCase().startsWith(which));
@@ -631,7 +657,12 @@ export function liquidityBridge(handoff: HandoffView): Figure[] {
   const summary = `${begin ?? "No beginning accessible liquidity stated"} to ${
     end ?? "no ending accessible liquidity stated"
   }, as served.`;
-  const head = { key: "liquidity-bridge", table: "T2E.5", title: "Liquidity bridge, 12 months" };
+  const head = {
+    key: "liquidity-bridge",
+    table: "T2E.5",
+    title: "Liquidity bridge, 12 months",
+    unit: unit || undefined,
+  };
   return [
     waterfallFigure({ ...head, summary }, steps, (key) => rows[Number(key)], [
       "Source / Calculation",
@@ -680,15 +711,24 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
   if (!rows?.length) return [];
   const fulcrums = registerRows(handoff, "CP-4C", "T4E.6") ?? [];
   const entries = rows.map((row, index) => ({ row, index }));
+  const moneyIn = (row: Row) => moneyOf("", text(row, "currency and scale"));
   const groups = [
-    ...groupBy(entries, ({ row }) => pair(text(row, "scenario"), text(row, "entity"))).values(),
+    ...groupBy(entries, ({ row }) =>
+      pair(pair(text(row, "scenario"), text(row, "entity")), moneyIn(row)),
+    ).values(),
   ];
-  const entities = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
+  const scenarios = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
+  const units = groupBy(groups, (group) =>
+    pair(text(group[0]!.row, "scenario"), text(group[0]!.row, "entity")),
+  );
   return groups.map((group, n) => {
     const [first, last] = [group[0]!.row, group.at(-1)!.row];
     const stating = group.map(({ row }) => row);
     const scenario = text(first, "scenario");
-    const entity = entities.get(scenario)!.length > 1 ? text(first, "entity") : "";
+    const entityCount = new Set(scenarios.get(scenario)!.map((g) => text(g[0]!.row, "entity")));
+    const entity = entityCount.size > 1 ? text(first, "entity") : "";
+    const money = moneyIn(first);
+    const unitNamed = units.get(pair(scenario, text(first, "entity")))!.length > 1 ? money : "";
     const fulcrum = fulcrumOf(fulcrums, scenario);
     const marked = fulcrum.named ? fulcrumClaim(group, fulcrum.named) : undefined;
     const steps: WaterfallStep[] = [
@@ -728,8 +768,9 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
     const head = {
       key: `value-allocation-${n}`,
       table: "T4E.5",
-      title: titled("Value allocation", scenario, entity),
+      title: titled("Value allocation", scenario, entity, unitNamed),
       summary,
+      unit: money || undefined,
     };
     const rowOf = (key: string) =>
       key === "opening" ? first : key === "closing" ? last : rows[Number(key)];
@@ -875,7 +916,7 @@ export function rateMix(handoff: HandoffView): Figure[] {
   });
 }
 
-/** CP-3C's maturity wall (`T3D.2`): per currency, the amount falling due
+/** CP-3C's maturity wall (`T3D.2`): per currency and scale, the amount falling due
     each year, stacked by seniority, said as CP-1's maturity wall is. */
 export function refinancingWall(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-3C", "T3D.2");
@@ -1037,7 +1078,7 @@ export function basketCapacity(handoff: HandoffView): Figure[] {
   );
 }
 
-/** CP-4C's recovery by class (`T4E.7`): per scenario and currency, each
+/** CP-4C's recovery by class (`T4E.7`): per scenario, currency and scale, each
     class's allowed claim beside its total recovery, a cell written in `x` or
     `%` drawn in its own unit's figure. The four value columns (`cash value`,
     `debt value`, `equity value`, `warrant value`, split by fork r17, N192)
@@ -1047,12 +1088,13 @@ export function recoveryByClass(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-4C", "T4E.7");
   if (!rows?.length) return [];
   const entries = rows.map((row, index) => ({ row, index }));
+  const moneyIn = (row: Row) => moneyOf(text(row, "currency"), text(row, "scale"));
   const groups = [
-    ...groupBy(entries, ({ row }) => pair(text(row, "scenario"), text(row, "currency"))).values(),
+    ...groupBy(entries, ({ row }) => pair(text(row, "scenario"), moneyIn(row))).values(),
   ];
   const currencies = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
   return groups.flatMap((group, n) => {
-    const [scenario, currency] = [text(group[0]!.row, "scenario"), text(group[0]!.row, "currency")];
+    const [scenario, currency] = [text(group[0]!.row, "scenario"), moneyIn(group[0]!.row)];
     const named = currencies.get(scenario)!.length > 1 ? currency : "";
     const base = {
       key: `recovery-by-class-${n}`,
@@ -1110,10 +1152,15 @@ function restatement(group: readonly Row[], column: string): string | null {
 const times = (count: number) => (count === 2 ? "twice" : `${count} times`);
 
 /** Entries keyed by `keyOf`, each key once, in the order it first appears:
-    its first entry's place and every row stating it. */
-const keyed = (entries: readonly Entry[], keyOf: (row: Row) => string) =>
-  [...groupBy(entries, ({ row }) => keyOf(row))].map(([label, group]) => ({
-    label,
+    its label (`labelOf` its first row, else the key), its first entry's place
+    and every row stating it. */
+const keyed = (
+  entries: readonly Entry[],
+  keyOf: (row: Row) => string,
+  labelOf: (row: Row) => string = keyOf,
+) =>
+  [...groupBy(entries, ({ row }) => keyOf(row)).values()].map((group) => ({
+    label: labelOf(group[0]!.row),
     first: group[0]!.index,
     same: group.map(({ row }) => row),
   }));
@@ -1423,32 +1470,44 @@ export function riskMatrix(handoff: HandoffView): Figure[] {
   ];
 }
 
-/** A trigger's label, which is also its identity: "Leverage (Issuer,
-    downgrade, BASE, FY26)", its stated direction read trimmed and casefolded
-    past its citation markers, so an upgrade and a downgrade trigger on one
-    metric stay two triggers; its metric and rating type too, and since fork
-    r17 (N192) the `case` and `period` its `value` is read at, so one trigger
-    tested in two cases is two bullets, not one stated twice. A blank rating
-    type, direction, case or period is left out; a blank metric is named by
-    its row. */
+/** What a trigger row's column says, past its citation markers and trimmed. */
+const written = (row: Row, column: string) => unmarked(text(row, column)).trim();
+
+/** A trigger's label: "Leverage (Issuer, downgrade, Base, FY26)", its stated
+    direction read trimmed and casefolded past its citation markers, the case
+    as first written. A blank rating type, direction, case or period is left
+    out; a blank metric is named by its row. */
 function triggerLabel(row: Row): string {
   const metric = nameOf(row, "metric");
-  const direction = unmarked(text(row, "trigger direction")).trim().toLowerCase();
   const parts = [
-    unmarked(text(row, "rating type")).trim(),
-    direction,
-    unmarked(text(row, "case")).trim(),
-    unmarked(text(row, "period")).trim(),
+    written(row, "rating type"),
+    written(row, "trigger direction").toLowerCase(),
+    written(row, "case"),
+    written(row, "period"),
   ].filter(Boolean);
   return parts.length ? `${metric} (${parts.join(", ")})` : metric;
 }
+
+/** A trigger's identity: its metric, rating type, direction, case (casefolded
+    as `caseLines` reads one) and, since fork r17 (N192), the `period` its
+    `value` is read at, each in a tagged place, so an upgrade and a downgrade
+    trigger stay two, one tested in two cases is two bullets, not one stated
+    twice, and a blank case never meets a blank period. */
+const triggerIdentity = (row: Row): string =>
+  JSON.stringify([
+    ["metric", nameOf(row, "metric")],
+    ["rating type", written(row, "rating type")],
+    ["direction", written(row, "trigger direction").toLowerCase()],
+    ["case", written(row, "case").toUpperCase()],
+    ["period", written(row, "period")],
+  ]);
 
 /** CP-2H's quantitative triggers (`T2R.4`): a bullet figure per agency and
     unit its threshold and value are written in (one in another unit a gap
     naming it), each trigger's value (read at its own `case` and `period`,
     columns of their own since fork r17, N192) against its threshold, the
-    headroom as served. A trigger stated twice (one metric, rating type and
-    direction) is one row, each value a gap naming each text where they
+    headroom as served. A trigger stated twice (one metric, rating type,
+    direction, case and period) is one row, each value a gap naming each text where they
     differ, and the summary names it. */
 export function ratingTriggers(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2H", "T2R.4");
@@ -1463,7 +1522,7 @@ export function ratingTriggers(handoff: HandoffView): Figure[] {
     };
     // A bar and a rule a trigger.
     return perGroup(group, base, byCellUnits(values.slice(0, 2)), 2, (entries, head, at) => {
-      const tests = keyed(entries, triggerLabel);
+      const tests = keyed(entries, triggerIdentity, triggerLabel);
       const read = (cell: Cell | undefined) => inUnit(cell, at);
       const bullets = tests.map(({ label, first, same }): BulletRow => ({
         key: `${first}`,
