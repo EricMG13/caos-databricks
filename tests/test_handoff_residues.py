@@ -587,7 +587,8 @@ def test_a_control_run_heading_gets_no_keep_line_and_never_meets_the_vendor() ->
     assert kept_registers_line(contract, "CP-3C", _body(markdown), skill) is None
     assert handoff._readable(_body(markdown)) is None
     assert reads == []
-    # The spy is live: a sound text does reach the vendor's locator.
+    # The spy is live on this path: a sound text reaches `find_registers`
+    # through `kept_registers_line`.
     assert kept_registers_line(contract, "CP-3C", _body(_t3d2("plain\n")), skill)
     assert reads == ["find_registers"]
 
@@ -613,7 +614,14 @@ def test_a_run_of_any_whitespace_is_a_host_bound(char: str) -> None:
     with pytest.raises(Refusal) as refused:
         handoff._text(markdown.encode())
     assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
-    assert reads == []  # refused by a host bound before the vendor's expressions
+    # The keep-line path (`kept_registers_line`) did not reach the vendor's
+    # `find_registers`; the spy shows nothing of `_text`, which raised above.
+    assert reads == []
+    # Positive control: the same spy sees a sound text reach `find_registers`.
+    assert kept_registers_line(
+        contract, "CP-3C", _body(_t3d2("plain\n")), _skill("CP-3C")
+    )
+    assert reads == ["find_registers"]
     run = handoff.MAX_WHITESPACE_RUN
     assert handoff._run_bound("x" + char * (run + 1)).startswith("a line carries")
     assert handoff._run_bound("x" + char * run) == ""
