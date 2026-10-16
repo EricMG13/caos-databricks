@@ -454,6 +454,52 @@ describe("Analysis", () => {
     expect(panel.querySelector("[data-register-rest]")).toBeNull();
   });
 
+  test("a wide register clamps its long text cells to two lines, whole for assistive tech, open on focus or click", () => {
+    const heads = Array.from({ length: 10 }, (_, index) => `col_${index}`);
+    const long = "A long covenant definition that runs well past two lines of a narrow column.";
+    const wide = {
+      ...complete.body.handoffs[0]!,
+      model_analysis: [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### T9.1 — Wide register",
+        `| ${heads.join(" | ")} |`,
+        `| ${heads.map(() => "---").join(" | ")} |`,
+        `| ${[long, ...heads.slice(1).map((_, index) => `s${index}`)].join(" | ")} |`,
+        "#### T9.2 — Narrow register",
+        "| a | b |",
+        "| --- | --- |",
+        `| ${long} | x |`,
+      ].join("\n"),
+    };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [wide] } }}
+        tab={wide.route_node_id}
+      />,
+    );
+    const panel = container.querySelector('[data-depth-panel="appendix"]')!;
+    const [first, second] = [...panel.querySelectorAll<HTMLElement>("[data-register-open]")];
+    fireEvent.click(first!);
+    const cell = panel.querySelector<HTMLElement>("td[data-clamp]")!;
+    // Only the long cell is a stop; its full text stays in the document.
+    expect(panel.querySelectorAll("td[data-clamp]")).toHaveLength(1);
+    expect(cell).toHaveAttribute("tabindex", "0");
+    expect(cell).toHaveTextContent(long);
+    expect(cell).toHaveAttribute("data-clamp", "closed");
+    fireEvent.focus(cell);
+    expect(cell).toHaveAttribute("data-clamp", "open");
+    fireEvent.blur(cell);
+    expect(cell).toHaveAttribute("data-clamp", "closed");
+    fireEvent.click(cell);
+    expect(cell).toHaveAttribute("data-clamp", "open");
+    // A register of fewer columns keeps its cells whole.
+    fireEvent.click(second!);
+    expect(panel.querySelector("td[data-clamp]")).toBeNull();
+  });
+
   test("the opening leads, its drivers are key points, the contrary view sits beside it", () => {
     const [cp1b, target] = [complete.body.handoffs[0]!, complete.body.handoffs[1]!];
     const opening = {
