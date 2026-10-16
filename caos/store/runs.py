@@ -89,7 +89,7 @@ def call_hold_seconds(lease: Lease | None) -> int:
 # (`call_hold`), for at most `call_hold_seconds` past its reservation. The
 # hold is tried on those alone; a try that takes it lets go at this unit's end.
 _UNSETTLED = (
-    "SELECT 1 FROM (SELECT t.attempt_id, r.reserved_at,"
+    "SELECT earlier.owed FROM (SELECT t.attempt_id, r.reserved_at,"
     "   o.attempt_id IS NOT NULL AS recorded,"
     "   l.attempt_id IS NOT NULL"
     "   AND (o.diagnostic_sha256 IS NULL"
@@ -109,7 +109,7 @@ _UNSETTLED = (
     "   THEN false"
     "   ELSE NOT pg_try_advisory_xact_lock(%(lock)s::integer,"
     "     hashtext(earlier.attempt_id::text)) END"
-    " LIMIT 1"
+    " ORDER BY earlier.owed DESC LIMIT 1"
 )
 # `0025_supersedes.sql`: the partial unique index that holds one successor per
 # predecessor. A violation is mapped to `RUN_ALREADY_SUPERSEDED` by this name
@@ -274,9 +274,11 @@ def start_attempt(
     charged against: a crash after a provider completed still has the attempt it
     completed (adopting CAOS-Final §21 with Phase 4).
 
-    Refuses `ATTEMPT_UNSETTLED`, with nothing written, while an earlier attempt
-    at the node may still be paid for or is owed a verdict (`_UNSETTLED`): the
-    pass that decided to start read the ledger before this lock, and a bill
+    Refuses `ATTEMPT_BILL_OWED` (a landed bill the next pass settles) or
+    `ATTEMPT_UNSETTLED` (a call another session holds), with nothing written,
+    while an earlier attempt at the node may still be paid for or is owed a
+    verdict (`_UNSETTLED`): the pass that decided to start read the ledger
+    before this lock, and a bill
     that landed since -- or a call another worker still holds past its lapsed
     lease -- would otherwise have the node paid for twice.
     """
@@ -304,19 +306,23 @@ def _start(
     # lost to a crash or a store fault.
     if overspent(conn, run_id):
         raise Refusal(RefusalCode.BUDGET_CHARGE_OVER_RESERVATION)
-    if (
-        conn.execute(
-            _UNSETTLED,
-            {
-                "run": run_id,
-                "node": route_node_id,
-                "hold": call_hold_seconds(lease),
-                "lock": CALL_HOLD_LOCK,
-            },
-        ).fetchone()
-        is not None
-    ):
-        raise Refusal(RefusalCode.ATTEMPT_UNSETTLED)
+    unsettled = conn.execute(
+        _UNSETTLED,
+        {
+            "run": run_id,
+            "node": route_node_id,
+            "hold": call_hold_seconds(lease),
+            "lock": CALL_HOLD_LOCK,
+        },
+    ).fetchone()
+    if unsettled is not None:
+        # An owed bill is settled by the next pass at once; a call another
+        # session holds waits behind the queue (N116, F421).
+        raise Refusal(
+            RefusalCode.ATTEMPT_BILL_OWED
+            if unsettled[0]
+            else RefusalCode.ATTEMPT_UNSETTLED
+        )
     # F530 round 2: a node whose one re-attempt was itself a declared drop,
     # with no park after it, is stopped here -- under the lock, in the unit
     # that would start the attempt -- so a drop billed after a pass read the
