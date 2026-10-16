@@ -4,6 +4,7 @@ layout's bands and lines, its limitations, and every bridge closing."""
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date, timedelta
 from decimal import Decimal, localcontext
 from typing import Any
 
@@ -35,6 +36,7 @@ from caos.calculators.credit_model.assemble import (
 )
 from caos.calculators.credit_model.frame import Cell, Column
 from caos.calculators.credit_model.history import (
+    _plus_months,
     account_frame,
     historical_columns,
 )
@@ -1991,6 +1993,36 @@ def test_a_latest_fiscal_year_that_is_not_twelve_months_is_no_ltm(
         ), line_id
     # The fiscal year itself is still a column with its own figures.
     assert _value(model, "revenue", "FY:FY2025") > 0
+
+
+@settings(max_examples=60, deadline=None)
+@given(
+    months=st.integers(min_value=1, max_value=30),
+    wobble=st.integers(min_value=-3, max_value=3),
+)
+def test_any_anchor_fiscal_year_not_twelve_months_yields_no_ltm_figure(
+    months: int, wobble: int
+) -> None:
+    """An anchor FY ending 2025-12-31 and running `months` whole months (give
+    or take `wobble` days) is an LTM only at twelve; any other length is
+    unbuilt and noted, never a figure over its own length (N207)."""
+    end = date(2025, 12, 31)
+    first = _plus_months(end + timedelta(days=1), -months)
+    assert first is not None
+    first += timedelta(days=wobble)
+    days = (end - first).days + 1
+    model = _model(
+        regs=_fy_anchored(first.isoformat(), end.isoformat(), days), projected=False
+    )
+
+    cell = _cell(model, "revenue", "LTM:FY2025")
+
+    if months == 12:
+        assert cell.value is not None
+    else:
+        assert (cell.value, cell.reason) == (None, "COMPONENT_MISSING")
+        assert cell.note is not None
+        assert cell.note.endswith("fiscal year (FY2025)")
 
 
 def test_the_model_lists_a_short_or_long_latest_fiscal_year_once() -> None:

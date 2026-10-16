@@ -3885,3 +3885,85 @@ def test_a_53_week_year_with_its_extra_week_in_q1_resolves_its_ltm() -> None:
 def test_odd_year_names_the_fiscal_year_and_whether_it_is_short_or_long() -> None:
     assert odd_year("FY2025", True) == "short fiscal year (FY2025)"
     assert odd_year("FY2025", False) == "long fiscal year (FY2025)"
+
+
+def _transition_regs(
+    fy_first: str, pytd: tuple[str, str], ytd_first: str = "2026-01-01"
+) -> Cp1Registers:
+    """A Q1-anchored register whose prior FY2025 and Q1 2025 (the PYTD) begin
+    on `fy_first` and `pytd[0]`, the PYTD ending `pytd[1]`; Q1 2026 (the YTD)
+    begins `ytd_first`. FY2025 ends 2025-12-31 and the YTD begins the next
+    day, so only the FY's own span can tell the LTM is not twelve months."""
+    regs = _regs(
+        quarters={"Q1_2025": {"revenue": 100}, "Q1_2026": {"revenue": 110}},
+        fy={"FY2025": {"revenue": 420}},
+    )
+
+    def moved(p: PeriodRow) -> PeriodRow:
+        if p.period_id == "FY2025":
+            return replace(p, start_date=fy_first)
+        if p.period_id == "Q1_2025":
+            return replace(p, start_date=pytd[0], end_date=pytd[1])
+        return replace(p, start_date=ytd_first) if p.period_id == "Q1_2026" else p
+
+    return replace(regs, periods=tuple(moved(p) for p in regs.periods))
+
+
+def _rolled_ltm_revenue(regs: Cp1Registers) -> Cell:
+    return _frame(regs)["LTM:Q1_2026"]["acct:revenue"]
+
+
+@pytest.mark.parametrize(
+    "regs",
+    [
+        # A nine-month transition year (275 days) and a fifteen-month one (457).
+        _transition_regs("2025-04-01", ("2025-04-01", "2025-06-30")),
+        _transition_regs("2024-10-01", ("2024-10-01", "2024-12-31")),
+    ],
+    ids=["nine-month", "fifteen-month"],
+)
+def test_a_rolled_ltm_needs_the_fiscal_year_before_it_to_be_twelve_months(
+    regs: Cp1Registers,
+) -> None:
+    assert _rolled_ltm_revenue(regs) == Cell(None, "COMPONENT_MISSING", note=UNSPANNED)
+
+
+def test_a_rolled_ltm_from_a_twelve_month_fiscal_year_is_built() -> None:
+    cell = _rolled_ltm_revenue(
+        _transition_regs("2025-01-01", ("2025-01-01", "2025-03-31"))
+    )
+
+    assert (cell.value, cell.note) == (Decimal(430), None)
+
+
+@settings(max_examples=60, deadline=None)
+@given(
+    months=st.integers(min_value=1, max_value=30),
+    wobble=st.integers(min_value=-3, max_value=3),
+)
+def test_any_fiscal_year_not_twelve_months_is_no_rolled_ltm(
+    months: int, wobble: int
+) -> None:
+    """Whatever the length of the FY before the YTD, only twelve whole months
+    (within the slack) makes an LTM; any other yields none, noted."""
+    end = date(2025, 12, 31)
+    first = history._plus_months(end + timedelta(days=1), -months)
+    assert first is not None
+    first += timedelta(days=wobble)
+    pytd_end = history._plus_months(first, 3)
+    assert pytd_end is not None
+    regs = _transition_regs(
+        first.isoformat(),
+        (first.isoformat(), (pytd_end - timedelta(days=1)).isoformat()),
+    )
+
+    cell = _rolled_ltm_revenue(regs)
+
+    if months == 12:
+        assert (cell.value, cell.note) == (Decimal(430), None)
+    else:
+        assert (cell.value, cell.reason, cell.note) == (
+            None,
+            "COMPONENT_MISSING",
+            UNSPANNED,
+        )
