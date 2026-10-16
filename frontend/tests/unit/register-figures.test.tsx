@@ -3230,3 +3230,29 @@ test("ratingTriggers: Base and BASE are one case; a case-only and a period-only 
   const [apart] = triggers([withOnly("FY26", ""), withOnly("", "FY26")]);
   expect(apart!.bullets).toHaveLength(2);
 });
+
+const SCALED_LIQUIDITY = [...LIQUIDITY.slice(0, 2), "Currency and Scale", ...LIQUIDITY.slice(2)];
+const t2e5Scaled = (item: string, amount: Served, scale: string) => {
+  const base = t2e5(item, amount);
+  return [base[0]!, base[1]!, c(scale), ...base.slice(2)];
+};
+
+test("liquidityBridge: with no opening total, the first stated scale is the bridge's; others are gaps", () => {
+  const [figure] = liquidityBridgeOf(SCALED_LIQUIDITY, [
+    t2e5Scaled("Cash interest", c("8", "8"), "USD m"),
+    t2e5Scaled("Cash taxes", c("0.002", "0.002"), "USD bn"),
+    t2e5Scaled("Ending accessible liquidity", c("92", "92"), "USD m"),
+  ]);
+  expect(figure!.unit).toBe("USD m");
+  expect(figure!.steps.map((step) => step.value)).toEqual(["-8", null, "92"]);
+});
+
+test("liquidityBridge: an opening total without a scale does not gap every scaled step", () => {
+  const [figure] = liquidityBridgeOf(SCALED_LIQUIDITY, [
+    t2e5Scaled("Beginning accessible liquidity", c("100", "100"), ""),
+    t2e5Scaled("Cash interest", c("8", "8"), "USD m"),
+    t2e5Scaled("Cash taxes", c("2", "2"), "USD m"),
+  ]);
+  expect(figure!.unit).toBe("USD m");
+  expect(figure!.steps.map((step) => step.value)).toEqual([null, "-8", "-2"]);
+});
