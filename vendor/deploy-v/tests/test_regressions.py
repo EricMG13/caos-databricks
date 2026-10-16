@@ -1840,6 +1840,9 @@ class ForkR16Tests(unittest.TestCase):
                         continue
                     with self.subTest(file=path.name, line=number):
                         self.assertEqual(line[found.end():found.end() + 3], ' \u2014 ')
+                        reason = line[found.end() + 3:]
+                        self.assertFalse(reason.casefold().startswith(('do not', 'never')),
+                                         'the dash must introduce what is missing, not a prohibition')
         self.assertEqual(kept, 5)
 
 
