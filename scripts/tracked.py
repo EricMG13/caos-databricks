@@ -57,21 +57,28 @@ def tracked_python(repo: Path) -> list[Path]:
 
 
 def python_names_at(repo: Path, rev: str) -> set[str]:
-    """Every .py path `rev` lists, vendor/ excluded, by one plain `ls-tree`
-    that shares nothing with `tracked_python_at`'s reading: the independent
-    list a gate sets that function's output against (N108). `RuntimeError`
+    """Every .py path `rev` lists as a file, vendor/ excluded. `RuntimeError`
     when git is missing or `rev` cannot be listed."""
-    listed = _git(repo, ("ls-tree", "-r", "--name-only", "-z", "--end-of-options", rev))
+    # No pathspec: `ls-tree`, unlike `ls-files`, supports no glob magic ("*.py"
+    # matched nothing), so `.py` is filtered in Python below instead.
+    # `--end-of-options`: `rev` is a caller-supplied string (ultimately a PR's
+    # `--against` argument); without it, a value shaped like an option (e.g.
+    # "--upload-pack=...") could be read as one rather than as a revision.
+    # No `--name-only`: each entry's `<mode> <type> <sha>\t<path>` head lets a
+    # gitlink (a submodule path that happens to end `.py`) be told from a blob.
+    listed = _git(repo, ("ls-tree", "-r", "-z", "--end-of-options", rev))
     if listed.returncode != 0:
         message = (
             f"git could not list {rev}'s tracked files; the gate cannot judge them"
         )
         raise RuntimeError(message)
-    return {
-        name
-        for name in listed.stdout.split("\0")
-        if name.endswith(".py") and not name.startswith(f"{VENDOR}/")
-    }
+    names: set[str] = set()
+    for entry in listed.stdout.split("\0"):
+        head, _, name = entry.partition("\t")
+        if head.split(" ")[1:2] == ["blob"] and name.endswith(".py"):
+            if not name.startswith(f"{VENDOR}/"):
+                names.add(name)
+    return names
 
 
 def tracked_python_at(repo: Path, rev: str) -> dict[str, str]:
@@ -85,22 +92,7 @@ def tracked_python_at(repo: Path, rev: str) -> dict[str, str]:
     `git worktree add` or a `git archive | tar -x` that would need its own
     cleanup.
     """
-    # No pathspec: `ls-tree`, unlike `ls-files`, supports no glob magic ("*.py"
-    # matched nothing), so `.py` is filtered in Python below instead.
-    # `--end-of-options`: `rev` is a caller-supplied string (ultimately a PR's
-    # `--against` argument); without it, a value shaped like an option (e.g.
-    # "--upload-pack=...") could be read as one rather than as a revision.
-    listed = _git(repo, ("ls-tree", "-r", "--name-only", "-z", "--end-of-options", rev))
-    if listed.returncode != 0:
-        message = (
-            f"git could not list {rev}'s tracked files; the gate cannot judge them"
-        )
-        raise RuntimeError(message)
-    names = [
-        name
-        for name in listed.stdout.split("\0")
-        if name.endswith(".py") and not name.startswith(f"{VENDOR}/")
-    ]
+    names = sorted(python_names_at(repo, rev))
     texts: dict[str, str] = {}
     for name in names:
         blob = _git(repo, ("show", "--end-of-options", f"{rev}:{name}"))

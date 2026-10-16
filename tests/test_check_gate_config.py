@@ -846,15 +846,23 @@ def test_baseline_problems_measures_the_base_tree_fresh_not_its_own_json(
     assert "baseline: noqa:E501 rose to 2 (base branch 1)" in problems
 
 
-def _narrowed_repo(root: Path) -> str:
+def _not_python(_directory: str, names: list[str]) -> list[str]:
+    return [name for name in names if not name.endswith(".py")]
+
+
+def _narrowed_repo(root: Path, *, checker: bool = False) -> str:
     """A repo whose second commit adds a suppression under `skipped/`; returns
-    the base revision."""
+    the base revision. With `checker`, the base commit carries this repo's own
+    `scripts/`, so it has a checker and a `tracked` module of its own."""
     root.mkdir()
     _git(root, "init", "-q")
     _git(root, "config", "user.email", "test@example.invalid")
     _git(root, "config", "user.name", "Gate test")
     (root / "m.py").write_text("x = 1\n", encoding="utf-8")
     _git(root, "add", "m.py")
+    if checker:
+        shutil.copytree(REPO / "scripts", root / "scripts", ignore=_not_python)
+        _git(root, "add", "scripts")
     _git(root, "commit", "-qm", "base")
     base_rev = _base_rev(root)
     (root / "skipped").mkdir()
@@ -880,6 +888,33 @@ def test_baseline_problems_refuses_a_tracked_path_the_current_tree_did_not_measu
         "check_gate_config.tracked_python",
         lambda repo: [p for p in real(repo) if "skipped" not in p.parts],
     )
+    problems = check_gate_config.baseline_problems(base_rev, root)
+    assert "baseline: skipped/s.py is tracked but was not measured" in problems
+
+
+@pytest.mark.parametrize("how", ["vendor", "tracked_files"])
+def test_baseline_problems_refuses_when_tracked_py_itself_is_narrowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, how: str
+) -> None:
+    """N108, the PR that edits `scripts/tracked.py`: this commit's `VENDOR` or
+    `tracked_files` skips a directory for the measure and for every lister
+    this commit owns alike. The base revision's own `tracked` module still
+    names the file, so the checker refuses it."""
+    root = tmp_path / "repo"
+    base_rev = _narrowed_repo(root, checker=True)
+    if how == "vendor":
+        # An edited `tracked.py` is what `check_gate_config` imports from, so
+        # both modules' bindings change together.
+        monkeypatch.setattr("tracked.VENDOR", "skipped")
+        monkeypatch.setattr("check_gate_config.VENDOR", "skipped")
+    else:
+        real = tracked.tracked_files
+
+        def narrowed(repo: Path, *specs: str) -> list[str]:
+            return [n for n in real(repo, *specs) if not n.startswith("skipped/")]
+
+        monkeypatch.setattr("tracked.tracked_files", narrowed)
+        monkeypatch.setattr("check_gate_config.tracked_files", narrowed)
     problems = check_gate_config.baseline_problems(base_rev, root)
     assert "baseline: skipped/s.py is tracked but was not measured" in problems
 
