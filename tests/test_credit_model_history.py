@@ -1898,7 +1898,7 @@ def test_components_in_any_order_that_span_the_period_are_summed() -> None:
             ytd={"9M_2025": {"revenue": 306}},
         )
     )["Q:FY2025-9M_2025"]["acct:revenue"]
-    assert (derived.value, derived.note) == (114, None)
+    assert (derived.value, derived.note) == (Decimal(114), None)
     assert frame["LTM:LTM_Q2_2026"]["acct:revenue"].value == 11654
 
 
