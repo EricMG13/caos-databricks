@@ -144,6 +144,7 @@ from caos.calculators.credit_model._cells import (
     odd_year,
     off_footing,
     refs,
+    not_stated,
     treated_as_zero,
 )
 from caos.calculators.credit_model.frame import Cell, Column, Frame, SourceRef
@@ -1026,6 +1027,17 @@ def _named_sum(series: _Series, parts: Iterable[tuple[str, Cell, int]]) -> Cell:
     row)."""
     named = list(parts)
     total = _sum(series, ((cell, sign) for _, cell, sign in named))
+    if total.reason == "COMPONENT_MISSING" and total.note is None:
+        unstated = next(
+            (
+                name
+                for name, cell, _ in named
+                if cell.value is None and cell.reason not in (None, "NOT_SOURCED")
+            ),
+            None,
+        )
+        if unstated is not None:
+            return replace(total, note=not_stated(unstated))
     nothing = [name for name, cell, _ in named if cell.reason == "NOT_SOURCED"]
     if total.value is None or not nothing:
         return total
@@ -1072,7 +1084,7 @@ def _component(series: _Series, register: _Register, period_id: str | None) -> C
         parts = period.component_period_ids
         if not register.off.isdisjoint(parts):
             return _OFF
-    return _sum(series, ((_reported(series, part), 1) for part in parts))
+    return _named_sum(series, ((part, _reported(series, part), 1) for part in parts))
 
 
 def _footing(

@@ -818,6 +818,16 @@ _PRO_FORMA_COLUMNS = frozenset(
 )
 
 
+def _pf_metric(text: str) -> str:
+    """A pro forma metric id in CP-1's lower case: `facility:<id>` keeps the
+    facility's id as written (it names a register row); any other id is
+    casefolded."""
+    head, colon, facility = text.partition(":")
+    if colon and head.strip().casefold() == "facility":
+        return f"facility:{facility.strip()}"
+    return text.casefold()
+
+
 def _pro_forma(row: _Row) -> PfAdjustmentRow:
     """A stated adjustment; one with no figure is no adjustment, and refused."""
     value = _figure(row, "value")
@@ -828,7 +838,7 @@ def _pro_forma(row: _Row) -> PfAdjustmentRow:
         label=_text(row, "label"),
         period_id=_text(row, "period_id"),
         classification=_enum(row, "classification", _PF_CLASSIFICATIONS),
-        metric_id=_text(row, "metric_id"),
+        metric_id=_pf_metric(_text(row, "metric_id")),
         value=value,
         source=_source(row, "value"),
     )
@@ -962,7 +972,8 @@ def _fraction(row: _Row) -> Decimal:
     """A READY growth driver's value as a decimal fraction, CP-MODEL's
     convention (`validate_cp_model_inputs._number`): a cell written with `%`
     divides by 100, where the host's figure keeps the points, then is
-    rounded half to even to `MAX_DECIMALS` decimals where that leaves more.
+    rounded half to even to `MAX_DECIMALS` decimals where that leaves more
+    (a result of zero is unsigned).
     Refused when the unit is not `PERCENT_DECIMAL` or the row has no
     value."""
     value = _figure(row, "value")
@@ -975,7 +986,9 @@ def _fraction(row: _Row) -> Decimal:
     fraction = Decimal((sign, digits, int(exponent) - 2))
     if -int(fraction.as_tuple().exponent) <= MAX_DECIMALS:
         return fraction
-    return fraction.quantize(_PLACES, context=_ROUNDING)
+    rounded = fraction.quantize(_PLACES, context=_ROUNDING)
+    # A tiny negative percent rounds to a negative zero: zero has no sign.
+    return rounded.copy_abs() if rounded.is_zero() else rounded
 
 
 def _growth(row: _Row) -> DivisionGrowth | None:

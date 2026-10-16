@@ -25,6 +25,7 @@ from caos.calculators.credit_model._cells import (
     UNSPANNED,
     Footing,
     anchor_period,
+    not_stated,
     odd_year,
     off_footing,
     treated_as_zero,
@@ -4026,3 +4027,25 @@ def test_a_balance_is_read_across_footings_only_where_none_differs(
         assert cell.value is None and cell.note is not None
     else:
         assert (cell.value, cell.note) == (Decimal(13870), None)
+
+
+def test_a_sum_refused_for_a_part_not_stated_names_the_part() -> None:
+    """N205: an add-back FY2025 of 12 with H1_2025's row not stated makes the
+    LTM COMPONENT_MISSING, and the refusal names H1_2025."""
+    regs = _sparse_rows(example_registers(), {"FY2025": 12, "H1_2025": 0, "H1_2026": 3})
+    regs = replace(
+        regs,
+        addbacks=tuple(
+            replace(b, value=None)
+            if (b.addback_id, b.period_id) == ("transaction_costs", "H1_2025")
+            else b
+            for b in regs.addbacks
+        ),
+    )
+    ltm = _costs(regs)["LTM:LTM_Q2_2026"]
+    assert (ltm.value, ltm.reason) == (None, "COMPONENT_MISSING")
+    assert ltm.note == not_stated("H1_2025")
+    # A flow's quarter with a null figure: the same, named by its period.
+    nulled = _rows_changed(example_registers(), "revenue", {"Q1_2026"}, drop=False)
+    summed = _frame(nulled)["YTD:H1_2026"]["acct:revenue"]
+    assert (summed.reason, summed.note) == ("COMPONENT_MISSING", not_stated("Q1_2026"))

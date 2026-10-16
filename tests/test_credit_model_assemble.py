@@ -50,7 +50,10 @@ from caos.calculators.credit_model.layout import (
     layout,
 )
 from caos.calculators.credit_model.metrics import metric_frame
-from caos.calculators.credit_model.statements import statement_frame
+from caos.calculators.credit_model.statements import (
+    PF_NET_DEBT_EXCLUDES,
+    statement_frame,
+)
 from caos.methodology.model_inputs import (
     Cp1Registers,
     PeriodRow,
@@ -1210,6 +1213,31 @@ def test_pf_rows_sit_by_the_line_they_adjust_and_reconcile() -> None:
     assert reconciliation_faults(broken) == (f"{_PF}:ebitda",)
     broken = _nudged(model, "pf:lease", _PF)
     assert reconciliation_faults(broken) == ()
+
+
+def test_the_pf_net_debt_is_noted_where_an_unapplied_adjustment_touches_debt() -> None:
+    """N202 (c): net debt reads total debt and cash; a PF adjustment to a
+    debt or cash metric the model has no line for is not in it, and the cell
+    says so. An unrelated one (capex) is limited, not noted on net debt."""
+    regs = example_registers()
+    base = _model(regs=regs)
+    assert _cell(base, "net_debt", _PF).note is None
+
+    unapplied = replace(
+        regs,
+        pro_forma=(*regs.pro_forma, _adjustment("nd", "net_debt", 40)),
+    )
+    model = _model(regs=unapplied)
+    note = _cell(model, "net_debt", _PF).note
+    assert note == f"{PF_NET_DEBT_EXCLUDES}: nd label"
+    assert _cell(model, "net_debt", _PF).value == _cell(base, "net_debt", _PF).value
+    assert f"{NOT_APPLIED}: nd label" in model.limitations
+
+    elsewhere = replace(
+        regs,
+        pro_forma=(*regs.pro_forma, _adjustment("capex", "capex", -5)),
+    )
+    assert _cell(_model(regs=elsewhere), "net_debt", _PF).note is None
 
 
 def test_a_model_without_segments_notes_nothing_on_revenue() -> None:
