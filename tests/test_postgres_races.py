@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
@@ -1617,7 +1617,7 @@ def test_a_held_call_keeps_its_node_only_while_a_live_session_holds_it(
             )
             assert _count(b, "run_attempts", run_id) == 3, "nothing written"
             start_attempt(b, run_id, nodes["CP-L10"], lease=fresh)
-            monkeypatch.setattr(runs, "CALL_HOLD_SECONDS", 0)
+            monkeypatch.setattr(runs, "CALL_HOLD_LEASES", 0)
             start_attempt(b, run_id, nodes["CP-5"], lease=fresh)
             monkeypatch.undo()
         _refused(
@@ -1628,6 +1628,32 @@ def test_a_held_call_keeps_its_node_only_while_a_live_session_holds_it(
     with connect(empty_database) as b:
         start_attempt(b, run_id, nodes["CP-0"], lease=fresh)
         assert _count(b, "run_attempts", run_id) == 6
+
+
+def test_a_held_call_keeps_its_node_two_of_the_leases_it_was_claimed_with(
+    empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
+) -> None:
+    """N80: the hold is sized from the lease the worker claimed with
+    (`WorkerConfig.lease_seconds`), not from the module default. A one-second
+    lease keeps a held node two seconds past its reservation: a holder silent
+    two leases is wedged, and the 1800 s of the default would keep its node
+    30 minutes for a worker configured for one."""
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+    stale = _claimed(empty_database, run_id)
+    with connect(empty_database) as a:
+        attempt = start_attempt(a, run_id, nodes["CP-0"], lease=stale)
+        reserve(a, attempt, RESERVED, lease=stale)
+    fresh = replace(_reclaimed(empty_database, run_id), seconds=1)
+    with connect(empty_database) as b, call_hold(connect(empty_database), attempt):
+        _refused(
+            RefusalCode.ATTEMPT_UNSETTLED,
+            lambda: start_attempt(b, run_id, nodes["CP-0"], lease=fresh),
+        )
+        time.sleep(2.2)  # past two one-second leases (a reservation is immutable)
+        start_attempt(b, run_id, nodes["CP-0"], lease=fresh)
+        assert _count(b, "run_attempts", run_id) == 2
 
 
 def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
