@@ -1299,6 +1299,7 @@ const WALL = [
   "Instrument",
   "Amount",
   "Currency",
+  "Scale",
   "Maturity Date",
   "Years to Maturity",
   "Seniority / Lien",
@@ -1309,8 +1310,15 @@ const WALL = [
   "Credit Implication",
   "Source Trace",
 ];
-const t3d2 = (name: string, amount: Served, currency: string, date: string, lien: string) =>
-  [name, amount, currency, date, "", lien, "", "", "", "", "", `Trace ${name}`].map((cell) =>
+const t3d2 = (
+  name: string,
+  amount: Served,
+  currency: string,
+  date: string,
+  lien: string,
+  scale = "",
+) =>
+  [name, amount, currency, scale, date, "", lien, "", "", "", "", "", `Trace ${name}`].map((cell) =>
     typeof cell === "string" ? c(cell) : cell,
   );
 const cp3cWith = (rows: Served[][]): HandoffView => ({
@@ -3123,4 +3131,96 @@ test("ratingTriggers: one trigger tested in two cases is two bullets, each at it
   expect(figure!.summary).toBe(
     "Headroom as served: Leverage (ceiling, Base, FY26) 1; Leverage (ceiling, Downside, FY26) -0.5.",
   );
+});
+
+// Fork r17's scale columns (T3D.2 `Scale`, T4E.7 `scale`, T4E.5 `currency and
+// scale`, T2E.5 `Currency and Scale`): one currency in two scales never shares
+// an axis, a sum or a subtraction.
+test("refinancingWall: 500 USD m and 1.2 USD bn in one year are two walls, never 501.2", () => {
+  const figures = refinancingWall(
+    cp3cWith([
+      t3d2("Term loan", c("500", "500"), "USD", "2029-03-31", "First lien", "m"),
+      t3d2("Notes", c("1.2", "1.2"), "USD", "2029-06-30", "First lien", "bn"),
+    ]),
+  ).map(stack);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["refinancing-wall-USD-m", "Maturities by seniority, USD m", "USD m"],
+    ["refinancing-wall-USD-bn", "Maturities by seniority, USD bn", "USD bn"],
+  ]);
+  expect(figures.map((figure) => figure.series.map((series) => series.data))).toEqual([
+    [[{ value: "500" }]],
+    [[{ value: "1.2" }]],
+  ]);
+  expect(figures[0]!.summary).toContain("500 USD m amount in 1 instrument");
+  expect(figures[1]!.summary).toContain("1.2 USD bn amount in 1 instrument");
+});
+
+test("recoveryByClass: one currency in two scales is two figures, each unit saying its scale", () => {
+  const row = (name: string, claim: string, scale: string) =>
+    t4e7("Base", name, c(claim, claim), c(claim, claim), "USD").map((cell, index) =>
+      index === 10 ? c(scale) : cell,
+    );
+  const figures = recoveries([row("Senior", "500", "m"), row("Notes", "1.2", "bn")]);
+  expect(figures.map((figure) => [figure.title, figure.unit])).toEqual([
+    ["Recovery by class, Base, USD m", "USD m"],
+    ["Recovery by class, Base, USD bn", "USD bn"],
+  ]);
+  expect(figures.map((figure) => figure.categories)).toEqual([["Senior"], ["Notes"]]);
+});
+
+const SCALED_ALLOCATION = [...ALLOCATION.slice(0, 6), "currency and scale", "legal evidence ID"];
+const scaled = (row: Served[], scale: string) => [...row.slice(0, 6), c(scale), row[6]!];
+
+test("valueAllocation: one entity in two scales is two waterfalls, never subtracting across them", () => {
+  const rows = [
+    scaled(t4e5("Base", "HoldCo", c("90", "90"), "Senior", c("60", "60"), c("30", "30")), "USD m"),
+    scaled(t4e5("Base", "HoldCo", c("1.2", "1.2"), "Notes", c("1", "1"), c("0.2", "0.2")), "USD bn"),
+  ];
+  const figures = valueAllocation(
+    cp4cWith([register("T4E.5", SCALED_ALLOCATION, rows), register("T4E.6", FULCRUM, [])]),
+  ).map(waterfall);
+  expect(figures.map((figure) => [figure.title, figure.unit])).toEqual([
+    ["Value allocation, Base, USD m", "USD m"],
+    ["Value allocation, Base, USD bn", "USD bn"],
+  ]);
+  expect(figures.map((figure) => figure.steps.map((step) => step.value))).toEqual([
+    ["90", "-60", "30"],
+    ["1.2", "-1", "0.2"],
+  ]);
+});
+
+test("liquidityBridge: a step in another scale than the opening total is a gap, never subtracted", () => {
+  const columns = [...LIQUIDITY.slice(0, 2), "Currency and Scale", ...LIQUIDITY.slice(2)];
+  const row = (item: string, amount: Served, scale: string) => {
+    const base = t2e5(item, amount);
+    return [base[0]!, base[1]!, c(scale), ...base.slice(2)];
+  };
+  const [figure] = liquidityBridgeOf(columns, [
+    row("Beginning accessible liquidity", c("100", "100"), "USD m"),
+    row("Cash interest", c("8", "8"), "USD m"),
+    row("Cash taxes", c("0.002", "0.002"), "USD bn"),
+    row("Ending accessible liquidity", c("92", "92"), "USD m"),
+  ]);
+  expect(figure!.unit).toBe("USD m");
+  expect(figure!.steps.map((step) => step.value)).toEqual(["100", "-8", null, "92"]);
+  expect(figure!.steps[2]).toMatchObject({
+    reason: "0.002 in USD bn, not the opening total's USD m",
+  });
+});
+
+const liquidityBridgeOf = (columns: string[], rows: Served[][]) =>
+  liquidityBridge(cp2dWith([register("T2E.5", columns, rows)])).map(waterfall);
+
+test("ratingTriggers: Base and BASE are one case; a case-only and a period-only row stay apart", () => {
+  const same = (kase: string) =>
+    t2r4("A", "", "ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1"), "OK", [kase, "FY26"]);
+  const [merged] = triggers([same("Base"), same("BASE")]);
+  expect(merged!.bullets).toHaveLength(1);
+  const withOnly = (kase: string, period: string) =>
+    t2r4("A", "", "ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1"), "OK", [
+      kase,
+      period,
+    ]);
+  const [apart] = triggers([withOnly("FY26", ""), withOnly("", "FY26")]);
+  expect(apart!.bullets).toHaveLength(2);
 });
