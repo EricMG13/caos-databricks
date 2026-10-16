@@ -3967,3 +3967,62 @@ def test_any_fiscal_year_not_twelve_months_is_no_rolled_ltm(
             "COMPONENT_MISSING",
             UNSPANNED,
         )
+
+
+def _balance_regs(
+    own: tuple[str | None, str | None], other: tuple[str | None, str | None]
+) -> Cp1Registers:
+    """H1 2025 with no total debt row, on `own`; Q2 2025, ending the same day
+    and holding it, on `other`; every other period states no footing."""
+    regs = _rows_changed(example_registers(), "total_debt", {"H1_2025"}, drop=True)
+    return _bases(regs, H1_2025=own, Q2_2025=other)
+
+
+def test_a_balance_across_stated_footings_is_refused_naming_both() -> None:
+    """N206 (R7): a restated H1 2025 with no debt row never reads the as
+    reported Q2 2025's debt; the note names both footings."""
+    regs = _balance_regs(("RESTATED", None), ("AS_REPORTED", None))
+    cell = _frame(regs)["PYTD:H1_2025"]["acct:total_debt"]
+    assert (cell.value, cell.reason) == (None, "COMPONENT_MISSING")
+    assert cell.note == (
+        f"{OTHER_FOOTING}: H1_2025 (RESTATED, not stated) and "
+        "Q2_2025 (AS_REPORTED, not stated)"
+    )
+    assert "RESTATED" in (cell.note or "") and "AS_REPORTED" in (cell.note or "")
+    assert "H1_2025" in (cell.note or "") and "Q2_2025" in (cell.note or "")
+    # A perimeter apart, the basis the same, is refused too.
+    regs = _balance_regs(("US GAAP", "Consolidated"), ("US GAAP", "Continuing ops"))
+    assert _frame(regs)["PYTD:H1_2025"]["acct:total_debt"].value is None
+
+
+def test_a_balance_on_one_footing_is_unchanged() -> None:
+    for own, other in (
+        (("RESTATED", None), ("restated", None)),  # spelling aside
+        (("RESTATED", None), (None, None)),  # not stated matches anything
+        ((None, None), ("AS_REPORTED", None)),
+        (("US GAAP", "Consolidated"), ("us-gaap", "consolidated")),
+    ):
+        cell = _frame(_balance_regs(own, other))["PYTD:H1_2025"]["acct:total_debt"]
+        assert (cell.value, cell.note) == (Decimal(13870), None), (own, other)
+
+
+@settings(max_examples=60, deadline=None)
+@given(
+    own=st.tuples(
+        st.sampled_from([None, "RESTATED", "AS_REPORTED", "IFRS"]),
+        st.sampled_from([None, "Consolidated", "Continuing ops"]),
+    ),
+    other=st.tuples(
+        st.sampled_from([None, "RESTATED", "AS_REPORTED", "IFRS"]),
+        st.sampled_from([None, "Consolidated", "Continuing ops"]),
+    ),
+)
+def test_a_balance_is_read_across_footings_only_where_none_differs(
+    own: tuple[str | None, str | None], other: tuple[str | None, str | None]
+) -> None:
+    cell = _frame(_balance_regs(own, other))["PYTD:H1_2025"]["acct:total_debt"]
+    apart = any(a is not None and b is not None and a != b for a, b in zip(own, other))
+    if apart:
+        assert cell.value is None and cell.note is not None
+    else:
+        assert (cell.value, cell.note) == (Decimal(13870), None)

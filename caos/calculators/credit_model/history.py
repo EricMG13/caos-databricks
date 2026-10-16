@@ -1326,18 +1326,53 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
     return replace(total, stated=stated, note=note)
 
 
+def _stated_footing(register: _Register, period_id: str | None) -> str:
+    """The period's id with its basis and perimeter as written, `not stated`
+    for one it does not state."""
+    period = register.periods.get(period_id)
+    basis = period.accounting_basis if period else None
+    perimeter = period.entity_perimeter if period else None
+    return f"{period_id} ({basis or 'not stated'}, {perimeter or 'not stated'})"
+
+
+def _apart(register: _Register, own: str | None, other: str) -> bool:
+    """Whether the two periods state a different basis or perimeter (not
+    stated matches anything)."""
+    first = register.footings.get(own, UNSTATED_FOOTING)
+    second = register.footings.get(other, UNSTATED_FOOTING)
+    return combined_footing((first, second)) is None
+
+
 def _balance(series: _Series, register: _Register, spec: _Spec) -> Cell:
     """The first observation at the column's end date: its own period's, then
-    any period's ending that day, in register order; none on another footing,
-    and only its own where it is."""
+    any period's ending that day, in register order; none on another footing
+    than the anchor's, and only its own where it is. A period ending that day
+    on a footing that differs from the column's own period's (both stated)
+    is not read: where it alone has the figure, the cell is
+    `COMPONENT_MISSING`, its note naming both footings (R7, N206)."""
     ending = register.ending.get(spec.column.end_date, ())
     if spec.own in register.off:
         ending = ()
     on = (period_id for period_id in ending if period_id not in register.off)
-    cells = [_reported(series, period_id) for period_id in (spec.own, *on)]
-    found = next((cell for cell in cells if cell.value is not None), None)
-    if found is not None:
-        return found
+    ids = (spec.own, *on)
+    cells = [_reported(series, period_id) for period_id in ids]
+    refused: Cell | None = None
+    for period_id, cell in zip(ids, cells, strict=True):
+        if cell.value is None:
+            continue
+        if period_id != spec.own and _apart(register, spec.own, str(period_id)):
+            refused = refused or Cell(
+                None,
+                "COMPONENT_MISSING",
+                note=(
+                    f"{OTHER_FOOTING}: {_stated_footing(register, spec.own)} and "
+                    f"{_stated_footing(register, period_id)}"
+                ),
+            )
+            continue
+        return cell
+    if refused is not None:
+        return refused
     return _UNSTATED if _UNSTATED in cells else ABSENT
 
 
