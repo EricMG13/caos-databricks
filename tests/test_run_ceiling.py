@@ -82,8 +82,9 @@ def test_preflight_refuses_a_ceiling_below_one_worst_case_call(
 def _widest_profile_spend(price: ModelPrice) -> Decimal:
     """What the widest execution profile reserves when every node carries its
     whole delivered authority and every upstream section at its bound: the
-    widest-node test's request, per node, priced. Evidence is excluded -- it is
-    the headroom the one worst-case call beside this pays for."""
+    widest-node test's request, per node, priced. Evidence is excluded: the
+    calls beside this one (a D30 second attempt or D82's guided retries) are
+    what the default's headroom is sized for."""
     spends = []
     for profile in CATALOG["profiles"].values():
         edges = profile["edges"]
@@ -132,8 +133,9 @@ def test_the_default_run_ceiling_finishes_the_widest_profile() -> None:
 def test_the_default_run_ceiling_holds_the_widest_profile_and_three_retries() -> None:
     """R6 (D152, N129): D82 allows three guided retries per node, each a full
     worst-case call, so the default must hold the widest profile plus three
-    (96.12 + 3 x 22.61 = 163.95); 120.00 held only one, and a FULL node needing
-    a second failed closed `BUDGET_CEILING_REACHED`. The owner set 165.00."""
+    (measured 96.343770 + 3 x 22.609920 = 164.173530, 0.83 under 165.00);
+    120.00 held only one, and a FULL node needing a second failed closed
+    `BUDGET_CEILING_REACHED`. The owner set 165.00."""
     values = bundle_defaults.defaults()
     price = price_from_environment(values["model_endpoint"], values["model_price"])
     default = Decimal(values["run_ceiling"])

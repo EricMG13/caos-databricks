@@ -83,9 +83,7 @@ from caos.store.source_sets import cited_source_ids
 # own pass alone, one more `payload_digests` read per signer and the freezer
 # -- the same one signer, one freezer shape the rest of this budget is stated
 # for -- so "committee" pays two more for a filed revision.
-# CF-019: every derivation (`canonical_payload`) first reads whether the
-# pin's sources are live: one more for "report", "frozen" and "unsaved".
-IO_BUDGET = {"report": 47, "committee": 22, "frozen": 54, "unsaved": 43}
+IO_BUDGET = {"report": 46, "committee": 22, "frozen": 53, "unsaved": 42}
 # N35's remainder: "report" and "frozen" (a state the store has not filed)
 # `prove_revision` -- the saved payload once, for its narrative
 # (`read_revision`), then the whole payload re-derived (`canonical_payload`),

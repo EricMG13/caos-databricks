@@ -236,6 +236,9 @@ class PinnedEvidence:
     sources: Mapping[str, UUID]
     delivered: Mapping[UUID, frozenset[str]]
     index: TokenIndex
+    # Documents the pin captured whose every copy is withdrawn (CF-019): a
+    # citation to one is `EVIDENCE_NOT_AVAILABLE`, not a record mismatch.
+    withdrawn: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -367,6 +370,8 @@ def _reanchored(
     requests = []
     for citation in record.citations:
         source_id = evidence.sources.get(citation.document_sha256)
+        if source_id is None and citation.document_sha256 in evidence.withdrawn:
+            raise Refusal(RefusalCode.EVIDENCE_NOT_AVAILABLE)
         if source_id is None:
             raise _refusal(
                 refuse,

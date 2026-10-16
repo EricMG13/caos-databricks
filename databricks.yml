@@ -63,7 +63,7 @@ variables:
       must cover at least one worst-case call (scripts/preflight.py checks).
       The default is the widest profile at its section bounds plus three
       worst-case calls, D82's guided retries, at the default price (D29, R6);
-      evidence is on top of it.
+      measured, 96.343770 + 3 x 22.609920 = 164.173530.
     default: "165.00"
   group_admin:
     description: The workspace group whose members are ADMIN.

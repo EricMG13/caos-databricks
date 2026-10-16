@@ -71,7 +71,7 @@ PACKAGE_IO = 20
 RENDER_IO = PACKAGE_IO
 # A frozen, unfiled revision is re-derived rather than read back
 # (`prove_revision`), as Committee's "frozen" proof re-derives it.
-RENDER_FROZEN_IO = 51
+RENDER_FROZEN_IO = 50
 IO_BUDGET = {
     "render": RENDER_IO,
     "render_frozen": RENDER_FROZEN_IO,

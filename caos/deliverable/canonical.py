@@ -41,10 +41,9 @@ from caos.methodology.verification import (
 )
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
-from caos.store.gates import sources_live
 from caos.store.outcomes import execution_reads
 from caos.store.routes import resolved_route
-from caos.store.source_sets import pinned_live_sources
+from caos.store.source_sets import pinned_sources
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,12 +80,13 @@ def canonical_payload(
 
     Owns one read unit. Refuses `RUN_NOT_FOUND` for a run of another case;
     `DELIVERABLE_PAYLOAD_INVALID` for an unpinned route or a pinned node with no
-    accepted artifact; `EVIDENCE_NOT_AVAILABLE` when a member the run's pin
-    captured is no longer live and unchanged (withdrawn, re-extracted: CF-019);
-    `ARTIFACT_RECORD_MISMATCH` when a blob, the binding, the
-    lineage, a projection or a rectangle disagrees, or a citation names a
-    document that is not among `pinned_live_sources` (withdrawn, re-extracted,
-    admitted after the pin, or captured twice with two extractions); a
+    accepted artifact; `EVIDENCE_NOT_AVAILABLE` when a citation names a
+    document the pin captured whose every source is now withdrawn (CF-019; an
+    uncited withdrawn member changes nothing); `ARTIFACT_RECORD_MISMATCH`
+    when a blob, the binding, the lineage, a projection or a rectangle
+    disagrees, or a citation names a document that is not among
+    `pinned_live_sources` (extraction identity moved, admitted after the pin,
+    or captured twice with two extractions); a
     citation's own code when it no longer anchors; and whatever `host_identity`
     refuses (`ROUTE_IDENTITY_INVALID` for a node without its CP-0 anchor). No
     refusal carries text.
@@ -107,14 +107,10 @@ def canonical_payload(
         }
         if route is None or any(n.route_node_id not in rows for n in route.nodes):
             raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
-        # A pinned member withdrawn, or changed, since the pin is the source's
-        # fault, not a stored record's (CF-019): the code approval and start
-        # refuse on for the same fact, not `ARTIFACT_RECORD_MISMATCH`.
-        if not sources_live(conn, run_id):
-            raise Refusal(RefusalCode.EVIDENCE_NOT_AVAILABLE)
-        pinned = pinned_live_sources(conn, run_id)
+        found = pinned_sources(conn, run_id)
+        pinned = found.live
         captured = captured_blocks(conn, run_id)
-        reader = _Reader(conn, blobs, bundle, route, pinned, captured)
+        reader = _Reader(conn, blobs, bundle, route, pinned, captured, found.withdrawn)
         # One reading of the accepted pairs for every record's lineage.
         reader.pairs = {
             node: (artifact, None if record is None else str(record))
@@ -170,6 +166,7 @@ class _Reader:
         route: ResolvedRoute,
         pinned: dict[str, UUID],
         captured: dict[UUID, frozenset[str]],
+        withdrawn: frozenset[str] = frozenset(),
     ) -> None:
         self.conn, self.blobs, self.bundle, self.route = conn, blobs, bundle, route
         self.vendor = load_vendor_authority(bundle)
@@ -182,6 +179,7 @@ class _Reader:
             pinned,
             {source: captured.get(source, frozenset()) for source in pinned.values()},
             TokenIndex(),
+            withdrawn,
         )
 
     def proven(

@@ -1033,10 +1033,11 @@ def test_a_transient_fault_answers_503_and_names_when_to_retry(
 def test_a_charge_over_its_reservation_answers_409_like_a_refused_command(
     client: TestClient, case: tuple[StoreConnection, UUID]
 ) -> None:
-    """R10 (D152, N183): a RETRY_RUN sent directly for a run parked
-    `BUDGET_CHARGE_OVER_RESERVATION` answered 500 where a refused command
-    elsewhere answers 409; the Run section already offers no such retry (F585).
-    No retry-after: waiting does not clear it."""
+    """R10 (D152, N183): the status map gives `BUDGET_CHARGE_OVER_RESERVATION`
+    409, as a refused command elsewhere answers, where it gave 500 (so a
+    RETRY_RUN sent directly for a run parked with it answers 409; the Run
+    section already offers no such retry, F585). Read here through a store
+    that refuses the code. No retry-after: waiting does not clear it."""
     _conn, case_id = case
     app.dependency_overrides[store_connection] = _refusing(
         RefusalCode.BUDGET_CHARGE_OVER_RESERVATION

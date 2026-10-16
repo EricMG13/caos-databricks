@@ -148,3 +148,61 @@ def test_the_filed_committee_read_is_served_from_its_own_bytes_after_a_withdrawa
     answer = _read(filing_client, lite, "committee", revision)
 
     assert answer.status_code == 200, answer.text
+
+
+def _withdraw_uncited(client: TestClient, lite: _Harness) -> None:
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    answer = _post(
+        client, f"{_case(lite)}/sources/{lite.witness_id}/withdrawal", writer
+    )
+    assert answer.status_code == 200, answer.text
+
+
+def test_withdrawing_a_member_no_citation_names_changes_nothing(
+    filing_client: TestClient, lite: _Harness
+) -> None:
+    """Invariant 1 is checked where a source is used: a pinned member no record
+    cites (the harness's `uncited.txt`) being withdrawn leaves the Report read,
+    freeze and the first save as they were."""
+    revision = _save(lite)
+    _step(filing_client, lite, revision, "signature")
+    _withdraw_uncited(filing_client, lite)
+
+    assert _read(filing_client, lite, "report", revision).status_code == 200
+    _step(filing_client, lite, revision, "freeze")
+
+
+def test_a_first_save_succeeds_after_an_uncited_member_is_withdrawn(
+    filing_client: TestClient, lite: _Harness
+) -> None:
+    _withdraw_uncited(filing_client, lite)
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+
+    answer = _post(
+        filing_client,
+        f"{_case(lite)}/runs/{lite.run_id}/revisions",
+        writer,
+        {"expected_revision_id": None, "narrative": []},
+    )
+
+    assert answer.status_code == 201, answer.text
+
+
+def test_the_frozen_committee_read_and_render_refuse_typed_after_a_withdrawal(
+    filing_client: TestClient, lite: _Harness
+) -> None:
+    """A frozen, unfiled revision is re-derived, so a cited source's withdrawal
+    refuses it by the same code in Committee and in the render."""
+    revision = _save(lite)
+    _step(filing_client, lite, revision, "signature")
+    _step(filing_client, lite, revision, "freeze")
+    _withdraw(filing_client, lite)
+
+    committee = _read(filing_client, lite, "committee", revision)
+    render = filing_client.get(
+        f"{_case(lite)}/revisions/{revision}/render",
+        headers=command_headers(member(lite.conn, lite.case_id, Standing.READER)),
+    )
+
+    assert _refused(committee) == (409, NOT_AVAILABLE), committee.text
+    assert _refused(render) == (409, NOT_AVAILABLE), render.text

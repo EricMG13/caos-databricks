@@ -60,7 +60,7 @@ from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant
 from caos.store.routes import _canonical
 from caos.store.runs import start_run
-from caos.store.source_sets import pinned_live_sources
+from caos.store.source_sets import PinnedSources, pinned_live_sources, pinned_sources
 
 __all__ = ["harness", "route"]
 
@@ -551,7 +551,29 @@ def test_a_withdrawn_source_refuses_the_proof_and_the_deliverable(
         ran.conn, case_id=ran.case_id, actor_id=actor, source_id=ran.source_id
     )
     assert _refusal(ran) is RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED
-    assert _delivered(ran) is MISMATCH
+    # CF-019: the harness's records cite this source, so the deliverable names
+    # the cause, `EVIDENCE_NOT_AVAILABLE`, rather than a record mismatch.
+    assert _delivered(ran) is RefusalCode.EVIDENCE_NOT_AVAILABLE
+
+
+def test_pinned_sources_names_a_document_whose_every_copy_is_withdrawn(
+    ran: _Harness,
+) -> None:
+    """CF-019: one statement says which captured documents have no live copy
+    because a source was withdrawn (`PinnedSources.withdrawn`)."""
+    digest = sha256(REPORT).hexdigest()
+    before = pinned_sources(ran.conn, ran.run_id)
+    assert isinstance(before, PinnedSources)
+    assert digest in before.live and not before.withdrawn
+    actor = uuid4()
+    grant(ran.conn, case_id=ran.case_id, user_id=actor, standing=Standing.APPROVER)
+    ran.conn.commit()
+    withdraw_source(
+        ran.conn, case_id=ran.case_id, actor_id=actor, source_id=ran.source_id
+    )
+    after = pinned_sources(ran.conn, ran.run_id)
+    assert digest not in after.live
+    assert digest in after.withdrawn
 
 
 def test_a_readmitted_copy_of_a_withdrawn_source_does_not_revive_the_proof(
@@ -597,6 +619,8 @@ def test_a_changed_extraction_refuses_the_proof_and_the_deliverable(
         )
     ran.conn.commit()
     assert _refusal(ran) is RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED
+    # The member is still live and only its extraction moved: nothing was
+    # withdrawn, so this stays a record mismatch (CF-019 is about withdrawal).
     assert _delivered(ran) is MISMATCH
 
 
