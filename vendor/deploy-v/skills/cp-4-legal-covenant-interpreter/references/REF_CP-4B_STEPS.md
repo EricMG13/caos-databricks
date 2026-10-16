@@ -107,7 +107,7 @@ T4D.5: Structural Priority Table — `Claim / Tranche`|`Obligor Entity`|`Reachab
 2. For each route record: entity path, **enabling provision** (cite the CP-4 finding ID — do not re-derive covenant terms here), value exposed, and recovery/priority implication.
 3. Score each route on Leakage-Route Severity (1 Sealed · 2 Bounded · 3 Market-Standard · 4 Open · 5 Trapdoor). Score only where document-level capacity evidence supports it; else [Not Scorable].
 4. Separate demonstrated/used capacity from theoretical capacity.
-5. If a CP-4 enabling finding is unavailable, mark the route [Insufficient Information] — do not assume capacity.
+5. If a CP-4 enabling finding is unavailable, mark the route [Insufficient Information] — the unavailable CP-4 enabling finding; do not assume capacity.
 
 ## Output
 T4D.6: Drop-down / Transfer Capacity Register — `Route`|`Entity Path`|`Enabling Provision (CP-4 ref)`|`Value Exposed`|`Severity (1–5)`|`Recovery / Priority Implication`|`Demonstrated vs Theoretical`|`Evidence ID`

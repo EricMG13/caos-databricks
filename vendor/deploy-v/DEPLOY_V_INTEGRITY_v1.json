@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_INTEGRITY_v1",
-  "build_id": "db5a78128a1fee7f8283844cb3aba92c40a33f72adc74bcaa45d2959096c2d38",
+  "build_id": "2b86a4de8910e2f971b1251d6363ea4e701b8ddd0495b538c71342e22943008c",
   "root_file_hashes": {
     ".gitignore": {
       "bytes": 83,
@@ -24,7 +24,7 @@
     },
     "CP_DEPLOY_V_RETRIEVAL_INDEX_v1.json": {
       "bytes": 5437,
-      "sha256": "cfbec80fae5eaefc3b98f6f7c2f1591d79e0ecd018eebf325ae3882c3ea630bd"
+      "sha256": "e37b63f1f8a273b7a6cecefb4550da3f596190541cd1392de9b27583f5fae371"
     },
     "CP_MODULE_PAYLOAD_BASE.schema.txt": {
       "bytes": 1930,
@@ -32,19 +32,19 @@
     },
     "DEPLOY_V_BASELINE.json": {
       "bytes": 58204,
-      "sha256": "caa12660b926cfc8649667d89fc514c245a4c31b36e3992de39b2230bad9bfc6"
+      "sha256": "f73847e5d87ad0680f408a41e50b48b4f755ed51c941b1d40e0b014b4d20f607"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT.md": {
       "bytes": 11934,
-      "sha256": "0ad99523a74101c641d2028cf6c6684d0e91d287c8b647ee216909d3cd45daea"
+      "sha256": "83e644705513fe929f3b493094216bc819aebb80937d45da8ab78478d94d9a97"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT_URL_BOUND.md": {
       "bytes": 12653,
-      "sha256": "4d79270aa00c8af0e99436f6796315546be92f36da9a90674ea26c546c1df76f"
+      "sha256": "46ff91aac60fb537636ae27b25616bf54715ae64b95e788a5fa698b354710d9c"
     },
     "DEPLOY_V_MANIFEST.json": {
       "bytes": 70399,
-      "sha256": "017af733d5cba1172fe22f201515f750e79b2b00dfd7b636d181479bb0075677"
+      "sha256": "116d680e457c4c3608dfc56f948d036ea366a87a78bda86bcd561a147174f76f"
     },
     "README.md": {
       "bytes": 7233,
@@ -55,8 +55,8 @@
       "sha256": "71fc109b3f90aaba15712c3a80b185115a016a583e827fd50accba1d1a223fc6"
     },
     "tests/test_regressions.py": {
-      "bytes": 128919,
-      "sha256": "0e338a8fad09f42dd6b91d9a5a5876e189aa89f44b06c7735399ebde4e9afcbc"
+      "bytes": 129170,
+      "sha256": "218d10f82b1a9f5f16e87f98abfb02d9208fc4b364c9d0509bb447c136ad6ba5"
     },
     "tests/test_research_workflow.py": {
       "bytes": 19397,
@@ -838,8 +838,8 @@
           "sha256": "00763966ffa099f598558a9539ebb094b16d32d669cc9d81e9e7bd0fda2211e2"
         },
         "references/REF_CP-4B_STEPS.md": {
-          "bytes": 20693,
-          "sha256": "fd96c1c7505077aa8c1ee2a0bad88469fc7ef8c8d04275cb2f8b6674d7fcb067"
+          "bytes": 20732,
+          "sha256": "7ffbc3bd8674c36b35f7e5fb49c626fa7b8591c9a85547ee276928496811b45c"
         },
         "references/REF_CP-4_STEPS.md": {
           "bytes": 45707,
@@ -1720,8 +1720,8 @@
     }
   ],
   "source_hashes": {
-    "deployed_baseline": "caa12660b926cfc8649667d89fc514c245a4c31b36e3992de39b2230bad9bfc6",
+    "deployed_baseline": "f73847e5d87ad0680f408a41e50b48b4f755ed51c941b1d40e0b014b4d20f607",
     "deployed_child_schema_registry": "6b1766e5698632e277ede71037bee2fcd3e02b726c43b76fc4fe0f8b47c5ef48",
-    "deployed_manifest": "017af733d5cba1172fe22f201515f750e79b2b00dfd7b636d181479bb0075677"
+    "deployed_manifest": "116d680e457c4c3608dfc56f948d036ea366a87a78bda86bcd561a147174f76f"
   }
 }
