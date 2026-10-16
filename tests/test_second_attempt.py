@@ -61,6 +61,7 @@ from caos.methodology.handoff import (
     LineHint,
     anchoring_line,
     answer_citations,
+    answer_markdown,
     capped,
     carried_answer,
     feedback_lines,
@@ -1706,6 +1707,73 @@ def test_a_shape_fault_still_wins_over_a_citation_field_fault() -> None:
         [line] = _field_lines(body)
         assert line.startswith("host transport check: the answer is not the JSON")
         _refused_malformed(body)
+
+
+def _field_fault_with(
+    change: Callable[[str], str], **faults: Mapping[int, object]
+) -> str:
+    """Two citations, `faults` in them, the answer changed by `change` (F651)."""
+    return change(_field_body(2, **faults))
+
+
+def test_a_field_fault_answer_is_told_a_marker_naming_no_citation_too() -> None:
+    body = _field_fault_with(_with_a_dangling_marker, page={1: 0})
+    lines = _field_lines(body)
+    assert len(lines) == 2
+    assert lines[0].startswith("host citation check: citation 1 has a page")
+    assert lines[1].startswith(
+        "host marker check: the Markdown body writes [C9], but the answer has 2"
+        " citations, so it names none"
+    )
+
+
+def test_a_field_fault_answer_is_told_a_host_front_matter_fault_too() -> None:
+    body = _field_fault_with(_about_someone_else, page={1: 0})
+    lines = _field_lines(body)
+    assert lines[0].startswith("host citation check: citation 1 has a page")
+    assert any(
+        line.startswith(
+            "host identity check: the host-owned field `issuer_name` is missing"
+        )
+        for line in lines
+    )
+    assert "Someone Else" not in " ".join(lines)
+
+
+def test_a_field_fault_answer_is_told_the_vendors_own_message_too() -> None:
+    body = _field_fault_with(_with_material, page={1: 0})
+    lines = _field_lines(body)
+    assert lines[0].startswith("host citation check: citation 1 has a page")
+    assert VENDOR_LINE in [line.split(";")[0] for line in lines[1:]]
+
+
+def test_a_field_fault_answer_reads_as_its_markdown_without_citations() -> None:
+    body = _field_body(2, page={1: 0})
+    markdown = json.loads(body)["canonical_markdown"].encode()
+    assert answer_markdown(body) == markdown
+    assert answer_citations(body) == ()
+    assert answer_markdown(wire(markdown, [{"page": 1}])) is None
+
+
+def test_the_readiness_set_line_reads_a_field_fault_answer_as_the_fixed_one() -> None:
+    fixed, faulty = _field_body(2), _field_body(2, page={1: 0})
+    assert fixed != faulty
+    route = frozenset({"CP-L10", "CP-5", "CP-1C"})
+    expected = readiness_set_line(CONTRACT, CATALOG, fixed, route)
+    assert expected is not None and "it lacks CP-1C" in expected
+    assert readiness_set_line(CONTRACT, CATALOG, faulty, route) == expected
+
+
+def test_the_citation_checks_wait_until_the_fields_are_fixed() -> None:
+    """The quote check runs on the whole list, so it waits (F651)."""
+    body = _field_body(2, page={1: 0}, matched_text={2: "bell \x07 in the quote"})
+    lines = _field_lines(body)
+    assert lines[0].startswith("host citation check: citation 1 has a page")
+    assert not any("carries a control, bidirectional" in line for line in lines)
+    fixed = _field_body(2, matched_text={2: "bell \x07 in the quote"})
+    assert any(
+        "carries a control, bidirectional" in line for line in _field_lines(fixed)
+    )
 
 
 def _with_an_upper_case_source_id(body: str) -> str:

@@ -958,12 +958,16 @@ def _requested(item: object) -> Citation:
 class _FieldFaults(ValueError):
     """A transport whole in shape whose citations break field rules: the
     1-based places per field, never a value (N50). It keeps the Markdown the
-    transport carried, for the carry and the readers of it (F651)."""
+    transport carried, for the carry and the readers of it, and how many
+    citations it listed, for the marker checks (F651)."""
 
-    def __init__(self, faults: Mapping[str, list[int]], markdown: bytes) -> None:
+    def __init__(
+        self, faults: Mapping[str, list[int]], markdown: bytes, count: int
+    ) -> None:
         super().__init__()
         self.faults = faults
         self.markdown = markdown
+        self.count = count
 
 
 def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
@@ -991,18 +995,20 @@ def _wire(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
         for name in _field_faults(citation):
             faults.setdefault(name, []).append(place)
     if faults:
-        raise _FieldFaults(faults, encoded)
+        raise _FieldFaults(faults, encoded, len(closed))
     return encoded, text, tuple(_citation(c) for c in closed)
 
 
-def _shaped(body: str) -> bytes | None:
+def _shaped(body: str) -> tuple[bytes, int] | None:
     """The Markdown of a body that is the transport, its citations' fields
-    aside (F651): `_wire`'s, or None when the body is not the transport."""
+    aside (F651), and how many citations it lists: `_wire`'s, or None when the
+    body is not the transport."""
     with suppress(Exception):  # not the transport: nothing to carry or read
         try:
-            return _wire(body)[0]
+            parsed = _wire(body)
         except _FieldFaults as bad:
-            return bad.markdown
+            return bad.markdown, bad.count
+        return parsed[0], len(parsed[2])
     return None
 
 
@@ -1133,7 +1139,7 @@ def carried_answer(body: str) -> str | None:
     transport otherwise, and is carried (qualify run b0b6fd10, CP-2); so is one refused
     only for a citation's source_id, page or matched_text (F651). Like the checks' lines
     it goes into that one request only, never a log, refusal or row."""
-    if _shaped(body) is None or hides_text(body):
+    if answer_markdown(body) is None or hides_text(body):
         return None
     with suppress(Refusal):
         return BoundaryText.of(body, limit=MAX_TRANSPORT_CHARS).value
@@ -1152,18 +1158,21 @@ def feedback_lines(
     transport, the host's own bounds on the text, the quotes, the front
     matter's host-owned and undeclared fields, the missing IDs, CP-0's blocker
     cells, the register rows a cell short or long, then the vendor's own
-    messages."""
+    messages. An answer refused only for its citations' fields (F651) gets every
+    Markdown check too, its citation checks waiting until its fields are fixed."""
     parsed, reason = _transport_or_reason(body)
-    if parsed is None:
+    shaped = _shaped(body)
+    if shaped is None:
         return (reason,)
-    markdown, text, citations = parsed
+    markdown, count = shaped
+    text = markdown.decode("utf-8")
     checked = _checked(contract, catalog, identity, markdown)
     host = (
-        reason,  # a repeated citation, or empty
+        reason,  # a repeated citation, the citation fields at fault, or empty
         _text_line(markdown),
-        _uncrossed_line(citations),
-        _dangling_line(text, len(citations)),
-        _unmarked_line(text, len(citations)),
+        _uncrossed_line(parsed[2]) if parsed is not None else None,
+        _dangling_line(text, count),
+        _unmarked_line(text, count),
         *_front_matter_lines(contract, identity, getattr(checked, "fields", None)),
         _absent_ids_line(contract, identity.module_id, text, skill),
         _blocker_line(contract, catalog, text)
@@ -1329,12 +1338,12 @@ def readiness_set_line(
     """CP-0's T8 against the modules this route pins (`gate_expects`): the
     host's own readiness check, which refuses `HANDOFF_INCOMPLETE` and until
     now told the second attempt nothing. Names module IDs only."""
-    parsed, _reason = _transport_or_reason(body)
-    if parsed is None or not expects:
+    markdown = answer_markdown(body)
+    if markdown is None or not expects:
         return None
     nav = contract.navigation
     try:
-        rows = nav.parse_t8(parsed[1], nav.validate_catalog(catalog))
+        rows = nav.parse_t8(markdown.decode("utf-8"), nav.validate_catalog(catalog))
     except ValueError:  # the parser's own line already says why
         return None
     named = frozenset(row.module_id for row in rows)
@@ -1405,7 +1414,7 @@ def _readable(body: str) -> str | None:
     else None. The vendor's heading and register expressions are read only on such text
     (AI-1, F649): a body `_text` refuses was never read by a validator, and measuring it
     must not be the first thing that does."""
-    markdown = _shaped(body)
+    markdown = answer_markdown(body)
     return None if markdown is None else _text_bound(markdown)[0]
 
 
@@ -2270,16 +2279,18 @@ def _near_clause(cited: str, hint: LineHint) -> str:
 
 def answer_citations(body: str) -> tuple[Citation, ...]:
     """The citations a stored answer asked for; none when it is not the
-    transport, whose reason `retry_feedback` gives."""
+    transport, whose reason `retry_feedback` gives, or when its citations'
+    fields are at fault: the citation checks wait until they are fixed (F651)."""
     parsed, _reason = _transport_or_reason(body)
     return () if parsed is None else parsed[2]
 
 
 def answer_markdown(body: str) -> bytes | None:
-    """The Markdown a stored answer carried; None when it is not the
-    transport, whose reason `retry_feedback` gives."""
-    parsed, _reason = _transport_or_reason(body)
-    return None if parsed is None else parsed[0]
+    """The Markdown of a stored answer that is the transport, its citations'
+    fields aside (F651); None when it is not, whose reason `retry_feedback`
+    gives."""
+    shaped = _shaped(body)
+    return None if shaped is None else shaped[0]
 
 
 def _vendor_lines(
