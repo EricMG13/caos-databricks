@@ -50,10 +50,7 @@ from caos.calculators.credit_model.layout import (
     layout,
 )
 from caos.calculators.credit_model.metrics import metric_frame
-from caos.calculators.credit_model.statements import (
-    PF_NET_DEBT_EXCLUDES,
-    statement_frame,
-)
+from caos.calculators.credit_model.statements import _pf_keys, statement_frame
 from caos.methodology.model_inputs import (
     Cp1Registers,
     PeriodRow,
@@ -1215,41 +1212,39 @@ def test_pf_rows_sit_by_the_line_they_adjust_and_reconcile() -> None:
     assert reconciliation_faults(broken) == ()
 
 
-def test_the_pf_net_debt_is_noted_where_an_unapplied_adjustment_touches_debt() -> None:
-    """N202 (c): net debt reads total debt and cash; a PF adjustment to a
-    debt or cash metric the model has no line for is not in it, and the cell
-    says so. An unrelated one (capex) is limited, not noted on net debt."""
+@pytest.mark.parametrize(
+    "metric_id",
+    [
+        "revenue",
+        "ebitda",
+        "adjusted_ebitda",
+        "cash_interest_paid",
+        "cash_and_equivalents",
+        "total_debt",
+        "facility:tlb",
+        "facility:no_such_row",
+    ],
+)
+def test_every_cp1_pf_metric_id_reaches_a_line(metric_id: str) -> None:
+    """N202 (c), Minor 2: CP-1's contract (`REF_CP-1_STEPS`) lists these
+    metric ids for an adjustment, and each has a line to add to, so no
+    contract adjustment to debt or cash is left out of the PF net debt: it
+    needs no note, and the substring heuristic that gave one is dropped."""
+    assert tuple(_pf_keys(_adjustment("x", metric_id, 1), example_registers()))
+
+
+def test_an_off_contract_pf_metric_is_limited_not_noted_on_net_debt() -> None:
+    """A metric id off CP-1's list is applied to no line: the NOT_APPLIED
+    limitation names it, and net debt carries no note of a guess about it."""
     regs = example_registers()
     base = _model(regs=regs)
-    assert _cell(base, "net_debt", _PF).note is None
-
-    unapplied = replace(
-        regs,
-        pro_forma=(*regs.pro_forma, _adjustment("nd", "net_debt", 40)),
-    )
-    model = _model(regs=unapplied)
-    note = _cell(model, "net_debt", _PF).note
-    assert note == f"{PF_NET_DEBT_EXCLUDES}: nd label"
-    assert _cell(model, "net_debt", _PF).value == _cell(base, "net_debt", _PF).value
-    assert f"{NOT_APPLIED}: nd label" in model.limitations
-
-    two = replace(
-        regs,
-        pro_forma=(
-            *regs.pro_forma,
-            _adjustment("nd", "net_debt", 40),
-            _adjustment("cn", "cash_net", 1),
-        ),
-    )
-    assert _cell(_model(regs=two), "net_debt", _PF).note == (
-        f"{PF_NET_DEBT_EXCLUDES}: nd label, cn label"
-    )
-
-    elsewhere = replace(
-        regs,
-        pro_forma=(*regs.pro_forma, _adjustment("capex", "capex", -5)),
-    )
-    assert _cell(_model(regs=elsewhere), "net_debt", _PF).note is None
+    for metric_id in ("net_debt", "cash_interest", "free_cash_flow", "borrowings"):
+        changed = replace(
+            regs, pro_forma=(*regs.pro_forma, _adjustment("nd", metric_id, 40))
+        )
+        model = _model(regs=changed)
+        assert _cell(model, "net_debt", _PF) == _cell(base, "net_debt", _PF)
+        assert f"{NOT_APPLIED}: nd label" in model.limitations
 
 
 def test_a_model_without_segments_notes_nothing_on_revenue() -> None:

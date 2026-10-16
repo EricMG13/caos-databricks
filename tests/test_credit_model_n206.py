@@ -17,6 +17,7 @@ from caos.calculators.credit_model._cells import (
     balance_periods,
     footing_note,
     periods_at,
+    refused_balance,
 )
 from caos.calculators.credit_model.assemble import ModelInputs, credit_model
 from caos.calculators.credit_model.frame import Cell
@@ -96,13 +97,15 @@ _NOTE_PYTD = (
 )
 
 
-def _refused(cell: Cell, fragment: str) -> None:
+def _refused(cell: Cell, needle: str) -> None:
     assert (cell.value, cell.reason) == (None, "COMPONENT_MISSING"), cell
-    assert fragment in (cell.note or ""), cell
+    assert needle in (cell.note or ""), cell
 
 
 def test_a_pytd_debt_frame_across_footings_is_refused() -> None:
-    cells = _cells(_pytd_regs(("RESTATED", None), ("AS_REPORTED", None)), "PYTD:H1_2025")
+    cells = _cells(
+        _pytd_regs(("RESTATED", None), ("AS_REPORTED", None)), "PYTD:H1_2025"
+    )
     for key in ("total_debt", "fac:tlb", "net_debt"):
         _refused(cells[key], _NOTE_PYTD)
 
@@ -152,7 +155,10 @@ def test_an_opening_balance_from_another_footing_is_refused() -> None:
         _refused(cells[key], f"{OTHER_FOOTING}: H1_2025 (RESTATED, not stated) and ")
         assert "(AS_REPORTED, not stated)" in (cells[key].note or "")
     base = _cells(_bases(example_registers()), "PYTD:H1_2025")
-    assert (base["cash_opening"].value, base["debt_opening"].value) == (980, 14142)
+    assert (base["cash_opening"].value, base["debt_opening"].value) == (
+        Decimal(980),
+        Decimal(14142),
+    )
     same = _cells(
         _bases(
             example_registers(),
@@ -172,12 +178,17 @@ _FOOTINGS = st.tuples(
 
 
 def _apart(own: Footing, other: Footing) -> bool:
-    return any(a is not None and b is not None and a != b for a, b in zip(own, other))
+    return any(
+        a is not None and b is not None and a != b
+        for a, b in zip(own, other, strict=False)
+    )
 
 
 @settings(max_examples=60, deadline=None)
 @given(own=_FOOTINGS, other=_FOOTINGS)
-def test_a_debt_read_never_crosses_stated_footings(own: Footing, other: Footing) -> None:
+def test_a_debt_read_never_crosses_stated_footings(
+    own: Footing, other: Footing
+) -> None:
     base = _cells(_pytd_regs((None, None), (None, None)), "PYTD:H1_2025")
     cells = _cells(_pytd_regs(own, other), "PYTD:H1_2025")
     if _apart(own, other):
@@ -185,9 +196,7 @@ def test_a_debt_read_never_crosses_stated_footings(own: Footing, other: Footing)
             assert cells[key].value is None and OTHER_FOOTING in (cells[key].note or "")
     else:
         assert cells == base
-    regs = _bases(
-        example_registers(), H1_2025=own, FY2024=other, Q4_2024=other
-    )
+    regs = _bases(example_registers(), H1_2025=own, FY2024=other, Q4_2024=other)
     opening = _cells(regs, "PYTD:H1_2025")
     plain = _cells(_bases(example_registers()), "PYTD:H1_2025")
     for key in ("cash_opening", "debt_opening"):
@@ -203,5 +212,8 @@ def test_balance_periods_skips_apart_periods_and_names_them() -> None:
     assert "Q2_2025" not in read and skipped == ("Q2_2025",)
     assert periods_at(regs, "H1_2025", "2025-06-30") == read
     assert footing_note(regs, "H1_2025", "Q2_2025") == _NOTE_PYTD
+    assert refused_balance(regs, "H1_2025", skipped) == Cell(
+        None, "COMPONENT_MISSING", note=_NOTE_PYTD
+    )
     read, skipped = balance_periods(regs, "H1_2025", "2025-06-30", read_own=False)
     assert "H1_2025" not in read and skipped == ("Q2_2025",)
