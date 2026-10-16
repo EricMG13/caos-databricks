@@ -56,6 +56,24 @@ def tracked_python(repo: Path) -> list[Path]:
     return [path for path in listed_paths if _present(path)]
 
 
+def python_names_at(repo: Path, rev: str) -> set[str]:
+    """Every .py path `rev` lists, vendor/ excluded, by one plain `ls-tree`
+    that shares nothing with `tracked_python_at`'s reading: the independent
+    list a gate sets that function's output against (N108). `RuntimeError`
+    when git is missing or `rev` cannot be listed."""
+    listed = _git(repo, ("ls-tree", "-r", "--name-only", "-z", "--end-of-options", rev))
+    if listed.returncode != 0:
+        message = (
+            f"git could not list {rev}'s tracked files; the gate cannot judge them"
+        )
+        raise RuntimeError(message)
+    return {
+        name
+        for name in listed.stdout.split("\0")
+        if name.endswith(".py") and not name.startswith(f"{VENDOR}/")
+    }
+
+
 def tracked_python_at(repo: Path, rev: str) -> dict[str, str]:
     """The tracked .py files' own text as git recorded it at `rev`, by
     repo-relative path; vendor/ excluded. `RuntimeError` when git is

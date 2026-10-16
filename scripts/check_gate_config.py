@@ -43,7 +43,14 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from tracked import blob_at, tracked_files, tracked_python, tracked_python_at
+from tracked import (
+    VENDOR,
+    blob_at,
+    python_names_at,
+    tracked_files,
+    tracked_python,
+    tracked_python_at,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 BASELINE = REPO / "tests" / "gate_baseline.json"
@@ -1662,6 +1669,31 @@ def _pattern_counts(
     return counts
 
 
+def _unmeasured_problems(against: str, root: Path, texts: dict[str, str]) -> list[str]:
+    """N108: each tracked `.py` path (vendor/ aside) that `git` lists for a
+    tree and the measure of that tree left out. Both lists are taken here, by
+    `git ls-files` and `git ls-tree`, not from `tracked_python`: a change that
+    narrowed those to skip a directory would otherwise skip it on both sides
+    and add suppressions there unseen."""
+    prefix = f"{VENDOR}/"
+    here = {
+        name
+        for name in tracked_files(root, "*.py")
+        if not name.startswith(prefix) and (root / name).exists()
+    }
+    measured_here = {path.relative_to(root).as_posix() for path in tracked_python(root)}
+    return [
+        *(
+            f"baseline: {name} is tracked but was not measured"
+            for name in sorted(here - measured_here)
+        ),
+        *(
+            f"baseline: {name} is tracked at {against} but was not measured"
+            for name in sorted(python_names_at(root, against) - texts.keys())
+        ),
+    ]
+
+
 def baseline_problems(against: str, root: Path = REPO) -> list[str]:
     """Each budget that rose against `against`, a base branch's git revision
     (F58, FP-11, W5): both trees are measured fresh, rather than trusting two
@@ -1671,8 +1703,11 @@ def baseline_problems(against: str, root: Path = REPO) -> list[str]:
     lets no pattern this commit weakened hide the suppression it spends."""
     try:
         texts = tracked_python_at(root, against)
+        unmeasured = _unmeasured_problems(against, root, texts)
     except RuntimeError as refusal:
         return [f"baseline: {refusal}"]
+    if unmeasured:
+        return unmeasured
     base = _counts_at(against, root, texts)
     now = suppression_counts(root)
     problems = [
