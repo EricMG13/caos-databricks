@@ -9,7 +9,15 @@ import { MemoryRouter } from "react-router";
 import { SectionSummary, headlineOf, keepStamps } from "@/chrome/SectionSummary";
 import { SectionTabs } from "@/chrome/SectionTabs";
 import { SiteHeader } from "@/chrome/SiteHeader";
-import { RUN_SEVERITY, composeChrome, isParked, scopeOf, sentence, words } from "@/chrome/compose";
+import {
+  RUN_SEVERITY,
+  composeChrome,
+  isParked,
+  partialNotes,
+  scopeOf,
+  sentence,
+  words,
+} from "@/chrome/compose";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import {
   parseAnalysisDocument,
@@ -377,6 +385,31 @@ test("a compact summary is one line, its brief on request", () => {
   expect(toggle).toHaveAttribute("aria-expanded", "true");
   expect(container.querySelector("[data-brief]")).toHaveTextContent("Changed.");
   expect(toggle).toHaveAttribute("aria-controls", container.querySelector("[data-brief]")!.id);
+});
+
+test("a compact summary of a partial document shows its notes without the Brief (N113)", () => {
+  const verdict = { severity: "WARNING" as const, conclusion: "Partial · Ready.", blocked_on: null };
+  const quiet = { chips: [], execution: null, persistence: null, approval: null, actions: [] };
+  const brief = { change: "Changed.", impact: null, action: null, evidence: null, headline: null };
+  const { container, rerender } = render(
+    <SectionSummary
+      verdict={verdict}
+      ribbon={quiet}
+      brief={brief}
+      partialNotes="Partial: HANDOFFS_PENDING."
+      compact
+    />,
+  );
+  // The brief is still closed, and the notes are already on the page.
+  expect(container.querySelector("[data-brief]")).toBeNull();
+  expect(container.querySelector("[data-summary-notes]")).toHaveTextContent(
+    "Partial: HANDOFFS_PENDING.",
+  );
+  // A document that is not partial has none.
+  rerender(<SectionSummary verdict={verdict} ribbon={quiet} brief={brief} compact />);
+  expect(container.querySelector("[data-summary-notes]")).toBeNull();
+  expect(partialNotes(["A", "B"])).toBe("Partial: A, B.");
+  expect(partialNotes([])).toBe("Some parts of this document could not be read.");
 });
 
 test("more than eight section views show module names in one compact row", () => {

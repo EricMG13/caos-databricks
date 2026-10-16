@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { App } from "@/app/App";
@@ -70,6 +72,28 @@ describe("the states", () => {
         expect.stringContaining("/api/v1/cases"),
         expect.anything(),
       );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("a partial Analysis with a module open shows its notes without opening the Brief (N113)", async () => {
+    const partial = readFileSync(
+      resolve(process.cwd(), "fixtures/states/analysis.partial.json"),
+      "utf8",
+    );
+    vi.stubGlobal("fetch", async () => new Response(partial, { status: 200 }));
+    try {
+      const caseId = "00000000-0000-4000-8000-000000000001";
+      render(
+        <MemoryRouter initialEntries={[`/analysis/?case=${caseId}&tab=rn-cp-1`]}>
+          <Workspace section="analysis" />
+        </MemoryRouter>,
+      );
+      const notes = await screen.findByText(/Partial: HANDOFFS_PENDING/);
+      expect(notes.closest("[data-summary]")).toHaveAttribute("data-compact", "true");
+      expect(notes).toHaveAttribute("data-summary-notes");
+      expect(document.querySelector("[data-brief]")).toBeNull();
     } finally {
       vi.unstubAllGlobals();
     }

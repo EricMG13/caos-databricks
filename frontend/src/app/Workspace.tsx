@@ -44,7 +44,7 @@ import { QualificationStrip } from "@/chrome/QualificationStrip";
 import { SectionPanel, SectionTabs } from "@/chrome/SectionTabs";
 import { SectionSummary } from "@/chrome/SectionSummary";
 import { SiteHeader } from "@/chrome/SiteHeader";
-import { CASE_SECTIONS, composeChrome, markDisabled } from "@/chrome/compose";
+import { CASE_SECTIONS, composeChrome, markDisabled, partialNotes } from "@/chrome/compose";
 import { fallbackChrome } from "@/chrome/fallback";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
 import { ReportDraftProvider } from "@/sections/report/draft";
@@ -472,6 +472,7 @@ export function Workspace({ section }: { section: Section }) {
           brief={chrome.brief}
           ribbon={chrome.ribbon}
           compact={activeTab !== null}
+          partialNotes={status.kind === "partial" ? partialNotes(status.notes) : null}
           review={
             reviewTab
               ? {
