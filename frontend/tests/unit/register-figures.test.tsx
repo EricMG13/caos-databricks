@@ -3193,16 +3193,11 @@ test("valueAllocation: one entity in two scales is two waterfalls, never subtrac
 });
 
 test("liquidityBridge: a step in another scale than the opening total is a gap, never subtracted", () => {
-  const columns = [...LIQUIDITY.slice(0, 2), "Currency and Scale", ...LIQUIDITY.slice(2)];
-  const row = (item: string, amount: Served, scale: string) => {
-    const base = t2e5(item, amount);
-    return [base[0]!, base[1]!, c(scale), ...base.slice(2)];
-  };
-  const [figure] = liquidityBridgeOf(columns, [
-    row("Beginning accessible liquidity", c("100", "100"), "USD m"),
-    row("Cash interest", c("8", "8"), "USD m"),
-    row("Cash taxes", c("0.002", "0.002"), "USD bn"),
-    row("Ending accessible liquidity", c("92", "92"), "USD m"),
+  const [figure] = liquidityBridgeOf(SCALED_LIQUIDITY, [
+    t2e5Scaled("Beginning accessible liquidity", c("100", "100"), "USD m"),
+    t2e5Scaled("Cash interest", c("8", "8"), "USD m"),
+    t2e5Scaled("Cash taxes", c("0.002", "0.002"), "USD bn"),
+    t2e5Scaled("Ending accessible liquidity", c("92", "92"), "USD m"),
   ]);
   expect(figure!.unit).toBe("USD m");
   expect(figure!.steps.map((step) => step.value)).toEqual(["100", "-8", null, "92"]);
