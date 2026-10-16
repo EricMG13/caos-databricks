@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import check_gate_config
 import pytest
@@ -472,9 +472,11 @@ def test_a_job_if_for_an_optional_job_is_not_refused(tmp_path: Path) -> None:
 def _edit_ci(root: Path, edit: Callable[[dict[str, Any]], None]) -> None:
     """Rewrite the copied workflow after `edit` has changed its parsed jobs."""
     ci = root / ".github" / "workflows" / "ci.yml"
-    document = yaml.safe_load(ci.read_text(encoding="utf-8"))
+    document = cast(dict[Any, Any], yaml.safe_load(ci.read_text(encoding="utf-8")))
     edit(document["jobs"])
-    ci.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    # YAML 1.1 reads the bare key `on` as true; JSON, which is YAML, spells it.
+    document = {("on" if key is True else key): v for key, v in document.items()}
+    ci.write_text(json.dumps(document), encoding="utf-8")
 
 
 def _move_before(steps: list[dict[str, Any]], mover: str, anchor: str) -> None:
@@ -585,10 +587,10 @@ def test_a_tracked_report_or_deployment_record_is_refused(tmp_path: Path) -> Non
     deployment.write_text("{}")
     _git(root, "add", "-f", "coverage.xml", "bandit.json", ".databricks")
     assert check_gate_config._report_problems(root) == [
-        "report: coverage.xml is tracked; a floor check would judge it stale",
-        "report: bandit.json is tracked; a floor check would judge it stale",
         "report: .databricks/bundle/dev/deployment.json is tracked; a floor "
         "check would judge it stale",
+        "report: bandit.json is tracked; a floor check would judge it stale",
+        "report: coverage.xml is tracked; a floor check would judge it stale",
     ]
     assert set(check_gate_config._report_problems(root)) <= set(
         check_gate_config.configuration_problems(root)
