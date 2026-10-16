@@ -1804,24 +1804,27 @@ _FIELD_CLAUSES = (
 )
 
 
+def _field_text(faults: Mapping[str, list[int]], shown: int) -> str:
+    """`_field_line`'s text naming at most `shown` places per clause."""
+    clauses = [
+        f"{_numbered(faults[name], shown=shown)}"
+        f" {'has' if len(faults[name]) == 1 else 'have'} {words}"
+        for name, words in _FIELD_CLAUSES
+        if name in faults
+    ]
+    return (
+        f"host citation check: {'; '.join(clauses)}"
+        " (numbered from 1 in the order given)"
+    )
+
+
 def _field_line(faults: Mapping[str, list[int]]) -> str:
     """Which citations break which field rule, by place, never quoted. Names
     as many per clause as `MAX_FEEDBACK_CHARS` holds (the rest counted), and
     one per clause at least."""
-    for shown in range(MAX_FEEDBACK_CITATIONS, 0, -1):
-        clauses = [
-            f"{_numbered(faults[name], shown=shown)}"
-            f" {'has' if len(faults[name]) == 1 else 'have'} {words}"
-            for name, words in _FIELD_CLAUSES
-            if name in faults
-        ]
-        line = (
-            f"host citation check: {'; '.join(clauses)}"
-            " (numbered from 1 in the order given)"
-        )
-        if len(line) <= MAX_FEEDBACK_CHARS:
-            break
-    return line
+    return _within_limit(
+        MAX_FEEDBACK_CITATIONS, lambda n: _field_text(faults, n)
+    ) or _field_text(faults, 1)
 
 
 def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
