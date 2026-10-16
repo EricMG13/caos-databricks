@@ -925,14 +925,14 @@
         "CP-4D"
       ],
       "companion_count": 18,
-      "entry_bytes": 42147,
-      "entry_sha256": "9a0bad83c3e01115e3db502a402c77b9f2ee40b60f54a69ee2f9edc119679866",
+      "entry_bytes": 42391,
+      "entry_sha256": "40ebb2613562b4fc36d7880aa5ed04a88bbc4648ee9bc157f41f61d77150f6f7",
       "folder_slug": "cp-4-legal-covenant-interpreter",
       "module_id": "CP-4",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 42147,
-          "sha256": "9a0bad83c3e01115e3db502a402c77b9f2ee40b60f54a69ee2f9edc119679866"
+          "bytes": 42391,
+          "sha256": "40ebb2613562b4fc36d7880aa5ed04a88bbc4648ee9bc157f41f61d77150f6f7"
         },
         "references/CP-4A_RUNBOOK.md": {
           "bytes": 11568,
