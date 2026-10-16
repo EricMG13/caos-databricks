@@ -3164,10 +3164,10 @@ def test_the_keep_line_names_the_largest_prefix_the_limit_allows(
 
 
 def _navigation_lines(
-    harness: _Harness, edit: Callable[[list[str]], None]
+    harness: _Harness, edit: Callable[[list[str]], None], row: int = 1
 ) -> list[str]:
     """The `navigation:` lines retry feedback gives CP-0's answer once `edit`
-    has rewritten the cells of T8's first data row (a list, in place)."""
+    has rewritten the cells of T8's data row `row` (a list, in place)."""
     answers = CanonicalCompletions(harness.source_id)
     assert _run(harness, answers) is None
     wire = json.loads(answers.bodies[0])
@@ -3175,7 +3175,7 @@ def _navigation_lines(
     contract = cached_contract(harness.bundle)
     header = "| " + " | ".join(contract.navigation.NEW_HEADERS) + " |"
     lines = markdown.split("\n")
-    first = lines.index(header) + 2
+    first = lines.index(header) + 1 + row
     cells = [cell.strip() for cell in lines[first].strip().strip("|").split(" | ")]
     edit(cells)
     lines[first] = "| " + " | ".join(cells) + " |"
@@ -3248,3 +3248,18 @@ def test_t8_relay_keeps_the_fault_the_answer_has_no_value_in(
 
     [line] = _navigation_lines(harness, edit)
     assert line == "navigation: row 1: why-now or blocker is empty", line
+
+
+def test_t8_relay_names_the_row_the_parser_refused_not_the_first(
+    harness: _Harness,
+) -> None:
+    """The row is the one the parser refused, found by parsing the table a
+    row at a time: rows before it were sound and are not named."""
+
+    def edit(cells: list[str]) -> None:
+        cells[1] = HOSTILE_MODULE
+
+    [line] = _navigation_lines(harness, edit, row=2)
+    assert line == (
+        "navigation: CP-0 recommends unknown or non-navigable module: row 2"
+    ), line
