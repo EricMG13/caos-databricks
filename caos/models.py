@@ -377,7 +377,7 @@ def _invoked(
         except BaseException as escaped:
             # Not held back, as `suppress(Exception)` held it not: it still
             # ends this thread, and the call is named `escaped` (F513).
-            answered.append(_Raised(DropKind.ESCAPED, _facts(escaped)))
+            answered.append(_Raised(DropKind.ESCAPED, _escaped_facts(escaped)))
             raise
         if held.facts is not None:
             answered.append(_Raised(DropKind.RAISED, held.facts))
@@ -643,6 +643,18 @@ def _facts(failed: BaseException | None) -> str:
     return facts
 
 
+def _escaped_facts(escaped: BaseException) -> str:
+    """`_facts` for a failure the sender did not hold back: a `BaseException`
+    raised while its facts are read (a property that raises one) is dropped
+    too, so the line still says `escaped` with unknown facts, not `deadline`
+    (N155). A fail-open (F513): the escaped failure itself still ends the
+    thread, and the refusal is unchanged."""
+    facts = _UNKNOWN_FACTS
+    with suppress(BaseException):  # fail-open, documented above (N155)
+        facts = _failure_facts(escaped)
+    return facts
+
+
 def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion:
     """The refusal of a call that got no answer, after one stderr line for it
     (F513): the code, how it ended -- `vendor` (a vendor error), `raised`
@@ -670,10 +682,24 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
         kind = DropKind.RAISED.value
     elif drop is DropKind.DECLARED:
         kind = "vendor"
-    with suppress(Exception):  # fail-open, documented above (F513)
-        line = f"{code.value} call={kind} {facts} elapsed={_clock() - started:.1f}\n"
-        sys.stderr.write(line)
+    line = f"{code.value} call={kind} {facts} elapsed={_clock() - started:.1f}\n"
+    _written(line)
     return Completion(None, None, generation, code, drop)
+
+
+def _written(line: str) -> None:
+    """`line` on stderr in one `write`, or nothing: a fail-open (F513) that
+    drops any failure of the write, an interrupt raised inside it too (N155),
+    so the call's refusal and recorded outcome never depend on the trace. A
+    non-blocking stderr that took only part of the line (`BlockingIOError`)
+    is left with a fragment; a newline ends it, best effort, so the next
+    line starts clean (N155)."""
+    with suppress(BaseException):  # fail-open, documented above (N155)
+        try:
+            sys.stderr.write(line)
+        except BlockingIOError as partial:
+            if partial.characters_written:
+                sys.stderr.write("\n")
 
 
 def _declared(failed: BaseException) -> bool:
