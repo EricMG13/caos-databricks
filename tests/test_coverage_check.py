@@ -501,6 +501,9 @@ def test_an_unrelated_early_range_does_not_hide_the_fullest_claim() -> None:
     row = _p5("1-3", "Pages 1-67")
     assert coverage_claims(row) == [(C27, 3), (C27, 67)]
     assert coverage_faults(row, {C27: 67}, _every_page({C27: 67})) == []
+    # The largest, whatever the order the cells are written in.
+    reordered = _p5("Pages 1-67", "1-3")
+    assert coverage_faults(reordered, {C27: 67}, _every_page({C27: 67})) == []
     short = _p5("1-3", "Pages 1-58")
     assert coverage_faults(short, {C27: 67}, _every_page({C27: 67})) == [
         CoverageFault(C27, 58, 67)
@@ -518,6 +521,19 @@ def test_lcr6s_1_67_for_a_60_page_whole_source_is_an_over_claim() -> None:
         " delivered it WHOLE, pages 1-60, so no page past 60 exists; correct"
         " its P5 row and every finding, gap and T8 status drawn from the"
         " longer extent"
+    )
+
+
+def test_a_message_without_a_name_or_a_heading_has_neither() -> None:
+    """The name's parentheses and the heading clause appear only when there
+    is a name or a heading to say."""
+    over = coverage_message(CoverageFault(C27, 67, 60, over=True), "", None)
+    assert over.startswith(f"P5 gives source {C27} pages 1-67, but")
+    short = coverage_message(CoverageFault(C27, 59, 67), "", None)
+    assert short == (
+        f"P5 gives source {C27} pages 1-59, but the host delivered it WHOLE,"
+        " pages 1-67; correct its P5 row and every finding, gap and T8 status"
+        " drawn from the shorter extent"
     )
 
 
