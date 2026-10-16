@@ -8,7 +8,7 @@ costs real money and calls a real model.
 ## The set
 
 - Qualification-set digest:
-  `fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b`
+  `715fd96d6dccee128a405006c20e4fdcd45d4f5cdf301e129e31f613ffe2221d`
 - Route: `LITE_CREDIT_22 / LITE_RELATIVE_VALUE` (`CP-0` → `CP-L10` → `CP-1C`,
   three REQUIRED edges, `decision_scope: SCREENING_ONLY`). CP-1C is a FULL
   module held behind the named-LITE-object boundary until CP-L10's
@@ -156,3 +156,27 @@ labelled `WHOLE` or `PAGE_MAP`); database on the persistent server (§100).
 false); every downstream key missed because nothing downstream ran. Why attempt
 1 was refused and why CP-0 blocked its consumers is under investigation; this
 record is updated with the finding.
+
+## Owner ruling R29, 16 October 2026 (N54) -- the set is keyed to the gate's verdict
+
+Over this pack (a 10-K and two peer releases, no instrument or governing
+document) the use case "Compare instruments and determine security preference"
+cannot run, and a strong CP-0 says so: CP-L10 is CONDITIONAL (D3). The 18
+September runs above ended BLOCKED at the gate for this reason. The owner ruled
+the set is keyed to that verdict rather than to sources the pack does not hold.
+Following `ccl-fy2025-portfolio` (`expects_blocked`, `docs/DECISIONS.md` §99):
+
+- Removed: `expects_ready`, all four citation keys, the `decision_scope`
+  projection keys and the `TL10.2` and `T4.5` register keys. Each asks something
+  of a CP-L10 or CP-1C handoff; CP-L10 refused means CP-1C (REQUIRED edge) does
+  not run either. The key text above describes the removed keys and is kept as
+  history.
+- Added: `expects_blocked: ["CP-L10"]`, met when CP-0's T8 verdict for CP-L10 is
+  `BLOCKED` or `CONDITIONAL`; a met key waives the run-COMPLETE requirement only
+  for a run that ended BLOCKED.
+- Previous set digest:
+  `fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b`. The new
+  digest is the one stated under "The set" at the top of this file.
+
+No document byte moves. Offline edit; no provider call, run, or snapshot. Both
+retained captures bind the earlier digest and are not re-scored.

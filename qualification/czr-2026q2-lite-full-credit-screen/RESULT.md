@@ -7,7 +7,7 @@ Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`e63265aaf3004c4bc9ce7b755cda587786240647b50e70a26567beaa3741bb39`.
+`25deb8d623c64914d22523da7c2269a4c8d901a220f8d4cfa38cd787e03f84e4`.
 
 ## Corpus provenance
 
@@ -200,15 +200,18 @@ CP-3C, CP-4C and CP-5 are expected `Restricted`:
   its missing FULL inputs and stays `Restricted` (each `SKILL.md`'s `UPGRADE`
   rule).
 
-Two register keys are set. CP-L10's `TL10.2` `LIQUIDITY_MATURITIES` row must
+One register key is set. CP-L10's `TL10.2` `LIQUIDITY_MATURITIES` row must
 read `SUFFICIENT`: the 10-Q carries both the revolver availability and the
 full maturity ladder (`Annual maturities of long-term debt`, `$11,807`
 million in total), so the evidence status is unambiguous. CP-4C's `T4E.1` row
-`No documented distress trigger` must read `Not Applicable`: the admitted
-sources document no payment default, failed refinancing, distressed exchange,
-covenant breach, adviser engagement or filing, the 10-Q states covenant
-compliance, and CP-4C's gate returns `Not Applicable` without a documented
-distress trigger. The row key follows `ccl-fy2025-lite-full-credit-screen`.
+`No documented distress trigger` (`Not Applicable`) was keyed here and is
+dropped by owner ruling R26 of 16 October 2026 (N128): its row key is free text
+the module may word differently, and the matrix compares a row key exactly. The
+admitted sources still document no payment default, failed refinancing,
+distressed exchange, covenant breach, adviser engagement or filing. The previous
+digest was `e63265aaf3004c4bc9ce7b755cda587786240647b50e70a26567beaa3741bb39`;
+`ccl-fy2025-lite-full-credit-screen` drops the same key. The live-run table
+below predates the change and is unaltered.
 No arithmetic is keyed; no leverage cell is keyed, because each issuer's
 denominator is its own non-GAAP measure.
 
