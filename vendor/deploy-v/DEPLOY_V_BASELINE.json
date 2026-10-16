@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_BASELINE",
-  "baseline_digest": "43b2560a8f447abcf2c1e030f2616f7a346e965c6bf2e63963c43430fc514f33",
+  "baseline_digest": "f7ff2e502be2b6af6b8d08e343a92c47f51b83d0593f7682e01b420c00cbcd1c",
   "packages": {
     "cp-0-source-readiness": {
       "files": {
@@ -733,56 +733,56 @@
           "sha256": "40ebb2613562b4fc36d7880aa5ed04a88bbc4648ee9bc157f41f61d77150f6f7"
         },
         "references/CP-4A_RUNBOOK.md": {
-          "bytes": 11568,
-          "sha256": "1ca9d2d86d40772d6c4a1df3052af174ab10ee80a27460dfcee0de93a227e5bc"
+          "bytes": 11676,
+          "sha256": "478017a8aeaa47588a5bcc20ca8820054b7140fa28e41ed194f571040366f385"
         },
         "references/CP-4A_SCHEMA_REFERENCE.md": {
-          "bytes": 4621,
-          "sha256": "51836c0d862af8fd53f12ef590a7ece45f49585cb9bd039be57be8d988558314"
+          "bytes": 4733,
+          "sha256": "53515183eb3436262fab9e2410fcf5941736bdaf5fa6e56f8504cf6d90f17a8a"
         },
         "references/CP-4A_SYSTEM_REFERENCE.md": {
-          "bytes": 4157,
-          "sha256": "80b90a1169dc9082f5bf14543ea67e8bd5cbfc3d3c603c83c40f291375198f7a"
+          "bytes": 4239,
+          "sha256": "bb9238bdee9af89193c7c854d4652966f0c1d4ad02c8adab07c68857af2e3d87"
         },
         "references/CP-4B_RUNBOOK.md": {
-          "bytes": 12237,
-          "sha256": "31ed040b5604c63dac454a87206036f9b9a17f160843232d755cff4e48a019c1"
+          "bytes": 12391,
+          "sha256": "c4c93c37d4366db7db6411c6cb530a90a8f32fe2c89184a076de82b47e8e5393"
         },
         "references/CP-4B_SCHEMA_REFERENCE.md": {
-          "bytes": 3240,
-          "sha256": "ab5f03322aac431ac75a4d523da77b38cfa6d1cedd77baee4dedd76b17679daa"
+          "bytes": 3332,
+          "sha256": "1bbf1cc58855e4348c36c275c7ec43fa80b0886020c84be9fc765029a0fc5bb2"
         },
         "references/CP-4B_SYSTEM_REFERENCE.md": {
-          "bytes": 3256,
-          "sha256": "ca81c7ede3a4086bbcd785146ea05793c844c7243e192abd6bcfa73597a10f28"
+          "bytes": 3338,
+          "sha256": "430ec6692a07f7e7a57d2e9b74881c55d6a207886d7e1291fd87b0a2ffe2e398"
         },
         "references/CP-4D_SCHEMA_REFERENCE.md": {
           "bytes": 1512,
           "sha256": "0695f3917d43bba80aafe5e4d29045afbd00acbefd6ad55b3e40913141328cf8"
         },
         "references/CP-4_RUNBOOK.md": {
-          "bytes": 28060,
-          "sha256": "abe96a72629686818d5697fbf7a9ccedaf90c3f6d80ca8c46fa3dd27b461ad57"
+          "bytes": 28124,
+          "sha256": "4efbf3bb32eb707bed244f05f75e09fdfe03942918887230ad0dc892ae62dc57"
         },
         "references/CP-4_SCHEMA_REFERENCE.md": {
-          "bytes": 4237,
-          "sha256": "f6f177e675011dc4d2f20f74a63f99f4919d892970bb58e424797aaa849f93df"
+          "bytes": 4294,
+          "sha256": "9e4aaebfa2571c3c1d9e65e32d680be1968787688482f5b92edbb119c9253287"
         },
         "references/CP-4_SYSTEM_REFERENCE.md": {
-          "bytes": 3499,
-          "sha256": "ef944dcb1e270bb949f576061c72facef6447b55f8e29da4cb0b9fdd1e02725a"
+          "bytes": 3528,
+          "sha256": "1ad221f5c5d4bc373a8de08e3bf4c24312ffaf66f9c68266edc739fb5e5afbe7"
         },
         "references/REF_CP-4A_STEPS.md": {
-          "bytes": 28675,
-          "sha256": "30cf03f343a9153aa85d6492e6bad519ab5d639395dae2b686de4b8276764e98"
+          "bytes": 28789,
+          "sha256": "00763966ffa099f598558a9539ebb094b16d32d669cc9d81e9e7bd0fda2211e2"
         },
         "references/REF_CP-4B_STEPS.md": {
-          "bytes": 20466,
-          "sha256": "62c3fc234a4eeab776af3233d5013eb45ce2eebe53d8c612948b00b97cad284e"
+          "bytes": 20732,
+          "sha256": "7ffbc3bd8674c36b35f7e5fb49c626fa7b8591c9a85547ee276928496811b45c"
         },
         "references/REF_CP-4_STEPS.md": {
-          "bytes": 45619,
-          "sha256": "ef5eb569be59ec30dd3a66c1bcc81c5cc0bcc2e9d2ac3909b04caa23339b6b94"
+          "bytes": 45707,
+          "sha256": "536165daad72db3cc8541163db77c89b64b797f22374f84c69772bcaa3efc358"
         },
         "scripts/completeness_check.py": {
           "bytes": 49508,

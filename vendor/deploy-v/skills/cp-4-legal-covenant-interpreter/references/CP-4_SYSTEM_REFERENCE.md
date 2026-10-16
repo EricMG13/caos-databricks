@@ -9,7 +9,7 @@ UP: CP-1, CP-1A, CP-3C | DOWN (Analytical): CP-4A, CP-6 | DOWN (QA): CP-5, CP-5A
 ## Governance Rules
 1. Every material legal/covenant conclusion must complete: Evidence → Risk Mechanic → Credit Implication.
 2. Source authority hierarchy is absolute: executed legal documents (Rank 1) outrank all other sources; conflicts resolved by rank.
-3. Do not fabricate covenant terms, baskets, thresholds, or legal conclusions — if evidence unavailable, mark [Insufficient Information].
+3. Do not fabricate covenant terms, baskets, thresholds, or legal conclusions — if evidence unavailable, mark [Insufficient Information] — the unavailable evidence.
 4. Covenant aggressiveness score is not a simple average — weight toward highest creditor-adverse severity; requires ≥3 scorable areas.
 5. Do not provide legal advice. Do not assign a formal credit rating.
 

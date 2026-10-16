@@ -43,7 +43,7 @@ Original files, in this bundle: REF_CP-4_01-02_LegalSourceGate.md, REF_CP-4_01_L
 ## Output
 T4.1: Source gate register (document inventory + quality assessment + authority rank + limitations)
 + Module Status: Completed / Completed with Limitations / Blocked
-<!-- Upstream re-anchor (common_rules #10): at this gate, re-import and verify the specific upstream module outputs this module consumes (per declared Upstream); restate the exact datapoints/run_id/period used. If a required upstream value is absent or its run_id/period mismatches this run, mark [Insufficient Information] and gate the dependent step — do not re-derive or infer the upstream value from memory. -->
+<!-- Upstream re-anchor (common_rules #10): at this gate, re-import and verify the specific upstream module outputs this module consumes (per declared Upstream); restate the exact datapoints/run_id/period used. If a required upstream value is absent or its run_id/period mismatches this run, mark [Insufficient Information] — the absent or mismatched upstream value and gate the dependent step — do not re-derive or infer the upstream value from memory. -->
 </step_reference>
 
 <!-- MERGED_FROM:REF_CP-4_02_ControllingDocumentsSourceAuthority.md sha256=3a3d6564caba322adc6d4640c25effb700a06df7fcd5bb04e4484c131448ec72 -->
@@ -96,7 +96,7 @@ T4.2: `Authority Rank`|`Document`|`Document Type`|`Version / Date`|`Status`|`Gov
 ## Output
 T4.1: Source gate register (document inventory + quality assessment + authority rank + limitations)
 + Module Status: Completed / Completed with Limitations / Blocked
-<!-- Upstream re-anchor (common_rules #10): at this gate, re-import and verify the specific upstream module outputs this module consumes (per declared Upstream); restate the exact datapoints/run_id/period used. If a required upstream value is absent or its run_id/period mismatches this run, mark [Insufficient Information] and gate the dependent step — do not re-derive or infer the upstream value from memory. -->
+<!-- Upstream re-anchor (common_rules #10): at this gate, re-import and verify the specific upstream module outputs this module consumes (per declared Upstream); restate the exact datapoints/run_id/period used. If a required upstream value is absent or its run_id/period mismatches this run, mark [Insufficient Information] — the absent or mismatched upstream value and gate the dependent step — do not re-derive or infer the upstream value from memory. -->
 </step_reference>
 ## REF_CP-4_02_ControllingDocumentsSourceAuthority.md
 <!-- REF_CP-4_02 (T2) | 2026-06-03 -->

@@ -1,7 +1,7 @@
 <!-- CP-4 Schema Reference (T3) | 2026-06-03 -->
 
 ## Required Output Sections (14)
-All 14 sections must be present. If source materials do not support analysis, the section must still appear with [Insufficient Information] and a gap ledger entry.
+All 14 sections must be present. If source materials do not support analysis, the section must still appear with [Insufficient Information] — what the source materials lack, and a gap ledger entry.
 
 ## Required Tables (7)
 | ID | Table Name | Key Columns |
@@ -24,7 +24,7 @@ All 14 sections must be present. If source materials do not support analysis, th
 | 8 | Events of Default, Remedies, and Amendment Risk | Standard Finding Format |
 
 ## QA Checklist
-- [ ] All 14 output sections present and populated (or marked [Insufficient Information] with gap logged)
+- [ ] All 14 output sections present and populated (or marked [Insufficient Information] — what is missing, with gap logged)
 - [ ] Every covenant finding includes: provision text, source trace, interpretation, aggressiveness score, credit implication, and legal-review dependency status
 - [ ] All aggressiveness scores (1–5) are justified with specific criteria from Covenant Aggressiveness Rubric
 - [ ] Composite aggressiveness score calculated from scored dimensions only
