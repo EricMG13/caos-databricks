@@ -1786,6 +1786,38 @@ class ForkR14Tests(unittest.TestCase):
         self.assertIn(f'| `{self.PRO_FORMA}` |', schema)
 
 
+class ForkR15Tests(unittest.TestCase):
+    """Deployment fork r15 (owner-authorised 2026-10-16): CP-4D's binding rules 3 and 5 no longer tell the model to
+    write the bare placeholder that CP-4's own critical-cell blocklist refuses; they ask for the reason form."""
+
+    CP4 = 'cp-4-legal-covenant-interpreter'
+    PLACEHOLDER = '[Insufficient Information]'
+    REASON = PLACEHOLDER + ' \u2014 ICA not in the source set'
+
+    def binding_rules(self):
+        return skill_text(self.CP4).partition('#### CP-4D binding rules')[2].partition('#### CP-4D method')[0]
+
+    def test_no_binding_rule_asks_for_a_bare_blocklisted_value(self):
+        contract = complete.load_contract(skill_text(self.CP4), 'CP-4')
+        blocked = contract['blocklist']
+        self.assertIn(self.PLACEHOLDER.casefold(), blocked)
+        rules = self.binding_rules()
+        self.assertIn(self.PLACEHOLDER, rules)
+        for found in re.finditer(re.escape(self.PLACEHOLDER), rules):
+            with self.subTest(offset=found.start()):
+                self.assertEqual(rules[found.end():found.end() + 3], ' \u2014 ')
+
+    def test_a_row_written_as_rule_5_says_passes_the_checker_and_the_bare_form_does_not(self):
+        skill = skill_text(self.CP4)
+        columns = complete.load_contract(skill, 'CP-4')['registers']['T4D.3']['columns']
+        reason = about(complete.check(skill, register('T4D.3', columns, [[self.REASON] * len(columns)]), 'CP-4')[0],
+                       'T4D.3')
+        self.assertEqual(reason, [])
+        bare = about(complete.check(skill, register('T4D.3', columns, [[self.PLACEHOLDER] * len(columns)]),
+                                    'CP-4')[0], 'T4D.3')
+        self.assertTrue(bare, 'the bare placeholder in every critical cell must be refused')
+
+
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
 class IntegrationTests(unittest.TestCase):
     def test_exporter_binds_current_catalyst_owner(self):
