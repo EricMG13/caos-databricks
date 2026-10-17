@@ -538,7 +538,7 @@ def test_an_over_claim_refuses_the_gate_and_its_retry_is_told_the_extent(
     heading needed) is refused `HANDOFF_MALFORMED`; the retry is told the
     extent delivered, and the corrected answer is accepted."""
     answers = CanonicalCompletions(paged.source_id)
-    flawed = _Flawed(answers, flaw=_short_of(paged.source_id, "Pages 1–4"))
+    flawed = _Flawed(answers, flaw=_short_of(paged.source_id, "Pages 1\u20134"))
     assert _run(paged, flawed) is None
     assert [_module(prompt) for prompt in answers.prompts] == [
         "CP-0",
