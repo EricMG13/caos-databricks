@@ -1290,9 +1290,9 @@ def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> No
     arithmetic the declared number rests on no longer held. **CP-5** of
     FULL_CREDIT_32 is the maximum on this bundle (D83, D152 R32): 16 direct
     upstreams at 128 KiB beside 170,803 bytes of authority encode to 2,278,276
-    bytes against the 4,194,304 ceiling, 1,916,028 left for evidence. CP-3 follows on the
-    heavier authority and fewer upstreams; the assertions hold for whichever
-    node is widest, not for CP-5 by name.
+    bytes against the 4,194,304 ceiling, 1,916,028 left for evidence. CP-3
+    follows on the heavier authority and fewer upstreams; the assertions hold
+    for whichever node is widest, not for CP-5 by name.
 
     **Measured through `encode_request`, not by summing raw lengths.** The
     Completion Phase 12 adversarial audit found this test's arithmetic was in
