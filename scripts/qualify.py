@@ -39,7 +39,7 @@ them, and `$TMPDIR` is purged (FP-16).
     scripts/qualify.py <set> <the options above> \
         --docker-container caos-postgres --min-free-bytes 5368709120
     scripts/qualify.py <set> <the options above> \
-        --resume caos_qualify_<32 hex>
+        --resume caos_qualify_<32 hex> --resume-token <the `resume token:` line>
 
 `--expect-identity` is not a convenience. A verdict binds the execution profile
 it was measured under, so the run refuses before spending anything if the
@@ -49,6 +49,7 @@ environment resolves to a different one than the caller believes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -534,8 +535,23 @@ def _non_negative(text: str) -> int:
     return int(text)
 
 
+def resume_token(set_digest: str, provider: str, model: str) -> str:
+    """What a start prints and `--resume` must be given back (N-2).
+
+    A driver killed before its first snapshot leaves nothing in the database
+    that records the set digest, so a resume could bind paid calls to an edited
+    answer key. The operator carries the binding instead: a SHA-256 over the
+    set digest and the provider and model identity exactly as
+    `--expect-identity` states them (an output-cap segment included)."""
+    bound = json.dumps([set_digest, provider, model], separators=(",", ":"))
+    return hashlib.sha256(bound.encode("utf-8")).hexdigest()
+
+
 def _resumed_pins(
-    conn: StoreConnection, harness: Harness, qualification: QualificationSet
+    conn: StoreConnection,
+    harness: Harness,
+    qualification: QualificationSet,
+    token: str,
 ) -> tuple[PreparedCase, ...]:
     """The set's pins as the database holds them, re-checked as `perform`
     would: one run per case in order, built from this bundle, and equal to what
@@ -553,6 +569,8 @@ def _resumed_pins(
         raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
     digest = qualification_set_digest(qualification)
     provider, model = harness_identities(harness.completions)
+    if resume_token(digest, provider, model) != token:
+        raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
     _assert_same_binding(conn, (digest, provider, model))
     try:
         return tuple(
@@ -790,6 +808,11 @@ def _parser() -> argparse.ArgumentParser:
         help="the free-space floor, in bytes (default 1 GiB)",
     )
     parser.add_argument(
+        "--resume-token",
+        metavar="HEX",
+        help="the `resume token:` line the run printed when it started",
+    )
+    parser.add_argument(
         "--resume",
         metavar="DATABASE",
         help=(
@@ -969,7 +992,7 @@ def _opened(
             database = args.resume
             run_url = _database_url(admin_url, database)
             with connect(run_url) as conn:
-                resumed = _resumed_pins(conn, harness, qualification)
+                resumed = _resumed_pins(conn, harness, qualification, args.resume_token)
     except (PreflightRefusal, Refusal) as refused:
         _refused(refused.code.value)
         return None
@@ -1003,6 +1026,13 @@ def _started(args: argparse.Namespace) -> _Start | None:
     return _opened(args, *planned)
 
 
+def _print_resume_token(start: _Start) -> None:
+    """The line `--resume` must be given back, printed before any call."""
+    provider, model = harness_identities(start.harness.completions)
+    digest = qualification_set_digest(start.qualification)
+    print(f"resume token: {resume_token(digest, provider, model)}", file=sys.stderr)
+
+
 def _print_preamble(start: _Start) -> None:
     # Printed before the call, not after: a driver that dies mid-run must still
     # leave the operator the two names that hold the evidence it paid for, and
@@ -1028,10 +1058,14 @@ def _print_preamble(start: _Start) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if (args.resume is None) != (args.resume_token is None):
+        parser.error("--resume and --resume-token are given together")
     start = _started(args)
     if start is None:
         return 2
+    _print_resume_token(start)
     _print_preamble(start)
     database = start.database
     try:
