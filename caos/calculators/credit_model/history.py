@@ -718,6 +718,24 @@ def _term_days(terms: tuple[_Term, ...]) -> int | None:
     return days
 
 
+def _term_length(
+    terms: tuple[_Term, ...], periods: Mapping[str | None, PeriodRow]
+) -> int | None:
+    """The terms' day counts (`_term_days`); where CP-1 states none, their
+    dated spans (`_spec_dated`), first day to end date, added and subtracted;
+    None when one is unknown."""
+    stated = _term_days(terms)
+    if stated is not None:
+        return stated
+    days = 0
+    for spec, sign in terms:
+        dated = _spec_dated(spec, periods) if isinstance(spec, _Spec) else None
+        if dated is None:
+            return None
+        days += sign * (dated[1] - dated[0] + 1)
+    return days
+
+
 def _first_day(period: PeriodRow) -> date | None:
     """The period's start date; without one, its end less its day count
     (end - days + 1); None where neither is known or the day count is not
@@ -1355,7 +1373,9 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
     if total.value is None:
         return Cell(None, total.reason, stated=stated, note=total.note)
     differs = stated is not None and beyond_rounding(stated, total.value)
-    length = odd_length(_term_days(spec.terms)) if spec.column.kind == "LTM" else None
+    length = None
+    if spec.column.kind == "LTM":
+        length = odd_length(_term_length(spec.terms, register.periods))
     note = join_notes((total.note, DIFFERS if differs else None, length))
     return replace(total, stated=stated, note=note)
 
@@ -1571,9 +1591,10 @@ def ltm_frames(
 ) -> dict[str, dict[str, Cell]]:
     """For each quarter column in `columns`, the cells of the twelve months
     ending with it: flows summed over it and the three quarters before it,
-    `COMPONENT_MISSING` without all four (an add-back's quarter without a row
-    adds nothing, noted `treated_as_zero`, whether or not the others have a
-    figure: `_ltm_cell`), and noted `UNSPANNED` where the four do not tile,
+    `COMPONENT_MISSING` without all four (a window with no quarter row at all
+    is `NOT_SOURCED`, without a note; an add-back's quarter without a row,
+    where another quarter has one, adds nothing, noted `treated_as_zero`:
+    `_ltm_cell`), and noted `UNSPANNED` where the four do not tile,
     each three whole months starting the day after the one before ends, or
     their span, from the first's start to the last's end, is not twelve
     whole months (`_twelve_months`); a span that is whole months but not 364

@@ -81,7 +81,6 @@ def test_opening_date_and_the_periods_a_balance_is_read_at() -> None:
     assert periods_at(regs, "H1_2026", "2026-06-30") == [
         "H1_2026",
         "Q2_2026",
-        "H1_2026",
         "LTM_Q2_2026",
     ]
     assert periods_at(regs, None, None) == [None]
@@ -320,3 +319,12 @@ def test_a_basis_is_unchanged_by_respacing_recasing_and_separators(
     glued = separators[0].join(words)
     glued = glued.upper() if upper else glued.lower()
     assert _footed(glued) == _footed(text)
+
+
+def test_footing_of_reads_not_stated_as_not_stated() -> None:
+    period = replace(
+        example_registers().periods[0],
+        accounting_basis="Not stated",
+        entity_perimeter=" NOT  stated ",
+    )
+    assert footing_of(period) == UNSTATED_FOOTING
