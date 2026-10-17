@@ -643,13 +643,26 @@ def test_the_stream_closes_at_its_deadline(
 
     monkeypatch.setattr("caos.api.stream.actions_after", counted)
 
-    started = time.monotonic()
+    # The stream's own clock, not the wall's (N197): a `sleep` that advances
+    # a fake `monotonic` by exactly what it was asked to wait, so the count of
+    # polls is the deadline over the poll and not a race with the scheduler.
+    now = [0.0]
+    slept: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+        now[0] += seconds
+
+    monkeypatch.setattr("caos.api.stream.monotonic", lambda: now[0])
+    monkeypatch.setattr("caos.api.stream.sleep", fake_sleep)
+
     frames = _frames_of(served, _path(case_id, run_id), _as(reader))
-    elapsed = time.monotonic() - started
 
     assert frames == [{"id": "0.1"}]
-    assert 0.3 <= elapsed < 3
-    assert 3 <= len(polled) <= 9
+    assert slept == [0.05] * len(slept), "every wait is the poll interval"
+    assert now[0] >= 0.3, "not closed before the deadline"
+    assert slept[:-1] and sum(slept[:-1]) < 0.3, "closed by the first poll past it"
+    assert len(polled) == len(slept) + 1 == 7, "0.3 s at 0.05 s: seven polls"
     assert SHIPPED == (300.0, 0.5), "five minutes, polled twice a second"
 
 
