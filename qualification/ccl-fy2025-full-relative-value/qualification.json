@@ -89,8 +89,17 @@
           "row_key": {
             "Entity": "Carnival Corporation & plc"
           },
-          "column": "Total/Net/Sr Sec Leverage",
-          "expected": "[Calculated] 3.66x / 3.40x"
+          "column": "Total Leverage",
+          "expected": "[Calculated] 3.66x"
+        },
+        {
+          "module_id": "CP-1C",
+          "register_id": "T4.5",
+          "row_key": {
+            "Entity": "Carnival Corporation & plc"
+          },
+          "column": "Net Leverage",
+          "expected": "[Calculated] 3.40x"
         }
       ]
     }
