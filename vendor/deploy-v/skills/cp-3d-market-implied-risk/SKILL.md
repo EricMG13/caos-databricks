@@ -98,7 +98,7 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T3E.2**: structured below
-      - **columns**: security_id; bid/mid/ask or evaluated price; yield; spread/OAS/DM; duration; benchmark; observation ID
+      - **columns**: security_id; bid/mid/ask or evaluated price; yield; spread; OAS; DM; duration; benchmark; observation ID
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1

@@ -277,7 +277,7 @@ COMMITTED_SET_DIGESTS = {
         "504fcb0641cb445d6413b0824b2482013f862b739594b0b80fdb3dfa82ae7532"
     ),
     "ccl-fy2025-full-relative-value": (
-        "f4205e4e3606ef68aece138696ea630c7632d2e184a067edce13eebf88e22e79"
+        "f04a9d56567b7b60b88879392c04d1b8291494df3beadfcbee6f81812c397e55"
     ),
     "ccl-fy2025-relative-value": (
         "715fd96d6dccee128a405006c20e4fdcd45d4f5cdf301e129e31f613ffe2221d"
@@ -286,7 +286,7 @@ COMMITTED_SET_DIGESTS = {
         "85fd43d537432db2a5a805ab5855ca2dda28d4b8b8b4e04fe91e0b78421fc2a9"
     ),
     "ccl-fy2025-lite-full-credit-screen": (
-        "4adc65e7ddb76b97758c0ad24feaec5a499df7c6a7814a2d3432a29d4ce3bef9"
+        "1ce7cf99711b1e6c1da60fb54481ed8cead5033119f86a6ffaeb3ab0027b1b7e"
     ),
     "ccl-fy2025-market-dislocation": (
         "c01b06c9c09b1ced76c297e0d7bf81ad07ace9e03f3e3322da81b3f85840db35"

@@ -81,7 +81,9 @@ plain-text extractor's token index: each matches whole tokens and matches
     are as follows:"). This is the register key the portfolio-screen set
     recorded as owed "with the reading"; this is that reading, for this set.
   - CP-1C `T4.5`, row `Entity = Carnival Corporation & plc`,
-    `Total/Net/Sr Sec Leverage` = `[Calculated] 3.66x / 3.40x`. Debt 26,640
+    `Total Leverage` = `[Calculated] 3.66x` and `Net Leverage` =
+    `[Calculated] 3.40x` (one packed `Total/Net/Sr Sec Leverage` cell, `[Calculated]
+    3.66x / 3.40x`, until fork r17 split it, N192). Debt 26,640
     (2,603 current + 24,037 long-term, carrying value); cash 1,928; EBITDA is
     not reported in the 10-K, so it is derived as operating income 4,483 + D&A
     2,790 = 7,273. Gross 26,640 / 7,273 = 3.66x; net 24,712 / 7,273 = 3.40x.
@@ -89,7 +91,8 @@ plain-text extractor's token index: each matches whole tokens and matches
     (`ANSWER_KEY_3ISSUER.md`, CCL core facts), which was read to confirm them,
     not admitted.
   - CP-1C `T4.5`, row `Entity = Norwegian Cruise Line Holdings Ltd.`,
-    `Total/Net/Sr Sec Leverage` = `[Calculated] 5.35x / 5.3x (reported)`.
+    `Total Leverage` = `[Calculated] 5.35x` and `Net Leverage` = `5.3x (reported)`
+    (the packed cell was `[Calculated] 5.35x / 5.3x (reported)`, N192).
     Total debt 14,606,176 and Adjusted EBITDA 2,730,226 (thousands, the
     release's Net Leverage reconciliation) give a calculated 5.35x gross; the
     5.3x net is the issuer's own reported Net Leverage.

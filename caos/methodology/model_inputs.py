@@ -29,7 +29,11 @@ columns the CP-1 fork added (owner-authorised 2026-10-10) are absent from an
 older run's debt register: they read as `NOT_STATED` or no value, never as a
 fault. A rate term written in the wrong unit (a spread or floor written with
 `%` or not a whole number of basis points, a fixed coupon outside 0-30
-percent) is kept as read, the row flagged `terms_out_of_range`. A fixed
+percent) is kept as read, the row flagged `terms_out_of_range`. CP-1 states
+a spread and a floor as integer basis points (`spread_bps`, `floor_bps`): a
+bare figure is read as basis points however small, so "3" or "3.00" is 3 bp,
+never 3 percent; the model notes one above nil and at most 30 as read so
+(`debt.TERMS_AS_BPS`). A fixed
 coupon is CP-1's decimal percent (`6.500`): 0 is a zero-coupon convertible,
 as stated. On a `FIXED` row, a coupon strictly between 0 and 0.5 written
 without `%` is either a decimal fraction written in place of the percent
@@ -274,8 +278,8 @@ class FacilityRow:
     margin_or_coupon: str
     rate_type: str
     reference_rate: str
-    spread_bps: Decimal | None
-    floor_bps: Decimal | None
+    spread_bps: Decimal | None  # integer basis points, as CP-1 states them
+    floor_bps: Decimal | None  # likewise
     fixed_rate: Decimal | None
     annual_amortisation: Decimal | None
     source: SourceRef | None
@@ -818,6 +822,16 @@ _PRO_FORMA_COLUMNS = frozenset(
 )
 
 
+def _pf_metric(text: str) -> str:
+    """A pro forma metric id in CP-1's lower case: `facility:<id>` keeps the
+    facility's id as written (it names a register row); any other id is
+    casefolded."""
+    head, colon, facility = text.partition(":")
+    if colon and head.strip().casefold() == "facility":
+        return f"facility:{facility.strip()}"
+    return text.casefold()
+
+
 def _pro_forma(row: _Row) -> PfAdjustmentRow:
     """A stated adjustment; one with no figure is no adjustment, and refused."""
     value = _figure(row, "value")
@@ -828,7 +842,7 @@ def _pro_forma(row: _Row) -> PfAdjustmentRow:
         label=_text(row, "label"),
         period_id=_text(row, "period_id"),
         classification=_enum(row, "classification", _PF_CLASSIFICATIONS),
-        metric_id=_text(row, "metric_id"),
+        metric_id=_pf_metric(_text(row, "metric_id")),
         value=value,
         source=_source(row, "value"),
     )
@@ -962,7 +976,8 @@ def _fraction(row: _Row) -> Decimal:
     """A READY growth driver's value as a decimal fraction, CP-MODEL's
     convention (`validate_cp_model_inputs._number`): a cell written with `%`
     divides by 100, where the host's figure keeps the points, then is
-    rounded half to even to `MAX_DECIMALS` decimals where that leaves more.
+    rounded half to even to `MAX_DECIMALS` decimals where that leaves more
+    (a result of zero is unsigned).
     Refused when the unit is not `PERCENT_DECIMAL` or the row has no
     value."""
     value = _figure(row, "value")
@@ -975,7 +990,9 @@ def _fraction(row: _Row) -> Decimal:
     fraction = Decimal((sign, digits, int(exponent) - 2))
     if -int(fraction.as_tuple().exponent) <= MAX_DECIMALS:
         return fraction
-    return fraction.quantize(_PLACES, context=_ROUNDING)
+    rounded = fraction.quantize(_PLACES, context=_ROUNDING)
+    # A tiny negative percent rounds to a negative zero: zero has no sign.
+    return rounded.copy_abs() if rounded.is_zero() else rounded
 
 
 def _growth(row: _Row) -> DivisionGrowth | None:
