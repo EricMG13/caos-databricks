@@ -427,6 +427,14 @@ def _broken_bound(text: str) -> str:
             "a line ends in a carriage return; canonical Markdown ends every line"
             " with a line feed alone"
         )
+    return _unreadable_bound(text, lenient=False)
+
+
+def _unreadable_bound(text: str, *, lenient: bool) -> str:
+    """`_broken_bound`'s bounds after the carriage return check. `lenient`
+    (the keep line, N218 5, R9) forgives a text only NFC changes: control
+    characters, runs and long lines still refuse, for the vendor's slow
+    expressions read any whitespace run, `\\x1f` included."""
     if INVISIBLE.intersection(text):
         return (
             "the Markdown carries a line separator (U+2028), paragraph separator"
@@ -441,7 +449,7 @@ def _broken_bound(text: str) -> str:
         )
     if bound := _run_bound(text):
         return bound
-    if not _clean(text):
+    if not _clean(unicodedata.normalize("NFC", text) if lenient else text):
         return _unclean_bound(text)
     lines = text.split("\n")
     if bound := _line_bound(lines):
@@ -454,15 +462,21 @@ def _broken_bound(text: str) -> str:
     return ""
 
 
+_SPACE_RUN = re.compile(r"[^\S\n]{2,}")
+
+
 def _run_bound(text: str) -> str:
     """The whitespace-run or heading bound `text` breaks, named; `""` for
-    neither. With `_line_bound`, the bounds that guard the vendor's slow
-    expressions (N218 5, R9): the keep line applies only these."""
-    # One C-level substring search, whatever the document does. Tabs are read
-    # as spaces so that a run mixing the two is one run, and `str.replace`
+    neither. A run is of any whitespace but a line feed (`str.isspace`: a
+    no-break or ideographic space, a `\\x1f`), which the vendor's `\\s`
+    expressions read as one."""
+    # One C-level substring search first, whatever the document does. Tabs are
+    # read as spaces so that a run mixing the two is one run, and `str.replace`
     # gives back the same object when there is no tab to replace.
     spaced = text.replace("\t", " ")
-    if " " * (MAX_WHITESPACE_RUN + 1) in spaced:
+    if " " * (MAX_WHITESPACE_RUN + 1) in spaced or any(
+        len(run.group()) > MAX_WHITESPACE_RUN for run in _SPACE_RUN.finditer(text)
+    ):
         return f"a line carries a run of more than {MAX_WHITESPACE_RUN} spaces or tabs"
     if _heading_backtracks(text, spaced):
         return (
@@ -1025,14 +1039,6 @@ def _wire(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
     return encoded, text, tuple(_citation(c) for c in closed)
 
 
-def _shaped(body: str) -> tuple[bytes, int] | None:
-    """The Markdown of a body that is the transport, its citations' fields
-    aside (F651), and how many citations it lists: `_wire`'s, or None when the
-    body is not the transport."""
-    read = _read(body)
-    return None if read.markdown is None else (read.markdown, read.count)
-
-
 def _repeats(citations: Sequence[Citation]) -> list[tuple[int, int]]:
     """(place, first place) for each citation equal to an earlier one, both
     1-based, in the list's order."""
@@ -1483,13 +1489,14 @@ def _held_registers(
 
 def _guarded(body: str) -> str | None:
     """The Markdown `body` carries as text when it is the transport (F651) and
-    breaks none of the bounds that guard the vendor's slow expressions
-    (`_run_bound`, `_line_bound`); else None."""
+    breaks any bound but the carriage return and NFC ones (R9; the controller's
+    ruling after review): the vendor's slow expressions read a control run as
+    whitespace, so every other bound still guards them; else None."""
     markdown = answer_markdown(body)
     if markdown is None:
         return None
     text = markdown.decode("utf-8")
-    return None if _run_bound(text) or _line_bound(text.split("\n")) else text
+    return None if _unreadable_bound(text, lenient=True) else text
 
 
 def kept_registers_line(
@@ -1830,7 +1837,7 @@ class _Read:
     count: int
 
 
-def _read(body: str) -> _Read:
+def _read(body: str, *, diagnose: bool = True) -> _Read:
     """Parse the repair transport once, or return the host's fixed reason (N50).
 
     Duplicate citations get repair feedback and a carried answer; strict
@@ -1844,7 +1851,7 @@ def _read(body: str) -> _Read:
         return _Read(
             parsed, _repeated_line(_repeats(parsed[2])), parsed[0], len(parsed[2])
         )
-    return _Read(None, _not_transport(body), None, 0)
+    return _Read(None, _not_transport(body) if diagnose else "", None, 0)
 
 
 def _not_transport(body: str) -> str:
@@ -2362,7 +2369,7 @@ def answer_citations(body: str) -> tuple[Citation, ...]:
     """The citations a stored answer asked for; none when it is not the
     transport, whose reason `retry_feedback` gives, or when its citations'
     fields are at fault: the citation checks wait until they are fixed (F651)."""
-    parsed = _read(body).parsed
+    parsed = _read(body, diagnose=False).parsed
     return () if parsed is None else parsed[2]
 
 
@@ -2370,7 +2377,7 @@ def answer_markdown(body: str) -> bytes | None:
     """The Markdown of a stored answer that is the transport, its citations'
     fields aside (F651); None when it is not, whose reason `retry_feedback`
     gives."""
-    return _read(body).markdown
+    return _read(body, diagnose=False).markdown
 
 
 def _vendor_lines(
