@@ -580,9 +580,9 @@ def test_one_actor_cannot_hold_both_frame_children_slots(
     hog = uuid4()
     deadline = time.monotonic() + 30.0
 
-    # The hog's own share, watched: a read is counted as it reaches the share
-    # and before it can wait there, so "the second read has made its choice" is
-    # an event and not a sleep.
+    # The hog's own share, watched: a read is counted only once it has found
+    # the share taken (a non-blocking try failed), so "the second read is
+    # waiting on its share" is an event and not a sleep (N232).
     reached = threading.Condition()
     attempts: list[UUID] = []
     real_share = page_module._actor_slot
@@ -593,6 +593,8 @@ def test_one_actor_cannot_hold_both_frame_children_slots(
             self.actor = actor
 
         def acquire(self, timeout: float | None = None) -> bool:
+            if self.inner.acquire(blocking=False):
+                return True
             with reached:
                 attempts.append(self.actor)
                 reached.notify_all()
@@ -617,7 +619,7 @@ def test_one_actor_cannot_hold_both_frame_children_slots(
         assert first_entered.wait(5), "the hog's own read never started"
         threads[1].start()
         with reached:
-            assert reached.wait_for(lambda: len(attempts) == 2, 5)
+            assert reached.wait_for(lambda: len(attempts) == 1, 5)
 
         other = uuid4()
         crop = page_module._Crop(

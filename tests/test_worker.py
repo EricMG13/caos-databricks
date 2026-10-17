@@ -48,6 +48,7 @@ from caos.graph.worker import (
     work_once,
 )
 from caos.methodology.bundle import Bundle
+from caos.methodology.canonical import BILL_TRIES
 from caos.pricing import ModelPrice
 from caos.provider import CONTEXT_NOT_DECLARED, CompletionProvider
 from caos.refusals import Refusal, RefusalCode
@@ -1847,13 +1848,14 @@ def test_a_bill_on_a_closed_connection_is_written_on_a_fresh_one(
 
 
 # The worker's statement and lock bounds in the test below, and how long
-# another session holds the run's case row: past every try the bill would get
-# under the bound (`canonical.BILL_TRIES`, its pause patched out), 3 x 0.5 s,
-# with a second to spare. A real Postgres timeout has no fake clock, so the
-# bound is a real one with the margin N197 asks for: an ordinary statement
-# here takes milliseconds, and the bound is 500 ms (10x and more).
+# another session holds the run's case row: five times the span of every try
+# the bill would get under the bound (`canonical.BILL_TRIES`, its pause patched
+# out), so a bill that kept the bound ends all its tries 5x before the lock
+# lets go and cannot pass by luck (N232: it was 2.0x). A real Postgres timeout
+# has no fake clock, so the bound is a real one: an ordinary statement here
+# takes milliseconds, and the bound is 500 ms (10x and more).
 _BILL_BOUND_MS = 500
-_CASE_LOCK_SECONDS = 3.0
+_CASE_LOCK_SECONDS = 5 * BILL_TRIES * _BILL_BOUND_MS / 1000
 
 
 def _case_lock_held(url: str, run_id: UUID, held: Event) -> threading.Thread:
