@@ -1264,7 +1264,7 @@ def _padded_past_the_handoff_bound(markdown: str) -> str:
         ),
         (
             lambda md: md.replace("was recorded.", "SECRETMARK" + " " * 257 + "x", 1),
-            "a run of more than 256 spaces or tabs",
+            "a run of more than 256 whitespace characters",
         ),
         (
             lambda md: md.replace(
@@ -2394,6 +2394,39 @@ def test_a_retry_too_large_to_carry_its_answer_asks_from_the_beginning(
         FROM_THE_BEGINNING + f"--- END SECOND ATTEMPT {_tag(second)} ---\n"
     )
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+@pytest.mark.parametrize(
+    "model", ["copilot:gpt-6-luna", "copilot:claude-opus-5.5@high", "openai/gpt-6-luna"]
+)
+def test_the_answer_is_dropped_past_the_models_own_bound_when_lesser(
+    model: str,
+) -> None:
+    """N135 (already fixed by D116/D119): `_sent_prompt` compares against
+    `request_ceiling(model)`, the lesser of the model's own bound and
+    `MAX_REQUEST_BYTES`, so a model whose limit falls between the plain and
+    the carrying retry falls back to the plain retry instead of failing."""
+    from caos.provider import request_ceiling
+
+    bound = request_ceiling(model)
+    assert bound < MAX_REQUEST_BYTES
+
+    class Measured:
+        def __init__(self, size: int) -> None:
+            self.model = model
+            self.size = size
+
+        def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
+            return b" " * (self.size if prompt == "carried" else 1)
+
+    def prompt_of(context: canonical._Context) -> str:
+        return "carried" if context.refused_answer else "plain"
+
+    whole = Selection(Basis.WHOLE_NO_DEMAND, None)
+    context = canonical._Context([], (), (), {}, None, whole, ("a check",), "{}")
+    for size, expected in ((bound, "carried"), (bound + 1, "plain")):
+        provider = cast(CompletionProvider, Measured(size))
+        assert canonical._sent_prompt(provider, context, prompt_of, bool) == expected
 
 
 def test_the_answer_is_dropped_only_past_the_transport_ceiling() -> None:
