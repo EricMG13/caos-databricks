@@ -144,6 +144,7 @@ from caos.calculators.credit_model._cells import (
     no_negative_zero,
     not_stated,
     odd_length,
+    odd_quarter,
     odd_year,
     off_footing,
     refs,
@@ -1478,6 +1479,7 @@ class _Window:
     tiled: bool
     year: str | None
     days: int | None = None  # the days the four quarters span, where they tile
+    odd: tuple[str, ...] = ()  # the notes on quarters of odd length (`odd_quarter`)
 
 
 def _fiscal_year_of(spec: _Spec, register: _Register) -> str | None:
@@ -1499,12 +1501,26 @@ def _fiscal_year_of(spec: _Spec, register: _Register) -> str | None:
     )
 
 
-def _with_length(total: Cell, days: int | None) -> Cell:
-    """`total`, with a figure, noted `odd_length` of the days it spans."""
+def _with_length(total: Cell, days: int | None, odd: tuple[str, ...] = ()) -> Cell:
+    """`total`, with a figure, noted `odd_length` of the days it spans, then
+    each quarter of odd length it sums (`odd_quarter`)."""
     length = odd_length(days)
-    if total.value is None or length is None:
+    if total.value is None or (length is None and not odd):
         return total
-    return replace(total, note=join_notes((total.note, length)))
+    return replace(total, note=join_notes((total.note, length, *odd)))
+
+
+def _odd_quarters(
+    found: list[_Spec], periods: Mapping[str | None, PeriodRow]
+) -> tuple[str, ...]:
+    """The `odd_quarter` notes of the quarter columns, by their dated spans."""
+    notes: list[str] = []
+    for spec in found:
+        dated = _spec_dated(spec, periods)
+        note = odd_quarter(None if dated is None else dated[1] - dated[0] + 1)
+        if note is not None:
+            notes.append(note)
+    return tuple(notes)
 
 
 def _window_days(
@@ -1552,7 +1568,7 @@ def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
             for name, (cell, sign) in zip(names, quarters, strict=True)
         ),
     )
-    return _with_length(total, window.days)
+    return _with_length(total, window.days, window.odd)
 
 
 def _some_unstated(cells: list[tuple[Cell, int]]) -> bool:
@@ -1615,6 +1631,7 @@ def ltm_frames(
                 tiled=len(found) < 4 or _twelve_months(found, periods),
                 year=_fiscal_year_of(spec, register),
                 days=_window_days(found, periods),
+                odd=_odd_quarters(found, periods),
             )
             frames[spec.column.column_id] = {
                 key: _ltm_cell(one, register, window) for key, one in series.items()

@@ -4080,6 +4080,36 @@ def test_twelve_months_of_other_than_52_or_53_weeks_are_noted() -> None:
     assert _four_quarters([95, 94, 95, 94]).value == 400  # still read
 
 
+def test_a_quarter_of_11_12_or_15_weeks_is_noted() -> None:
+    """N220 (1): a quarter that is not 13 or 14 weeks (nor a calendar
+    quarter) passes as three months within the slack but is named, in a
+    window whose four quarters still span 52 or 53 weeks."""
+    for lengths, note in (
+        ([84, 91, 91, 98], "quarter of 84 days"),  # a 12-week quarter
+        ([77, 98, 98, 91], "quarter of 77 days"),  # an 11-week quarter
+        ([84, 98, 98, 84], "quarter of 84 days"),  # said once
+    ):
+        cell = _four_quarters(lengths)
+        assert (cell.value, cell.note) == (Decimal(400), note), lengths
+    for lengths in ([91] * 4, [91, 91, 91, 98], [90, 91, 92, 92], [89, 98, 92, 92]):
+        assert _four_quarters(lengths).note is None, lengths
+
+
+@settings(max_examples=150, deadline=None)
+@given(
+    lengths=st.lists(st.integers(min_value=77, max_value=105), min_size=4, max_size=4),
+)
+def test_a_window_names_each_quarter_outside_89_to_98_days(
+    lengths: list[int],
+) -> None:
+    cell = _four_quarters(lengths)
+    if cell.value is None:
+        return
+    odd = dict.fromkeys(n for n in lengths if not 89 <= n <= 98)
+    named = [p for p in (cell.note or "").split("; ") if p.startswith("quarter")]
+    assert named == [f"quarter of {n} days" for n in odd]
+
+
 def test_a_378_day_ltm_is_noted() -> None:
     """The adversary's MINOR-C residual: FY 2024-12-25..2025-12-31 (372 days)
     + a 188-day YTD - a 182-day PYTD is 378 days, accepted and noted."""

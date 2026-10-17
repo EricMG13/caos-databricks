@@ -131,6 +131,20 @@ def odd_length(days: int | None) -> str | None:
     return f"twelve months of {days} days"
 
 
+# The days a quarter spans (13 or 14 weeks, or a calendar quarter): a quarter
+# of 11, 12 or 15 weeks still reads as three months (`history._whole_months`
+# allows a fortnight) but is named by `odd_quarter`.
+QUARTER_DAYS = (89, 98)
+
+
+def odd_quarter(days: int | None) -> str | None:
+    """The note on a quarter of `days` days outside `QUARTER_DAYS`; None
+    inside them or where unknown."""
+    if days is None or QUARTER_DAYS[0] <= days <= QUARTER_DAYS[1]:
+        return None
+    return f"quarter of {days} days"
+
+
 def odd_year(period_id: str, short: bool) -> str:
     """The note on an LTM that is a fiscal year, `period_id`, of fewer
     (`short`) or more than twelve months."""
