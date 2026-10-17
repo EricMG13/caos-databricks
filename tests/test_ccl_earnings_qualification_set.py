@@ -14,13 +14,16 @@ from caos.qualification.on_disk import load_qualification_set
 REPO = Path(__file__).resolve().parents[1]
 SET_ROOT = REPO / "qualification" / "ccl-fy2025-earnings-update"
 DOCUMENT_SHA256 = "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6"
+DEBT_ANCHOR = (
+    "Total Debt, net of unamortized debt issuance costs and discounts | "
+    "26,640 | 27,475 |"
+)
 ANCHORS = {
     "Total Revenues | 26,622 | 25,021 | 21,593 |",
     "Operating Income | 4,483 | 3,574 | 1,956 |",
     "Net cash provided by operating activities | 6,218 | 5,923 | 4,281 |",
     "Purchases of property and equipment | ( 3,611 ) | ( 4,626 ) | ( 3,284 ) |",
-    "Total Debt, net of unamortized debt issuance costs and discounts | "
-    "26,640 | 27,475 |",
+    DEBT_ANCHOR,
 }
 COMPARATOR_DELTAS = {
     "revenue": ("26622", "25021", "1601"),
@@ -55,19 +58,42 @@ def test_ccl_earnings_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
         "FULL_CREDIT_32",
         "EARNINGS_UPDATE",
     )
-    # F653 (N54, R29): keyed to the gate's verdict. CP-0 is expected to hold
-    # CP-1, CP-1B and CP-2, so no module behind them runs and no citation,
-    # projection or register key can be met; a run cannot be scored on one.
-    assert case.expects_blocked == ("CP-1", "CP-1B", "CP-2")
-    assert case.expects_ready == ()
-    assert case.expects == ()
+    # F709 (owner 2026-10-18, Sol only): the strict READY keys are restored for
+    # CP-1, CP-1B and CP-2. CP-5 runs only if CP-0 clears it, so its keys stay
+    # dropped (F653), and so does `expects_blocked`.
+    assert case.expects_ready == ("CP-1", "CP-1B", "CP-2")
+    assert case.expects_blocked == ()
     assert case.expects_projection == ()
-    assert case.expects_register == ()
 
-    # The document still carries each figure the earlier key anchored, once,
-    # so the set can be re-keyed to the answers when CP-0 clears the modules.
+    citations = {
+        (key.module_id, key.document_sha256, key.matched_text) for key in case.expects
+    }
+    assert {module for module, _digest, _text in citations} == {
+        "CP-1",
+        "CP-1B",
+        "CP-2",
+    }
+    assert {text for _module, _digest, text in citations} == ANCHORS - {DEBT_ANCHOR}
+    assert all(digest == DOCUMENT_SHA256 for _module, digest, _text in citations)
     evidence = document.read_text(encoding="utf-8")
     assert all(evidence.count(anchor) == 1 for anchor in ANCHORS)
+
+    comparator_cells = {
+        (key.row_key, key.column, key.expected)
+        for key in case.expects_register
+        if key.register_id == "T4.12"
+    }
+    expected_comparator_cells = {
+        ((("metric_id", metric),), column, expected)
+        for metric, values in COMPARATOR_DELTAS.items()
+        for column, expected in (
+            ("values", f"{values[0]}/{values[1]}"),
+            ("changes", values[2]),
+        )
+    }
+    assert comparator_cells == expected_comparator_cells
+    assert all(key.module_id == "CP-1B" for key in case.expects_register)
+    assert len(case.expects_register) == len(comparator_cells)
 
     rules = CONTRACT.completeness_check.load_contract(skill("CP-1B").decode(), "CP-1B")
     comparator_columns = set(rules["registers"]["T4.12"]["columns"])
@@ -90,6 +116,14 @@ def test_ccl_earnings_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
         "values",
         "changes",
     }
+    assert all(
+        key.column in comparator_columns
+        and all(column in comparator_columns for column, _value in key.row_key)
+        for key in case.expects_register
+        if key.register_id == "T4.12"
+    )
+    assert all(key.register_id == "T4.12" for key in case.expects_register)
+
     cp1_reference = (
         REPO
         / "vendor/deploy-v/skills/cp-1-canonical-data-foundation/references"

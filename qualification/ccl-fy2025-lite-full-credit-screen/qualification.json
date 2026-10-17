@@ -110,6 +110,15 @@
           },
           "column": "Total/Net/Sr Sec Leverage",
           "expected": "[Calculated] 5.35x / 5.3x (reported)"
+        },
+        {
+          "module_id": "CP-4C",
+          "register_id": "T4E.1",
+          "row_key": {
+            "trigger": "No documented distress trigger"
+          },
+          "column": "status",
+          "expected": "Not Applicable"
         }
       ]
     }

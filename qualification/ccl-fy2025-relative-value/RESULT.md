@@ -8,7 +8,7 @@ costs real money and calls a real model.
 ## The set
 
 - Qualification-set digest:
-  `715fd96d6dccee128a405006c20e4fdcd45d4f5cdf301e129e31f613ffe2221d`
+  `40cf77c4a36a7551afa481d865ea97f52ed1e251bbee35c4e31e1356053c228e`
 - Route: `LITE_CREDIT_22 / LITE_RELATIVE_VALUE` (`CP-0` → `CP-L10` → `CP-1C`,
   three REQUIRED edges, `decision_scope: SCREENING_ONLY`). CP-1C is a FULL
   module held behind the named-LITE-object boundary until CP-L10's
@@ -180,3 +180,17 @@ Following `ccl-fy2025-portfolio` (`expects_blocked`, `docs/DECISIONS.md` §99):
 
 No document byte moves. Offline edit; no provider call, run, or snapshot. Both
 retained captures bind the earlier digest and are not re-scored.
+
+## Owner ruling F709, 18 October 2026 -- the strict keys are restored for Sol
+
+Live runs now use Sol only (owner, 18 October 2026), so the set is keyed to
+CP-L10 READY again rather than held CONDITIONAL by CP-0's gate (R29 above
+records the Luna-era key and stays as history). Restored from the set before
+R29: `expects_ready` for CP-L10, its liquidity citation key, its
+`decision_scope` projection key and its `TL10.2` register key. `expects_blocked`
+is removed. Kept removed: every CP-1C key (the three citations, the `expects_ready`
+entry, the `decision_scope` projection and the two `T4.5` leverage cells), as
+F653 dropped them. Previous digest
+`715fd96d6dccee128a405006c20e4fdcd45d4f5cdf301e129e31f613ffe2221d`; the new
+digest is the one stated under "The set". Offline edit; no provider call, run,
+or snapshot.

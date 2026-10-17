@@ -15,9 +15,33 @@
         "documents/RCL_Q4_2025_Earnings_Release.txt",
         "documents/NCLH_Q4_2025_Earnings_Release.txt"
       ],
-      "expects": [],
-      "expects_blocked": [
+      "expects": [
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "As of November 30, 2025, we had $6.4 billion of liquidity including $1.9 billion of cash and cash equivalents and $4.5 billion available for borrowing under our multicurrency revolving credit facility. In addition, we had $7.8 billion of undrawn export credit facilities to fund future ship deliveries."
+        }
+      ],
+      "expects_ready": [
         "CP-L10"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-L10",
+          "field": "decision_scope",
+          "value": "SCREENING_ONLY"
+        }
+      ],
+      "expects_register": [
+        {
+          "module_id": "CP-L10",
+          "register_id": "TL10.2",
+          "row_key": {
+            "topic_id": "LIQUIDITY_MATURITIES"
+          },
+          "column": "evidence_status",
+          "expected": "SUFFICIENT"
+        }
       ]
     }
   ]

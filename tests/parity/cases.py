@@ -1379,10 +1379,11 @@ def _synthetic_citation_case(
     return _quote_case(target, _matcher_tokens(target, data), quote, tracking)
 
 
-# `ccl-fy2025-relative-value` is keyed `expects_blocked` (F653), so its own
-# `expects` carry no quotes. Its two earnings releases are byte-identical to
-# the ones the full relative-value set quotes, and that set keeps the same
-# answer-key quotes (the digest still selects them), so they are read there.
+# `ccl-fy2025-relative-value` keys only CP-L10 (CP-1C's keys stay dropped, F653/
+# F709), so its own `expects` carry no quote for the two earnings releases. Those
+# are byte-identical to the ones the full relative-value set quotes, and that set
+# keeps the same answer-key quotes (the digest still selects them), so they are
+# read there.
 _KEY_FALLBACK = {"ccl-fy2025-relative-value": "ccl-fy2025-full-relative-value"}
 
 

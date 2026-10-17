@@ -2,7 +2,7 @@
 
 This set is prepared offline for `FULL_CREDIT_32 / EARNINGS_UPDATE`; it does
 not record or claim qualification. Its qualification-set digest is
-`ffbd83e75e1ad65bbfb1b8662ff973f094e8f6990f13e21d67052235c7f3bea7`.
+`4e118e8fd051f2ba99e18ce8697566f86335b7340b1763d2ebbcd9e925609cd3`.
 
 ## Corpus and key provenance
 
@@ -50,3 +50,18 @@ The owner ruled the set is keyed to that verdict. Following
   digest is the one stated above.
 
 No document byte moves. Offline edit; no provider call, run, or snapshot.
+
+## Owner ruling F709, 18 October 2026 -- the strict keys are restored for Sol
+
+Live runs now use Sol only (owner, 18 October 2026), so the set is keyed to the
+modules READY again rather than held CONDITIONAL by CP-0's gate (R29 above
+records the Luna-era key and stays as history). Restored from the set before
+R29: `expects_ready` for CP-1, CP-1B and CP-2; the four citation keys of
+CP-1, CP-1B and CP-2; the ten `T4.12` register keys. `expects_blocked` is
+removed. Kept removed: the CP-5 citation (total debt), the CP-5 `expects_ready`
+entry and the CP-5 `decision_scope` projection key, because CP-5 runs only if
+CP-0 clears it (F653). The total-debt figure stays keyed through CP-1B's
+`total_debt` `T4.12` cells. Previous digest
+`ffbd83e75e1ad65bbfb1b8662ff973f094e8f6990f13e21d67052235c7f3bea7`; the new
+digest is the one stated at the top. Offline edit; no provider call, run, or
+snapshot.

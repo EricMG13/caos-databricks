@@ -9,7 +9,7 @@ Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`d8ca1c81161a7043e87cdf7b9ed4d03614618044a091b4fd9f15f9864e89a752`.
+`49eadf882ca52d9f2a6a58e48e343564ba4124d8582182de6cb03843f427e45c`.
 
 ## Corpus changed 2026-10-16 (R27, N147)
 
@@ -264,3 +264,15 @@ Reading the table: "build" is the first eight hex digits of the methodology buil
 Verdict: The set is **NOT QUALIFIED**: no run completed. LFCS1 accepted 8 of 9 nodes (CP-0, CP-L10, CP-1A, CP-1C, CP-2A, CP-2H, CP-3C, CP-4C) and stopped at CP-5; 230 citations; keys 6 of 11 on the nodes that ran (one unverified-near; misses "not cited"; the CP-2H rating keys met). CP-5 had missed 39 upstream restrictions (24 distinct), all omissions, with no feedback line; F510 now names them to the retry, but the set was not re-run after it. LFCS2 was a provider drop on CP-1A. The run was not repeated.
 
 Owner-decision stops and provider limits: Provider drops: PROVIDER_UNAVAILABLE after about 195 to 299 s on large non-streamed calls, never billed; the owner ruled on 5 October to run without streaming and re-run a dropped module once (L9, streaming in the test adapter, stays unmerged: `PROVIDER_RUNBOOK.md` and N145).
+
+## Owner ruling F709, 18 October 2026 -- the strict keys are restored for Sol
+
+Live runs now use Sol only (owner, 18 October 2026), so CP-4C's `T4E.1` key
+(`trigger` = `No documented distress trigger`, column `status` = `Not
+Applicable`) that R26 dropped to fit Luna's wording is restored, byte for byte
+as in the set before that change. Two register keys are set again (CP-L10's
+`TL10.2` and CP-4C's `T4E.1`). The R26 paragraph and the live-run table above
+are the record of what Luna scored and are unaltered. The digest before this
+change was `d8ca1c81161a7043e87cdf7b9ed4d03614618044a091b4fd9f15f9864e89a752`;
+the new digest is the one stated at the top. Offline edit; no provider call,
+run, or snapshot.
