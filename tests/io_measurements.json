@@ -4,7 +4,7 @@
     "io": 57
   },
   "caos/api/reads/analysis.py": {
-    "blob": 40,
+    "blob": 41,
     "io": 251
   },
   "caos/api/reads/book.py": {
@@ -45,7 +45,7 @@
     }
   },
   "caos/api/reads/run.py": {
-    "blob": 4,
+    "blob": 5,
     "io": 102
   }
 }

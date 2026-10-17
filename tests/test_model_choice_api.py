@@ -6,6 +6,7 @@ the choices and each run's model. The list and the worker are
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -16,15 +17,25 @@ from qualification_fixtures import (
     record_performed_earlier,
     record_runs,
 )
+from test_api_routes import _CountingConnection
 from test_model_choice import deployed
 from test_run_commands import ROUTE, _outcome, _path, _send
 
 from caos.api.deps import methodology_bundle
+from caos.api.reads import run as run_read
 from caos.api.reads.qualification import verdict_state
 from caos.api.wire import QualificationState
 from caos.copilot import identity_of
-from caos.pricing import MODEL_PRICE_ENV, model_choices
-from caos.qualification.store import record_verdict
+from caos.pricing import (
+    CHOICES_SEPARATOR,
+    ENDPOINT_ENV,
+    MAX_MODEL_CHOICES,
+    MODEL_CHOICES_ENV,
+    MODEL_PRICE_ENV,
+    REASONING_EFFORT_ENV,
+    model_choices,
+)
+from caos.qualification.store import Evidence, record_verdict
 from caos.qualification.verdict import read_verdict
 from caos.store import StoreConnection
 from caos.store.audit import audit_trail, digest_of
@@ -312,3 +323,77 @@ def test_verdict_state_maps_the_validator_as_the_qualification_read_does(
     assert (state, verdict is not None) == (QualificationState.QUALIFIED, True)
     unsigned = qualification_performed(model="never-signed").evidence
     assert verdict_state(conn, unsigned, now) == (QualificationState.UNQUALIFIED, None)
+
+
+def _approve_the_most_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`MAX_MODEL_CHOICES` models: the configured one and the rest approved."""
+    monkeypatch.setenv(ENDPOINT_ENV, "model-0")
+    monkeypatch.setenv(MODEL_PRICE_ENV, "model-0,0.000001,0.000002,2026-09-22")
+    monkeypatch.setenv(
+        MODEL_CHOICES_ENV,
+        CHOICES_SEPARATOR.join(
+            f"model-{n},0.000001,0.000002,2026-09-22"
+            for n in range(1, MAX_MODEL_CHOICES)
+        ),
+    )
+    monkeypatch.delenv(REASONING_EFFORT_ENV, raising=False)
+
+
+def test_the_qualification_read_costs_exactly_its_budget_at_the_most_models(
+    case: tuple[StoreConnection, UUID], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N224: `QUALIFICATION_IO` (one candidate read, then three per model) is
+    measured with `MAX_MODEL_CHOICES` approved models, each with a current
+    verdict, not only declared."""
+    _approve_the_most_models(monkeypatch)
+    conn, _case_id = case
+    models = list(model_choices())
+    assert len(models) == MAX_MODEL_CHOICES
+    for model in models:
+        _verdict(conn, model, days=30)
+    counter = _CountingConnection(conn)
+    states = run_read._qualification_states(
+        cast(StoreConnection, counter),
+        models,
+        methodology_bundle().build_id,
+        datetime.now(UTC),
+    )
+    assert set(states.values()) == {QualificationState.QUALIFIED}
+    assert run_read.QUALIFICATION_IO == 1 + MAX_MODEL_CHOICES * 3
+    assert counter.executed == run_read.QUALIFICATION_IO
+
+
+def test_two_verdicts_decided_at_the_same_instant_resolve_the_same_way_each_time(
+    case: tuple[StoreConnection, UUID],
+    deployed: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N224: the candidate read orders ties on the evidence digest, so the
+    verdict that stands for a model does not depend on row order."""
+    conn, _case_id = case
+    build_id = methodology_bundle().build_id
+    identity = identity_of("gpt-6-luna")
+    for digest in ("b" * 64, "a" * 64):  # inserted highest digest first
+        conn.execute(
+            "INSERT INTO qualification_evidence (evidence_sha256,"
+            " qualification_set_sha256,performed_sha256,build_id,adapter_version,"
+            " provider,model) VALUES (%s,%s,%s,%s,'a',%s,'gpt-6-luna')",
+            (digest, digest, digest, build_id, identity),
+        )
+        conn.execute(
+            "INSERT INTO qualification_verdicts"
+            " (evidence_sha256,reviewer_id,reviewer,decided_at,expires_at)"
+            " VALUES (%s,gen_random_uuid(),'Reviewer',"
+            " timestamptz '2026-01-01 00:00:00+00', now() + interval '30 days')",
+            (digest,),
+        )
+    conn.commit()
+    seen: list[str] = []
+
+    def spy(_conn: object, evidence: Evidence, _now: datetime) -> object:
+        seen.append(evidence.performed_sha256)
+        return QualificationState.UNQUALIFIED, None
+
+    monkeypatch.setattr(run_read, "verdict_state", spy)
+    run_read._qualification_states(conn, ["gpt-6-luna"], build_id, datetime.now(UTC))
+    assert seen == ["a" * 64]
