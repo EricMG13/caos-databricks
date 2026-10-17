@@ -48,7 +48,8 @@ import {
 
 /** A register's rows keyed by the profile column the bundle binds to each
     header cell, else by the header as written; `null` unless `handoff` is
-    `moduleId`'s and serves `registerId`. */
+    `moduleId`'s and serves `registerId`; a register the host refused (N194)
+    serves no rows, and the module's other registers still read. */
 export function registerRows(
   handoff: HandoffView,
   moduleId: string,
@@ -56,7 +57,7 @@ export function registerRows(
 ): Row[] | null {
   if (handoff.module_id !== moduleId) return null;
   const register = handoff.registers.find((entry) => entry.register_id === registerId);
-  if (!register) return null;
+  if (!register || register.unavailable_reason) return null;
   const keys = register.columns.map((column, index) => {
     const declared = register.declared[index] ?? null;
     return { key: declared ?? column, index, declared: declared !== null };

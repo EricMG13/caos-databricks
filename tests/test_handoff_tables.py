@@ -524,7 +524,12 @@ def test_a_register_row_of_another_width_than_its_header_is_malformed() -> None:
         "### T4C.4 \u2014 Covenant headroom", [*HEADROOM, "Notes"], [row]
     )
     found = handoff_registers(CONTRACT, _skill("CP-4"), "CP-4", markdown)
-    assert found == HandoffRegisters((), "TABLES_MALFORMED")
+    assert found == HandoffRegisters((_refused("T4C.4"),), None)
+
+
+def _refused(register_id: str) -> HandoffRegister:
+    """A register the host would not key: named, with its code and no cells."""
+    return HandoffRegister(register_id, (), (), (), "TABLES_MALFORMED")
 
 
 @pytest.mark.parametrize(
@@ -537,7 +542,26 @@ def test_a_register_header_with_a_repeated_or_empty_cell_is_malformed(
 ) -> None:
     markdown = _register("### T4.6", header, [["Capex", "9", "11"]])
     found = handoff_registers(CONTRACT, _skill("CP-1"), "CP-1", markdown)
-    assert found == HandoffRegisters((), "TABLES_MALFORMED")
+    assert found == HandoffRegisters((_refused("T4.6"),), None)
+
+
+def test_one_malformed_register_is_refused_alone_and_the_sound_one_is_served() -> None:
+    sound = _register(
+        "### T4.4 \u2014 Income statement", ["Line Item", "FY2025"], [["Revenue", "7"]]
+    )
+    broken = _register(
+        "### T4.6 \u2014 Cash flow statement",
+        ["Line Item", "FY2025", "FY2025"],
+        [["Capex", "9", "11"]],
+    )
+    for markdown in (sound + broken, broken + sound):
+        found = handoff_registers(CONTRACT, _skill("CP-1"), "CP-1", markdown)
+        assert found.unavailable_reason is None
+        served, refused = found.registers
+        assert served.register_id == "T4.4"
+        assert served.unavailable_reason is None
+        assert served.rows == ((TableCell("Revenue", None), TableCell("7", "7")),)
+        assert refused == _refused("T4.6")
 
 
 def test_a_cell_two_columns_claim_is_declared_to_the_one_it_spells() -> None:

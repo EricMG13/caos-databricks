@@ -482,6 +482,7 @@ function analysis(): { [key: string]: Json } {
           registers: [
             {
               register_id: "T4C.4",
+              unavailable_reason: null,
               columns: ["Test", "Headroom", "Note"],
               declared: ["Test", "Headroom", null],
               rows: [

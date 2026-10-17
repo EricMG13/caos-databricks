@@ -183,6 +183,7 @@ describe("Analysis", () => {
       registers: [
         {
           register_id: "T5.9",
+          unavailable_reason: null,
           columns,
           declared: columns,
           rows: [

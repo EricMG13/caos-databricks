@@ -43,6 +43,7 @@ from caos.methodology.bundle import Bundle, verified_bytes
 from caos.methodology.handoff import (
     GATE_MODULE,
     CanonicalRecord,
+    HostIdentity,
     Projections,
     read_record,
     validate_markdown,
@@ -227,14 +228,20 @@ def load_vendor_authority(bundle: Bundle) -> VendorAuthority:
     )
 
 
+# The blocks one node was handed (D94, N130): its route node and the identity
+# its record binds, to source and block ids.
+NodeDelivery = Callable[[RouteNode, HostIdentity], Mapping[UUID, frozenset[str]]]
+
+
 @dataclass(frozen=True, slots=True)
 class PinnedEvidence:
     """What a re-anchoring reader locates quotes in: the run's pinned live
-    sources by document digest, the captured blocks each was handed, and one
-    token index shared across the unit (records cluster on the same pages)."""
+    sources by document digest, what each node was handed (`delivery`, the
+    node's own selection, never the run's whole capture), and one token index
+    shared across the unit (records cluster on the same pages)."""
 
     sources: Mapping[str, UUID]
-    delivered: Mapping[UUID, frozenset[str]]
+    delivery: NodeDelivery
     index: TokenIndex
 
 
@@ -345,7 +352,13 @@ def verify_accepted(  # noqa: PLR0913 -- one accepted row and what its reader ow
         raise _refusal(refuse, Step.PROJECTIONS, _MISMATCH)
     citations = None
     if reanchor is not None:
-        citations = _reanchored(conn, record, reanchor, refuse)
+        citations = _reanchored(
+            conn,
+            record,
+            reanchor,
+            refuse,
+            lambda: reanchor.delivery(node, record.identity),
+        )
     return Verified(markdown, stored, record, projections, citations)
 
 
@@ -363,6 +376,7 @@ def _reanchored(
     record: CanonicalRecord,
     evidence: PinnedEvidence,
     refuse: Refuse,
+    delivery: Callable[[], Mapping[UUID, frozenset[str]]],
 ) -> tuple[AnchoredCitation, ...]:
     requests = []
     for citation in record.citations:
@@ -379,19 +393,25 @@ def _reanchored(
                 citation.cited_page,
             )
         )
+    # Only the blocks this node was handed (N130): a block the run captured
+    # but did not deliver to it is refused `CITATION_NOT_DELIVERED`, as live
+    # acceptance refused it. Read outside the step, so a store fault keeps its
+    # own code. A record with no citation needs no delivery.
+    delivered = delivery() if requests else {}
     anchored = _step(
         refuse,
         Step.CITATION_ANCHOR,
         lambda: verify_stored_citations(
             conn,
-            delivered=evidence.delivered,
+            delivered=delivered,
             citations=requests,
             index=evidence.index,
             rule=record.citation_rule,
         ),
     )
     # Same quotes, same rectangles, same lines (D105), inside the captured
-    # blocks -- located by the rule the record was accepted under (N28), so
+    # blocks it was handed -- located by the rule the record was
+    # accepted under (N28), so
     # a record accepted before the whole-line rule re-anchors as it always
     # has; each at the page the record stores, never searched for, and a
     # re-anchoring kept only where its cited page holds no such line (D94).

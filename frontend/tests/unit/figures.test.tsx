@@ -874,6 +874,7 @@ const COVENANT = [
 ];
 const headroom: Register = {
   register_id: "T4C.4",
+  unavailable_reason: null,
   columns: COVENANT,
   declared: COVENANT,
   rows: [
@@ -895,6 +896,7 @@ const headroom: Register = {
 const PEERS = ["Metric", "Borrower Value", "Peer Avg", "Median", "Min", "Max", "Q1", "Q3", "N"];
 const peers: Register = {
   register_id: "T4.6",
+  unavailable_reason: null,
   columns: PEERS,
   declared: PEERS,
   rows: [
@@ -959,6 +961,42 @@ test("register figures follow the table figures, and each refusal withholds only
   expect(neither.querySelector("[data-figures]")).toBeNull();
 });
 
+test("a register refused alone is named and the module's sound register still draws (N194)", () => {
+  const refused = {
+    register_id: "T4.6",
+    unavailable_reason: "TABLES_MALFORMED" as const,
+    columns: [],
+    declared: [],
+    rows: [],
+  };
+  const container = shown({ ...handoffOf("CP-4"), tables: [], registers: [refused, headroom] });
+  expect(container.querySelector("[data-figure='covenant-headroom-x']")).not.toBeNull();
+  expect(container.querySelector("[data-registers-refused]")).toHaveTextContent(
+    "registers T4.6 (TABLES_MALFORMED) could not be read",
+  );
+});
+
+test("a refused register is named beside a tables refusal too (N194)", () => {
+  const refused = {
+    register_id: "T4.6",
+    unavailable_reason: "TABLES_MALFORMED" as const,
+    columns: [],
+    declared: [],
+    rows: [],
+  };
+  const container = shown({
+    ...handoffOf("CP-4"),
+    tables_unavailable_reason: "TABLES_MALFORMED",
+    registers: [refused, headroom],
+  });
+  const note = container.querySelector("[data-tables-unavailable='TABLES_MALFORMED']");
+  expect(note).toHaveTextContent("tables could not be read (TABLES_MALFORMED)");
+  expect(note).toHaveTextContent("registers T4.6 (TABLES_MALFORMED) could not be read");
+  expect(note).toHaveAttribute("data-registers-refused", "T4.6 (TABLES_MALFORMED)");
+  expect(note).toHaveTextContent("Its other registers and prose are unaffected");
+  expect(container.querySelector("[data-figure='covenant-headroom-x']")).not.toBeNull();
+});
+
 test("pressing an interquartile bar names both ends, Q1 to Q3, never n/a", () => {
   const container = shown({ ...handoffOf("CP-1C"), registers: [peers] });
   const figure = container.querySelector("[data-figure='peer-ranges-x']") as HTMLElement;
@@ -995,6 +1033,7 @@ test("grouped bars draw a bar per case, each named and pressed for its class", (
   const columns = ["Creditor Class", "Exposure: Base Case", "Exposure: Stress Case"];
   const exposure: Register = {
     register_id: "T3D.8",
+    unavailable_reason: null,
     columns,
     declared: columns,
     rows: [[served("Senior secured"), served("100", "100"), served("120", "120")]],
@@ -1013,6 +1052,7 @@ test("pressing a dumbbell's end names which end it is, its metric and stated sou
   const columns = ["Metric", "Expected", "Realized", "Variance (direction + magnitude)"];
   const outcomes: Register = {
     register_id: "T7.4",
+    unavailable_reason: null,
     columns,
     declared: columns,
     rows: [[served("Leverage"), served("4.0x", "4.0"), served("4.6x", "4.6"), served("Up 0.6x")]],
@@ -1040,6 +1080,7 @@ test("pressing a security's point names its seniority, security and stated sourc
   ];
   const curve: Register = {
     register_id: "T3E.3",
+    unavailable_reason: null,
     columns,
     declared: columns,
     rows: [
@@ -1073,6 +1114,7 @@ test("pressing a cell of the risk matrix names both labels and its count", () =>
   const columns = ["Event ID", "Description", "Probability", "Impact", "P/I Classification"];
   const events: Register = {
     register_id: "T5.4",
+    unavailable_reason: null,
     columns,
     declared: columns,
     rows: [["EV-1", "Event one", "High", "High", "Critical"].map((cell) => served(cell))],
@@ -1110,6 +1152,7 @@ test("a register stack's table twin heads its first column with what the categor
   const columns = ["Basket / Test", "Usage", "Remaining Capacity"];
   const baskets: Register = {
     register_id: "T4C.5",
+    unavailable_reason: null,
     columns,
     declared: columns,
     rows: [[served("General basket"), served("10", "10"), served("40", "40")]],

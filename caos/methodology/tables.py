@@ -99,12 +99,17 @@ class HandoffRegister:
     """One declared register: its id, its header as written, per header cell
     the profile column the bundle binds to it (None for a cell only a template
     column such as `Period 1…N` stands for, or one two contract columns claim
-    where none spells it), and every row in header order."""
+    where none spells it), and every row in header order.
+
+    A register the host will not key (`_keyable`) is named with its code and
+    carries no header, no binding and no row (N194): it blanks its own figures
+    and no other register's."""
 
     register_id: str
     columns: tuple[str, ...]
     declared: tuple[str | None, ...]
     rows: tuple[tuple[TableCell, ...], ...]
+    unavailable_reason: TablesUnavailable | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,10 +157,14 @@ def handoff_registers(
     A skill with no output profile declares no registers: that is no table, not
     a refusal. `TABLES_MALFORMED` where a located register is not a table a
     reader can key -- a header cell empty or repeated, a row of another width
-    than its header, the rules `parse_tables` holds a tagged table to -- or
-    where the locator raised on the answer's text; `TABLES_TOO_LARGE` past a
-    bound. Both serve no register at all, since a partial set would read as
-    the whole one.
+    than its header, the rules `parse_tables` holds a tagged table to -- refuses
+    that register alone (N194, D152): it is served named, with its code and no
+    cells, and the module's other registers are served as written. The
+    locator raising on the answer's text refuses them all with
+    `TABLES_MALFORMED`, as does `TABLES_TOO_LARGE` past a bound: a bound
+    breached anywhere leaves no register served. A malformed register still
+    counts toward the size bound (its header and rows are measured before it is
+    refused), so one oversize malformed register refuses them all.
     """
     checker = contract.completeness_check
     try:
@@ -181,8 +190,6 @@ def handoff_registers(
     except (KeyError, ValueError):  # unread: its message can quote the answer
         return HandoffRegisters((), "TABLES_MALFORMED")
     written = [(reg_id, *located[reg_id]) for reg_id in specs if reg_id in located]
-    if not all(_keyable(header, widths) for _, header, _, widths in written):
-        return HandoffRegisters((), "TABLES_MALFORMED")
     if len(written) > TABLES_MAX or not all(
         _bounded(reg_id, header, rows) for reg_id, header, rows, _ in written
     ):
@@ -195,7 +202,9 @@ def handoff_registers(
                 declared=_declared(contract, specs[reg_id]["columns"], header),
                 rows=_rows(contract, header, rows),
             )
-            for reg_id, header, rows, _ in written
+            if _keyable(header, widths)
+            else HandoffRegister(reg_id, (), (), (), "TABLES_MALFORMED")
+            for reg_id, header, rows, widths in written
         ),
         None,
     )

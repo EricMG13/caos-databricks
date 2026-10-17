@@ -1189,17 +1189,17 @@ def verify_stored_citations(
 
     Each pair is a citation at the page the record stores and the record's
     `cited_page`. The stored page is checked, never searched for: the quote
-    must be located there by `rule` within `delivered` (the run's captured
-    blocks), exactly as `verify_citations` locates a citation found where it
+    must be located there by `rule` within `delivered` (the blocks the
+    record's own node was handed, never the run's whole capture: N130),
+    exactly as `verify_citations` locates a citation found where it
     was cited. A `cited_page` is kept only when the quote is no line (under
     `EXCERPT`, no excerpt) of that page (`CITATION_NOT_LOCATED` there,
     whatever was delivered), the one case in which acceptance re-anchors; a
     record claiming any other re-anchoring reads back without it, so it no
     longer equals the record. Acceptance also
-    held the true line unique among the pages the node was given; those
-    pages are the node's (its selection), not the run's, so that is
-    re-judged where the node's delivery is rebuilt (`replay_billed`), not
-    here -- the run's captured blocks may hold copies the node never saw.
+    held the true line unique among the pages the node was given, which
+    `delivered` now is, but that uniqueness is still re-judged where the
+    node's delivery is rebuilt (`replay_billed`), not here.
     """
     anchored = []
     for citation, cited in citations:
