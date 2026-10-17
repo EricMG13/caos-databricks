@@ -35,7 +35,7 @@ import sys
 import tempfile
 import tokenize
 import tomllib
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Hashable, Iterable, Iterator
 from hashlib import sha256
 from pathlib import Path
 from types import ModuleType
@@ -528,13 +528,37 @@ def _python_problems(root: Path, project: dict[str, object]) -> list[str]:
     return problems
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """`SafeLoader` that refuses a mapping repeating a key (N83): PyYAML keeps
+    the last, so the line a reviewer reads first could say one thing and the
+    file mean another."""
+
+    def construct_mapping(
+        self, node: yaml.MappingNode, deep: bool = False
+    ) -> dict[object, object]:
+        seen: set[object] = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=True)
+            if not isinstance(key, Hashable):
+                continue  # the parent loader refuses it as unhashable
+            if key in seen:
+                raise yaml.YAMLError("a repeated key")
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
 def _yaml_mapping(text: str | None) -> dict[object, object] | None:
     """`text` read as YAML, the way pre-commit and Actions read it, when it
-    is a mapping; None when it is missing, does not parse, or is not one."""
+    is a mapping; None when it is missing, does not parse, repeats a key, or
+    is not one."""
     if text is None:
         return None
     try:
-        loaded = yaml.safe_load(text)
+        loader = _UniqueKeyLoader(text)
+        try:
+            loaded = loader.get_single_data()
+        finally:
+            loader.dispose()
     except yaml.YAMLError:
         return None
     return loaded if isinstance(loaded, dict) else None

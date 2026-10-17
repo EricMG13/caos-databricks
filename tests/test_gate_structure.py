@@ -283,6 +283,48 @@ def test_every_hook_repository_is_pinned_by_commit_with_its_tag_in_a_comment(
     assert all("is at 'v" in problem for problem in problems)
 
 
+def test_a_duplicate_key_in_a_configuration_is_refused_not_resolved_to_the_last(
+    tmp_path: Path,
+) -> None:
+    """N83: PyYAML keeps the last of a repeated key, so the first -- the line a
+    reviewer reads -- could say one thing and the file mean another. Each
+    configuration the gate reads as YAML is refused on a repeat, at any depth."""
+    root = _tree(tmp_path)
+    assert check_gate_config._hook_problems(root) == []
+    assert check_gate_config._ci_problems(root) == []
+    assert check_gate_config._bundle_problems(root) == []
+    hooks = root / HOOKS
+    hooks.write_text(
+        hooks.read_text(encoding="utf-8").replace(
+            "      - id: ruff-format\n",
+            "      - id: ruff-format\n        exclude: ^vendor/\n        exclude: ^$\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    assert check_gate_config._hook_problems(root) == [
+        "pre-commit: .pre-commit-config.yaml is missing or not a mapping"
+    ]
+    ci = root / CI
+    ci.write_text(
+        ci.read_text(encoding="utf-8").replace(
+            "\njobs:\n", "\njobs:\n  lint:\n    timeout-minutes: 1\n    timeout-minutes: 2\n", 1
+        ),
+        encoding="utf-8",
+    )
+    assert check_gate_config._ci_problems(root) == [
+        "ci: .github/workflows/ci.yml is missing or not a mapping"
+    ]
+    bundle = root / "databricks.yml"
+    bundle.write_text(bundle.read_text(encoding="utf-8") + "\nbundle:\n  name: x\n")
+    assert check_gate_config._yaml_mapping(bundle.read_text(encoding="utf-8")) is None
+    assert check_gate_config._yaml_mapping("a: 1\nb: {c: 1, c: 2}\n") is None
+    assert check_gate_config._yaml_mapping("a: 1\nb: {c: 1, d: 2}\n") == {
+        "a": 1,
+        "b": {"c": 1, "d": 2},
+    }
+
+
 def test_both_gitleaks_scans_run_the_one_pinned_version(tmp_path: Path) -> None:
     """W3: the hook's rev is the commit of the version the gitleaks workflow
     installs (its tag is the comment beside the rev, checked above)."""
