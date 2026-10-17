@@ -327,6 +327,20 @@ def test_a_duplicate_key_in_a_configuration_is_refused_not_resolved_to_the_last(
     }
 
 
+def test_a_gitleaks_version_with_no_resolved_commit_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W3, N114: the hook is pinned by commit, so a bump of the version the
+    workflow installs needs the commit its tag names, or the hook would keep
+    the old binary under a green gate."""
+    root = _tree(tmp_path)
+    assert check_gate_config._hook_problems(root) == []
+    monkeypatch.setattr(check_gate_config, "GITLEAKS_VERSION", "v8.99.0")
+    assert check_gate_config._hook_problems(root) == [
+        "pre-commit: GITLEAKS_VERSION v8.99.0 has no commit in GITLEAKS_COMMITS"
+    ]
+
+
 def test_both_gitleaks_scans_run_the_one_pinned_version(tmp_path: Path) -> None:
     """W3: the hook's rev is the commit of the version the gitleaks workflow
     installs (its tag is the comment beside the rev, checked above)."""
@@ -334,7 +348,7 @@ def test_both_gitleaks_scans_run_the_one_pinned_version(tmp_path: Path) -> None:
     hook_rev, _ = check_gate_config.PRE_COMMIT_REPOS[
         "https://github.com/gitleaks/gitleaks"
     ]
-    assert hook_rev == check_gate_config.GITLEAKS_COMMIT
+    assert hook_rev == check_gate_config.GITLEAKS_COMMITS[version]
     root = _tree(tmp_path)
     assert check_gate_config._gitleaks_ci_problems(root) == []
     scan_file = root / check_gate_config.GITLEAKS_CI_FILE

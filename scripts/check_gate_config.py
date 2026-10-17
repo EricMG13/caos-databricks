@@ -106,7 +106,7 @@ OVERRIDING = (
 GITLEAKS_VERSION = "v8.30.1"
 # The hook repositories are pinned by commit (N114), the tag a comment beside
 # each `rev:`; each commit is what `ls-remote <repo> refs/tags/<tag>` names.
-GITLEAKS_COMMIT = "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"  # v8.30.1
+GITLEAKS_COMMITS = {"v8.30.1": "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"}
 GITLEAKS_CI_FILE = ".github/workflows/gitleaks.yml"
 SECRETS_WEEKLY_FILE = ".github/workflows/secrets-weekly.yml"
 # Each secret-scan workflow whole (C1): the sha256 of its parsed YAML, so a
@@ -137,7 +137,7 @@ PRE_COMMIT_REPOS: dict[str, tuple[str | None, tuple[str, ...]]] = {
         ("ruff", "ruff-format"),
     ),
     "https://github.com/gitleaks/gitleaks": (
-        GITLEAKS_COMMIT,
+        GITLEAKS_COMMITS.get(GITLEAKS_VERSION, ""),
         ("gitleaks", "gitleaks"),
     ),
     "https://github.com/pre-commit/pre-commit-hooks": (
@@ -658,7 +658,15 @@ def _hook_problems(root: Path) -> list[str]:
     config = _yaml_mapping(_read(root, ".pre-commit-config.yaml"))
     if config is None:
         return ["pre-commit: .pre-commit-config.yaml is missing or not a mapping"]
-    problems = [
+    problems = (
+        []
+        if GITLEAKS_VERSION in GITLEAKS_COMMITS
+        else [
+            f"pre-commit: GITLEAKS_VERSION {GITLEAKS_VERSION} has no commit "
+            "in GITLEAKS_COMMITS"
+        ]
+    )
+    problems += [
         f"pre-commit: the config sets {key!r}; it may set only "
         f"{sorted(PRE_COMMIT_KEYS)}"
         for key in config
