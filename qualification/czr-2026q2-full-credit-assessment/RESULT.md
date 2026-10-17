@@ -148,7 +148,7 @@ until the acquisition is consummated.
 
 ## Keys
 
-Keys authored from the documents; material figures pending owner confirmation.
+Keys authored from the documents; material figures stand as authored by the owner's ruling of 2026-10-17 (N126, F702).
 
 - CP-1: the 10-Q's cash and cash equivalents, `$965` million at 30 June 2026.
 - CP-1A, the named transaction: the 8-K's Item 1.01 paragraph recording the
