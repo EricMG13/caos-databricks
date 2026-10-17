@@ -102,17 +102,18 @@ Health must answer 200 with `python_version` starting `3.13` and `status: ready`
 
 ## 6. Rolling back a release
 
-The store runs only code whose migration list is its own: a release's first boot applies its migrations (`apply_schema`), and from then on code with a shorter or different list is refused at boot with `STORE_SCHEMA_DRIFT` and does not start. Migrations are forward-only, with no "down" migration. So a rollback is a redeploy only when the older commit carries exactly the release's migrations. Decide that first, from the release's own checkout, before checking anything else out (C1):
+The store runs only code whose migration list is its own: a release's first boot applies its migrations (`apply_schema`), and from then on code with a shorter or different list is refused at boot with `STORE_SCHEMA_DRIFT` and does not start. Migrations are forward-only, with no "down" migration. The release also writes records under a record codec version and under writer versions (extractors, crops, citation normalisation, block packing, the canonical adapter, the renderer pin), and an older build refuses a record written under a version it does not know. So a rollback is a redeploy only when the older commit carries exactly the release's migrations, reads the same schema, and has the same record codec and writer versions. Decide that first, from the release's own checkout, before checking anything else out (C1):
 
 ```bash
 uv run python scripts/rollback_check.py <older commit> --release <the commit the release was deployed from>
 ```
 
-**Exit 0: redeploy.** The older commit carries the release's migrations in order and byte for byte, and reads the same schema (`caos_store`). Check it out and run the same one command (section 3) against it, or section 3a by hand at that commit; `bundle deploy` overwrites the app's code and restarts it, and leaves the store as it is. Row E6's `store` code `OK` is the proof that the older code accepted the store.
+**Exit 0: redeploy.** The older commit carries the release's migrations in order and byte for byte, reads the same schema (`caos_store`), and has the release's record codec version (`RECORD_CODEC_VERSION`) and writer versions. Check it out and run the same one command (section 3) against it, or section 3a by hand at that commit; `bundle deploy` overwrites the app's code and restarts it, and leaves the store as it is. Row E6's `store` code `OK` is the proof that the older code accepted the store.
 
-**Exit 1: do not redeploy that commit.** It names one of two reasons:
+**Exit 1: do not redeploy that commit.** It names one of these reasons:
 
 - The release applied a migration the older commit does not carry. Its app would refuse the store at boot (`STORE_SCHEMA_DRIFT`, E6 `store` not `OK`) and production would stay down until a commit carrying the migration is deployed again.
+- The older commit's record codec or a writer version differs from the release's (any difference, not only a rise, so a bump the older build would still read also blocks). The release's records carry versions the older build refuses, and every reader of them then refuses the run.
 - The older commit is from before DL-1 (F219), which moved the store from `public` into `caos_store`. Its code reads `public`, finds no store there, creates an empty one and starts green, with every case, run and ledger row the release wrote invisible to it. No commit from before F219 is ever a rollback target. That code cannot be changed to refuse, and nothing newer can make it refuse, so this check is the only guard.
 
 Then do one of these instead:

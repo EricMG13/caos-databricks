@@ -28,6 +28,13 @@ PYTEST = "py" + "test"
 MARK = "mark"
 
 
+def _base_measure(
+    rev: str, root: Path = check_gate_config.REPO
+) -> check_gate_config.Measure | None:
+    """`rev`'s own measure of suppressions, as the ratchet loads it."""
+    return check_gate_config._module_measure(check_gate_config._base_module(rev, root))
+
+
 def _git(root: Path, *args: str) -> None:
     git = shutil.which("git")
     assert git is not None
@@ -235,7 +242,7 @@ def test_the_base_rules_are_the_base_checker_s_own(tmp_path: Path) -> None:
     `SUPPRESSIONS` alone where it predates the shared measure (84eb06d);
     no checker there is no rule to hold to, and one that will not load is
     refused rather than skipped."""
-    measure = check_gate_config.base_measure("84eb06d")
+    measure = _base_measure("84eb06d")
     assert measure is not None
     assert measure(["x = 1  " + "#" + " noqa"])["noqa"] == 1
     root = tmp_path / "repo"
@@ -245,7 +252,7 @@ def test_the_base_rules_are_the_base_checker_s_own(tmp_path: Path) -> None:
     _git(root, "config", "user.name", "Ratchet test")
     (root / "m.py").write_text("x = 1\n", encoding="utf-8")
     bare = _commit(root, "no checker")
-    assert check_gate_config.base_measure(bare, root) is None
+    assert _base_measure(bare, root) is None
     (root / "scripts").mkdir()
     (root / "scripts" / "check_gate_config.py").write_text("import nowhere_at_all\n")
     broken = _commit(root, "a checker that will not load")
@@ -309,7 +316,7 @@ def test_the_base_checker_imports_its_own_siblings_not_this_commit_s(
         'SUPPRESSIONS = {"noqa": re.compile(r"' + "#" + '\\s*noqa\\b")}\n'
     )
     base = _commit(root, "a base with its own tracked module")
-    measure = check_gate_config.base_measure(base, root)
+    measure = _base_measure(base, root)
     assert measure is not None
     assert measure(["x = 1  " + "#" + " noqa"]) == {"noqa": 1}
     assert sys.modules["tracked"] is tracked

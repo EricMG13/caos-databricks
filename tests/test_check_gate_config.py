@@ -752,6 +752,22 @@ def test_the_coverage_floor_ahead_of_its_report_or_in_another_job_is_refused(
     )
 
 
+def test_a_floor_check_is_read_only_after_the_nearest_step_writes_its_report() -> None:
+    """N226: the writer must be the step just ahead of the reader, not a
+    string on any earlier line, and a floor spelled another way is still a
+    reader."""
+    write = {"run": "uv run coverage xml -o coverage.xml"}
+    other = {"run": "uv run ruff check ."}
+    read = {"run": "uv run python scripts/scan_floors.py coverage.xml --cobertura"}
+    respelt = {"run": "uv run python scripts/scan_floors.py --cobertura coverage.xml"}
+    order = check_gate_config._order_problems
+    refused = ["ci: job j reads coverage.xml before the step that writes it"]
+    assert order("j", {"steps": [write, read]}) == []
+    assert order("j", {"steps": [write, other, read]}) == refused
+    assert order("j", {"steps": [other, respelt]}) == refused
+    assert order("j", {"steps": [write, respelt]}) == []
+
+
 def test_a_shipped_check_ahead_of_its_deploy_is_refused(tmp_path: Path) -> None:
     """N110: `--shipped .databricks/bundle/<target>/deployment.json` reads a
     file the target's deploy writes; ahead of it, a stale file would do."""
