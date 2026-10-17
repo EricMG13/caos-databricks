@@ -104,8 +104,7 @@ OVERRIDING = (
 # The one gitleaks both scans run (W3): the hook's rev and the version the
 # gitleaks.yml workflow installs (by release checksum) are this one version.
 GITLEAKS_VERSION = "v8.30.1"
-# The hook repositories are pinned by commit (N114), the tag a comment beside
-# each `rev:`; each commit is what `ls-remote <repo> refs/tags/<tag>` names.
+# Hook repositories are pinned by commit (N114): `ls-remote <repo> refs/tags/<tag>`.
 GITLEAKS_COMMITS = {"v8.30.1": "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"}
 GITLEAKS_CI_FILE = ".github/workflows/gitleaks.yml"
 SECRETS_WEEKLY_FILE = ".github/workflows/secrets-weekly.yml"

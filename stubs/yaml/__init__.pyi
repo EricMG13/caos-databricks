@@ -1,9 +1,7 @@
-# Typed surface of the PyYAML names this repository uses (the gate checker
-# and the loopback stand-in). PyYAML 6.0.3 ships no `py.typed`; these
-# signatures were read from its source. `safe_load` answers plain data --
-# a mapping, a list, a scalar or None -- so it is typed `object`, and every
-# caller narrows it before use. `SafeLoader` is here to be subclassed (the
-# gate checker's repeated-key refusal).
+# Typed surface of the PyYAML names this repository uses. PyYAML 6.0.3 ships
+# no `py.typed`; these signatures were read from its source. `safe_load` is
+# typed `object` and every caller narrows it; `SafeLoader` is subclassed by
+# the gate checker's repeated-key refusal.
 from typing import IO
 
 class YAMLError(Exception): ...

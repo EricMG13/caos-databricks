@@ -111,9 +111,7 @@ def _load(name: str) -> dict[str, Any]:
 
 
 def test_app_yaml_and_the_bundle_state_the_same_start_command() -> None:
-    """N114: the platform reads `app.yaml` when the bundle's `config` is
-    ignored, and the bundle's otherwise; a command that moved in one would
-    start a different app depending on which was read."""
+    """N114: the platform reads one or the other; they must not differ."""
     app = _load("app.yaml")
     bundle = _load("databricks.yml")
     commands = [

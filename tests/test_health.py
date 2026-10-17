@@ -152,9 +152,7 @@ def test_each_failed_probe_names_its_code_and_answers_503(
     (tmp_path / "a-file").write_text("x")
     monkeypatch.setenv(BLOB_ROOT, str(tmp_path / "a-file"))
     assert health.probe_blobs() == "BLOB_ROOT_UNAVAILABLE"
-    # A directory the process may not write. A mode does not say so for root
-    # (the probe then answers OK, rightly), so the OS's answer is what is
-    # stood in for: `os.access` refuses this one directory and no other.
+    # A mode is no refusal for root, so `os.access` refuses this one directory.
     locked = tmp_path / "locked"
     locked.mkdir()
     monkeypatch.setenv(BLOB_ROOT, str(locked))

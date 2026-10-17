@@ -256,8 +256,7 @@ def test_every_declared_writer_version_is_read_and_each_move_is_named(
 def test_a_release_with_an_unreadable_writer_is_refused_not_passed(
     repo: Path,
 ) -> None:
-    """A writer the release declares in no form this reads is None on both
-    sides when the older commit is the same, which compared equal and passed."""
+    """A writer unreadable on both sides compared equal and passed."""
     older = _commit(repo, {**_store(), HANDOFF: "RECORD_CODEC_VERSION = 1\n"}, "older")
     release = _commit(repo, {"caos/serve.py": "a = 1\n"}, "release")
     assert rollback_check.rollback_problems(older, release, repo) == [
