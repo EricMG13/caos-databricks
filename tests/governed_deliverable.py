@@ -1,12 +1,6 @@
-"""The deliverable's governed writes, as a test calls them.
-
-Production drives each write through an API command (`caos/api/commands/
-deliverable.py`), which runs the unit's `*_in` function inside `governed` and
-its audit action. These compose the same `*_in` functions under the same
-`governed_write` directly, so a test can sign, freeze, file or save without an
-HTTP request; they are here, not in `caos/deliverable/`, because nothing in
-production calls them (N114, SI-3).
-"""
+"""The deliverable's governed writes as a test calls them (N114, SI-3): the
+real `*_in` functions under the real `governed_write`, without an HTTP request.
+Nothing in production calls these, so they live here."""
 
 from __future__ import annotations
 
@@ -33,7 +27,6 @@ from caos.store.members import Standing
 def sign_opinion(
     conn: StoreConnection, *, case_id: UUID, actor_id: UUID, revision_id: UUID
 ) -> None:
-    """Sign the stored digest; a frozen revision takes no further signature."""
     payload = {"revision_id": str(revision_id)}
     action = GovernedAction(
         case_id, actor_id, "OPINION_SIGNED", Standing.APPROVER, payload
@@ -56,7 +49,6 @@ def freeze(  # noqa: PLR0913 -- exact revision and authority for its re-proof
     actor_id: UUID,
     revision_id: UUID,
 ) -> str:
-    """Re-prove under the write lock, then freeze exactly the signed stored bytes."""
     payload = {"revision_id": str(revision_id)}
     action = GovernedAction(
         case_id, actor_id, "DELIVERABLE_FROZEN", Standing.APPROVER, payload
@@ -84,7 +76,6 @@ def file_deliverable(
     actor_id: UUID,
     revision_id: UUID,
 ) -> Receipt:
-    """File once, independently of every signer and the freezer, naming this event."""
     payload = {"revision_id": str(revision_id)}
     action = GovernedAction(
         case_id, actor_id, "DELIVERABLE_FILED", Standing.APPROVER, payload
@@ -115,7 +106,6 @@ def save_revision(  # noqa: PLR0913 -- authority, owner and narrative boundary
     actor_id: UUID,
     narrative: object,
 ) -> UUID:
-    """Save only proven route bytes under the case lock; callers supply no digest."""
     revision = uuid4()
     audit: dict[str, Any] = {"revision_id": str(revision), "run_id": str(run_id)}
     action = GovernedAction(case_id, actor_id, "REVISION_SAVED", Standing.WRITER, audit)
@@ -144,7 +134,6 @@ def freeze_canonical(
     *,
     actor_id: UUID,
 ) -> str:
-    """Freeze the payload the store proves now, never a caller's bytes."""
     return freeze(
         conn,
         blobs,

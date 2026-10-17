@@ -286,9 +286,8 @@ def test_every_hook_repository_is_pinned_by_commit_with_its_tag_in_a_comment(
 def test_a_duplicate_key_in_a_configuration_is_refused_not_resolved_to_the_last(
     tmp_path: Path,
 ) -> None:
-    """N83: PyYAML keeps the last of a repeated key, so the first -- the line a
-    reviewer reads -- could say one thing and the file mean another. Each
-    configuration the gate reads as YAML is refused on a repeat, at any depth."""
+    """N83: PyYAML keeps the last of a repeated key; each YAML the gate reads
+    is refused on a repeat, at any depth."""
     root = _tree(tmp_path)
     assert check_gate_config._hook_problems(root) == []
     assert check_gate_config._ci_problems(root) == []
@@ -330,9 +329,7 @@ def test_a_duplicate_key_in_a_configuration_is_refused_not_resolved_to_the_last(
 def test_a_gitleaks_version_with_no_resolved_commit_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """W3, N114: the hook is pinned by commit, so a bump of the version the
-    workflow installs needs the commit its tag names, or the hook would keep
-    the old binary under a green gate."""
+    """W3: a bumped version needs the commit its tag names."""
     root = _tree(tmp_path)
     assert check_gate_config._hook_problems(root) == []
     monkeypatch.setattr(check_gate_config, "GITLEAKS_VERSION", "v8.99.0")

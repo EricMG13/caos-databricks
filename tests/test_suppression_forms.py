@@ -257,9 +257,7 @@ def test_the_base_rules_are_the_base_checker_s_own(tmp_path: Path) -> None:
 def test_the_base_checker_is_loaded_once_and_its_texts_are_not_read_twice(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Task 4 review: `--against` loaded the base checker once for the
-    unmeasured scan and again for its measure, and read every sibling blob
-    from git whether or not `texts` already held it."""
+    """`--against` loads the base checker once and reads no blob `texts` has."""
     root = tmp_path / "repo"
     (root / "scripts").mkdir(parents=True)
     _git(root, "init", "-q")

@@ -489,9 +489,7 @@ def test_the_receipt_names_only_the_latest_of_several_signers(
 
 
 def test_no_governed_write_wrapper_is_production_code() -> None:
-    """N114 (SI-3): the five wrappers only tests called live in
-    `tests/governed_deliverable.py`; production reaches each write through its
-    `*_in` function inside the API command's own governed transaction."""
+    """N114: the wrappers only tests called live in `governed_deliverable`."""
     gone = {
         filing: ("sign_opinion", "freeze", "file_deliverable"),
         revisions: ("save_revision",),
