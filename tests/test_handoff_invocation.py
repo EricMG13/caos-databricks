@@ -1294,6 +1294,12 @@ def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> No
     follows on the heavier authority and fewer upstreams; the assertions hold
     for whichever node is widest, not for CP-5 by name.
 
+    **The floor is 40% of `MAX_REQUEST_BYTES`** (controller ruling, 2026-10-17).
+    R32's bound leaves CP-5 about 45.7% (1,916,028 bytes) for evidence, below
+    the half the 98,304 bound left. That is enough: D116 page-maps evidence
+    that does not fit the room, so a narrower room costs coverage per call,
+    not a refusal.
+
     **Measured through `encode_request`, not by summing raw lengths.** The
     Completion Phase 12 adversarial audit found this test's arithmetic was in
     the wrong unit: `MAX_REQUEST_BYTES` bounds
@@ -1331,10 +1337,10 @@ def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> No
             if cost > worst:
                 worst, worst_node = cost, node
     # The 16-upstream node was measured, every section at the bound, and fits
-    # beside its authority with at least half the request left for evidence.
+    # beside its authority with at least 40% of the request left for evidence.
     assert most_upstreams == 16, most_upstreams
     assert worst < MAX_REQUEST_BYTES, (worst_node, worst)
-    assert MAX_REQUEST_BYTES - worst >= MAX_REQUEST_BYTES // 2, (worst_node, worst)
+    assert MAX_REQUEST_BYTES - worst >= MAX_REQUEST_BYTES * 2 // 5, (worst_node, worst)
     # The largest CP-1 answer the 2 October runs produced, 85,559 bytes (D83),
     # is carried whole with room.
     assert MAX_UPSTREAM_HANDOFF_BYTES >= 85_559 + 8_192, MAX_UPSTREAM_HANDOFF_BYTES
