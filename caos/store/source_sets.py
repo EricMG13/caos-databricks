@@ -185,9 +185,12 @@ def pinned_sources(conn: StoreConnection, run_id: UUID) -> PinnedSources:
     document captured by the pin that has a withdrawn source and no live copy
     whose extraction matches its member, so a citation to it is told apart from
     one naming a document the pin never held. A live member whose extraction
-    identity moved is in neither `live` nor, if it is the only live copy of a
-    document with no withdrawn copy, `withdrawn`; beside a withdrawn copy it
-    leaves the document in `withdrawn`.
+    identity moved counts for neither set: it never puts its document in
+    `live`, and it never keeps it out of `withdrawn`. So a document whose
+    every copy moved is in neither; one with a moved copy beside a withdrawn
+    copy and no matching live copy is in `withdrawn`; and one with a matching
+    live copy is in `live` whatever stands beside it, unless its matching live
+    copies carry two extractions, when it is in neither.
     Caller owns the read transaction.
     """
     rows = conn.execute(

@@ -81,12 +81,15 @@ def canonical_payload(
     Owns one read unit. Refuses `RUN_NOT_FOUND` for a run of another case;
     `DELIVERABLE_PAYLOAD_INVALID` for an unpinned route or a pinned node with no
     accepted artifact; `EVIDENCE_NOT_AVAILABLE` when a citation names a
-    document the pin captured whose every source is now withdrawn (CF-019; an
-    uncited withdrawn member changes nothing); `ARTIFACT_RECORD_MISMATCH`
-    when a blob, the binding, the lineage, a projection or a rectangle
-    disagrees, or a citation names a document that is not among
-    `pinned_live_sources` (extraction identity moved, admitted after the pin,
-    or captured twice with two extractions); a
+    document the pin captured that has a withdrawn copy and no live copy
+    whose extraction matches its member (CF-019, `pinned_sources`: a live
+    copy whose extraction identity moved does not count, so a moved-only
+    copy beside a withdrawn one answers this code; an uncited withdrawn
+    member changes nothing); `ARTIFACT_RECORD_MISMATCH` when a blob, the
+    binding, the lineage, a projection or a rectangle disagrees, or a
+    citation names a document that is neither among `pinned_live_sources`
+    nor withdrawn (every copy live with its extraction identity moved,
+    admitted after the pin, or two live copies with two extractions); a
     citation's own code when it no longer anchors; and whatever `host_identity`
     refuses (`ROUTE_IDENTITY_INVALID` for a node without its CP-0 anchor). No
     refusal carries text.
