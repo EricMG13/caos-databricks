@@ -204,7 +204,7 @@ def test_footing_of_reads_basis_and_perimeter_as_compared() -> None:
         accounting_basis="US_GAAP",
         entity_perimeter=" Continuing-Operations ",
     )
-    assert footing_of(period) == ("us gaap", "continuing operations")
+    assert footing_of(period) == ("usgaap", "continuingoperations")
     unstated = replace(period, accounting_basis=None, entity_perimeter=None)
     assert footing_of(unstated) == UNSTATED_FOOTING == (None, None)
 
@@ -282,3 +282,41 @@ def test_uncombined_periods_add_pairs_the_anchor_does_not_state() -> None:
         regs.periods[0].period_id,
         regs.periods[1].period_id,
     }
+
+
+def _footed(basis: str | None, perimeter: str | None = None) -> Footing:
+    period = replace(
+        example_registers().periods[0],
+        accounting_basis=basis,
+        entity_perimeter=perimeter,
+    )
+    return footing_of(period)
+
+
+def test_basis_spellings_differ_only_in_spacing_case_and_separators_are_one() -> None:
+    """N208: "US GAAP" = "USGAAP" = "us-gaap" = "U.S._GAAP"; different
+    standards stay different."""
+    same = ["US GAAP", "USGAAP", "us-gaap", "US_GAAP", " us  gaap ", "U.S. GAAP"]
+    assert len({_footed(text) for text in same}) == 1
+    assert _footed("Continuing ops", "Group") == _footed("ContinuingOps", "group")
+    for first, second in (
+        ("US GAAP", "IFRS"),
+        ("US GAAP", "GAAP"),
+        ("UK GAAP", "US GAAP"),
+    ):
+        assert _footed(first) != _footed(second)
+    assert _footed(None)[0] is None
+
+
+@given(
+    st.sampled_from(["US GAAP", "IFRS", "UK GAAP", "Continuing operations"]),
+    st.lists(st.sampled_from([" ", "_", "-", ".", "  "]), min_size=3, max_size=3),
+    st.booleans(),
+)
+def test_a_basis_is_unchanged_by_respacing_recasing_and_separators(
+    text: str, separators: list[str], upper: bool
+) -> None:
+    words = text.split(" ")
+    glued = separators[0].join(words)
+    glued = glued.upper() if upper else glued.lower()
+    assert _footed(glued) == _footed(text)

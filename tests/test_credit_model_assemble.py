@@ -4,6 +4,7 @@ layout's bands and lines, its limitations, and every bridge closing."""
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date, timedelta
 from decimal import Decimal, localcontext
 from typing import Any
 
@@ -35,6 +36,7 @@ from caos.calculators.credit_model.assemble import (
 )
 from caos.calculators.credit_model.frame import Cell, Column
 from caos.calculators.credit_model.history import (
+    _plus_months,
     account_frame,
     historical_columns,
 )
@@ -48,7 +50,10 @@ from caos.calculators.credit_model.layout import (
     layout,
 )
 from caos.calculators.credit_model.metrics import metric_frame
-from caos.calculators.credit_model.statements import statement_frame
+from caos.calculators.credit_model.statements import (
+    PF_NET_DEBT_EXCLUDES,
+    statement_frame,
+)
 from caos.methodology.model_inputs import (
     Cp1Registers,
     PeriodRow,
@@ -1210,6 +1215,31 @@ def test_pf_rows_sit_by_the_line_they_adjust_and_reconcile() -> None:
     assert reconciliation_faults(broken) == ()
 
 
+def test_the_pf_net_debt_is_noted_where_an_unapplied_adjustment_touches_debt() -> None:
+    """N202 (c): net debt reads total debt and cash; a PF adjustment to a
+    debt or cash metric the model has no line for is not in it, and the cell
+    says so. An unrelated one (capex) is limited, not noted on net debt."""
+    regs = example_registers()
+    base = _model(regs=regs)
+    assert _cell(base, "net_debt", _PF).note is None
+
+    unapplied = replace(
+        regs,
+        pro_forma=(*regs.pro_forma, _adjustment("nd", "net_debt", 40)),
+    )
+    model = _model(regs=unapplied)
+    note = _cell(model, "net_debt", _PF).note
+    assert note == f"{PF_NET_DEBT_EXCLUDES}: nd label"
+    assert _cell(model, "net_debt", _PF).value == _cell(base, "net_debt", _PF).value
+    assert f"{NOT_APPLIED}: nd label" in model.limitations
+
+    elsewhere = replace(
+        regs,
+        pro_forma=(*regs.pro_forma, _adjustment("capex", "capex", -5)),
+    )
+    assert _cell(_model(regs=elsewhere), "net_debt", _PF).note is None
+
+
 def test_a_model_without_segments_notes_nothing_on_revenue() -> None:
     regs = replace(example_registers(), segments=())
     model = _model(regs=regs, projected=False)
@@ -1991,6 +2021,36 @@ def test_a_latest_fiscal_year_that_is_not_twelve_months_is_no_ltm(
         ), line_id
     # The fiscal year itself is still a column with its own figures.
     assert _value(model, "revenue", "FY:FY2025") > 0
+
+
+@settings(max_examples=60, deadline=None)
+@given(
+    months=st.integers(min_value=1, max_value=30),
+    wobble=st.integers(min_value=-3, max_value=3),
+)
+def test_any_anchor_fiscal_year_not_twelve_months_yields_no_ltm_figure(
+    months: int, wobble: int
+) -> None:
+    """An anchor FY ending 2025-12-31 and running `months` whole months (give
+    or take `wobble` days) is an LTM only at twelve; any other length is
+    unbuilt and noted, never a figure over its own length (N207)."""
+    end = date(2025, 12, 31)
+    first = _plus_months(end + timedelta(days=1), -months)
+    assert first is not None
+    first += timedelta(days=wobble)
+    days = (end - first).days + 1
+    model = _model(
+        regs=_fy_anchored(first.isoformat(), end.isoformat(), days), projected=False
+    )
+
+    cell = _cell(model, "revenue", "LTM:FY2025")
+
+    if months == 12:
+        assert cell.value is not None
+    else:
+        assert (cell.value, cell.reason) == (None, "COMPONENT_MISSING")
+        assert cell.note is not None
+        assert cell.note.endswith("fiscal year (FY2025)")
 
 
 def test_the_model_lists_a_short_or_long_latest_fiscal_year_once() -> None:
