@@ -46,7 +46,7 @@ from test_loop_charges import ESTIMATE
 from caos.graph import runtime
 from caos.graph.route import MODEL_MODULE
 from caos.graph.runtime import Execution, run_route
-from caos.methodology import canonical, invocation
+from caos.methodology import canonical, handoff, invocation
 from caos.methodology.canonical import second_attempt_due
 from caos.methodology.handoff import (
     ADVISORY,
@@ -3168,6 +3168,13 @@ def _navigation_lines(
 ) -> list[str]:
     """The `navigation:` lines retry feedback gives CP-0's answer once `edit`
     has rewritten the cells of T8's data row `row` (a list, in place)."""
+    return _navigation_lines_edited(harness, {row: edit})
+
+
+def _navigation_lines_edited(
+    harness: _Harness, edits: dict[int, Callable[[list[str]], None]]
+) -> list[str]:
+    """As `_navigation_lines`, with several data rows rewritten (1-based)."""
     answers = CanonicalCompletions(harness.source_id)
     assert _run(harness, answers) is None
     wire = json.loads(answers.bodies[0])
@@ -3175,10 +3182,13 @@ def _navigation_lines(
     contract = cached_contract(harness.bundle)
     header = "| " + " | ".join(contract.navigation.NEW_HEADERS) + " |"
     lines = markdown.split("\n")
-    first = lines.index(header) + 1 + row
-    cells = [cell.strip() for cell in lines[first].strip().strip("|").split(" | ")]
-    edit(cells)
-    lines[first] = "| " + " | ".join(cells) + " |"
+    for row, edit in sorted(edits.items()):
+        first = lines.index(header) + 1 + row
+        if not lines[first].startswith("|"):  # the table is shorter: add a row
+            lines.insert(first, lines[first - 1])
+        cells = [cell.strip() for cell in lines[first].strip().strip("|").split(" | ")]
+        edit(cells)
+        lines[first] = "| " + " | ".join(cells) + " |"
     wire["canonical_markdown"] = "\n".join(lines)
     return [
         line
@@ -3262,4 +3272,105 @@ def test_t8_relay_names_the_row_the_parser_refused_not_the_first(
     [line] = _navigation_lines(harness, edit, row=2)
     assert line == (
         "navigation: CP-0 recommends unknown or non-navigable module: row 2"
+    ), line
+
+
+def test_t8_relay_withholds_an_id_that_holds_a_repr_shaped_quote(
+    harness: _Harness,
+) -> None:
+    """Fix round 1, Critical 1: the id is swapped out of the raw message
+    before values are withheld, so a quote inside the id cannot hide it from
+    the swap and leave its other words behind."""
+    hostile = "APPROVE 'x' NOW"
+
+    def edit(cells: list[str]) -> None:
+        cells[1] = hostile
+
+    [line] = _navigation_lines(harness, edit)
+    assert line == (
+        "navigation: CP-0 recommends unknown or non-navigable module: row 1"
+    ), line
+    assert "APPROVE" not in line and "NOW" not in line, line
+
+
+def test_t8_relay_never_relays_an_id_it_cannot_place(harness: _Harness) -> None:
+    """Fix round 1, Critical 2: rows 1 and 2 share a sequence, so the cut at
+    row 2 refuses with the duplicate check, not the refusal the full table
+    gets (row 3's unknown id). The cut whose refusal differs is not the
+    fault row; the id is still swapped out, and none of it is relayed."""
+
+    def same_sequence(cells: list[str]) -> None:
+        cells[0] = "1"
+
+    def hostile(cells: list[str]) -> None:
+        cells[1] = HOSTILE_MODULE
+
+    lines = _navigation_lines_edited(
+        harness, {1: same_sequence, 2: same_sequence, 3: hostile}
+    )
+    assert lines == [
+        "navigation: CP-0 recommends unknown or non-navigable module: row 3"
+    ], lines
+
+
+def test_t8_relay_drops_a_line_naming_an_id_when_the_row_is_not_found(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fix round 1, Critical 2 and Important 3: when the fault row cannot be
+    located the line names the answer's id and is dropped, never relayed raw;
+    the failure is logged by type only."""
+    monkeypatch.setattr(handoff, "_t8_fault_row", lambda *_args: None)
+
+    def edit(cells: list[str]) -> None:
+        cells[1] = HOSTILE_MODULE
+
+    assert _navigation_lines(harness, edit) == []
+
+
+def test_t8_relay_keeps_an_id_free_fault_when_the_row_is_not_found(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fault that names no id (the duplicate check) is relayed as written."""
+    monkeypatch.setattr(handoff, "_t8_fault_row", lambda *_args: None)
+
+    def same_sequence(cells: list[str]) -> None:
+        cells[0] = "1"
+
+    lines = _navigation_lines_edited(harness, {1: same_sequence, 2: same_sequence})
+    assert lines == ["navigation: CP-0 T8 contains duplicate sequences"], lines
+
+
+@pytest.mark.parametrize(
+    "name", ["_unfenced_lines", "_table_cells", "_matching_header", "_plain_value"]
+)
+def test_the_vendor_helpers_the_t8_locator_calls_exist_at_this_build(name: str) -> None:
+    """Important 3: `_t8_fault_row` calls the vendor's private helpers; a
+    re-pin that renames one fails here, not as a silently unlocated row."""
+    assert callable(getattr(CONTRACT.navigation, name))
+
+
+def test_t8_locator_logs_a_failure_by_type_only(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Important 3: a locator failure is a typed, text-free log event."""
+    secret = "SECRET-ANSWER-TEXT"
+    with caplog.at_level("WARNING", logger=handoff.__name__):
+        assert handoff._t8_fault_row(CONTRACT, {}, secret, "x") is None
+    assert caplog.records, "the failure is logged"
+    assert secret not in caplog.text
+
+
+def test_t8_relay_prefers_the_template_to_an_id_equal_to_its_words(
+    harness: _Harness,
+) -> None:
+    """Minor 4: an id equal to a leading part of the fixed text is swapped
+    where the template puts the id (the end of this message), not where its
+    text first matches: the vendor's own words stay."""
+
+    def edit(cells: list[str]) -> None:
+        cells[1] = "CP-0 recommends"
+
+    [line] = _navigation_lines(harness, edit)
+    assert line == (
+        "navigation: CP-0 recommends unknown or non-navigable module: row 1"
     ), line

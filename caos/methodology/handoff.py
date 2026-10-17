@@ -18,6 +18,7 @@ quote the document (invariant 2).
 from __future__ import annotations
 
 import json
+import logging
 import re
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
@@ -2476,6 +2477,21 @@ def _t8_messages(
     return []
 
 
+# The T8 parser's refusals that name no module id of the answer's: a dropped
+# row's fault is relayed whole only when it is one of these.
+_T8_ID_FREE = re.compile(
+    r"CP-0 must contain exactly one unfenced canonical T8 table; found \d+"
+    r"|CP-0 T8 separator row is invalid"
+    r"|CP-0 T8 row width does not match its header"
+    r"|CP-0 T8 sequence must be a positive integer"
+    r"|CP-0 T8 has no navigable recommendation rows"
+    r"|CP-0 T8 contains duplicate (?:sequences|modules)"
+)
+_T8_UNKNOWN_MODULE = "CP-0 recommends unknown or non-navigable module: "
+_T8_LEADING_ID = (": ", " is an alias for ", " cannot appear as a downstream T8")
+_T8_LOG = logging.getLogger(__name__)
+
+
 def _t8_without_values(
     contract: VendorContract,
     catalog: Mapping[str, Any],
@@ -2483,37 +2499,46 @@ def _t8_without_values(
     refused: ValueError,
 ) -> str | None:
     """The T8 parser's message with the answer's own values withheld (N73,
-    D152 R1; F292's rule): a quoted value (`{readiness!r}`) becomes
-    `WITHHELD_VALUE`, and the module id a row's fault leads or ends with
-    (`{id}: ...`, `... module: {id}`) becomes `row N`, N the data row the
-    parser refused (found by parsing the table a row at a time). The fault
-    stays, so the second attempt knows what to fix."""
+    D152 R1; F292's rule). The module id a row's fault names becomes `row N`,
+    N the data row the parser refused (found by parsing the table a row at a
+    time), swapped out of the raw message where its template puts it, before
+    quoted values become `WITHHELD_VALUE`; the fault stays, so the second
+    attempt knows what to fix. A message that names an id and cannot be
+    placed is dropped, never relayed raw."""
+    raw = _vendor_said(refused)
+    if raw is None:
+        return None
+    row = _t8_fault_row(contract, catalog, text, raw)
+    if row is None:
+        return raw if _T8_ID_FREE.fullmatch(raw) else None
     nav = contract.navigation
-    message = _without_values(_vendor_said(refused))
-    row = _t8_fault_row(contract, catalog, text)
-    if message is None or row is None:
-        return message
-    lines = nav._unfenced_lines(text)
-    cells = nav._table_cells(lines[row[0]])
-    with suppress(Exception):
-        module_id = nav._plain_value(cells[1])
-        place = f"row {row[1]}"
-        if module_id and message.startswith(module_id):
-            return place + message[len(module_id) :]
-        if module_id and message.endswith(module_id):
-            return message[: -len(module_id)] + place
-    return message
+    module_id = nav._plain_value(nav._table_cells(nav._unfenced_lines(text)[row[0]])[1])
+    place = f"row {row[1]}"
+    if not module_id:
+        return None
+    if raw == _T8_UNKNOWN_MODULE + module_id:
+        placed = _T8_UNKNOWN_MODULE + place
+    elif any(raw.startswith(module_id + lead) for lead in _T8_LEADING_ID):
+        placed = place + raw[len(module_id) :]
+    elif _T8_ID_FREE.fullmatch(raw):
+        placed = raw
+    else:
+        return None
+    return _without_values(placed)
 
 
 def _t8_fault_row(
-    contract: VendorContract, catalog: Mapping[str, Any], text: str
+    contract: VendorContract, catalog: Mapping[str, Any], text: str, refusal: str
 ) -> tuple[int, int] | None:
     """The refused row of CP-0's T8 table as (its index among the unfenced
     lines, its 1-based place among the data rows): the first row after which
-    the parser, given the table cut there, refuses. Nothing when the table
-    cannot be located or the parser refuses before any row."""
+    the parser, given the table cut there, refuses with `refusal`, the full
+    table's own message (a cut can refuse for another reason, such as the
+    end-of-table duplicate checks). Nothing when the table cannot be located,
+    the parser refuses before any row, or the vendor's helpers fail (logged
+    by type only: no answer text)."""
     nav = contract.navigation
-    with suppress(Exception):
+    try:
         lines = nav._unfenced_lines(text)
         head = next(
             n
@@ -2526,8 +2551,11 @@ def _t8_fault_row(
                 break
             try:
                 nav.parse_t8("\n".join((*lines[: index + 1], "")), checked)
-            except ValueError:
-                return index, place
+            except ValueError as cut:
+                if _vendor_said(cut) == refusal:
+                    return index, place
+    except (AttributeError, TypeError, ValueError, IndexError, StopIteration) as failed:
+        _T8_LOG.warning("t8 fault row not located: %s", type(failed).__name__)
     return None
 
 
