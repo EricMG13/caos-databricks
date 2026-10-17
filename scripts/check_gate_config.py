@@ -1128,7 +1128,7 @@ CI_ACTIONS: tuple[dict[object, object], ...] = (
         },
     },
     {
-        "uses": "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
+        "uses": "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
         "with": {"pattern": "coverage-*", "path": "coverage-shards"},
     },
     {"uses": _CHECKOUT},
@@ -1178,7 +1178,7 @@ JOB_KEYS = frozenset({"runs-on", "timeout-minutes", "services", "steps", "if"})
 # Deliberate changes update these hashes after reviewing the workflow diff.
 CI_PARALLEL_JOBS = {
     "test-shards": "7ed96bf28bd7b32a41bcc313b46b87ad89003cb79ca78aa28ef73dba3d952b1f",
-    "test": "ec997378e3f5e076ae6db4597c7e3e2743dfcd39ea8cf024d1f13bcdd32ac5ce",
+    "test": "c4ff7d610516d5ffc8871cc9d26d0290c9a08efcbce27fe057c6f499c7655cb1",
     "frontend-checks": (
         "88a828459677b6d82540e60c3c4ddd5ab093c22b5b4cec0c5a159b48989f368d"
     ),
