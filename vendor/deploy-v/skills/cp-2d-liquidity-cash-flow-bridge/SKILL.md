@@ -108,7 +108,7 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T2E.5**: structured below
-      - **columns**: Bridge Item; Amount; Source / Calculation; Status; Credit Comment; Source Trace
+      - **columns**: Bridge Item; Amount; Currency and Scale; Source / Calculation; Status; Credit Comment; Source Trace
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
