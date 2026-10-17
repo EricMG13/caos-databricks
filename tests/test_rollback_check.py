@@ -269,3 +269,20 @@ def test_every_writer_reads_a_value_at_head() -> None:
     versions = rollback_check.writer_versions("HEAD")
     assert [label for label, value in versions.items() if value is None] == []
     assert {"host record format", "blocked-citations format"} <= versions.keys()
+
+
+def test_the_runbook_and_the_command_comment_name_what_the_check_compares() -> None:
+    """N225: the check also holds the record codec and the writer versions;
+    a runbook that named only migrations and schema sent an operator to a
+    redeploy the older build would refuse."""
+    root = Path(__file__).resolve().parents[1]
+    section = (root / "docs" / "DEPLOYMENT.md").read_text(encoding="utf-8")
+    section = section.split("## 6. Rolling back a release")[1].split("\n## ")[0]
+    [comment] = [
+        line
+        for line in (root / "CLAUDE.md").read_text(encoding="utf-8").splitlines()
+        if "scripts/rollback_check.py" in line
+    ]
+    for text in (section, comment):
+        assert "record codec" in text, text
+        assert "writer versions" in text, text

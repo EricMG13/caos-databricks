@@ -295,6 +295,16 @@ def test_every_hook_repository_is_pinned_by_commit_with_its_tag_in_a_comment(
             ),
             "bundle:\n  name: x",
         ),
+        (
+            check_gate_config.GITLEAKS_CI_FILE,
+            check_gate_config._actions_file_pin_problems,
+            "name: x",
+        ),
+        (
+            check_gate_config.SECRETS_WEEKLY_FILE,
+            check_gate_config._actions_file_pin_problems,
+            "name: x",
+        ),
     ],
 )
 def test_a_duplicate_key_in_a_configuration_is_refused_not_resolved_to_the_last(
@@ -311,6 +321,28 @@ def test_a_duplicate_key_in_a_configuration_is_refused_not_resolved_to_the_last(
     path.write_text(path.read_text(encoding="utf-8") + f"\n{duplicate}\n")
     [refusal] = problems(root)
     assert refusal.endswith(f"{name} is missing or not a mapping")
+
+
+def test_a_merge_key_is_refused_by_a_message_naming_it(tmp_path: Path) -> None:
+    """N227: PyYAML flattens `<<` before the key check, so a merge key read as
+    the generic "missing or not a mapping"; the refusal now names it."""
+    root = _tree(tmp_path)
+    merge = "\nbase: &base {a: 1}\nuses:\n  <<: *base\n"
+    assert check_gate_config._yaml_mapping("a: &b {c: 1}\nd:\n  <<: *b\n") is None
+    for name, problems in (
+        (HOOKS, check_gate_config._hook_problems),
+        (CI, check_gate_config._ci_problems),
+        (
+            check_gate_config.GITLEAKS_CI_FILE,
+            check_gate_config._actions_file_pin_problems,
+        ),
+    ):
+        path = root / name
+        original = path.read_text(encoding="utf-8")
+        path.write_text(original + merge, encoding="utf-8")
+        refusal = problems(root)[0]
+        assert "'<<' merge key" in refusal, refusal
+        path.write_text(original, encoding="utf-8")
 
 
 def test_a_repeated_key_is_refused_at_any_depth() -> None:
