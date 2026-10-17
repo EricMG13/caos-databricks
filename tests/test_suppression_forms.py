@@ -21,6 +21,7 @@ from pathlib import Path
 from types import ModuleType
 
 import check_gate_config
+import pytest
 
 PYTEST = "py" + "test"
 MARK = "mark"
@@ -250,6 +251,43 @@ def test_the_base_rules_are_the_base_checker_s_own(tmp_path: Path) -> None:
     assert check_gate_config.baseline_problems(broken, root) == [
         f"baseline: {broken}'s own checker could not be loaded"
     ]
+
+
+def test_the_base_checker_is_loaded_once_and_its_texts_are_not_read_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Task 4 review: `--against` loaded the base checker once for the
+    unmeasured scan and again for its measure, and read every sibling blob
+    from git whether or not `texts` already held it."""
+    root = tmp_path / "repo"
+    (root / "scripts").mkdir(parents=True)
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "test@example.invalid")
+    _git(root, "config", "user.name", "Ratchet test")
+    checker = Path(check_gate_config.__file__).read_text(encoding="utf-8")
+    (root / "scripts" / "check_gate_config.py").write_text(checker, encoding="utf-8")
+    (root / "m.py").write_text("import os\n", encoding="utf-8")
+    base = _commit(root, "base")
+    texts = check_gate_config.tracked_python_at(root, base)
+    loads: list[str] = []
+    reads: list[str] = []
+    real_load, real_blob = check_gate_config._base_module, check_gate_config.blob_at
+
+    def counted_load(
+        rev: str, where: Path, known: dict[str, str] | None = None
+    ) -> ModuleType | None:
+        loads.append(rev)
+        return real_load(rev, where, known)
+
+    def counted_blob(repo: Path, rev: str, name: str) -> str | None:
+        reads.append(name)
+        return real_blob(repo, rev, name)
+
+    monkeypatch.setattr(check_gate_config, "_base_module", counted_load)
+    monkeypatch.setattr(check_gate_config, "blob_at", counted_blob)
+    assert check_gate_config.baseline_problems(base, root) == []
+    assert len(loads) == 1
+    assert [name for name in reads if name in texts] == []
 
 
 def test_the_base_checker_imports_its_own_siblings_not_this_commit_s(
