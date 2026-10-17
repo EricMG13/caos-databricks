@@ -20,6 +20,7 @@ from typing import Any
 from uuid import UUID
 
 import pytest
+from governed_deliverable import save_revision
 from test_deliverable_canonical import QUOTE, _accept, harness, route
 from test_deliverable_package import IDENTITY
 from test_execution_freshness import _Harness
@@ -331,7 +332,7 @@ def unverified_route(harness: _Harness) -> _Harness:
 
 
 def _save(lite: _Harness, narrative: object) -> UUID:
-    return revisions.save_revision(
+    return save_revision(
         lite.conn,
         lite.blobs,
         lite.bundle,

@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -103,12 +104,18 @@ def test_every_install_is_locked_and_wheels_only() -> None:
     assert not (REPO / "requirements.txt").exists(), "pip would take over the App"
 
 
+def _load(name: str) -> dict[str, Any]:
+    loaded = yaml.safe_load((REPO / name).read_text(encoding="utf-8"))
+    assert isinstance(loaded, dict)
+    return loaded
+
+
 def test_app_yaml_and_the_bundle_state_the_same_start_command() -> None:
     """N114: the platform reads `app.yaml` when the bundle's `config` is
     ignored, and the bundle's otherwise; a command that moved in one would
     start a different app depending on which was read."""
-    app = yaml.safe_load((REPO / "app.yaml").read_text(encoding="utf-8"))
-    bundle = yaml.safe_load((REPO / "databricks.yml").read_text(encoding="utf-8"))
+    app = _load("app.yaml")
+    bundle = _load("databricks.yml")
     commands = [
         resource["config"]["command"]
         for resource in bundle["resources"]["apps"].values()

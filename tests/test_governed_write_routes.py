@@ -22,6 +22,7 @@ import pytest
 from command_fixtures import command_client, command_headers, member
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from governed_deliverable import sign_opinion
 from httpx2 import Response
 from test_deliverable_canonical import _accept, harness, lite, route
 from test_execution_freshness import _Harness
@@ -35,7 +36,7 @@ from caos.api.deps import actor_from_request
 from caos.api.reads import reports as reports_read
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.deliverable.filing import Receipt, filing_payload, sign_opinion
+from caos.deliverable.filing import Receipt, filing_payload
 from caos.refusals import Refusal
 from caos.store import StoreConnection, connect
 from caos.store.audit import audit_trail, digest_of

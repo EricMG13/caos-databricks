@@ -168,7 +168,9 @@ def test_a_release_whose_record_codec_moved_cannot_be_rolled_back(
     same codec on both sides is."""
     formats = 'RECORD_FORMAT = "r"\nBLOCKED_FORMAT = "b"\n'
     older = _commit(repo, {**_store(), HANDOFF: formats}, "older")
-    release = _commit(repo, {HANDOFF: formats + "RECORD_CODEC_VERSION = 1\n"}, "release")
+    release = _commit(
+        repo, {HANDOFF: formats + "RECORD_CODEC_VERSION = 1\n"}, "release"
+    )
     assert rollback_check.record_codec(older, repo) is None
     assert rollback_check.record_codec(release, repo) == 1
     assert rollback_check.rollback_problems(older, release, repo) == [

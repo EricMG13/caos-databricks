@@ -22,6 +22,7 @@ from types import ModuleType
 
 import check_gate_config
 import pytest
+from tracked import blob_at, tracked_python_at
 
 PYTEST = "py" + "test"
 MARK = "mark"
@@ -268,10 +269,10 @@ def test_the_base_checker_is_loaded_once_and_its_texts_are_not_read_twice(
     (root / "scripts" / "check_gate_config.py").write_text(checker, encoding="utf-8")
     (root / "m.py").write_text("import os\n", encoding="utf-8")
     base = _commit(root, "base")
-    texts = check_gate_config.tracked_python_at(root, base)
+    texts = tracked_python_at(root, base)
     loads: list[str] = []
     reads: list[str] = []
-    real_load, real_blob = check_gate_config._base_module, check_gate_config.blob_at
+    real_load, real_blob = check_gate_config._base_module, blob_at
 
     def counted_load(
         rev: str, where: Path, known: dict[str, str] | None = None

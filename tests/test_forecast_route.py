@@ -257,9 +257,9 @@ def test_forecast_route_accepts_real_host_calculated_artifact(
     harness: _Harness,
 ) -> None:
     from conftest import priced
+    from governed_deliverable import save_revision
     from test_loop_charges import ESTIMATE
 
-    from caos.deliverable.revisions import save_revision
     from caos.graph.runtime import Execution, accepted_artifacts, run_route
 
     answers = ForecastCompletions(harness.source_id)

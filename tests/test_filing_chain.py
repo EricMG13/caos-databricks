@@ -8,23 +8,23 @@ import json
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import governed_deliverable
 import pytest
+from governed_deliverable import file_deliverable, freeze, sign_opinion
 from test_deliverable_canonical import harness, lite, route
 from test_execution_freshness import _Harness
 from test_revisions import _read, _save
 
 from caos.boundary_text import BoundaryText
+from caos.deliverable import canonical, filing, revisions
 from caos.deliverable.canonical import payload_bytes
 from caos.deliverable.filing import (
     Receipt,
-    file_deliverable,
     file_deliverable_in,
-    freeze,
     freeze_in,
     persist_receipt,
     receipt_bytes,
     revision_signatures,
-    sign_opinion,
     sign_opinion_in,
 )
 from caos.deliverable.revisions import save_revision_in
@@ -221,7 +221,6 @@ def test_the_receipt_names_its_case_run_and_filing_event(
 ) -> None:
     from collections.abc import Callable
 
-    from caos.deliverable import filing
     from caos.store import StoreConnection
     from caos.store.audit import GovernedAction, governed_write
 
@@ -250,7 +249,9 @@ def test_the_receipt_names_its_case_run_and_filing_event(
     _sign(lite, revision)
     freezer, filer = _actor(lite), _actor(lite)
     _freeze(lite, revision, freezer)
-    monkeypatch.setattr(filing, "governed_write", followed_by_another_event)
+    monkeypatch.setattr(
+        governed_deliverable, "governed_write", followed_by_another_event
+    )
     receipt = file_deliverable(
         lite.conn,
         lite.blobs,
@@ -485,3 +486,20 @@ def test_the_receipt_names_only_the_latest_of_several_signers(
     } == (signers)
     assert filing_payload(receipt)["signed_by"] == str(receipt.signed_by)
     assert json.loads(receipt_bytes(receipt))["signed_by"] == str(receipt.signed_by)
+
+
+def test_no_governed_write_wrapper_is_production_code() -> None:
+    """N114 (SI-3): the five wrappers only tests called live in
+    `tests/governed_deliverable.py`; production reaches each write through its
+    `*_in` function inside the API command's own governed transaction."""
+    gone = {
+        filing: ("sign_opinion", "freeze", "file_deliverable"),
+        revisions: ("save_revision",),
+        canonical: ("freeze_canonical",),
+    }
+    assert [
+        f"{module.__name__}.{name}"
+        for module, names in gone.items()
+        for name in names
+        if hasattr(module, name)
+    ] == []
