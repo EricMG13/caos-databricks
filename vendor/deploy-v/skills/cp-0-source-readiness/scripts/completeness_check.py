@@ -289,6 +289,22 @@ def load_contract(skill_text, module_id=None):
 # --------------------------------------------------------------------------
 
 
+# A caption as it opens (fork r17, N164): past a quote mark ("> **T4.4 — …**")
+# and a list marker only before an emphasised item ("1. **T4.4 — …**"). A
+# marker before a plain ID is a gap note's ("- T4.18 `commitment` is null …"),
+# which stays a mention.
+CAPTION_QUOTE_RE = re.compile(r">\s*")
+CAPTION_LIST_RE = re.compile(r"(?:[-+*]|[0-9]+[.)])\s+(?=[*_])")
+
+
+def _captioned(line):
+    while True:
+        found = CAPTION_QUOTE_RE.match(line) or CAPTION_LIST_RE.match(line)
+        if not found:
+            return line
+        line = line[found.end():]
+
+
 # A heading whose first word is a register ID ("#### T4.7 Normalized
 # Financials", "### **T4.7** ..."), fork r7.
 LEADING_ID_RE = re.compile(r"#+\s*[*_]*\s*([PT][0-9][A-Za-z0-9.]*?|TL[0-9]+\.[0-9]+)\.?(?![A-Za-z0-9]|\.[A-Za-z0-9])")
@@ -365,9 +381,13 @@ def _locate_registers(handoff_text, register_ids=None, retired_ids=()):
     title_of = {reg_id: title for title, reg_id in titles.items()}
 
     def opens_with(line, reg_id, marks):
-        # The line's first word, past heading marks and `marks`, is the ID or,
-        # on a heading, a snake_case register's title (fork r12).
-        rest = re.sub(r"^#*\s*" + marks + r"*\s*", "", line)
+        # The line's first word, past heading marks, a quote mark, a list
+        # marker before an emphasised ID, the word "Table" and `marks`, is the
+        # ID or, on a heading, a snake_case register's title (fork r12, r17).
+        # `marks` hug the word they mark: a list marker "* " is not one.
+        rest = _captioned(line)
+        rest = re.sub(r"^#*\s*(?:" + marks + r"+(?=\S))?", "", rest)
+        rest = re.sub(r"^table\s+(?:" + marks + r"+(?=\S))?", "", rest, flags=re.IGNORECASE)
         if re.match(re.escape(reg_id) + r"\.?(?![A-Za-z0-9_]|\.[A-Za-z0-9])", rest):
             return True
         title = title_of.get(reg_id) if line.startswith("#") else None
@@ -532,6 +552,14 @@ def _short_row(reg_id, n, col, width, columns):
             f"row has {width} cells under a {columns}-cell header")
 
 
+def _row_width(reg_id, n, width, columns):
+    """The message for a row of another width than its header (fork r17,
+    N163), where no critical cell it emptied already named the widths: a short
+    row's missing cell, or a long row's extra ones, left the row read one
+    column off by the key scorer and the downstream readers."""
+    return f"{reg_id} row {n}: the row has {width} cells under a {columns}-cell header"
+
+
 def _cell(row, column):
     """A row's cell for a contract column name, matched as `_column_key` does."""
     if column in row:
@@ -563,14 +591,17 @@ def check(skill_text, handoff_text, module_id=None):
             )
         exempt = set(spec["disqualifier_exempt_columns"])
         for n, (row, width) in enumerate(zip(rows, widths), 1):
+            named = False
             for col in spec["critical_columns"]:
                 if col in exempt:
                     continue
                 for actual in resolved.get(col) or ([col] if col in row else []):
                     found = _cell_violations(contract, reg_id, n, actual, row[actual])
                     if found and _padded(header, width, actual):
-                        found = [_short_row(reg_id, n, actual, width, len(header))]
+                        found, named = [_short_row(reg_id, n, actual, width, len(header))], True
                     violations.extend(found)
+            if width != len(header) and not named:
+                violations.append(_row_width(reg_id, n, width, len(header)))
 
     violations.extend(_semantic_violations(contract["semantic_rules"], present, contract["blocklist"]))
     violations.extend(_fixture_violations(contract, handoff_text))
@@ -634,14 +665,32 @@ def _leads_with(cell, value):
     return bool(value) and re.match(rf"{re.escape(value)}(?:[\s(\-–—]|$)", cell) is not None
 
 
+def _required_elsewhere(rules, rule, value):
+    """Whether another rule is a `required_values` on the same register and
+    column, with the same case rule and exact matching, naming `value`."""
+    sensitive = rule.get("case_sensitive", True)
+    want = value.strip().strip("`*").strip()
+    return any(
+        other.get("rule") == "required_values"
+        and other.get("register_id") == rule.get("register_id")
+        and other.get("column") == rule.get("column")
+        and other.get("case_sensitive", True) == sensitive
+        and str(other.get("match", "")).strip().casefold() != "leading_word"
+        and want in (v.strip().strip("`*").strip() for v in other.get("values", []))
+        for other in rules
+    )
+
+
 def _semantic_violations(rules, present, blocklist=frozenset()):
     """The profile's `semantic_rules`, each over one located register.
 
-    The five kinds the profiles declare: `unique_columns` (no value repeats in
+    The six kinds the profiles declare: `unique_columns` (no value repeats in
     any named column); `required_values` (every declared value appears in the
     column); `allowed_values` (every cell of the column is a declared value);
     `exact_values` (the column holds each declared value exactly once and
-    nothing else); `at_least_one_row_populates` (some row fills every named
+    nothing else); `exactly_once_values` (the column holds each declared value
+    exactly once, other cells free, fork r17; it reports only a count above 1 for a value a
+    `required_values` rule on the same column already demands); `at_least_one_row_populates` (some row fills every named
     column with a value that is not a disqualifying placeholder). Comparison
     is case-sensitive unless the rule says otherwise. A `required_values` rule
     declaring `match: leading_word` also finds a value as a cell's leading
@@ -686,6 +735,15 @@ def _semantic_violations(rules, present, blocklist=frozenset()):
             if sorted(cells) != sorted(values):
                 out.append(f"{reg_id}: {rule_id} -- column {col!r} must hold exactly "
                            f"{rule.get('values', [])!r} once each")
+        elif kind == "exactly_once_values":
+            for value in rule.get("values", []):
+                count = cells.count(fold(value))
+                # A value a `required_values` rule on the same column already
+                # demands (same exact match) is reported missing there, not twice.
+                if count == 0 and _required_elsewhere(rules, rule, value):
+                    continue
+                if count != 1:
+                    out.append(f"{reg_id}: {rule_id} -- column {col!r} must hold {value!r} exactly once")
         elif kind == "at_least_one_row_populates":
             columns = rule.get("columns", [])
             if not any(all(_cell(row, c).strip() and _cell(row, c).strip().casefold() not in blocklist
@@ -849,6 +907,19 @@ def _self_check():
     v, _, _ = check(skill, good.replace("| Coverage | 2.1x | E2 |", "| Coverage | 2.1x | |"))
     assert v == ["T1.1 row 2: critical column 'Evidence ID' holds a disqualifying placeholder ''"], v
 
+    # a row of another width than its header is a violation (fork r17); a short row that emptied a critical cell
+    # keeps the message above and is not reported twice
+    wide = good.replace("| Item | Value | Evidence ID |", "| Item | Value | Evidence ID | Note |").replace(
+        "| --- | --- | --- |", "| --- | --- | --- | --- |")
+    v, _, _ = check(skill, wide.replace("| Leverage | 4.2x | E1 |", "| Leverage | 4.2x | E1 | n |")
+                    .replace("| Coverage | 2.1x | E2 |", "| Coverage | 2.1x | E2 | n |"))
+    assert v == [], v
+    v, _, _ = check(skill, wide.replace("| Leverage | 4.2x | E1 |", "| Leverage | 4.2x | E1 |")
+                    .replace("| Coverage | 2.1x | E2 |", "| Coverage | 2.1x | E2 | n |"))
+    assert v == ["T1.1 row 1: the row has 3 cells under a 4-cell header"], v
+    v, _, _ = check(skill, good.replace("| Coverage | 2.1x | E2 |", "| Coverage | 2.1x | E2 | extra |"))
+    assert v == ["T1.1 row 2: the row has 4 cells under a 3-cell header"], v
+
     # too few rows
     v, _, _ = check(skill, good.replace("| Coverage | 2.1x | E2 |\n", ""))
     assert any("body row" in x for x in v), v
@@ -989,6 +1060,26 @@ def _self_check():
     assert v == ["T1.1 row 2: cpx.evidence_enum -- column 'Evidence ID' holds 'e9', not one of the allowed values"], v
     v, _, _ = check(enumerated, good.replace("| 4.2x |", "| tbd |").replace("| 2.1x |", "| n/a |"))
     assert "T1.1: cpx.has_valued_row -- no row populates every one of ['Item', 'Value']" in v, v
+
+    # `exactly_once_values` binds only the declared values (fork r17); the other cells are free
+    once = skill.replace(
+        "  - **unconditional_stable_tables_cp_model**: cpx.model_register\n",
+        "  - **semantic_rules**: structured below\n"
+        "    - structured item\n"
+        "      - **case_sensitive**: True\n"
+        "      - **column**: Item\n"
+        "      - **register_id**: T1.1\n"
+        "      - **rule**: exactly_once_values\n"
+        "      - **rule_id**: cpx.leverage_once\n"
+        "      - **values**: Leverage\n"
+        "  - **unconditional_stable_tables_cp_model**: cpx.model_register\n",
+    )
+    v, _, _ = check(once, good)
+    assert v == [], v
+    v, _, _ = check(once, good.replace("| Coverage |", "| Leverage |"))
+    assert v == ["T1.1: cpx.leverage_once -- column 'Item' must hold 'Leverage' exactly once"], v
+    v, _, _ = check(once, good.replace("| Leverage |", "| Gearing |"))
+    assert v == ["T1.1: cpx.leverage_once -- column 'Item' must hold 'Leverage' exactly once"], v
 
     # the payload contract is judged over a payload object, never the Markdown
     paid = skill.replace(
