@@ -217,3 +217,20 @@ def test_the_accepted_runs_are_listed_and_a_run_replay_carries_its_ids(
     database = replay.DatabaseReplay("fixture", [run])
     assert isinstance(database, replay.DatabaseReplay)
     assert database.report()["accepted_runs"] == 1
+
+
+def test_a_delivery_rebuild_that_raises_ends_the_run_rather_than_being_counted(
+    paged: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _accepted(paged)
+
+    def broken(*_: object) -> object:
+        def rebuild(*_: object) -> object:
+            raise ValueError
+
+        return rebuild
+
+    monkeypatch.setattr(replay, "node_delivery", broken)
+    with replay.read_only(paged.url) as conn:
+        with pytest.raises(ValueError):
+            replay.replay_run(conn, paged.blobs, paged.bundle, paged.run_id)

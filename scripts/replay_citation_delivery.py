@@ -23,6 +23,15 @@ The report is counts and ids (run, route node, the citation's place in its
 record, the refusal code): never document text. A run that cannot be replayed
 (no pin, an unreadable record or upstream blob) is counted under its typed code.
 
+Like `scripts/quality_compare.py`, this imports the private
+`caos.methodology.handoff._decoded_record`. It decodes the stored record
+without `read_record`'s binding checks (canonical bytes, `artifact_sha256`,
+identity equal to the store-rebuilt call-time identity, authority bundle) and
+rebuilds the delivery from the record's own `record.identity`. A record that no
+longer matches its artifact is therefore still counted handed or not_handed
+where the reader would refuse it with `ARTIFACT_RECORD_MISMATCH`: the replay
+measures delivery, not record binding.
+
     CAOS_QUALIFY_POSTGRES_URL=... uv run python scripts/replay_citation_delivery.py \\
         --blob-root .dev-data/qualification-blobs caos_dev --qualify
 """
@@ -206,11 +215,11 @@ def replay_run(
             continue
         try:
             record = _decoded_record(blobs.get(str(record_sha256)))
-            result.nodes += 1
-            handed = delivery(node, record.identity) if record.citations else {}
         except UNREADABLE as failed:
             result.unreadable[_name(failed)] += 1
             continue
+        handed = delivery(node, record.identity) if record.citations else {}
+        result.nodes += 1
         _count(result, locator, str(route_node_id), record, handed)
     conn.rollback()
     return result
