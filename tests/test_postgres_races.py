@@ -1871,6 +1871,58 @@ def test_a_reconnected_bill_lands_beside_a_live_holder_under_a_lock_timeout(
     assert billed == 1 and took < 3
 
 
+def test_n223_a_bill_that_lost_the_try_lock_leaves_its_node_unheld_while_it_waits(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N223, the window as it stands (recorded, not closed): the replacement
+    connection's try-lock fails beside the old backend, which then dies while a
+    freeze holds the case row. The bill waits on that row, unbounded by design
+    (`_UNBOUNDED_UNIT`, W1: a cancelled write leaves no row and the next claim
+    pays again), and nothing holds the node in the meantime. It lands once the
+    row is let go."""
+    from caos.methodology import canonical
+
+    case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+    lease = _claimed(empty_database, run_id)
+    with connect(empty_database) as a:
+        attempt = start_attempt(a, run_id, nodes["CP-0"], lease=lease)
+        reserve(a, attempt, RESERVED, lease=lease)
+    zombie, closed, freeze = (connect(empty_database) for _ in range(3))
+    closed.close()
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    biller = Thread(target=canonical.bill, args=(closed, attempt, _BILL), daemon=True)
+    try:
+        old_hold = call_hold(zombie, attempt)  # kept: a dropped one lets go
+        old_hold.__enter__()
+        freeze.execute("SELECT 1 FROM cases WHERE case_id = %s FOR UPDATE", (case_id,))
+        biller.start()
+        time.sleep(1)
+        assert biller.is_alive(), "the bill waits on the case row"
+        assert not _hold_is_free(empty_database, attempt), "the old backend holds"
+        zombie.close()
+        deadline = time.monotonic() + 5  # the backend ends a moment after close
+        while (
+            not _hold_is_free(empty_database, attempt) and time.monotonic() < deadline
+        ):
+            time.sleep(0.05)
+        assert _hold_is_free(empty_database, attempt), "the window: no one holds it"
+        assert biller.is_alive(), "and the bill has still not landed"
+        freeze.rollback()
+        biller.join(timeout=10)
+        with connect(empty_database) as b:
+            assert _count(b, "call_outcomes", run_id) == 1
+    finally:
+        zombie.close()
+        freeze.close()
+        biller.join(timeout=10)
+
+
 def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
     empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
 ) -> None:
