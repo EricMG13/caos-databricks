@@ -3529,4 +3529,4 @@ def test_t8_relay_never_contains_the_answers_module_id(
     refusals = handoff._t8_messages(contract, catalog(BUNDLE), text)
     assume(refusals)  # an id that is a real module is not refused by `unknown`
     [(_, message)] = refusals
-    assert message is None or module_id not in message, (template, message)
+    assert message is None or module_id not in str(message), (template, message)
