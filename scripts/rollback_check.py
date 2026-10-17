@@ -65,6 +65,8 @@ WRITERS = (
         "CANONICAL_ADAPTER_VERSION",
     ),
     ("renderer digest", "caos/deliverable/verify_package.py", "RENDERER_SHA256"),
+    ("host record format", CODEC, "RECORD_FORMAT"),
+    ("blocked-citations format", CODEC, "BLOCKED_FORMAT"),
 )
 # What code with no `STORE_SCHEMA` reads: Postgres's default search path.
 PUBLIC = "public"
@@ -250,11 +252,18 @@ def rollback_problems(
         writer_versions(older, repo),
         writer_versions(release, repo),
     )
+    # A writer the release declares in no form this reads would compare equal
+    # to the same gap on the older commit: refuse it, never pass it.
+    problems.extend(
+        f"{label} is not declared in a form this check reads on {release}"
+        for label, value in now_writes.items()
+        if value is None
+    )
     problems.extend(
         f"{label} is {was_writes[label]} on {older} and {now_writes[label]} on "
         f"{release}: {older} refuses the rows {release} writes"
         for label in was_writes
-        if was_writes[label] != now_writes[label]
+        if now_writes[label] is not None and was_writes[label] != now_writes[label]
     )
     return problems
 
