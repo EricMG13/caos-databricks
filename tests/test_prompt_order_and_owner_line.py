@@ -209,9 +209,7 @@ def test_an_unreadable_upstream_handoff_leaves_the_owner_section_out(
     assert "not a handoff" not in caplog.text
 
 
-def test_cp0_final_check_names_pages_for_a_page_mapped_source_never_the_file_alone() -> (
-    None
-):
+def test_cp0_final_check_names_pages_of_a_page_mapped_source() -> None:
     """Fork r18's Step I rules 5 and 8: a consumer's `Source files to attach`
     cell names the pages it needs; the block no longer says "in full"."""
     block = " ".join(prompt_block("cp0_final_check").split())
