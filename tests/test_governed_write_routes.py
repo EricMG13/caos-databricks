@@ -36,7 +36,7 @@ from caos.api.reads import reports as reports_read
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.deliverable.filing import Receipt, filing_payload, sign_opinion
-from caos.refusals import Refusal
+from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, connect
 from caos.store.audit import audit_trail, digest_of
 from caos.store.commands import (
@@ -1247,3 +1247,61 @@ def test_a_payload_naming_the_request_digest_itself_is_refused() -> None:
     view = _WithRequest({"revision_id": "r"}, "b" * 64)
     assert len(view) == len(list(view)) == 2
     assert view[REQUEST_KEY] == "b" * 64
+
+
+def test_a_frozen_head_that_no_longer_re_proves_is_offered_the_superseding_save(
+    filing_client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N112. The Report read re-proved the frozen head before building its
+    actions, so a head that no longer re-proves -- a rule tightened after the
+    freeze -- refused the whole read and never offered the superseding save
+    `_fileable` accepts. It is offered in exactly that case; a head that still
+    re-proves keeps `DELIVERABLE_ALREADY_FROZEN`, and no other action moves."""
+    frozen = _save(lite)
+    digest = _digest(lite, frozen)
+    for step in ("signature", "freeze"):
+        answer = _post(
+            filing_client,
+            f"{_case(lite)}/revisions/{frozen}/{step}",
+            _approver(lite),
+            {"payload_sha256": digest},
+        )
+        assert answer.status_code == 200, answer.text
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    before = _shown(filing_client, lite, frozen, writer)
+    assert before["SAVE_REVISION"] == "DELIVERABLE_ALREADY_FROZEN"
+
+    def tightened(*args: Any, **kwargs: Any) -> bytes:
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
+
+    monkeypatch.setattr(reports_read, "prove_revision", tightened)
+    monkeypatch.setattr(deliverable, "prove_revision", tightened)
+    after = _shown(filing_client, lite, frozen, writer)
+    assert after["SAVE_REVISION"] is None
+    assert {k: v for k, v in after.items() if k != "SAVE_REVISION"} == {
+        k: v for k, v in before.items() if k != "SAVE_REVISION"
+    }
+    draft = {"narrative": [], "expected_revision_id": str(frozen)}
+    runs = f"{_case(lite)}/runs/{lite.run_id}/revisions"
+    superseding = _post(filing_client, runs, writer, draft)
+    assert superseding.status_code == 201, superseding.text
+
+
+def test_an_unfrozen_revision_that_no_longer_re_proves_still_refuses_the_report(
+    filing_client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N112: only a frozen, unfiled head is served from its stored bytes when it
+    no longer re-proves; a saved revision that is not frozen refuses as before."""
+    saved = _save(lite)
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+
+    def tightened(*args: Any, **kwargs: Any) -> bytes:
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
+
+    monkeypatch.setattr(reports_read, "prove_revision", tightened)
+    answer = filing_client.get(
+        f"{_case(lite)}/report?run={lite.run_id}&revision={saved}",
+        headers=command_headers(writer),
+    )
+    assert answer.status_code >= 400, answer.text
+    assert answer.json()["code"] == "ARTIFACT_RECORD_MISMATCH", answer.text

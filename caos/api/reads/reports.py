@@ -184,8 +184,10 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
         proof = ProvenRevision(conn, blobs, bundle, case_id, run, revision, digest)
         if committee:
             publication, payload = proven_revision(proof)
+            reproved = True
         else:
-            publication, payload = {}, _reproven(proof)
+            publication = {}
+            payload, reproved = _report_payload(proof, head)
         return dict(
             chrome=dict(
                 subject=dict(case_id=case_id, title=payload["case_title"]),
@@ -193,7 +195,9 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
                 actions=report_actions(
                     actor.role,
                     standing,
-                    _filing_facts(proof, actor, head=head, payload=payload),
+                    _filing_facts(
+                        proof, actor, head=head, payload=payload, reproved=reproved
+                    ),
                 ),
             ),
             body={
@@ -349,6 +353,44 @@ def _reproven(proof: ProvenRevision) -> dict[str, Any]:
     return dict(json.loads(data))
 
 
+def _report_payload(proof: ProvenRevision, head: object) -> tuple[dict[str, Any], bool]:
+    """The Report's payload and whether it re-proved.
+
+    A frozen, unfiled head that no longer re-proves is served from its stored
+    bytes, as a filed one is, rather than refusing the read: the save command's
+    `_fileable` says such a head takes a draft that supersedes it (N77, N112),
+    and a refused read could not offer that save. Any other revision that does
+    not re-prove still refuses, and a store fault is never an answer.
+    """
+    try:
+        return _reproven(proof), True
+    except Refusal as refused:
+        if (
+            refused.code is RefusalCode.STORE_UNAVAILABLE
+            or head is None
+            or UUID(str(head)) != proof.revision
+            or not _frozen_unfiled(proof)
+        ):
+            raise
+    return (
+        read_revision(
+            proof.conn, proof.blobs, case_id=proof.case_id, revision_id=proof.revision
+        ),
+        False,
+    )
+
+
+def _frozen_unfiled(proof: ProvenRevision) -> bool:
+    """Whether the revision has a publication row and no filing (W5)."""
+    row = proof.conn.execute(
+        "SELECT 1 FROM deliverable_revisions r JOIN deliverable_publications p"
+        " ON p.case_id=r.case_id AND p.revision_id=r.revision_key"
+        " WHERE r.case_id=%s AND r.revision_id=%s AND p.filed_at IS NULL",
+        (proof.case_id, proof.revision),
+    ).fetchone()
+    return row is not None
+
+
 def _revisions(conn: Store, case_id: UUID, run: UUID) -> list[dict[str, Any]]:
     """The run's revisions, newest first, each with how far it has gone.
 
@@ -370,7 +412,12 @@ def _revisions(conn: Store, case_id: UUID, run: UUID) -> list[dict[str, Any]]:
 
 
 def _filing_facts(
-    proof: ProvenRevision, actor: Caller, *, head: object, payload: dict[str, Any]
+    proof: ProvenRevision,
+    actor: Caller,
+    *,
+    head: object,
+    payload: dict[str, Any],
+    reproved: bool = True,
 ) -> FilingFacts:
     """What the section can say about this revision's filing, and no more.
 
@@ -398,7 +445,7 @@ def _filing_facts(
         actor_froze=frozen and row is not None and actor.user_id == UUID(str(row[0])),
         head=head is not None and UUID(str(head)) == revision,
         actor_saved=row is not None and actor.user_id == UUID(str(row[2])),
-        fileable=filed or not frozen or _renders(payload),
+        fileable=filed or not frozen or (reproved and _renders(payload)),
     )
 
 
