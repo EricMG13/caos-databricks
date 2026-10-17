@@ -261,6 +261,8 @@ def _fit_endpoint(client: WorkspaceClient, name: str) -> object:
     """The endpoint, or `Unfit` naming the gateway setting the host cannot run under."""
     endpoint = client.serving_endpoints.get(name)
     ready = getattr(getattr(endpoint, "state", None), "ready", None)
+    # Fail-open on purpose: no state, or one the SDK's enum maps to None (an
+    # unknown value), is not a refusal; only a state that says not READY is.
     if ready is not None and getattr(ready, "value", ready) != "READY":
         raise Unfit(ENDPOINT_NOT_READY)
     problems = gateway_problems(endpoint)
@@ -385,6 +387,9 @@ def _fit_instance(client: WorkspaceClient, name: str) -> object:
     """The instance, or `Unfit` while it is anything but AVAILABLE."""
     found = client.database.get_database_instance(name)
     state = getattr(found, "state", None)
+    # Every state but AVAILABLE is refused (fail-closed): whether UPDATING or
+    # FAILING_OVER still serve is unconfirmed. No state, or one the SDK's enum
+    # maps to None (an unknown value), passes (fail-open, not a refusal).
     if state is not None and getattr(state, "value", state) != "AVAILABLE":
         raise Unfit(INSTANCE_NOT_AVAILABLE)
     return found

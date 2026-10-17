@@ -593,10 +593,11 @@ class _Handler(BaseHTTPRequestHandler):
     def _workspace_import(self, rest: str, query: Query, raw: bytes) -> None:
         """`POST /api/2.0/workspace/import`: the multipart form CLI 1.21.0
         writes files with (`path`, `overwrite`, `format` and the raw `content`
-        file; 1.17.0 used the `import-file` route above), or the JSON form
-        the API also takes with base64 content. An `overwrite` that is not
-        true over a file already there is refused, as the platform's default
-        is (N47)."""
+        file; 1.17.0 used the `import-file` route above). Only that form: the
+        platform's JSON default is a SOURCE import, not a file write, and
+        nothing here sends it. A missing `path` or `content`, or a `format`
+        other than RAW or AUTO, is 400; an `overwrite` that is not true over
+        a file already there is 409, as the platform's default is (N47)."""
         kind = self.headers.get("Content-Type", "")
         fields: dict[str, bytes] = {}
         if kind.startswith("multipart/form-data"):
@@ -607,25 +608,22 @@ class _Handler(BaseHTTPRequestHandler):
                 payload = part.get_payload(decode=True)
                 if isinstance(name, str) and isinstance(payload, bytes):
                     fields[name] = payload
-        else:
-            sent = json.loads(raw or b"{}")
-            fields = {
-                "path": str(sent.get("path", "")).encode(),
-                "overwrite": b"true" if sent.get("overwrite") is True else b"",
-            }
-            try:
-                fields["content"] = base64.b64decode(
-                    sent.get("content", ""), validate=True
-                )
-            except (ValueError, binascii.Error):
-                self._send(
-                    400,
-                    {"error_code": "INVALID_PARAMETER_VALUE", "message": "content"},
-                )
-                return
         path = fields.get("path", b"").decode()
+        if (
+            not path
+            or "content" not in fields
+            or fields.get("format", b"AUTO")
+            not in (
+                b"RAW",
+                b"AUTO",
+            )
+        ):
+            self._send(
+                400, {"error_code": "INVALID_PARAMETER_VALUE", "message": "import"}
+            )
+            return
         keep = fields.get("overwrite", b"").lower() != b"true"
-        self._write(path, fields.get("content", b""), keep)
+        self._write(path, fields["content"], keep)
 
     def _write(self, path: str, content: bytes, keep: bool) -> None:
         if keep and path in self.stub.workspace_files:

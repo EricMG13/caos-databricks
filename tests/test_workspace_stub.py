@@ -796,9 +796,10 @@ def test_the_workspace_import_route_keeps_a_held_file_unless_told_to_overwrite(
     stub: WorkspaceStub,
 ) -> None:
     """N47: CLI 1.21.0 uploads a file with a multipart `workspace/import`
-    (path, overwrite, raw content); 1.17.0 used `import-file`. Both forms
-    store the bytes, and an overwrite that is not true over a held file is
-    409, the way the deploy lock is held."""
+    (path, overwrite, raw content); 1.17.0 used `import-file`. Both store
+    the bytes, and an overwrite that is not true over a held file is 409,
+    the way the deploy lock is held. A request missing its path or content,
+    or naming a format other than RAW or AUTO, is 400."""
     import urllib.error
     import urllib.request
 
@@ -815,16 +816,24 @@ def test_the_workspace_import_route_keeps_a_held_file_unless_told_to_overwrite(
         except urllib.error.HTTPError as refused:
             return refused.code
 
-    def form(path: str, content: bytes, overwrite: str) -> tuple[bytes, str]:
+    def form(
+        path: str,
+        content: bytes | None,
+        overwrite: str,
+        extra: tuple[tuple[str, str], ...] = (),
+    ) -> tuple[bytes, str]:
         edge = "xBOUNDARYx"
-        parts = [("path", path), ("overwrite", overwrite)]
+        parts = [("path", path), ("overwrite", overwrite), *extra]
+        parts = [(n, v) for n, v in parts if n != "path" or v]
         head = '--{}\r\nContent-Disposition: form-data; name="{}"\r\n\r\n{}\r\n'
         body = b"".join(head.format(edge, n, v).encode() for n, v in parts)
-        body += (
-            f'--{edge}\r\nContent-Disposition: form-data; name="content"; '
-            'filename="f"\r\nContent-Type: application/octet-stream\r\n\r\n'
-        ).encode()
-        body += content + f"\r\n--{edge}--\r\n".encode()
+        if content is not None:
+            body += (
+                f'--{edge}\r\nContent-Disposition: form-data; name="content"; '
+                'filename="f"\r\nContent-Type: application/octet-stream\r\n\r\n'
+            ).encode()
+            body += content + b"\r\n"
+        body += f"--{edge}--\r\n".encode()
         return body, f"multipart/form-data; boundary={edge}"
 
     binary = b"\xff\x00 not utf-8 \r\n"
@@ -835,14 +844,22 @@ def test_the_workspace_import_route_keeps_a_held_file_unless_told_to_overwrite(
     assert stub.workspace_files["/Workspace/b/a.bin"] == binary
     assert send(*form("/Workspace/b/a.bin", b"other", "true")) == 200
     assert stub.workspace_files["/Workspace/b/a.bin"] == b"other"
-    sent = json.dumps(
-        {"path": "/Workspace/b/j", "content": base64.b64encode(b"j").decode()}
-    ).encode()
-    assert send(sent, "application/json") == 200
-    assert send(sent, "application/json") == 409
-    assert stub.workspace_files["/Workspace/b/j"] == b"j"
-    bad = json.dumps({"path": "/Workspace/b/k", "content": "!"}).encode()
-    assert send(bad, "application/json") == 400
+    assert send(*form("", b"x", "true")) == 400
+    assert send(*form("/Workspace/b/n", None, "true")) == 400
+    assert send(*form("/Workspace/b/n", b"x", "true", (("format", "SOURCE"),))) == 400
+    assert "/Workspace/b/n" not in stub.workspace_files
+    assert send(*form("/Workspace/b/n", b"x", "true", (("format", "RAW"),))) == 200
+
+
+def test_an_endpoint_still_updating_but_ready_passes_preflight(
+    stub: WorkspaceStub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only `ready` decides: a READY endpoint with an update in progress
+    keeps serving the old configuration, so preflight does not refuse it."""
+    stub.endpoint_fields = {"state": {"ready": "READY", "config_update": "IN_PROGRESS"}}
+    flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
+    assert preflight.main([*flags, "--lakebase-project", LAKEBASE_PROJECT]) == 0
+    assert f"ok      serving endpoint {ENDPOINT}" in capsys.readouterr().out
 
 
 def test_the_token_endpoint_refuses_a_malformed_exchange(stub: WorkspaceStub) -> None:
