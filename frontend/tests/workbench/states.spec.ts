@@ -48,6 +48,16 @@ test("partial renders through warning status with its notes and the body", async
   await expect(page.locator("[data-pending-node]").first()).toBeVisible();
 });
 
+test("a blocked Analysis shows the Blocked quotes under the node that ended the run", async ({
+  page,
+}) => {
+  await page.goto(`/analysis/?case=${CASE}&fixture=blocked`);
+  const row = page.locator("[data-pending-node][data-blocking='yes']");
+  await expect(row).toBeVisible();
+  await expect(row.locator("[data-blocked-quotes='recorded']")).toBeVisible();
+  await expect(row.locator("[data-blocked-quote]")).toHaveCount(2);
+});
+
 test("a stale view holds its figures until Reload", async ({ page }) => {
   // The fixture stream announces an accepted handoff; the refetch answers for
   // another displayed run with other figures (brief 4.4, decision 6).

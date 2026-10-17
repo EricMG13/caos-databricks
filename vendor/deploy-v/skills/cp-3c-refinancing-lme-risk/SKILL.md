@@ -118,6 +118,7 @@ conclusions, never shorter reasoning or invented filler.
         - Instrument
         - Amount
         - Currency
+        - Scale
         - Maturity Date
         - Years to Maturity
         - Seniority / Lien
@@ -131,6 +132,7 @@ conclusions, never shorter reasoning or invented filler.
         - Instrument
         - Amount
         - Currency
+        - Scale
         - Maturity Date
         - Years to Maturity
         - Seniority / Lien

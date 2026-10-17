@@ -43,8 +43,10 @@ document and the page, with any column your authority requires there.
 rows otherwise (for example `CF-1`). An upstream handoff's marker is shown
 as `[CP-1 C3]`: keep that form if you carry it over, never `[C3]`, and cite
 the excerpt yourself to rest a claim of yours on it. A marker that names no
-citation refuses the answer. A citation the host cannot locate is kept as
-unverified and shown to the reader as such; it does not refuse the answer.
+citation refuses the answer. No marker may be numbered above the last
+citation in your list: with four citations, `[C5]` names none. A citation the
+host cannot locate is kept as unverified and shown to the reader as such; it
+does not refuse the answer.
 Valid `source_id` values are exactly: {source_ids}, and `page` is the page in
 the nearest evidence header above that line.
 {host_text}--- END FINAL RESPONSE CHECK {tag} ---
