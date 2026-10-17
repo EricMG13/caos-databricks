@@ -268,7 +268,7 @@ COMMITTED_SET_DIGESTS = {
         "813a9182f25b51814e97ab9b5ce924b21c313471e6557d2486f2599f175806df"
     ),
     "ccl-fy2025-earnings-update": (
-        "4e118e8fd051f2ba99e18ce8697566f86335b7340b1763d2ebbcd9e925609cd3"
+        "36aafade247e6c98811e23be6a5c9ccb6bd17c975b77075b6a7d58a62012be61"
     ),
     "ccl-fy2025-liquidity": (
         "f98bf8cc077e7fca0e347a34ef8f29adc9dbd4a2a9e51e985fc7118d645335e1"
@@ -280,7 +280,7 @@ COMMITTED_SET_DIGESTS = {
         "f4205e4e3606ef68aece138696ea630c7632d2e184a067edce13eebf88e22e79"
     ),
     "ccl-fy2025-relative-value": (
-        "40cf77c4a36a7551afa481d865ea97f52ed1e251bbee35c4e31e1356053c228e"
+        "fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b"
     ),
     "ccl-fy2025-lite-covenant-refinancing": (
         "85fd43d537432db2a5a805ab5855ca2dda28d4b8b8b4e04fe91e0b78421fc2a9"

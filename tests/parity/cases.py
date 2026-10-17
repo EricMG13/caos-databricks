@@ -1379,15 +1379,9 @@ def _synthetic_citation_case(
     return _quote_case(target, _matcher_tokens(target, data), quote, tracking)
 
 
-# `ccl-fy2025-relative-value` keys only CP-L10 (CP-1C's keys stay dropped, F653/
-# F709), so its own `expects` carry no quote for the two earnings releases. Those
-# are byte-identical to the ones the full relative-value set quotes, and that set
-# keeps the same answer-key quotes (the digest still selects them), so they are
-# read there.
-_KEY_FALLBACK = {"ccl-fy2025-relative-value": "ccl-fy2025-full-relative-value"}
-
-
-def _set_quotes(target: Target, qualification_set: str, digest: str) -> list[str]:
+def _answer_key_quotes(
+    target: Target, qualification_set: str, digest: str
+) -> list[str]:
     path = target.root / "qualification" / qualification_set / "qualification.json"
     document = _as_dict(json.loads(path.read_text(encoding="utf-8")))
     quotes: list[str] = []
@@ -1397,16 +1391,6 @@ def _set_quotes(target: Target, qualification_set: str, digest: str) -> list[str
             quote = _as_str(fields["matched_text"])
             if fields.get("document_sha256") == digest and quote not in quotes:
                 quotes.append(quote)
-    return quotes
-
-
-def _answer_key_quotes(
-    target: Target, qualification_set: str, digest: str
-) -> list[str]:
-    quotes = _set_quotes(target, qualification_set, digest)
-    fallback = _KEY_FALLBACK.get(qualification_set)
-    if not quotes and fallback is not None:
-        quotes = _set_quotes(target, fallback, digest)
     if not quotes:
         message = f"{qualification_set} names no answer-key quote for {digest[:12]}"
         raise ValueError(message)

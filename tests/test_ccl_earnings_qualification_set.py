@@ -14,16 +14,13 @@ from caos.qualification.on_disk import load_qualification_set
 REPO = Path(__file__).resolve().parents[1]
 SET_ROOT = REPO / "qualification" / "ccl-fy2025-earnings-update"
 DOCUMENT_SHA256 = "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6"
-DEBT_ANCHOR = (
-    "Total Debt, net of unamortized debt issuance costs and discounts | "
-    "26,640 | 27,475 |"
-)
 ANCHORS = {
     "Total Revenues | 26,622 | 25,021 | 21,593 |",
     "Operating Income | 4,483 | 3,574 | 1,956 |",
     "Net cash provided by operating activities | 6,218 | 5,923 | 4,281 |",
     "Purchases of property and equipment | ( 3,611 ) | ( 4,626 ) | ( 3,284 ) |",
-    DEBT_ANCHOR,
+    "Total Debt, net of unamortized debt issuance costs and discounts | "
+    "26,640 | 27,475 |",
 }
 COMPARATOR_DELTAS = {
     "revenue": ("26622", "25021", "1601"),
@@ -58,12 +55,10 @@ def test_ccl_earnings_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
         "FULL_CREDIT_32",
         "EARNINGS_UPDATE",
     )
-    # F709 (owner 2026-10-18, Sol only): the strict READY keys are restored for
-    # CP-1, CP-1B and CP-2. CP-5 runs only if CP-0 clears it, so its keys stay
-    # dropped (F653), and so does `expects_blocked`.
-    assert case.expects_ready == ("CP-1", "CP-1B", "CP-2")
-    assert case.expects_blocked == ()
-    assert case.expects_projection == ()
+    assert case.expects_ready == ("CP-1", "CP-1B", "CP-2", "CP-5")
+    assert {
+        (key.module_id, key.field, key.value) for key in case.expects_projection
+    } == {("CP-5", "decision_scope", "FULL")}
 
     citations = {
         (key.module_id, key.document_sha256, key.matched_text) for key in case.expects
@@ -72,8 +67,9 @@ def test_ccl_earnings_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
         "CP-1",
         "CP-1B",
         "CP-2",
+        "CP-5",
     }
-    assert {text for _module, _digest, text in citations} == ANCHORS - {DEBT_ANCHOR}
+    assert {text for _module, _digest, text in citations} == ANCHORS
     assert all(digest == DOCUMENT_SHA256 for _module, digest, _text in citations)
     evidence = document.read_text(encoding="utf-8")
     assert all(evidence.count(anchor) == 1 for anchor in ANCHORS)

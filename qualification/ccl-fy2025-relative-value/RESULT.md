@@ -8,7 +8,7 @@ costs real money and calls a real model.
 ## The set
 
 - Qualification-set digest:
-  `40cf77c4a36a7551afa481d865ea97f52ed1e251bbee35c4e31e1356053c228e`
+  `fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b`
 - Route: `LITE_CREDIT_22 / LITE_RELATIVE_VALUE` (`CP-0` → `CP-L10` → `CP-1C`,
   three REQUIRED edges, `decision_scope: SCREENING_ONLY`). CP-1C is a FULL
   module held behind the named-LITE-object boundary until CP-L10's
@@ -184,13 +184,13 @@ retained captures bind the earlier digest and are not re-scored.
 ## Owner ruling F709, 18 October 2026 -- the strict keys are restored for Sol
 
 Live runs now use Sol only (owner, 18 October 2026), so the set is keyed to
-CP-L10 READY again rather than held CONDITIONAL by CP-0's gate (R29 above
-records the Luna-era key and stays as history). Restored from the set before
-R29: `expects_ready` for CP-L10, its liquidity citation key, its
-`decision_scope` projection key and its `TL10.2` register key. `expects_blocked`
-is removed. Kept removed: every CP-1C key (the three citations, the `expects_ready`
-entry, the `decision_scope` projection and the two `T4.5` leverage cells), as
-F653 dropped them. Previous digest
-`715fd96d6dccee128a405006c20e4fdcd45d4f5cdf301e129e31f613ffe2221d`; the new
-digest is the one stated under "The set". Offline edit; no provider call, run,
-or snapshot.
+CP-L10 and CP-1C READY again rather than held CONDITIONAL by CP-0's gate (R29
+above records the Luna-era key and stays as history). Every key R29 removed is
+restored byte for byte: `expects_ready` for CP-L10 and CP-1C; the four citation
+keys; the `decision_scope` projection keys; the `TL10.2` and `T4.5` register keys.
+`expects_blocked` is removed. CP-1C sits on the route behind a REQUIRED edge from
+CP-L10 and its keys had been dropped only because Luna's CP-0 held CP-L10. The
+digest is back to
+`fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b` (the one
+stated under "The set"; R29's `715fd96d...` is superseded). Offline edit; no
+provider call, run, or snapshot.
