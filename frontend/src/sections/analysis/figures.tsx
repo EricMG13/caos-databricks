@@ -1034,6 +1034,18 @@ function ModelKey({ figures }: { figures: readonly Figure[] }) {
 function Unread({ handoff }: { handoff: HandoffView }) {
   const tables = handoff.tables_unavailable_reason;
   const registers = handoff.registers_unavailable_reason;
+  // A register refused alone (N194): its own figures are blank, the rest draw.
+  const refused = handoff.registers
+    .filter((register) => register.unavailable_reason)
+    .map((register) => `${register.register_id} (${register.unavailable_reason})`);
+  if (!tables && !registers && refused.length) {
+    return (
+      <p className="note" data-registers-refused={refused.join(" ")}>
+        This module&apos;s registers {refused.join(", ")} could not be read, so no figure is drawn
+        from them. Its other registers and its prose are unaffected.
+      </p>
+    );
+  }
   if (!tables && !registers) return null;
   const what =
     tables && registers

@@ -909,13 +909,17 @@ class RegisterView(BaseModel):
     """One register the module's output profile declares, located by the
     bundle's own `_locate_registers` (`find_registers`' body): the header
     exactly as written, `declared` the profile column the bundle binds to each
-    header cell (`None` where it binds none), then every row in header order."""
+    header cell (`None` where it binds none), then every row in header order.
+    A register the host would not key is named with its `unavailable_reason`
+    and no header or row (N194): its own figures are blank, the module's other
+    registers are served."""
 
     model_config = _CLOSED
 
     register_id: Annotated[
         str, Field(max_length=TABLE_ID_CHARS, pattern=r"^[A-Za-z0-9_.]+$")
     ]
+    unavailable_reason: TablesUnavailable | None
     columns: Annotated[list[CellText], Field(max_length=TABLE_COLUMNS_MAX)]
     declared: Annotated[list[CellText | None], Field(max_length=TABLE_COLUMNS_MAX)]
     rows: Annotated[
