@@ -93,10 +93,9 @@ export function AdmitSources({
     <div className="admitsources" data-admit-sources>
       {/* Still an <input type="file">, focused and labelled as one; the
           browser's own "Choose Files / No file chosen" gives way to the
-          workspace's button and the names chosen (brief 6.10). */}
-      <label className="sr-only" htmlFor={inputId}>
-        Documents to admit
-      </label>
+          workspace's button and the names chosen (brief 6.10). The visible
+          button is the input's one label, so its name is what is seen
+          (WCAG 2.5.3, N113). */}
       <input
         ref={inputRef}
         id={inputId}
@@ -110,7 +109,6 @@ export function AdmitSources({
       />
       <label
         htmlFor={inputId}
-        aria-hidden="true"
         className={cn(
           buttonVariants({ variant: "outline", size: "sm" }),
           "cursor-pointer peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50",
