@@ -525,6 +525,8 @@ def test_a_reference_rate_of_none_is_kept_and_not_read_as_null() -> None:
         ("Facility:ssn31", "facility:ssn31"),  # the id after it keeps its case
         ("FACILITY:Ssn31", "facility:Ssn31"),
         ("facility:ssn31", "facility:ssn31"),
+        ("Facility:Ssn:31", "facility:Ssn:31"),  # only the first colon splits
+        ("Cash:Interest", "cash:interest"),  # no other prefix is a facility's
     ],
 )
 def test_a_pro_forma_metric_id_is_read_in_canonical_case(
