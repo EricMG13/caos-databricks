@@ -1376,10 +1376,10 @@ def _first_run(
 _TOKENS: dict[str, str] = {}
 
 
-def _token_for(root: Path, model: str = "a-model/for-the-test") -> str:
-    """The token a start of `root` under `model` prints."""
+def _token_for(root: Path, database: str, model: str = "a-model/for-the-test") -> str:
+    """The token a start of `root` under `model` in `database` prints."""
     digest = qualification_set_digest(load_qualification_set(root))
-    return qualify.resume_token(digest, "test-fake-identity", model)
+    return qualify.resume_token(digest, "test-fake-identity", model, database)
 
 
 def _resume_args(
@@ -1516,7 +1516,9 @@ def test_resume_of_a_pin_for_another_set_refuses_without_a_call(
     manifest["cases"][0]["subject"]["analysis_date"] = "2026-09-14"
     (other / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
 
-    code = qualify.main(_resume_args(other, database, token=_token_for(other)))
+    code = qualify.main(
+        _resume_args(other, database, token=_token_for(other, database))
+    )
 
     assert code == 2
     assert len(provider.prompts) == calls
@@ -1577,7 +1579,9 @@ def test_resume_under_another_model_refuses_and_makes_no_call(
     other = _other_model(monkeypatch)
     monkeypatch.setattr(qualify, "from_environment", lambda: other)
 
-    code = qualify.main(_resume_args(root, database, token=_token_for(root, OTHER)))
+    code = qualify.main(
+        _resume_args(root, database, token=_token_for(root, database, OTHER))
+    )
 
     assert code == 2
     assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
@@ -1604,7 +1608,9 @@ def test_resume_under_another_model_refuses_when_no_snapshot_was_written(
     other = _other_model(monkeypatch)
     monkeypatch.setattr(qualify, "from_environment", lambda: other)
 
-    code = qualify.main(_resume_args(root, database, token=_token_for(root, OTHER)))
+    code = qualify.main(
+        _resume_args(root, database, token=_token_for(root, database, OTHER))
+    )
 
     assert code == 2
     assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
@@ -1628,7 +1634,9 @@ def test_resume_of_an_edited_answer_key_refuses_and_makes_no_call(
     manifest["cases"][0]["expects"].append(key)
     (edited / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
 
-    code = qualify.main(_resume_args(edited, database, token=_token_for(edited)))
+    code = qualify.main(
+        _resume_args(edited, database, token=_token_for(edited, database))
+    )
 
     assert code == 2
     assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
@@ -1729,14 +1737,15 @@ def test_resume_after_a_kill_before_the_first_snapshot_refuses_an_edited_key(
 
 
 def test_the_resume_token_names_the_set_and_the_identity_exactly() -> None:
-    base = qualify.resume_token("a" * 64, "copilot/m/high/65536", "m")
+    here = "caos_qualify_" + "0" * 32
+    base = qualify.resume_token("a" * 64, "copilot/m/high/65536", "m", here)
     assert len(base) == 64 and base == qualify.resume_token(
-        "a" * 64, "copilot/m/high/65536", "m"
+        "a" * 64, "copilot/m/high/65536", "m", here
     )
     # Every part counts, the output-cap segment of the identity included.
-    assert base != qualify.resume_token("b" * 64, "copilot/m/high/65536", "m")
-    assert base != qualify.resume_token("a" * 64, "copilot/m/high/32768", "m")
-    assert base != qualify.resume_token("a" * 64, "copilot/m/high/65536", "n")
+    assert base != qualify.resume_token("b" * 64, "copilot/m/high/65536", "m", here)
+    assert base != qualify.resume_token("a" * 64, "copilot/m/high/32768", "m", here)
+    assert base != qualify.resume_token("a" * 64, "copilot/m/high/65536", "n", here)
 
 
 def test_a_start_prints_its_resume_token_once_before_any_call(
@@ -1747,7 +1756,7 @@ def test_a_start_prints_its_resume_token_once_before_any_call(
 ) -> None:
     root, database, first = _first_run(monkeypatch, capsys, tmp_path, _costed())
     assert first == 0
-    assert _TOKENS[database] == _token_for(root)
+    assert _TOKENS[database] == _token_for(root, database)
 
 
 def test_resume_without_its_token_is_an_argparse_error(
@@ -1772,8 +1781,59 @@ def test_resume_with_a_token_from_another_identity_refuses_without_a_call(
     root, database, _ = _first_run(monkeypatch, capsys, tmp_path, provider)
     calls = len(provider.prompts)
 
-    code = qualify.main(_resume_args(root, database, token=_token_for(root, OTHER)))
+    code = qualify.main(
+        _resume_args(root, database, token=_token_for(root, database, OTHER))
+    )
 
     assert code == 2
     assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
     assert len(provider.prompts) == calls
+
+
+def _donor_start(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], root: Path
+) -> tuple[str, str]:
+    """Another start of `root`, in a database of its own: its name and the
+    resume token it printed."""
+    donor = _costed()
+    monkeypatch.setattr(qualify, "from_environment", lambda: donor)
+    # Performed (0 or 1: a set with an edited key does not qualify), not refused.
+    assert qualify.main(_arguments(root)) in (0, 1)
+    assert donor.prompts != []
+    captured = capsys.readouterr()
+    database = json.loads(captured.out.partition("\n")[0])["database"]
+    (token,) = re.findall(r"^resume token: ([0-9a-f]{64})$", captured.err, re.M)
+    return database, token
+
+
+def test_resume_with_a_donor_databases_token_refuses_without_a_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """N-3: the token binds the database too. One that named only the set and
+    the identity let a crashed database resume with an edited key under the
+    token another start of that edited set printed, and pay."""
+    _, crashed, first = _first_run(monkeypatch, capsys, tmp_path, _costed(_StoppedOnce))
+    assert first != 0
+    _kill_before_the_first_snapshot(crashed)
+    edited = _edited_key_set(tmp_path / "edited")
+    donor, donor_token = _donor_start(monkeypatch, capsys, edited)
+    assert donor != crashed
+    resumed = _costed()
+    monkeypatch.setattr(qualify, "from_environment", lambda: resumed)
+
+    code = qualify.main(_resume_args(edited, crashed, token=donor_token))
+
+    assert code == 2
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+    assert resumed.prompts == []
+
+
+def test_the_resume_token_names_the_database_too() -> None:
+    here = "caos_qualify_" + "0" * 32
+    there = "caos_qualify_" + "1" * 32
+    base = qualify.resume_token("a" * 64, "copilot/m/high/65536", "m", here)
+    assert base == qualify.resume_token("a" * 64, "copilot/m/high/65536", "m", here)
+    assert base != qualify.resume_token("a" * 64, "copilot/m/high/65536", "m", there)

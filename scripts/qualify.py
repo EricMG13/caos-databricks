@@ -535,15 +535,19 @@ def _non_negative(text: str) -> int:
     return int(text)
 
 
-def resume_token(set_digest: str, provider: str, model: str) -> str:
-    """What a start prints and `--resume` must be given back (N-2).
+def resume_token(set_digest: str, provider: str, model: str, database: str) -> str:
+    """What a start prints and `--resume` must be given back (N-2, N-3).
 
     A driver killed before its first snapshot leaves nothing in the database
     that records the set digest, so a resume could bind paid calls to an edited
     answer key. The operator carries the binding instead: a SHA-256 over the
-    set digest and the provider and model identity exactly as
-    `--expect-identity` states them (an output-cap segment included)."""
-    bound = json.dumps([set_digest, provider, model], separators=(",", ":"))
+    set digest, the provider and model identity exactly as `--expect-identity`
+    states them (an output-cap segment included), and the database name, so a
+    token another start of the same set printed (another database) does not
+    pass either. It guards against a mistake -- a mixed-up token, an edited
+    key after a crash -- not against an operator who recomputes it: that
+    operator owns the set and the database and could as well start afresh."""
+    bound = json.dumps([set_digest, provider, model, database], separators=(",", ":"))
     return hashlib.sha256(bound.encode("utf-8")).hexdigest()
 
 
@@ -551,11 +555,13 @@ def _resumed_pins(
     conn: StoreConnection,
     harness: Harness,
     qualification: QualificationSet,
+    database: str,
     token: str,
 ) -> tuple[PreparedCase, ...]:
     """The set's pins as the database holds them, re-checked as `perform`
     would: one run per case in order, built from this bundle, and equal to what
-    the set says now. Nothing is written."""
+    the set says now; `token` must be the one this database's start printed.
+    Nothing is written."""
     # An out-of-date store refuses typed up front (STORE_SCHEMA_DRIFT).
     verify_schema(conn)
     rows = conn.execute(
@@ -569,7 +575,7 @@ def _resumed_pins(
         raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
     digest = qualification_set_digest(qualification)
     provider, model = harness_identities(harness.completions)
-    if resume_token(digest, provider, model) != token:
+    if resume_token(digest, provider, model, database) != token:
         raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
     _assert_same_binding(conn, (digest, provider, model))
     try:
@@ -992,7 +998,9 @@ def _opened(
             database = args.resume
             run_url = _database_url(admin_url, database)
             with connect(run_url) as conn:
-                resumed = _resumed_pins(conn, harness, qualification, args.resume_token)
+                resumed = _resumed_pins(
+                    conn, harness, qualification, database, args.resume_token
+                )
     except (PreflightRefusal, Refusal) as refused:
         _refused(refused.code.value)
         return None
@@ -1030,7 +1038,8 @@ def _print_resume_token(start: _Start) -> None:
     """The line `--resume` must be given back, printed before any call."""
     provider, model = harness_identities(start.harness.completions)
     digest = qualification_set_digest(start.qualification)
-    print(f"resume token: {resume_token(digest, provider, model)}", file=sys.stderr)
+    token = resume_token(digest, provider, model, start.database)
+    print(f"resume token: {token}", file=sys.stderr)
 
 
 def _print_preamble(start: _Start) -> None:
