@@ -22,18 +22,35 @@ from pathlib import Path
 VENDOR = "vendor"
 
 
+def run_argv(
+    argv: Sequence[str], *, cwd: Path | None = None, timeout: float | None = None
+) -> subprocess.CompletedProcess[str]:
+    """The one shell-less subprocess call site of the gate scripts: `argv` as
+    given, output captured, never a shell. A run past `timeout` is a
+    `TimeoutError` (not `subprocess.TimeoutExpired`), so a caller needs no
+    `subprocess` import of its own; a missing program is an `OSError`."""
+    try:
+        return subprocess.run(  # nosec B603
+            list(argv),
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise TimeoutError from None
+
+
 def _git(repo: Path, args: Sequence[str]) -> subprocess.CompletedProcess[str]:
     """One resolved, shell-less git invocation; every function below goes
-    through it, so there is exactly one subprocess call site in this file to
-    audit, whichever git subcommand a caller needs (`RuntimeError` when git
-    is missing, never a silent empty result)."""
+    through it (and so through `run_argv`), whichever git subcommand a caller
+    needs (`RuntimeError` when git is missing, never a silent empty result)."""
     git = shutil.which("git")
     if git is None:
         message = "git is not on PATH; the gate cannot determine what a PR carries"
         raise RuntimeError(message)
-    return subprocess.run(  # nosec B603
-        [git, *args], cwd=repo, capture_output=True, text=True, check=False
-    )
+    return run_argv([git, *args], cwd=repo)
 
 
 def tracked_files(repo: Path, *pathspecs: str) -> list[str]:

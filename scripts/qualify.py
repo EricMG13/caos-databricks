@@ -33,6 +33,11 @@ them, and `$TMPDIR` is purged (FP-16).
     scripts/qualify.py qualification/ccl-fy2025-market-dislocation \
         --expect-identity copilot/gpt-6-luna/high/65536 --ceiling 5.00
 
+    # Name where the run database's disk is read from, so a set that would fill
+    # it refuses before it reserves anything (N150, F521).
+    scripts/qualify.py <set> <the options above> \
+        --docker-container caos-postgres --min-free-bytes 5368709120
+
 `--expect-identity` is not a convenience. A verdict binds the execution profile
 it was measured under, so the run refuses before spending anything if the
 environment resolves to a different one than the caller believes.
@@ -43,9 +48,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shlex
 import sys
 from collections.abc import Mapping
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from decimal import ROUND_DOWN, Decimal
 from enum import Enum
 from pathlib import Path
@@ -57,6 +64,8 @@ import psycopg
 # Run as a script, not as a package module: the repository root is what makes
 # `server` importable, and a driver nobody can run is the gap this closes.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tracked import run_argv
 
 from caos.blobs import BlobStore
 from caos.copilot import require_ready
@@ -83,11 +92,19 @@ from caos.qualification.harness import (
     perform,
     prepare,
 )
-from caos.qualification.matrix import QualificationSet, assert_measurable
+from caos.qualification.matrix import (
+    QualificationSet,
+    assert_measurable,
+)
 from caos.qualification.on_disk import load_qualification_set
 from caos.qualification.store import performed_evidence, record_evidence
 from caos.refusals import Refusal, RefusalCode
-from caos.store import RunStatus, StoreConnection, apply_schema, connect
+from caos.store import (
+    RunStatus,
+    StoreConnection,
+    apply_schema,
+    connect,
+)
 from caos.store.budget import remaining, validate_spend
 from caos.store.gates import Gate, GateApproval, approve_gate, gate_preview
 from caos.store.members import Standing, grant
@@ -394,6 +411,114 @@ def _plain(value: object) -> Plain:
     return str(value)
 
 
+# The data directory the local Docker probe reads (N150).
+PGDATA = "/var/lib/postgresql/data"
+_PROBE_SECONDS = 30
+_CONTAINER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
+
+
+class PreflightCode(Enum):
+    """What the script itself refuses before it spends. Typed and text-free:
+    a code and the fixed sentence around it, never a probe's output or a
+    number from the server."""
+
+    FREE_SPACE_BELOW_FLOOR = "FREE_SPACE_BELOW_FLOOR"
+    FREE_SPACE_UNREADABLE = "FREE_SPACE_UNREADABLE"
+
+
+class PreflightRefusal(Exception):
+    def __init__(self, code: PreflightCode) -> None:
+        super().__init__(code.value)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class Probe:
+    """How free bytes are read: an operator's command, or `df` in a container."""
+
+    command: str | None
+    docker_container: str | None
+
+
+def _parsed_free_bytes(answer: str) -> int:
+    """One whole number of bytes and nothing else; anything more or less is
+    refused, so a probe that misreports can never read as room."""
+    text = answer.strip()
+    if not (text.isascii() and text.isdigit()):
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+    return _whole(text)
+
+
+def _whole(text: str) -> int:
+    """`int(text)` for digits, a refusal for a number Python will not convert
+    (over 4300 digits raises ValueError): never a traceback."""
+    try:
+        return int(text)
+    except ValueError:
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE) from None
+
+
+def _free_bytes_from_df(answer: str) -> int:
+    """The Available column of `df -P` (1024-byte blocks), in bytes: a header
+    and exactly one filesystem line."""
+    lines = answer.strip().splitlines()
+    header = lines[0].split() if lines else []
+    # A POSIXLY_CORRECT busybox prints 512-byte blocks: reading those as KiB
+    # would double the answer, so any other unit refuses.
+    if len(lines) != 2 or header[:2] != ["Filesystem", "1024-blocks"]:
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+    fields = lines[1].split()
+    if len(fields) < 6 or not (fields[3].isascii() and fields[3].isdigit()):
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+    return _whole(fields[3]) * 1024
+
+
+def _free_bytes(probe: Probe) -> int:
+    """Run the named probe (no shell, bounded time) and read its answer. Any
+    failure to run it is a refusal: an unmeasured disk is not a roomy one."""
+    try:
+        argv = (
+            ["docker", "exec", probe.docker_container, "df", "-P", PGDATA]
+            if probe.docker_container is not None
+            else shlex.split(probe.command or "")
+        )
+        # docker's own name rule: a name that starts with `-` would be read as
+        # an option, so it is refused rather than passed.
+        named = probe.docker_container
+        if not argv or (named is not None and not _CONTAINER_NAME.fullmatch(named)):
+            raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+        done = run_argv(argv, timeout=_PROBE_SECONDS)
+    except (OSError, ValueError, TimeoutError):
+        # Unrunnable, unparseable or timed out: the same typed refusal; the
+        # cause (a path, an argument) is not repeated.
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE) from None
+    if done.returncode != 0:
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+    if probe.docker_container is not None:
+        return _free_bytes_from_df(done.stdout)
+    return _parsed_free_bytes(done.stdout)
+
+
+def _preflight(args: argparse.Namespace) -> None:
+    """The free-space floor when a probe is named, which needs neither the
+    provider nor the store (N150)."""
+    if args.free_space_probe is None and args.docker_container is None:
+        print(
+            "no free-space probe named: free space is not checked",
+            file=sys.stderr,
+        )
+        return
+    free = _free_bytes(Probe(args.free_space_probe, args.docker_container))
+    if free < args.min_free_bytes:
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_BELOW_FLOOR)
+
+
+def _non_negative(text: str) -> int:
+    if not (text.isascii() and text.isdigit()):
+        raise ValueError  # argparse names the option and the bad value
+    return int(text)
+
+
 def _perform_until(  # noqa: PLR0913 -- one set, one loop, keyword-only tail
     conn: StoreConnection,
     blobs: BlobStore,
@@ -542,6 +667,24 @@ def _parser() -> argparse.ArgumentParser:
         default=1,
         help="times to enter perform; >1 retries the node that stopped the set",
     )
+    parser.add_argument(
+        "--free-space-probe",
+        help=(
+            "a command (no shell) whose whole output is the free bytes on the"
+            " run database's disk; below --min-free-bytes the run refuses"
+            " before it reserves anything"
+        ),
+    )
+    parser.add_argument(
+        "--docker-container",
+        help=f"read the free bytes with `docker exec <name> df -P {PGDATA}`",
+    )
+    parser.add_argument(
+        "--min-free-bytes",
+        type=_non_negative,
+        default=2**30,
+        help="the free-space floor, in bytes (default 1 GiB)",
+    )
     return parser
 
 
@@ -637,11 +780,14 @@ def _planned(
     return qualification, harness, admin_url, blob_root
 
 
+def _database_url(admin_url: str, database: str) -> str:
+    return urlunsplit(urlsplit(admin_url)._replace(path=f"/{database}"))
+
+
 def _create_database(admin_url: str) -> tuple[str, str]:
     """A fresh database on the persistent server: its name and its URL."""
     database = f"caos_qualify_{uuid4().hex}"
-    parts = urlsplit(admin_url)
-    run_url = urlunsplit(parts._replace(path=f"/{database}"))
+    run_url = _database_url(admin_url, database)
     with psycopg.connect(admin_url, autocommit=True) as admin:
         admin.execute(
             psycopg.sql.SQL("CREATE DATABASE {}").format(
@@ -651,18 +797,24 @@ def _create_database(admin_url: str) -> tuple[str, str]:
     return database, run_url
 
 
-def _performed_capture(
-    run_url: str,
-    blob_root: str,
-    harness: Harness,
-    qualification: QualificationSet,
-    *,
-    attempts: int,
-) -> dict[str, object]:
+@dataclass(frozen=True)
+class _Start:
+    """Everything a run needs once every refusal that spends nothing is past:
+    the set, its harness and the new database."""
+
+    qualification: QualificationSet
+    harness: Harness
+    database: str
+    run_url: str
+    blob_root: str
+
+
+def _performed_capture(start: _Start, *, attempts: int) -> dict[str, object]:
     """Prepare, approve and perform the set in its database; its capture."""
-    with connect(run_url) as conn:
+    harness, qualification = start.harness, start.qualification
+    with connect(start.run_url) as conn:
+        blobs = BlobStore(Path(start.blob_root))
         apply_schema(conn)
-        blobs = BlobStore(Path(blob_root))
         prepared = prepare(conn, blobs, harness, qualification=qualification)
         _approve_every_gate(conn, prepared)
         performed = _perform_until(
@@ -677,46 +829,62 @@ def _performed_capture(
     return document
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    if args.attempts < 1:
-        print("--attempts must be at least 1; nothing was spent", file=sys.stderr)
-        return 2
-    try:
-        planned = _planned(args)
-    except Refusal as refused:
-        print(
-            f"{refused.code.value}: the set was refused; nothing was spent",
-            file=sys.stderr,
-        )
-        return 2
-    if planned is None:
-        return 2
-    qualification, harness, admin_url, blob_root = planned
+def _refused(code: str) -> None:
+    print(f"{code}: the set was refused; nothing was spent", file=sys.stderr)
+
+
+def _opened(
+    qualification: QualificationSet,
+    harness: Harness,
+    admin_url: str,
+    blob_root: str,
+) -> _Start | None:
+    """A new database for the run. None, having said why nothing was spent."""
     try:
         database, run_url = _create_database(admin_url)
     except psycopg.Error:
         # CF-078: a DSN psycopg itself refuses to parse -- bad percent-encoding
         # in a password included -- quotes the whole string, password and all,
         # in its own message; only the typed code is ever printed here.
-        print(
-            f"{RefusalCode.STORE_UNAVAILABLE.value}: the set was refused;"
-            " nothing was spent",
-            file=sys.stderr,
-        )
-        return 2
+        _refused(RefusalCode.STORE_UNAVAILABLE.value)
+        return None
+    return _Start(qualification, harness, database, run_url, blob_root)
+
+
+def _started(args: argparse.Namespace) -> _Start | None:
+    """Every check that spends nothing, then the database; None having said
+    which refused. The free-space floor is read first (N150), before the
+    provider is built or anything is reserved."""
+    if args.attempts < 1:
+        print("--attempts must be at least 1; nothing was spent", file=sys.stderr)
+        return None
+    if args.free_space_probe is not None and args.docker_container is not None:
+        print("name one free-space probe, not both; nothing was spent", file=sys.stderr)
+        return None
+    try:
+        _preflight(args)
+        planned = _planned(args)
+    except (PreflightRefusal, Refusal) as refused:
+        _refused(refused.code.value)
+        return None
+    if planned is None:
+        return None
+    return _opened(*planned)
+
+
+def _print_preamble(start: _Start) -> None:
     # Printed before the call, not after: a driver that dies mid-run must still
     # leave the operator the two names that hold the evidence it paid for, and
     # the dated price every reservation it is about to take will be priced on
     # (Task 8.2) -- an operator reading the ceiling alone cannot tell whether a
     # set was affordable at the price the worker was configured with.
-    price = harness.price
+    price = start.harness.price
     print(
         json.dumps(
             {
-                "database": database,
-                "blob_root": blob_root,
-                "run_ceiling": str(harness.run_ceiling),
+                "database": start.database,
+                "blob_root": start.blob_root,
+                "run_ceiling": str(start.harness.run_ceiling),
                 "price_model": price.model,
                 "price_input_per_token": str(price.input_per_token),
                 "price_output_per_token": str(price.output_per_token),
@@ -726,10 +894,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
         flush=True,
     )
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    start = _started(args)
+    if start is None:
+        return 2
+    _print_preamble(start)
+    database = start.database
     try:
-        document = _performed_capture(
-            run_url, blob_root, harness, qualification, attempts=args.attempts
-        )
+        document = _performed_capture(start, attempts=args.attempts)
     except Refusal as refused:
         # After the database exists, so not "nothing was spent": what was
         # performed is kept there, the matrix's own refusal included (DQ-5).
