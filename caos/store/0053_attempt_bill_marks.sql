@@ -3,7 +3,8 @@
 -- try-lock to a half-open old backend, and waits on a case row a freeze holds
 -- (unbounded by design, W1), left the node unheld the moment that backend
 -- ended, and a reclaim queued ahead of the bill paid the node again. The bill
--- now writes a mark, in a unit of its own that waits on nothing, before its
+-- now writes a mark, in a unit of its own that waits on no other session,
+-- before its
 -- write; `start_attempt` reads it beside the advisory lock and refuses
 -- ATTEMPT_UNSETTLED while `owed_until` is in the future.
 --
@@ -14,12 +15,25 @@
 -- attempt with a call outcome is settled and its mark is not read (`_UNSETTLED`
 -- reads outcomes first).
 --
--- The one mutable row kind beside `worker_heartbeats`, for the same reason: it
--- is an observation with a shelf life, not a governed fact. It grants nothing
--- and spends nothing -- the accepted-attempt ledger (`run_attempts`,
--- `artifacts`, `budget_ledger`, `call_outcomes`) is untouched; the worst a
--- stray mark does is hold one node for the span, then lapse.
+-- The table is append-only, like the ledger beside it: every try of a bill
+-- inserts a row of its own under a fresh `mark_id`, and nothing is updated,
+-- deleted or truncated (`refuse_governed_mutation`, 0033). An upsert on
+-- `attempt_id` was the first design and was wrong: a bill's old backend cut
+-- between the INSERT and its COMMIT sits idle in transaction holding the row,
+-- and the fresh bill's upsert waited on it -- under a `lock_timeout` the mark
+-- failed and no outcome was written (F704). Inserts of distinct keys wait on
+-- nothing, so the mark never queues behind another session. A mark grants
+-- nothing and spends nothing; the worst a stray one does is hold one node for
+-- its span, then lapse.
 CREATE TABLE attempt_bill_marks (
-    attempt_id uuid        PRIMARY KEY REFERENCES run_attempts (attempt_id),
+    mark_id    uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    attempt_id uuid        NOT NULL REFERENCES run_attempts (attempt_id),
     owed_until timestamptz NOT NULL
 );
+
+CREATE INDEX attempt_bill_marks_by_attempt ON attempt_bill_marks (attempt_id, owed_until);
+
+CREATE TRIGGER bill_mark_immutable BEFORE UPDATE OR DELETE ON attempt_bill_marks
+    FOR EACH ROW EXECUTE FUNCTION refuse_governed_mutation();
+CREATE TRIGGER bill_mark_no_truncate BEFORE TRUNCATE ON attempt_bill_marks
+    FOR EACH STATEMENT EXECUTE FUNCTION refuse_governed_mutation();

@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import UNANCHORED, CanonicalCompletions
-from conftest import login_role, priced, reserve_at
+from conftest import login_role, priced, reserve_at, tamper
 from lite_route_fixtures import RealisticLiteCompletions
 from test_runtime import (
     ESTIMATE,
@@ -2197,8 +2197,9 @@ def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
     worker_conn.close()
     with pytest.raises(Refusal, match=r"^ATTEMPT_UNSETTLED$"):
         start_attempt(run.conn, run.run_id, node, lease=lease)
-    run.conn.execute(
-        "UPDATE attempt_bill_marks SET owed_until = now() - interval '1 second'"
+    tamper(
+        run.conn,
+        "UPDATE attempt_bill_marks SET owed_until = now() - interval '1 second'",
     )
     run.conn.commit()
     start_attempt(run.conn, run.run_id, node, lease=lease)

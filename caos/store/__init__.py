@@ -269,8 +269,10 @@ MIGRATIONS = (
         Path(__file__).with_name("0051_book_entries.sql").read_text(encoding="utf-8"),
     ),
     # 0052 belongs to the unmerged N81 branch (claude/oi-store-n81); the
-    # runner takes a gap, as it does at 0030 and 0049, so this is 0053 and
-    # whichever of the two merges second renumbers.
+    # runner takes a gap, as it does at 0030 and 0049, so this is 0053. The
+    # runner keys migrations by position in `MIGRATIONS`: the second branch
+    # to merge appends its migration after the first's, and resolving by name
+    # order once 0053 has been applied anywhere gives STORE_SCHEMA_DRIFT.
     (
         "0053_attempt_bill_marks",
         Path(__file__)

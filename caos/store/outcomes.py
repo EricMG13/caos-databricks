@@ -110,12 +110,13 @@ def call_hold(
 # this, so it expires with no one to clear it.
 BILL_OWED_SECONDS = 2 * 900
 
+# Append-only, a row of its own per try (fresh `mark_id`): no key shared with
+# another session's row, so an insert never waits on one left uncommitted by a
+# backend that was cut (F704, 0053).
 _OWE_BILL = (
     "INSERT INTO attempt_bill_marks (attempt_id, owed_until)"
     " SELECT attempt_id, now() + make_interval(secs => %s) FROM run_attempts"
     " WHERE attempt_id = %s"
-    " ON CONFLICT (attempt_id) DO UPDATE"
-    " SET owed_until = greatest(attempt_bill_marks.owed_until, excluded.owed_until)"
 )
 
 
@@ -124,8 +125,10 @@ def owe_bill(conn: StoreConnection, attempt_id: UUID) -> None:
     held `ATTEMPT_UNSETTLED` by `start_attempt` for `BILL_OWED_SECONDS` or
     until the bill lands, whichever is first, whoever holds the session lock.
 
-    A unit of its own that takes no case or run lock, so it commits while the
-    bill's write is still waiting behind a freeze; an unknown attempt writes
+    A unit of its own that takes no case or run lock and waits on no other
+    session's row (it inserts a row of its own), so it commits while the
+    bill's write is still waiting behind a freeze or a cut backend's open
+    mark; an unknown attempt writes
     nothing (the bill's write then refuses it). A fault answers
     `STORE_UNAVAILABLE`, which the bill's own retry treats as it treats a
     failed write. The session lock stays for the live holder; this covers the

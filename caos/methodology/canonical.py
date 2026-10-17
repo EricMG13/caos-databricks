@@ -19,6 +19,7 @@ anchored ones.
 from __future__ import annotations
 
 import hashlib
+import logging
 import sys
 import time
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
@@ -191,6 +192,10 @@ if TYPE_CHECKING:
 # between the call and its one write would otherwise lose the only record that
 # the call was made, and the next claim would pay for the node again.
 BILL_TRIES = 3
+# The fixed line a try logs when its mark could not be written (N223, F704):
+# no store text, no statement, no identifier.
+BILL_MARK_FAILED_NOTE = "bill mark not written; the outcome is written without it"
+_LOG = logging.getLogger(__name__)
 BILL_PAUSE_SECONDS = 1.0
 _pause = time.sleep
 
@@ -514,7 +519,8 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
     not it got it. That would leave the node unheld if the try fails and the
     old backend then dies before the write commits (N223), so every try first
     marks the bill owed in the store (`owe_bill`, a unit of its own that waits
-    on nothing): `start_attempt` then refuses `ATTEMPT_UNSETTLED` at the node
+    on no other session: it inserts a row of its own): `start_attempt` then
+    refuses `ATTEMPT_UNSETTLED` at the node
     until the write lands or the mark lapses (`BILL_OWED_SECONDS`), whoever
     holds the session lock. The mark is bounded, not a lock: a write still
     waiting past it (a freeze held longer than the span) is not covered, and
@@ -539,7 +545,7 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
                 # N223: the store says the bill is owed before the write that
                 # may wait, unbounded, behind a held case row; a hold the
                 # session lock gave is gone when its backend is.
-                owe_bill(target, attempt_id)
+                _mark_owed(target, attempt_id)
                 record_outcome(target, attempt_id=attempt_id, outcome=outcome)
             except Refusal as refused:
                 if refused.code is not RefusalCode.STORE_UNAVAILABLE:
@@ -555,6 +561,21 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
                 _pause(BILL_PAUSE_SECONDS)
                 continue
             return
+
+
+def _mark_owed(conn: StoreConnection, attempt_id: UUID) -> None:
+    """Mark the bill owed, failing open: the mark only adds a hold beside the
+    session lock, so a store fault writing it must never stop the outcome
+    (the paid call's one record). The fault is logged as a fixed, text-free
+    line and the outcome write that follows keeps its own retries and its
+    unbounded wait (W1). A fault that took the session away shows again at the
+    outcome write, which the caller's reconnect answers."""
+    try:
+        owe_bill(conn, attempt_id)
+    except Refusal as refused:
+        if refused.code is not RefusalCode.STORE_UNAVAILABLE:
+            raise
+        _LOG.warning(BILL_MARK_FAILED_NOTE)
 
 
 @contextmanager

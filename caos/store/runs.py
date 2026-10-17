@@ -97,7 +97,8 @@ def call_hold_seconds(lease: Lease | None) -> int:
 _UNSETTLED = (
     "SELECT earlier.owed FROM (SELECT t.attempt_id, r.reserved_at,"
     "   o.attempt_id IS NOT NULL AS recorded,"
-    "   m.owed_until > now() AS marked,"
+    "   EXISTS (SELECT 1 FROM attempt_bill_marks m"
+    "     WHERE m.attempt_id = t.attempt_id AND m.owed_until > now()) AS marked,"
     "   l.attempt_id IS NOT NULL"
     "   AND (o.diagnostic_sha256 IS NULL"
     "     OR (o.model IS NOT NULL AND o.generation_id IS NOT NULL))"
@@ -107,7 +108,6 @@ _UNSETTLED = (
     " FROM run_attempts t"
     " LEFT JOIN budget_reservations r ON r.attempt_id = t.attempt_id"
     " LEFT JOIN call_outcomes o ON o.attempt_id = t.attempt_id"
-    " LEFT JOIN attempt_bill_marks m ON m.attempt_id = t.attempt_id"
     " LEFT JOIN budget_ledger l"
     "   ON (l.run_id, l.attempt_id) = (o.run_id, o.charged_attempt_id)"
     " WHERE t.run_id = %(run)s AND t.route_node_id = %(node)s"
