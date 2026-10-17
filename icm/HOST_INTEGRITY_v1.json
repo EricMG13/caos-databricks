@@ -44,8 +44,8 @@
   "module_id": "CP-CF",
   "relative_file_hashes": {
     "SKILL.md": {
-      "bytes": 8777,
-      "sha256": "8ddb451067518eedbb97b2c8f7d1c56c2e73a9acee600561db59e4ee2e52a82f"
+      "bytes": 9052,
+      "sha256": "41a1b1dfa63821968a849043f6ce3a9bea88e371e78be37b63a56a694f756f08"
     },
     "scripts/cash_flow.py": {
       "bytes": 26822,
