@@ -17,11 +17,18 @@ from caos.calculators.credit_model._cells import (
     OTHER_FOOTING,
     balance_periods,
     footing_note,
+    merged_footing_note,
+    odd_quarter,
     periods_at,
     refused_balance,
 )
 from caos.calculators.credit_model.assemble import ModelInputs, credit_model
-from caos.calculators.credit_model.debt import _stated_at, debt_frame, facility_keys
+from caos.calculators.credit_model.debt import (
+    _merged,
+    _stated_at,
+    debt_frame,
+    facility_keys,
+)
 from caos.calculators.credit_model.frame import Cell
 from caos.calculators.credit_model.history import (
     _term_length,
@@ -394,7 +401,7 @@ def test_two_same_day_periods_on_different_footings_merged_are_noted() -> None:
     alt = replace(quarter, period_id="ALT_2025", accounting_basis="IFRS")
     moved = tuple(
         replace(f, period_id="ALT_2025")
-        if (f.facility_id, f.period_id) == ("sun29", "Q2_2025")
+        if (f.facility_id, f.period_id) == ("ssn29", "Q2_2025")
         else f
         for f in base.facilities
     )
@@ -403,5 +410,63 @@ def test_two_same_day_periods_on_different_footings_merged_are_noted() -> None:
     note = footing_note(regs, "Q2_2025", "ALT_2025")
     assert cells["total_debt"].value is not None
     assert note in (cells["total_debt"].note or "")
-    assert OTHER_FOOTING not in (cells["secured_debt"].note or "")
+    assert note in (cells["secured_debt"].note or "")  # the moved note is secured
     assert cells["secured_debt"].value is not None
+    assert OTHER_FOOTING not in (cells["lease_liabilities"].note or "")
+
+
+def test_merged_footing_note_names_the_first_apart_pair_in_order() -> None:
+    regs = _bases(
+        _pytd_regs((None, None), (None, None)),
+        H1_2025=("IFRS", None),
+        Q2_2025=("US GAAP", None),
+        FY2024=("IFRS", None),
+    )
+    assert merged_footing_note(regs, ["FY2024", "H1_2025"]) is None
+    assert merged_footing_note(regs, iter(["FY2024", "H1_2025", "H1_2025"])) is None
+    assert merged_footing_note(regs, ["FY2024", "Q2_2025", "H1_2025"]) == footing_note(
+        regs, "FY2024", "Q2_2025"
+    )
+    assert merged_footing_note(regs, []) is None
+
+
+def test_odd_quarter_names_only_days_outside_89_to_98() -> None:
+    assert odd_quarter(None) is None
+    assert [odd_quarter(n) for n in (89, 98)] == [None, None]
+    assert odd_quarter(88) == "quarter of 88 days"
+    assert odd_quarter(99) == "quarter of 99 days"
+
+
+def test_a_total_without_a_figure_is_not_given_the_merge_note() -> None:
+    base = _pytd_regs((None, None), ("AS_REPORTED", None))
+    quarter = next(p for p in base.periods if p.period_id == "Q2_2025")
+    alt = replace(quarter, period_id="ALT_2025", accounting_basis="IFRS")
+    regs = replace(base, periods=(*base.periods, alt))
+    rows = [f for f in regs.facilities if f.period_id == "Q2_2025"][:2]
+    stack = {
+        f.facility_id: replace(f, period_id=pid)
+        for f, pid in zip(rows, ["Q2_2025", "ALT_2025"], strict=True)
+    }
+    refused = Cell(None, "COMPONENT_MISSING")
+    assert _merged(regs, stack, "total_debt", refused) == refused
+    figure = _merged(regs, stack, "total_debt", Cell(Decimal(1), basis="CALCULATED"))
+    assert figure.note == footing_note(regs, "Q2_2025", "ALT_2025")
+
+
+def test_an_opening_stack_merged_across_footings_is_noted() -> None:
+    """N220 (2) at the opening (2024-12-31): the column's own period states
+    none; Q4 2024 (AS_REPORTED) lacks the 2029 senior note, FY2024 (IFRS)
+    has it."""
+    regs = example_registers()
+    regs = replace(
+        regs,
+        facilities=tuple(
+            f
+            for f in regs.facilities
+            if (f.facility_id, f.period_id) != ("sun29", "Q4_2024")
+        ),
+    )
+    regs = _bases(regs, Q4_2024=("AS_REPORTED", None), FY2024=("IFRS", None))
+    opened = _debt(regs)["debt_opening"]
+    assert opened.value is not None
+    assert footing_note(regs, "Q4_2024", "FY2024") in (opened.note or "")

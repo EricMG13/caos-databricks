@@ -461,7 +461,7 @@ def _column_debt(
         refusal = _refusal(refused, key, currency)
         if refusal is not None:
             totals[key] = refusal
-        elif totals[key].value is not None:
+        else:
             totals[key] = _merged(regs, stack, key, totals[key])
     if _refusal(refused, "total_debt", currency) is not None:
         total = totals["total_debt"]
@@ -472,7 +472,7 @@ def _column_debt(
     open_refusal = _refusal(open_refused, "total_debt", currency)
     if open_refusal is not None:
         opened = open_refusal
-    elif opened.value is not None:
+    else:
         opened = _merged(regs, opening, "total_debt", opened)
     raised = _account(accounts, "net_debt_issue_repay")
     undrawn = (
