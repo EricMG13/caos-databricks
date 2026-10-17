@@ -33,6 +33,7 @@ import {
   fetchSection,
   sectionUrl,
   selectionNeeded,
+  unrequestedStatus,
   type RegionStatus,
   type WorkspaceDocument,
 } from "./transport";
@@ -44,7 +45,7 @@ import { QualificationStrip } from "@/chrome/QualificationStrip";
 import { SectionPanel, SectionTabs } from "@/chrome/SectionTabs";
 import { SectionSummary } from "@/chrome/SectionSummary";
 import { SiteHeader } from "@/chrome/SiteHeader";
-import { CASE_SECTIONS, composeChrome, markDisabled } from "@/chrome/compose";
+import { CASE_SECTIONS, composeChrome, markDisabled, partialNotes } from "@/chrome/compose";
 import { fallbackChrome } from "@/chrome/fallback";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
 import { ReportDraftProvider } from "@/sections/report/draft";
@@ -58,7 +59,6 @@ import type { Chrome, Section } from "@/wire";
 const LOADING: RegionStatus = { kind: "loading" };
 /** Sections about the book as a whole rather than one case. */
 const PORTFOLIO = new Set<Section>(["directory", "book"]);
-const UNAVAILABLE: RegionStatus = { kind: "unavailable" };
 
 /** The chrome composed for a v1 document. A disabled section never fetches,
     so it never reaches here with a document to compose from. */
@@ -194,10 +194,10 @@ export function Workspace({ section }: { section: Section }) {
   );
   const status = useMemo<RegionStatus>(() => {
     if (requested) return current ? visible(current) : LOADING;
-    if (need === null) return UNAVAILABLE;
+    if (need === null) return unrequestedStatus(section);
     const where = sectionPath(need === "run" ? "run" : "report");
     return { kind: "choose", need, href: caseSearch ? `${where}?${caseSearch}` : where };
-  }, [requested, current, need, caseSearch]);
+  }, [requested, current, need, caseSearch, section]);
   const latest = current?.pending ?? current?.displayed ?? null;
   // The refetch that did not answer says the view is not live and replaces
   // nothing (FE-2).
@@ -472,6 +472,7 @@ export function Workspace({ section }: { section: Section }) {
           brief={chrome.brief}
           ribbon={chrome.ribbon}
           compact={activeTab !== null}
+          partialNotes={status.kind === "partial" ? partialNotes(status.notes) : null}
           review={
             reviewTab
               ? {

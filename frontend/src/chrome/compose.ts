@@ -507,15 +507,19 @@ function factsOf(section: EnabledSection, document: SectionDocument): Facts {
   }
 }
 
+/** What a partial document says could not be read, as the Evidence cell and
+    a compact summary both print it. */
+export function partialNotes(notes: readonly string[]): string {
+  return notes.length
+    ? `Partial: ${notes.join(", ")}.`
+    : "Some parts of this document could not be read.";
+}
+
 export function composeChrome(section: EnabledSection, document: SectionDocument): Chrome {
   const { subject, served_role: role } = document.chrome;
   const facts = factsOf(section, document);
   const partial = document.status === "partial";
-  const notes = partial
-    ? document.notes.length
-      ? `Partial: ${document.notes.join(", ")}.`
-      : "Some parts of this document could not be read."
-    : null;
+  const notes = partial ? partialNotes(document.notes) : null;
   return {
     subject: subject ? { case_id: subject.case_id, issuer: subject.title } : null,
     ribbon: {
