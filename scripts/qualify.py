@@ -34,9 +34,12 @@ them, and `$TMPDIR` is purged (FP-16).
         --expect-identity copilot/gpt-6-luna/high/65536 --ceiling 5.00
 
     # Name where the run database's disk is read from, so a set that would fill
-    # it refuses before it reserves anything (N150, F521).
+    # it refuses before it reserves anything (N150, F521); and pick a stopped
+    # set back up in the database it stopped in rather than pin a new one.
     scripts/qualify.py <set> <the options above> \
         --docker-container caos-postgres --min-free-bytes 5368709120
+    scripts/qualify.py <set> <the options above> \
+        --resume caos_qualify_<32 hex> --resume-token <the `resume token:` line>
 
 `--expect-identity` is not a convenience. A verdict binds the execution profile
 it was measured under, so the run refuses before spending anything if the
@@ -46,6 +49,7 @@ environment resolves to a different one than the caller believes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -89,12 +93,16 @@ from caos.qualification.harness import (
     PreparedCase,
     Unrun,
     assert_admissible,
+    assert_pin_eligible,
+    harness_identities,
     perform,
     prepare,
 )
 from caos.qualification.matrix import (
+    QualificationCase,
     QualificationSet,
     assert_measurable,
+    qualification_set_digest,
 )
 from caos.qualification.on_disk import load_qualification_set
 from caos.qualification.store import performed_evidence, record_evidence
@@ -104,12 +112,14 @@ from caos.store import (
     StoreConnection,
     apply_schema,
     connect,
+    verify_schema,
 )
 from caos.store.budget import remaining, validate_spend
 from caos.store.gates import Gate, GateApproval, approve_gate, gate_preview
 from caos.store.members import Standing, grant
 from caos.store.outcomes import execution_reads, node_attempts
 from caos.store.routes import resolved_route
+from caos.store.run_inputs import load_run_input
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -415,6 +425,7 @@ def _plain(value: object) -> Plain:
 PGDATA = "/var/lib/postgresql/data"
 _PROBE_SECONDS = 30
 _CONTAINER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
+_DATABASE_NAME = re.compile(r"caos_qualify_[0-9a-f]{32}")
 
 
 class PreflightCode(Enum):
@@ -424,6 +435,9 @@ class PreflightCode(Enum):
 
     FREE_SPACE_BELOW_FLOOR = "FREE_SPACE_BELOW_FLOOR"
     FREE_SPACE_UNREADABLE = "FREE_SPACE_UNREADABLE"
+    RESUME_DATABASE_INVALID = "RESUME_DATABASE_INVALID"
+    RESUME_NO_PIN = "RESUME_NO_PIN"
+    RESUME_PIN_MISMATCH = "RESUME_PIN_MISMATCH"
 
 
 class PreflightRefusal(Exception):
@@ -500,8 +514,10 @@ def _free_bytes(probe: Probe) -> int:
 
 
 def _preflight(args: argparse.Namespace) -> None:
-    """The free-space floor when a probe is named, which needs neither the
-    provider nor the store (N150)."""
+    """The checks that need neither the provider nor the store: the resume
+    name, and the free-space floor when a probe is named (N150)."""
+    if args.resume is not None and not _DATABASE_NAME.fullmatch(args.resume):
+        raise PreflightRefusal(PreflightCode.RESUME_DATABASE_INVALID)
     if args.free_space_probe is None and args.docker_container is None:
         print(
             "no free-space probe named: free space is not checked",
@@ -517,6 +533,118 @@ def _non_negative(text: str) -> int:
     if not (text.isascii() and text.isdigit()):
         raise ValueError  # argparse names the option and the bad value
     return int(text)
+
+
+def resume_token(set_digest: str, provider: str, model: str, database: str) -> str:
+    """What a start prints and `--resume` must be given back (N-2, N-3).
+
+    A driver killed before its first snapshot leaves nothing in the database
+    that records the set digest, so a resume could bind paid calls to an edited
+    answer key. The operator carries the binding instead: a SHA-256 over the
+    set digest, the provider and model identity exactly as `--expect-identity`
+    states them (an output-cap segment included), and the database name, so a
+    token another start of the same set printed (another database) does not
+    pass either. It guards against a mistake -- a mixed-up token, an edited
+    key after a crash -- not against an operator who recomputes it: that
+    operator owns the set and the database and could as well start afresh."""
+    bound = json.dumps([set_digest, provider, model, database], separators=(",", ":"))
+    return hashlib.sha256(bound.encode("utf-8")).hexdigest()
+
+
+def _resumed_pins(
+    conn: StoreConnection,
+    harness: Harness,
+    qualification: QualificationSet,
+    database: str,
+    token: str,
+) -> tuple[PreparedCase, ...]:
+    """The set's pins as the database holds them, re-checked as `perform`
+    would: one run per case in order, built from this bundle, and equal to what
+    the set says now; `token` must be the one this database's start printed.
+    Nothing is written."""
+    # An out-of-date store refuses typed up front (STORE_SCHEMA_DRIFT).
+    verify_schema(conn)
+    rows = conn.execute(
+        "SELECT c.title, r.run_id FROM runs r JOIN cases c USING (case_id)"
+        " ORDER BY r.created_at, r.run_id"
+    ).fetchall()
+    conn.rollback()
+    if not rows:
+        raise PreflightRefusal(PreflightCode.RESUME_NO_PIN)
+    if [row[0] for row in rows] != [case.label for case in qualification.cases]:
+        raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
+    digest = qualification_set_digest(qualification)
+    provider, model = harness_identities(harness.completions)
+    if resume_token(digest, provider, model, database) != token:
+        raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
+    _assert_same_binding(conn, (digest, provider, model))
+    try:
+        return tuple(
+            _resumed_pin(conn, harness, case, row, (digest, provider, model))
+            for case, row in zip(qualification.cases, rows, strict=True)
+        )
+    finally:
+        conn.rollback()
+
+
+_OTHER_BINDING = (
+    "SELECT 1 FROM qualification_performed WHERE"
+    " (qualification_set_sha256, provider, model) IS DISTINCT FROM (%s, %s, %s)"
+    " LIMIT 1",
+    "SELECT 1 FROM qualification_evidence WHERE"
+    " (qualification_set_sha256, provider, model) IS DISTINCT FROM (%s, %s, %s)"
+    " LIMIT 1",
+)
+
+
+def _assert_same_binding(conn: StoreConnection, binding: tuple[str, str, str]) -> None:
+    """Refuse `RESUME_PIN_MISMATCH` unless everything the database already
+    recorded was made under this set, provider and model.
+
+    `perform` compares a `PreparedCase` with the harness it was built from, so
+    on a resume that check compares the current values with themselves: a
+    resume under another model paid again and left a set no one can sign. The
+    stored snapshots and evidence name what they were made under, and the
+    calls recorded in the ledger name the model they were paid under (which
+    covers a driver killed before its first snapshot)."""
+    for query in _OTHER_BINDING:
+        if conn.execute(query, binding).fetchone() is not None:
+            conn.rollback()
+            raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
+    paid = conn.execute(
+        "SELECT 1 FROM call_outcomes WHERE model IS NOT NULL AND model <> %s LIMIT 1",
+        (binding[2],),
+    ).fetchone()
+    conn.rollback()
+    if paid is not None:
+        raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
+
+
+def _resumed_pin(
+    conn: StoreConnection,
+    harness: Harness,
+    case: QualificationCase,
+    row: tuple[str, UUID],
+    identity: tuple[str, str, str],
+) -> PreparedCase:
+    """One case's pin, from the store, checked as `perform` will check it."""
+    label, run_id = row
+    try:
+        pin = load_run_input(conn, run_id)
+        # The read keeps its transaction; `execution_reads` wants an idle one.
+        conn.rollback()
+        if pin is None:
+            raise PreflightRefusal(PreflightCode.RESUME_NO_PIN)
+        item = PreparedCase(label, pin, *identity)
+        with execution_reads(conn):
+            assert_pin_eligible(conn, harness, case, item)
+    except Refusal as refused:
+        # A pin that will not load or no longer equals the set is a mismatch;
+        # any other typed refusal (the store, the bundle) stands as itself.
+        if refused.code is not RefusalCode.RUN_INPUT_INVALID:
+            raise
+        raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH) from None
+    return item
 
 
 def _perform_until(  # noqa: PLR0913 -- one set, one loop, keyword-only tail
@@ -685,6 +813,19 @@ def _parser() -> argparse.ArgumentParser:
         default=2**30,
         help="the free-space floor, in bytes (default 1 GiB)",
     )
+    parser.add_argument(
+        "--resume-token",
+        metavar="HEX",
+        help="the `resume token:` line the run printed when it started",
+    )
+    parser.add_argument(
+        "--resume",
+        metavar="DATABASE",
+        help=(
+            "re-enter perform on the pins already in this caos_qualify_*"
+            " database instead of creating a new one"
+        ),
+    )
     return parser
 
 
@@ -800,23 +941,30 @@ def _create_database(admin_url: str) -> tuple[str, str]:
 @dataclass(frozen=True)
 class _Start:
     """Everything a run needs once every refusal that spends nothing is past:
-    the set, its harness and the new database."""
+    the set, its harness, the database (new, or the one resumed) and the pins a
+    resume found there (None for a new run, which prepares them)."""
 
     qualification: QualificationSet
     harness: Harness
     database: str
     run_url: str
     blob_root: str
+    resumed: tuple[PreparedCase, ...] | None
 
 
 def _performed_capture(start: _Start, *, attempts: int) -> dict[str, object]:
-    """Prepare, approve and perform the set in its database; its capture."""
+    """Prepare, approve and perform the set in its database; its capture.
+
+    A resumed set is already prepared and approved: it performs on those pins."""
     harness, qualification = start.harness, start.qualification
     with connect(start.run_url) as conn:
         blobs = BlobStore(Path(start.blob_root))
-        apply_schema(conn)
-        prepared = prepare(conn, blobs, harness, qualification=qualification)
-        _approve_every_gate(conn, prepared)
+        if start.resumed is None:
+            apply_schema(conn)
+            prepared = prepare(conn, blobs, harness, qualification=qualification)
+            _approve_every_gate(conn, prepared)
+        else:
+            prepared = start.resumed
         performed = _perform_until(
             conn, blobs, harness, qualification, prepared, attempts=attempts
         )
@@ -834,21 +982,35 @@ def _refused(code: str) -> None:
 
 
 def _opened(
+    args: argparse.Namespace,
     qualification: QualificationSet,
     harness: Harness,
     admin_url: str,
     blob_root: str,
 ) -> _Start | None:
-    """A new database for the run. None, having said why nothing was spent."""
+    """The database the run goes in: a new one, or the one `--resume` names with
+    its pins re-checked. None, having said why nothing was spent."""
+    resumed: tuple[PreparedCase, ...] | None = None
     try:
-        database, run_url = _create_database(admin_url)
+        if args.resume is None:
+            database, run_url = _create_database(admin_url)
+        else:
+            database = args.resume
+            run_url = _database_url(admin_url, database)
+            with connect(run_url) as conn:
+                resumed = _resumed_pins(
+                    conn, harness, qualification, database, args.resume_token
+                )
+    except (PreflightRefusal, Refusal) as refused:
+        _refused(refused.code.value)
+        return None
     except psycopg.Error:
         # CF-078: a DSN psycopg itself refuses to parse -- bad percent-encoding
         # in a password included -- quotes the whole string, password and all,
         # in its own message; only the typed code is ever printed here.
         _refused(RefusalCode.STORE_UNAVAILABLE.value)
         return None
-    return _Start(qualification, harness, database, run_url, blob_root)
+    return _Start(qualification, harness, database, run_url, blob_root, resumed)
 
 
 def _started(args: argparse.Namespace) -> _Start | None:
@@ -869,7 +1031,15 @@ def _started(args: argparse.Namespace) -> _Start | None:
         return None
     if planned is None:
         return None
-    return _opened(*planned)
+    return _opened(args, *planned)
+
+
+def _print_resume_token(start: _Start) -> None:
+    """The line `--resume` must be given back, printed before any call."""
+    provider, model = harness_identities(start.harness.completions)
+    digest = qualification_set_digest(start.qualification)
+    token = resume_token(digest, provider, model, start.database)
+    print(f"resume token: {token}", file=sys.stderr)
 
 
 def _print_preamble(start: _Start) -> None:
@@ -897,10 +1067,14 @@ def _print_preamble(start: _Start) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if (args.resume is None) != (args.resume_token is None):
+        parser.error("--resume and --resume-token are given together")
     start = _started(args)
     if start is None:
         return 2
+    _print_resume_token(start)
     _print_preamble(start)
     database = start.database
     try:
