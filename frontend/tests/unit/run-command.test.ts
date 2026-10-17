@@ -3,6 +3,7 @@
 // request body the form maps onto `qualifiers` and `objective`.
 import {
   EMPTY_COMMAND_FORM,
+  FORECAST_MODULE,
   NO_COMMAND,
   commandErrors,
   derivedScope,
@@ -63,6 +64,14 @@ describe("the command the form sends", () => {
       ],
       objective: "Size a senior secured position.",
     });
+  });
+
+  test("every forecast qualifier addresses FORECAST_MODULE, CP-2G", () => {
+    expect(FORECAST_MODULE).toBe("CP-2G");
+    const form = { horizon: "FY2026-FY2028", base: "FY2025", cases: "Base", objective: "" };
+    const { qualifiers } = runCommand(form, BOTH);
+    expect(qualifiers).toHaveLength(3);
+    for (const q of qualifiers) expect(q.module_id).toBe(FORECAST_MODULE);
   });
 
   test("a module the route does not carry is never addressed", () => {
