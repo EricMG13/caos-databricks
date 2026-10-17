@@ -946,3 +946,59 @@ describe("Analysis", () => {
     expect(container).toHaveTextContent("No handoff has been accepted on this run yet.");
   });
 });
+
+describe("Analysis residue (N221)", () => {
+  const withText = (model_analysis: string) => ({
+    ...complete.body.handoffs[0]!,
+    model_analysis,
+  });
+  const mountText = (model_analysis: string) => {
+    const handoff = withText(model_analysis);
+    return mountAt(
+      { ...complete, body: { ...complete.body, handoffs: [handoff] } },
+      handoff.module_id,
+    );
+  };
+
+  test("a model-text Restricted status word wears the ring, not the warning (D71)", () => {
+    const { container } = mountText(
+      [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### B2 — Status",
+        "| Check | Status |",
+        "| --- | --- |",
+        "| Leverage | Restricted |",
+        "| Liquidity | Stale |",
+      ].join("\n"),
+    );
+    openTab(container, "appendix");
+    fireEvent.click(container.querySelector("[data-register-open]")!);
+    const words = [...container.querySelectorAll("[data-status-word]")];
+    const restricted = words.find((word) => word.textContent === "Restricted")!;
+    expect(restricted.classList.contains("warn")).toBe(false);
+    expect(restricted.querySelector(".glyph")).toHaveClass("restricted");
+    const stale = words.find((word) => word.textContent === "Stale")!;
+    expect(stale.querySelector(".glyph")).toHaveClass("warn");
+  });
+
+  test("the Audit tab's issue count is drawn as the ring, not a warning (D71)", () => {
+    const { container } = mountText(
+      [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### B9 — Conflicts & gaps register",
+        "| Gap ID | Gap description |",
+        "| --- | --- |",
+        "| G1 | Missing FY25 notes |",
+      ].join("\n"),
+    );
+    const glyph = container.querySelector('[data-depth-tab="audit"] .count .glyph')!;
+    expect(glyph).toHaveClass("restricted");
+    expect(glyph).not.toHaveClass("warn");
+  });
+});

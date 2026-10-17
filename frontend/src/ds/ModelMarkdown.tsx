@@ -116,7 +116,7 @@ function figureColumns(table: MdTable): boolean[] {
 // Status words the methodology writes in its registers, as a badge with the
 // severity's shape (DESIGN.md: severity is shape and hue). The word is printed
 // as written; only its tone is chosen here.
-const TONE: Record<string, "ok" | "warn" | "crit"> = {
+const TONE: Record<string, "ok" | "warn" | "crit" | "restricted"> = {
   pass: "ok",
   passed: "ok",
   ready: "ok",
@@ -128,7 +128,7 @@ const TONE: Record<string, "ok" | "warn" | "crit"> = {
   warn: "warn",
   warning: "warn",
   partial: "warn",
-  restricted: "warn",
+  restricted: "restricted",
   degraded: "warn",
   stale: "warn",
   unresolved: "warn",
@@ -150,14 +150,21 @@ const SEVERITY: Record<string, "ok" | "warn" | "crit" | ""> = {
 };
 const SEVERITY_HEAD = /severity|materiality|priority|caution/i;
 
-function toneOf(head: string, cell: string): "ok" | "warn" | "crit" | "" | null {
+function toneOf(head: string, cell: string): "ok" | "warn" | "crit" | "restricted" | "" | null {
   const word = cell.trim().toLowerCase();
   if (word in TONE) return TONE[word]!;
   if (SEVERITY_HEAD.test(head) && word in SEVERITY) return SEVERITY[word]!;
   return null;
 }
 
-const GLYPH = { ok: "ok", warn: "warn", crit: "crit", "": "idle" } as const;
+// A module that ran carrying a limitation is the ring, never a warning (D71).
+const GLYPH = {
+  ok: "ok",
+  warn: "warn",
+  crit: "crit",
+  restricted: "restricted",
+  "": "idle",
+} as const;
 
 /** One cell: a status word as a badge, anything else as model text. */
 export function MdCell({ head, text }: { head: string; text: string }) {
