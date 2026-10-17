@@ -3616,17 +3616,21 @@ def test_t8_relay_places_every_id_it_can_in_the_same_line(
     wording of the vendor's message, ...) is relayed as the same line an
     ordinary id gets, never dropped (a line exists) and never leaking: the
     relay of any id the table keeps in one cell equals that of a neutral id."""
-    # A catalog module or alias draws a different vendor fault, relayed as
-    # that fault with `row N` for the id (see the next test); only an unknown
-    # id gets `unknown`'s line.
-    known = {m["module_id"] for m in CATALOG["modules"]} | set(
-        CATALOG["superseded_module_ids"]
+    # A catalog module, an alias or a module the parser suppresses draws a
+    # different vendor fault, relayed as that fault with `row N` for the id
+    # (see the next test); only an unknown id gets `unknown`'s line. The
+    # parser looks the id up after `_plain_value` strips one wrapper.
+    navigation = cached_contract(BUNDLE).navigation
+    known = (
+        {m["module_id"] for m in CATALOG["modules"]}
+        | set(CATALOG["superseded_module_ids"])
+        | set(navigation.SUPPRESSED_MODULES)
     )
-    assume(module_id not in known)
+    assume(navigation._plain_value(module_id) not in known)
     baseline = _relayed(template, "ZZ-NOT-A-MODULE")
     assert baseline is not None
     got = _relayed(template, module_id)
-    assume(got != "NOT REFUSED")
+    assume(got != "NOT REFUSED")  # the parser accepts some ids; nothing to relay
     assert got == baseline, (template, module_id, got)
 
 
@@ -3641,3 +3645,12 @@ def test_t8_relay_gives_a_real_module_id_its_own_fault_without_the_id() -> None:
         "row 1 is an alias for CP-2A; replace the T8 row with its current owner"
         " and preserve qualifiers"
     )
+
+
+@pytest.mark.parametrize("module_id", ["CP-X", "**CP-0**", "`CP-2B`"])
+def test_t8_relay_withholds_a_suppressed_or_wrapped_real_id(module_id: str) -> None:
+    """The ids the property above discards (`CP-X` is suppressed, a wrapped
+    real id is unwrapped before lookup) get their own fault, never the id."""
+    got = _relayed("unknown", module_id)
+    assert got != "NOT REFUSED"
+    assert module_id.strip("`*") not in str(got).replace("CP-2A", ""), got
