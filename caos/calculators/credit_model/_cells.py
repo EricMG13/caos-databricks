@@ -281,6 +281,18 @@ def refused_balance(
     )
 
 
+def merged_footing_note(regs: Cp1Registers, period_ids: Iterable[str]) -> str | None:
+    """`footing_note` of the first two of the periods, in order, that state a
+    different basis or perimeter (`_apart_periods`); None where none do."""
+    seen: list[str] = []
+    for period_id in dict.fromkeys(period_ids):
+        for earlier in seen:
+            if _apart_periods(regs, earlier, period_id):
+                return footing_note(regs, earlier, period_id)
+        seen.append(period_id)
+    return None
+
+
 def anchor_period(regs: Cp1Registers) -> PeriodRow | None:
     """The period at the latest end date of a quarter, YTD or FY: an FY
     ending then, else a YTD, else a quarter, first in register order. An end

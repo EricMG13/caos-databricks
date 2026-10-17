@@ -21,7 +21,7 @@ from caos.calculators.credit_model._cells import (
     refused_balance,
 )
 from caos.calculators.credit_model.assemble import ModelInputs, credit_model
-from caos.calculators.credit_model.debt import _stated_at, debt_frame
+from caos.calculators.credit_model.debt import _stated_at, debt_frame, facility_keys
 from caos.calculators.credit_model.frame import Cell
 from caos.calculators.credit_model.history import (
     _term_length,
@@ -315,3 +315,93 @@ def _drop_tlb_history(regs: Cp1Registers) -> Cp1Registers:
 def test_term_length_is_unknown_for_a_term_that_is_not_a_column() -> None:
     assert _term_length(((None, 1),), {}) is None
     assert _term_length((("FY2025", 1),), {}) is None
+
+
+# N220 (2)-(4): notes and refusals scoped to the facilities concerned.
+_PYTD = "PYTD:H1_2025"
+
+
+def _debt(regs: Cp1Registers) -> dict[str, Cell]:
+    columns = tuple(c for c in historical_columns(regs) if c.column_id == _PYTD)
+    return debt_frame(regs, columns, account_frame(regs, columns))[_PYTD]
+
+
+def _own_holds(regs: Cp1Registers, held: set[str], blank: set[str]) -> Cp1Registers:
+    """H1 2025 (RESTATED, the column's own) also holds Q2 2025's (AS_REPORTED)
+    rows of the `held` facilities, those in `blank` without a carrying value."""
+    copies = tuple(
+        replace(
+            f,
+            period_id="H1_2025",
+            carrying_value=None if f.facility_id in blank else f.carrying_value,
+        )
+        for f in regs.facilities
+        if f.period_id == "Q2_2025" and f.facility_id in held
+    )
+    regs = replace(regs, facilities=(*regs.facilities, *copies))
+    return _bases(regs, H1_2025=("RESTATED", None), Q2_2025=("AS_REPORTED", None))
+
+
+def test_an_own_row_without_a_value_beside_an_apart_twin_is_refused_with_note() -> None:
+    """N220 (3): the own period holds the term loan with no carrying value,
+    Q2 2025 (another footing) holds 2340: the total is refused, naming both."""
+    regs = _own_holds(_pytd_regs((None, None), (None, None)), {"tlb"}, {"tlb"})
+    cells = _debt(regs)
+    for key in ("total_debt", "secured_debt", "fac:tlb"):
+        _refused(cells[key], footing_note(regs, "H1_2025", "Q2_2025"))
+
+
+def test_only_the_totals_a_refused_facility_feeds_are_refused() -> None:
+    """N220 (4): an unsecured note held only on another footing refuses
+    `total_debt`, not `secured_debt` or `lease_liabilities`."""
+    base = _pytd_regs((None, None), (None, None))
+    everyone = {f.facility_id for f in base.facilities if f.period_id == "Q2_2025"}
+    regs = _own_holds(base, everyone - {"sun29"}, set())
+    cells = _debt(regs)
+    _refused(cells["total_debt"], footing_note(regs, "H1_2025", "Q2_2025"))
+    _refused(cells["debt_closing"], footing_note(regs, "H1_2025", "Q2_2025"))
+    plain = _debt(_pytd_regs((None, None), (None, None)))
+    assert cells["secured_debt"].value == plain["secured_debt"].value
+    assert cells["lease_liabilities"].reason != "COMPONENT_MISSING"
+
+
+@settings(max_examples=40, deadline=None)
+@given(kept=st.sets(st.sampled_from(range(9)), min_size=1, max_size=8))
+def test_a_total_is_refused_exactly_when_a_facility_feeding_it_is_apart(
+    kept: set[int],
+) -> None:
+    base = _pytd_regs((None, None), (None, None))
+    rows = [f for f in base.facilities if f.period_id == "Q2_2025"]
+    held = {rows[i].facility_id for i in kept}
+    cells = _debt(_own_holds(base, held, set()))
+    for key in ("total_debt", "secured_debt", "lease_liabilities"):
+        feeds = [r for r in rows if key in facility_keys(r, "USD")]
+        apart = [r for r in feeds if r.facility_id not in held]
+        mine = [r for r in feeds if r.facility_id in held]
+        if apart:
+            assert cells[key].reason == "COMPONENT_MISSING", key
+            assert OTHER_FOOTING in (cells[key].note or ""), key
+        else:
+            total = sum((r.carrying_value or Decimal(0) for r in mine), Decimal(0))
+            assert cells[key].value == total, key
+
+
+def test_two_same_day_periods_on_different_footings_merged_are_noted() -> None:
+    """N220 (2): the column's own period states none; the stack reads Q2 2025
+    (AS_REPORTED) and ALT_2025 (IFRS, holds one senior note)."""
+    base = _pytd_regs((None, None), ("AS_REPORTED", None))
+    quarter = next(p for p in base.periods if p.period_id == "Q2_2025")
+    alt = replace(quarter, period_id="ALT_2025", accounting_basis="IFRS")
+    moved = tuple(
+        replace(f, period_id="ALT_2025")
+        if (f.facility_id, f.period_id) == ("sun29", "Q2_2025")
+        else f
+        for f in base.facilities
+    )
+    regs = replace(base, periods=(*base.periods, alt), facilities=moved)
+    cells = _debt(regs)
+    note = footing_note(regs, "Q2_2025", "ALT_2025")
+    assert cells["total_debt"].value is not None
+    assert note in (cells["total_debt"].note or "")
+    assert OTHER_FOOTING not in (cells["secured_debt"].note or "")
+    assert cells["secured_debt"].value is not None
