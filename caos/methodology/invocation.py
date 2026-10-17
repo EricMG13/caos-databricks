@@ -99,24 +99,29 @@ _CATALOG = "references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
 # reader sees the number. The legacy 32 KiB was sized for another model's
 # handoffs: the first live Claude Opus 5 answer, CP-0 over a six-line
 # document, ran to 36,544 bytes and the next node refused
-# UPSTREAM_SECTION_OVER_CEILING before any call (F110). 128 KiB since D152 R32
-# (N209): live CP-4 answers run 75-99 KB and retries dropped sections to fit
-# the 96 KiB that D83 set. 96 KiB since D83: the
+# UPSTREAM_SECTION_OVER_CEILING before any call (F110). 96 KiB since D83: the
 # 52 KiB that followed refused CP-1's real answers, 9 of 11 CZR sets and 6 of 6
 # CCL at 50,489-85,559 bytes, so the next node stopped on the section rather
-# than the work. The catalog's widest node is CP-5, 16 direct upstreams: 16
-# sections at this bound beside its 170,803 bytes of delivered authority encode
-# to 2,278,276 bytes, leaving 1,916,028 of the 4 MiB request (D29) for evidence
-# and for the upstream citation register, which this figure excludes and which
-# is unbounded (it grows with answer size); a request over the ceiling still
-# fails closed, typed (the widest-node test in
-# `tests/test_handoff_invocation.py`). The bound is on raw bytes and the
-# ceiling on the JSON encoding, so a node whose real sections escape heavier and
-# still reaches the ceiling fails closed there, typed.
-# Nothing is ever truncated: per-node evidence selection (§95,
-# `caos/methodology/selection.py`) narrows a node's evidence to the members its
-# gate row names, but a named member is delivered whole and the upstream
-# sections are bounded here, not selected.
+# than the work. 128 KiB since D152 R32 (N209): live CP-4 answers run 75-99 KB
+# and retries dropped sections to fit the 96 KiB. The catalog's widest node is
+# CP-5, 16 direct upstreams: 16 sections at this bound beside its 170,803
+# bytes of delivered authority encode to about 2,278,300 bytes. Since D116 a
+# node is fitted to its model's request ceiling less `RETRY_RESERVE_BYTES`
+# (2,737,856 for the smallest declared context), not to the 4 MiB transport
+# bound, which leaves CP-5 about 459,500 bytes for evidence and the upstream
+# citation register (unbounded: it grows with answer size); R32 cost 524,288
+# of the 983,820 the 96 KiB bound left. The room must cover the least evidence
+# a FULL run can send, one line a page, which `pack_view` needs or refuses
+# CONTEXT_OVER_CEILING (the widest-node test in
+# `tests/test_handoff_invocation.py` computes it from the committed sets and
+# fails for a declared context too small for the node). The bound is on raw
+# bytes and the ceiling on the JSON encoding, so a node whose real sections
+# escape heavier and still reaches the ceiling fails closed there, typed.
+# An upstream section is never truncated: it is bounded here and refused past
+# the bound. Evidence is the part that narrows: per-node selection (§95,
+# `caos/methodology/selection.py`) names the members a gate row lists, and
+# where those do not fit the request ceiling D116's page maps show a leading
+# part of each page, every page at least once, with the prompt saying so.
 MAX_UPSTREAM_HANDOFF_BYTES = 131_072
 
 

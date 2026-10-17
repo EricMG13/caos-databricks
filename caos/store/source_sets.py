@@ -171,8 +171,8 @@ def snapshot_in(conn: StoreConnection, case_id: UUID) -> SourceSet:
 @dataclass(frozen=True, slots=True)
 class PinnedSources:
     """What one read of a run's captured members found: the usable ones by
-    document digest, and the documents the pin captured whose every copy is
-    now withdrawn."""
+    document digest, and the documents the pin captured that have a withdrawn
+    copy and no live copy whose extraction matches its member."""
 
     live: dict[str, UUID]
     withdrawn: frozenset[str]
@@ -182,9 +182,12 @@ def pinned_sources(conn: StoreConnection, run_id: UUID) -> PinnedSources:
     """The run's captured members, usable and withdrawn, in one statement.
 
     `live` is `pinned_live_sources`' answer; `withdrawn` (CF-019) is a
-    document captured by the pin that has a withdrawn source and no live copy,
-    so a citation to it is told apart from one naming a document the pin never
-    held. A live member whose extraction identity moved is in neither.
+    document captured by the pin that has a withdrawn source and no live copy
+    whose extraction matches its member, so a citation to it is told apart from
+    one naming a document the pin never held. A live member whose extraction
+    identity moved is in neither `live` nor, if it is the only live copy of a
+    document with no withdrawn copy, `withdrawn`; beside a withdrawn copy it
+    leaves the document in `withdrawn`.
     Caller owns the read transaction.
     """
     rows = conn.execute(

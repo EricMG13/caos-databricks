@@ -236,7 +236,8 @@ class PinnedEvidence:
     sources: Mapping[str, UUID]
     delivered: Mapping[UUID, frozenset[str]]
     index: TokenIndex
-    # Documents the pin captured whose every copy is withdrawn (CF-019): a
+    # Documents the pin captured that have a withdrawn copy and no live copy
+    # whose extraction matches its member (CF-019): a
     # citation to one is `EVIDENCE_NOT_AVAILABLE`, not a record mismatch.
     withdrawn: frozenset[str] = frozenset()
 
