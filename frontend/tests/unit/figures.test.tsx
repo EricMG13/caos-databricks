@@ -992,6 +992,8 @@ test("a refused register is named beside a tables refusal too (N194)", () => {
   const note = container.querySelector("[data-tables-unavailable='TABLES_MALFORMED']");
   expect(note).toHaveTextContent("tables could not be read (TABLES_MALFORMED)");
   expect(note).toHaveTextContent("registers T4.6 (TABLES_MALFORMED) could not be read");
+  expect(note).toHaveAttribute("data-registers-refused", "T4.6 (TABLES_MALFORMED)");
+  expect(note).toHaveTextContent("Its other registers and prose are unaffected");
   expect(container.querySelector("[data-figure='covenant-headroom-x']")).not.toBeNull();
 });
 

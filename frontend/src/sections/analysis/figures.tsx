@@ -1057,7 +1057,7 @@ function Unread({ handoff }: { handoff: HandoffView }) {
       data-registers-refused={refused.length ? refused.join(" ") : undefined}
     >
       This module&apos;s {what}, so no figure is drawn from them. Its{" "}
-      {unread ? "prose below is" : "other registers and prose are"} unaffected.
+      {refused.length ? "other registers and prose are" : "prose below is"} unaffected.
     </p>
   );
 }
