@@ -30,7 +30,7 @@ from test_revisions import _save
 from test_run_commands import _Counting
 
 from caos.api.app import app, methodology_bundle, store_connection
-from caos.api.commands import deliverable, members
+from caos.api.commands import availability, deliverable, members
 from caos.api.commands._request import require_case_admin
 from caos.api.deps import actor_from_request
 from caos.api.reads import reports as reports_read
@@ -1274,11 +1274,14 @@ def _refusing(code: RefusalCode) -> Callable[..., bytes]:
     return refuse
 
 
+# Exactly the drift refusals `prove_revision` can raise (the renderer's codes
+# are not among them: a head that re-proves but does not render is served
+# complete, FILE refused, SAVE offered).
 DRIFT = [
     RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING,
     RefusalCode.DELIVERABLE_PAYLOAD_INVALID,
-    RefusalCode.DELIVERABLE_MARKDOWN_UNSUPPORTED,
-    RefusalCode.DELIVERABLE_UNCITED_FIGURE,
+    RefusalCode.NARRATIVE_REFERENCE_INVALID,
+    RefusalCode.NARRATIVE_FIGURE_UNREFERENCED,
 ]
 
 
@@ -1297,6 +1300,7 @@ def test_a_frozen_head_that_no_longer_re_proves_is_offered_the_superseding_save(
     with `HEAD_UNPROVEN`, the save is offered, and filing is refused with the
     proof's own code (an independent approver sees it, not only a writer); a
     head that still re-proves keeps `DELIVERABLE_ALREADY_FROZEN`."""
+    assert availability.UNPROVEN_HEAD_CODES == frozenset(DRIFT)
     frozen = _frozen_head(filing_client, lite)
     writer = member(lite.conn, lite.case_id, Standing.WRITER)
     approver = _approver(lite)

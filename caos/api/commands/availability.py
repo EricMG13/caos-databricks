@@ -23,16 +23,17 @@ from caos.store.work import MAX_QUEUED_RUNS_PER_ACTOR
 IO_BUDGET = 0
 
 _C = RefusalCode
-# The refusals of a frozen head's re-proof that mean drift, not tamper: the
-# renderer or the rules moved since the freeze, so the head cannot be filed and
-# takes the superseding save `_fileable` lets through (N77, N112). A blob that
-# is missing or changed, a record mismatch or a store fault is none of these.
+# The refusals `prove_revision` raises that mean drift, not tamper: the saved
+# narrative no longer resolves, or the derivation moved since the freeze, so the
+# head cannot be filed and takes the superseding save `_fileable` lets through
+# (N77, N112). A blob that is missing or changed, a record mismatch or a store
+# fault is none of these.
 UNPROVEN_HEAD_CODES = frozenset(
     {
         RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING,
         RefusalCode.DELIVERABLE_PAYLOAD_INVALID,
-        RefusalCode.DELIVERABLE_MARKDOWN_UNSUPPORTED,
-        RefusalCode.DELIVERABLE_UNCITED_FIGURE,
+        RefusalCode.NARRATIVE_REFERENCE_INVALID,
+        RefusalCode.NARRATIVE_FIGURE_UNREFERENCED,
     }
 )
 _A = ActionName
@@ -197,10 +198,7 @@ def report_actions(
                 ),
                 (filing.filed, _C.DELIVERABLE_ALREADY_FILED),
                 # Last, as the command re-proves only after its own checks.
-                (
-                    filing.unfileable is not None,
-                    filing.unfileable or _C.DELIVERABLE_MOVED_SINCE_SIGNING,
-                ),
+                *([(True, filing.unfileable)] if filing.unfileable is not None else []),
             ],
         ),
     ]

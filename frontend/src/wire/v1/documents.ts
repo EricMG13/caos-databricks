@@ -90,7 +90,7 @@ function sectionDocument<B extends ReturnType<typeof object>>(body: B) {
     observed_at: datetime,
     observed_empty: bool,
     status: enumOf(["complete", "partial"]),
-    notes: array(SectionNote, 3),
+    notes: array(SectionNote, 4),
   });
 }
 
@@ -868,7 +868,7 @@ const PageDocument = object({
   body: PageBody,
   observed_at: datetime,
   status: enumOf(["complete", "partial"]),
-  notes: array(SectionNote, 3),
+  notes: array(SectionNote, 4),
 });
 
 const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
