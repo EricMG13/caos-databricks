@@ -84,10 +84,23 @@ def test_the_bound_is_the_declared_context_at_three_bytes_a_token() -> None:
         "openai/gpt-6-luna": 1_050_000,
         "openai/gpt-6-luna-pro": 1_050_000,
         "openai/gpt-6-sol": 1_050_000,
+        "openai/gpt-6.1-sol": 1_050_000,
         **dict.fromkeys(WORKSPACE, 1_000_000),
     }
     assert request_ceiling(LUNA) == (1_050_000 - MAX_COMPLETION_TOKENS) * 3
     assert request_ceiling(LUNA) == 2_953_392 < FCA3_REQUEST
+
+
+def test_sol_6_1_is_declared_so_it_does_not_run_on_the_fallback() -> None:
+    """F710: the FCA3 CP-0 run on `openai/gpt-6.1-sol` sent 1,067,449 tokens
+    against a 1,050,000 context because the name was undeclared."""
+    from caos import copilot
+
+    model = "openai/gpt-6.1-sol"
+    assert CONTEXT_TOKENS[model] == 1_050_000
+    cap = copilot.output_cap(model)
+    assert request_ceiling(model) == (1_050_000 - cap) * BYTES_PER_TOKEN_FLOOR
+    assert request_ceiling(model) < MAX_REQUEST_BYTES
 
 
 # D119: the ten approved workspace endpoints and the bundle default, declared
