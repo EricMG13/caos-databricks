@@ -226,9 +226,24 @@ def _permission_problems(document: object, groups: tuple[str, str]) -> list[str]
         if "group_name" in entry
     )
     wanted = sorted((group, "CAN_USE") for group in groups)
-    if granted == wanted:
-        return []
-    return ["resolved app permissions do not grant CAN_USE to exactly the groups given"]
+    problems = []
+    if granted != wanted:
+        problems.append(
+            "resolved app permissions do not grant CAN_USE to exactly the groups given"
+        )
+    # The deployer's own CAN_MANAGE is the one user or service-principal
+    # grant the CLI resolves (W3, N112); any other would open or manage the app.
+    principals = [
+        str(entry.get("level"))
+        for entry in (_mapping(item) for item in _list(listed))
+        if "group_name" not in entry
+    ]
+    if principals not in ([], ["CAN_MANAGE"]):
+        problems.append(
+            "resolved app permissions grant a user or service principal "
+            "other than the deployer's CAN_MANAGE"
+        )
+    return problems
 
 
 def _list(value: object) -> list[object]:

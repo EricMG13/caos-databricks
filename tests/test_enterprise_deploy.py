@@ -1135,3 +1135,40 @@ def test_a_reopened_tail_resumes_after_the_last_event_id() -> None:
         None,
         "status 302, content-type 'text/html': not an event stream",
     )
+
+
+def test_e2_holds_user_and_service_principal_grants_to_the_deployer_manage() -> None:
+    """N112: the one user or service-principal grant E2 admits is the
+    deployer's CAN_MANAGE (W3); any other level, a second principal, or a
+    service principal's CAN_USE broadens who may open or manage the app."""
+    given = enterprise_deploy.given_values(
+        enterprise_deploy._parser().parse_args(
+            ["--stage", "record", "--evidence", "e", "--target", "prod"]
+            + ["--lakebase-project", "p"]
+            + ["--endpoint", ENDPOINT, "--price", PRICE]
+        )
+    )
+    refusal = [
+        "resolved app permissions grant a user or service principal "
+        "other than the deployer's CAN_MANAGE"
+    ]
+
+    def problems(level: str | None, *extra: dict[str, str]) -> list[str]:
+        document = _resolved("caos")
+        listed = document["resources"]["apps"]["caos"]["permissions"]
+        if level is not None:
+            listed[-1]["level"] = level
+        listed.extend(extra)
+        return enterprise_deploy.resolution_problems(
+            document, target="prod", given=given
+        )
+
+    assert problems(None) == []
+    for extra in (
+        {"user_name": "other@example.com", "level": "CAN_MANAGE"},
+        {"service_principal_name": "sp-1", "level": "CAN_MANAGE"},
+        {"user_name": "other@example.com", "level": "CAN_USE"},
+        {"service_principal_name": "sp-1", "level": "CAN_USE"},
+    ):
+        assert problems(None, extra) == refusal
+    assert problems("CAN_USE") == refusal
