@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import os
 import shutil
 import threading
 import time
@@ -151,13 +152,21 @@ def test_each_failed_probe_names_its_code_and_answers_503(
     (tmp_path / "a-file").write_text("x")
     monkeypatch.setenv(BLOB_ROOT, str(tmp_path / "a-file"))
     assert health.probe_blobs() == "BLOB_ROOT_UNAVAILABLE"
+    # A directory the process may not write. A mode does not say so for root
+    # (the probe then answers OK, rightly), so the OS's answer is what is
+    # stood in for: `os.access` refuses this one directory and no other.
     locked = tmp_path / "locked"
-    locked.mkdir(mode=0o500)
+    locked.mkdir()
     monkeypatch.setenv(BLOB_ROOT, str(locked))
-    try:
-        assert health.probe_blobs() == "BLOB_ROOT_UNAVAILABLE"
-    finally:
-        locked.chmod(0o700)
+    assert health.probe_blobs() == "OK"
+    real_access = os.access
+
+    def refuse_locked(path: str | os.PathLike[str], mode: int) -> bool:
+        return os.fspath(path) != str(locked) and real_access(path, mode)
+
+    monkeypatch.setattr(os, "access", refuse_locked)
+    assert health.probe_blobs() == "BLOB_ROOT_UNAVAILABLE"
+    monkeypatch.setattr(os, "access", real_access)
     assert list(tmp_path.iterdir()) and not any(locked.iterdir())
 
     for code in ("STORE_SCHEMA_DRIFT", "BUNDLE_MOVED", "BLOB_ROOT_UNAVAILABLE"):
