@@ -260,26 +260,32 @@ def test_the_gate_starts_from_its_per_source_bound() -> None:
 # --- through the host's builders ---------------------------------------------
 
 
-# The lease documents R27 (N147) added to FCA. The tests below measure the pack
-# FCA3-dec was refused on (D116), so they leave the leases out: admitting 4.3 MB
-# more text into the shared test database is heavy enough to have its backend
-# killed on a small docker VM, and the test below holds what the leases change.
+# The lease documents R27 (N147) added to FCA. The fixture-based tests below
+# cover the pack FCA3-dec was refused on (D116), the committed pack without
+# them: admitting 4.3 MB more text into the test database got its backend
+# killed on a small docker VM. What the leases change is held by the
+# size-only test below; the fit of the whole committed pack is measured in the
+# set's RESULT.md, not asserted by a test that admits it.
 LEASE_PREFIXES = ("CZR_GLPI_", "CZR_VICI_")
 
 
-def test_the_regional_lease_alone_is_past_the_per_source_bound() -> None:
-    """R27 (N147): of the lease documents FCA carries, only the conformed
-    Regional Lease is larger than the gate's per-source bound, so it alone is
-    shown as a page map on a model of no declared context; the rest reach
-    CP-0 whole, and the set's `RESULT.md` records the measured sizes."""
+def _fca_sizes() -> dict[str, int]:
     [listed] = json.loads((FCA / "qualification.json").read_text())["cases"]
-    leases = {
-        Path(n).name: len((FCA / n).read_bytes())
-        for n in listed["documents"]
-        if Path(n).name.startswith(LEASE_PREFIXES)
-    }
+    return {Path(n).name: len((FCA / n).read_bytes()) for n in listed["documents"]}
+
+
+def test_fcas_committed_pack_is_past_the_transport_ceiling_as_a_whole() -> None:
+    """R27 (N147): with the 21 lease documents the committed FCA pack's text
+    exceeds `MAX_REQUEST_BYTES` on its own, so CP-0 can see it only through
+    page maps (`pack_view`); and the conformed Regional Lease alone is past the
+    gate's per-source bound. Sizes only, from `qualification/`: no admission."""
+    sizes = _fca_sizes()
+    leases = {n: s for n, s in sizes.items() if n.startswith(LEASE_PREFIXES)}
     assert len(leases) == 21
-    past = {name for name, size in leases.items() if size > GATE_SOURCE_BYTES}
+    assert sum(sizes.values()) > MAX_REQUEST_BYTES
+    # Without the leases the text is inside it (the pack D116 measured).
+    assert sum(sizes.values()) - sum(leases.values()) < MAX_REQUEST_BYTES
+    past = {n for n, s in leases.items() if s > GATE_SOURCE_BYTES}
     assert past == {"CZR_VICI_Regional_Lease_Conformed_Fifth_Amendment.txt"}
 
 
