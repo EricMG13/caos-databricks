@@ -38,6 +38,8 @@ import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from email.parser import BytesParser
+from email.policy import HTTP
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -129,6 +131,11 @@ class WorkspaceStub:
         default_factory=lambda: {LAKEBASE_DATABASE: _DEFAULTS["lakebase_database"]}
     )
     endpoint_type: str = "ENDPOINT_TYPE_READ_WRITE"
+    # Serving endpoints and Provisioned instances that exist but answer not
+    # ready, as the platform does while one is still being created or
+    # started: `state.ready` NOT_READY with an update in progress, and an
+    # instance `state` other than AVAILABLE (DF-12).
+    not_ready: frozenset[str] = frozenset()
     # The host an instance's `read_write_dns` and an endpoint's
     # `status.hosts.host` both name.
     instance_host: str = "127.0.0.1"
@@ -489,7 +496,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._missing()
 
     def _endpoint_get(self, rest: str, query: Query, raw: bytes) -> None:
-        shape = partial(_endpoint, self.stub.gateway, self.stub.endpoint_fields)
+        shape = partial(
+            _endpoint,
+            self.stub.gateway,
+            self.stub.endpoint_fields,
+            self.stub.not_ready,
+        )
         self._known(rest, self.stub.endpoints, shape)
 
     def _schema_get(self, rest: str, query: Query, raw: bytes) -> None:
@@ -499,7 +511,7 @@ class _Handler(BaseHTTPRequestHandler):
         self._known(rest, self.stub.volumes, _named)
 
     def _instance_get(self, rest: str, query: Query, raw: bytes) -> None:
-        shape = partial(_instance, self.stub.instance_host)
+        shape = partial(_instance, self.stub.instance_host, self.stub.not_ready)
         self._known(rest, self.stub.instances, shape)
 
     def _postgres_get(self, rest: str, query: Query, raw: bytes) -> None:
@@ -576,12 +588,52 @@ class _Handler(BaseHTTPRequestHandler):
         by another deployer stops the next deploy (DF-12)."""
         path = "/" + rest.lstrip("/")
         kept = query.get("overwrite", [""])[0] == "false"
-        if kept and path in self.stub.workspace_files:
+        self._write(path, raw, kept)
+
+    def _workspace_import(self, rest: str, query: Query, raw: bytes) -> None:
+        """`POST /api/2.0/workspace/import`: the multipart form CLI 1.21.0
+        writes files with (`path`, `overwrite`, `format` and the raw `content`
+        file; 1.17.0 used the `import-file` route above), or the JSON form
+        the API also takes with base64 content. An `overwrite` that is not
+        true over a file already there is refused, as the platform's default
+        is (N47)."""
+        kind = self.headers.get("Content-Type", "")
+        fields: dict[str, bytes] = {}
+        if kind.startswith("multipart/form-data"):
+            head = f"Content-Type: {kind}\r\n\r\n".encode()
+            message = BytesParser(policy=HTTP).parsebytes(head + raw)
+            for part in message.iter_parts():
+                name = part.get_param("name", header="content-disposition")
+                payload = part.get_payload(decode=True)
+                if isinstance(name, str) and isinstance(payload, bytes):
+                    fields[name] = payload
+        else:
+            sent = json.loads(raw or b"{}")
+            fields = {
+                "path": str(sent.get("path", "")).encode(),
+                "overwrite": b"true" if sent.get("overwrite") is True else b"",
+            }
+            try:
+                fields["content"] = base64.b64decode(
+                    sent.get("content", ""), validate=True
+                )
+            except (ValueError, binascii.Error):
+                self._send(
+                    400,
+                    {"error_code": "INVALID_PARAMETER_VALUE", "message": "content"},
+                )
+                return
+        path = fields.get("path", b"").decode()
+        keep = fields.get("overwrite", b"").lower() != b"true"
+        self._write(path, fields.get("content", b""), keep)
+
+    def _write(self, path: str, content: bytes, keep: bool) -> None:
+        if keep and path in self.stub.workspace_files:
             self._send(
                 409, {"error_code": "RESOURCE_ALREADY_EXISTS", "message": "exists"}
             )
             return
-        self.stub.workspace_files[path] = raw
+        self.stub.workspace_files[path] = content
         self._send(200, {})
 
     def _export(self, rest: str, query: Query, raw: bytes) -> None:
@@ -708,6 +760,7 @@ _ROUTES: list[tuple[str, str, bool, Route]] = [
     ("POST", "/api/2.0/workspace/mkdirs", True, _Handler._mkdirs),
     ("POST", "/api/2.0/workspace/delete", True, _Handler._delete),
     ("POST", IMPORT + "/", False, _Handler._import),
+    ("POST", "/api/2.0/workspace/import", True, _Handler._workspace_import),
     ("GET", APPS, False, _Handler._apps),
     ("POST", APPS, False, _Handler._apps),
     ("PATCH", APPS, False, _Handler._apps),
@@ -718,11 +771,18 @@ _ROUTES: list[tuple[str, str, bool, Route]] = [
 
 
 def _endpoint(
-    gateway: dict[str, Any], fields: dict[str, Any], name: str
+    gateway: dict[str, Any],
+    fields: dict[str, Any],
+    not_ready: frozenset[str],
+    name: str,
 ) -> dict[str, Any]:
+    waiting = name in not_ready
     return {
         "name": name,
-        "state": {"ready": "READY", "config_update": "NOT_UPDATING"},
+        "state": {
+            "ready": "NOT_READY" if waiting else "READY",
+            "config_update": "IN_PROGRESS" if waiting else "NOT_UPDATING",
+        },
         "ai_gateway": gateway,
         **fields,
     }
@@ -732,10 +792,10 @@ def _named(full_name: str) -> dict[str, Any]:
     return {"full_name": full_name, "name": full_name.rsplit(".", 1)[-1]}
 
 
-def _instance(host: str, name: str) -> dict[str, Any]:
+def _instance(host: str, not_ready: frozenset[str], name: str) -> dict[str, Any]:
     return {
         "name": name,
-        "state": "AVAILABLE",
+        "state": "STARTING" if name in not_ready else "AVAILABLE",
         "pg_version": "PG_VERSION_16",
         "read_write_dns": host,
     }

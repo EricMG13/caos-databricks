@@ -46,6 +46,12 @@ _DEFAULTS = bundle_defaults.defaults()
 READ_ONLY = "ENDPOINT_TYPE_READ_ONLY"
 ENDPOINT_READ_ONLY = "a read-only endpoint: the app writes; name the read-write one"
 ENDPOINT_DISABLED = "the endpoint is disabled: enable it or name another"
+ENDPOINT_NOT_READY = (
+    "the endpoint is not ready: wait until it reports READY, then run this again"
+)
+INSTANCE_NOT_AVAILABLE = (
+    "the instance is not AVAILABLE: wait until it is, then run this again"
+)
 
 Check = tuple[str, Callable[[], object], str]
 
@@ -254,6 +260,9 @@ def affordable(
 def _fit_endpoint(client: WorkspaceClient, name: str) -> object:
     """The endpoint, or `Unfit` naming the gateway setting the host cannot run under."""
     endpoint = client.serving_endpoints.get(name)
+    ready = getattr(getattr(endpoint, "state", None), "ready", None)
+    if ready is not None and getattr(ready, "value", ready) != "READY":
+        raise Unfit(ENDPOINT_NOT_READY)
     problems = gateway_problems(endpoint)
     if problems:
         raise Unfit("; ".join(problems))
@@ -342,7 +351,7 @@ def _lakebase_checks(client: WorkspaceClient, args: argparse.Namespace) -> list[
         return [
             (
                 f"lakebase instance {instance}",
-                lambda: client.database.get_database_instance(instance),
+                lambda: _fit_instance(client, instance),
                 "name an existing Provisioned instance (none can be created "
                 "now), or deploy the default kind, Lakebase Autoscaling",
             )
@@ -370,6 +379,15 @@ def _lakebase_checks(client: WorkspaceClient, args: argparse.Namespace) -> list[
             f"'databricks postgres list-databases {paths.branch}' names its databases",
         ),
     ]
+
+
+def _fit_instance(client: WorkspaceClient, name: str) -> object:
+    """The instance, or `Unfit` while it is anything but AVAILABLE."""
+    found = client.database.get_database_instance(name)
+    state = getattr(found, "state", None)
+    if state is not None and getattr(state, "value", state) != "AVAILABLE":
+        raise Unfit(INSTANCE_NOT_AVAILABLE)
+    return found
 
 
 def _fit_lakebase_endpoint(client: WorkspaceClient, path: str) -> object:

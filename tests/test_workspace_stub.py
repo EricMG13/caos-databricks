@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 import anyio
+import enterprise_deploy
 import gateway_smoke
 import preflight
 import pytest
@@ -747,6 +748,101 @@ def test_the_stub_refuses_what_the_platform_refuses(stub: WorkspaceStub) -> None
     stub.app_state, stub.deployment_state = "CRASHED", "FAILED"
     assert stub.app("caos-dev-42")["app_status"]["state"] == "CRASHED"
     assert stub.deployment("caos-dev-42")["status"]["state"] == "FAILED"
+
+
+def test_a_resource_that_is_not_ready_stops_preflight_and_the_deploy(
+    stub: WorkspaceStub,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """DF-12: the stub no longer answers every endpoint and instance ready.
+    One that exists but is not is refused with its typed message, and the
+    one command's E1 exits non-zero on it, so `set -e` never reaches the
+    bundle deploy."""
+    flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
+    stub.not_ready = frozenset({ENDPOINT})
+    assert preflight.main([*flags, "--lakebase-project", LAKEBASE_PROJECT]) == 1
+    out = capsys.readouterr().out
+    assert f"MISSING serving endpoint {ENDPOINT}: {preflight.ENDPOINT_NOT_READY}" in out
+    assert out.count("ok ") == 7  # everything else is found
+
+    for name in ("CAOS_MODEL_ENDPOINT", "CAOS_MODEL_PRICE", "CAOS_MODEL_CHOICES"):
+        monkeypatch.setenv(name, os.environ.get(name, ""))
+    evidence = tmp_path / "ev"
+    code = enterprise_deploy.main(
+        [
+            *("--stage", "before", "--evidence", str(evidence)),
+            *("--catalog", "main", "--schema", "caos"),
+            *("--lakebase-project", LAKEBASE_PROJECT),
+        ]
+    )
+    assert code == 1
+    assert preflight.ENDPOINT_NOT_READY in (evidence / "E1.log").read_text()
+
+    stub.not_ready = frozenset({LAKEBASE_INSTANCE})
+    flags_ok = [*flags, "--lakebase-instance", LAKEBASE_INSTANCE]
+    assert preflight.main(flags_ok) == 1
+    out = capsys.readouterr().out
+    assert (
+        f"MISSING lakebase instance {LAKEBASE_INSTANCE}: "
+        f"{preflight.INSTANCE_NOT_AVAILABLE}"
+    ) in out
+    stub.not_ready = frozenset()
+    assert preflight.main(flags_ok) == 0
+
+
+def test_the_workspace_import_route_keeps_a_held_file_unless_told_to_overwrite(
+    stub: WorkspaceStub,
+) -> None:
+    """N47: CLI 1.21.0 uploads a file with a multipart `workspace/import`
+    (path, overwrite, raw content); 1.17.0 used `import-file`. Both forms
+    store the bytes, and an overwrite that is not true over a held file is
+    409, the way the deploy lock is held."""
+    import urllib.error
+    import urllib.request
+
+    def send(body: bytes, kind: str) -> int:
+        request = urllib.request.Request(
+            stub.host + "/api/2.0/workspace/import",
+            data=body,
+            method="POST",
+            headers={"Authorization": f"Bearer {BEARER}", "Content-Type": kind},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as answered:
+                return int(answered.status)
+        except urllib.error.HTTPError as refused:
+            return refused.code
+
+    def form(path: str, content: bytes, overwrite: str) -> tuple[bytes, str]:
+        edge = "xBOUNDARYx"
+        parts = [("path", path), ("overwrite", overwrite)]
+        head = '--{}\r\nContent-Disposition: form-data; name="{}"\r\n\r\n{}\r\n'
+        body = b"".join(head.format(edge, n, v).encode() for n, v in parts)
+        body += (
+            f'--{edge}\r\nContent-Disposition: form-data; name="content"; '
+            'filename="f"\r\nContent-Type: application/octet-stream\r\n\r\n'
+        ).encode()
+        body += content + f"\r\n--{edge}--\r\n".encode()
+        return body, f"multipart/form-data; boundary={edge}"
+
+    binary = b"\xff\x00 not utf-8 \r\n"
+    body, kind = form("/Workspace/b/a.bin", binary, "false")
+    assert send(body, kind) == 200
+    assert stub.workspace_files["/Workspace/b/a.bin"] == binary
+    assert send(*form("/Workspace/b/a.bin", b"other", "false")) == 409
+    assert stub.workspace_files["/Workspace/b/a.bin"] == binary
+    assert send(*form("/Workspace/b/a.bin", b"other", "true")) == 200
+    assert stub.workspace_files["/Workspace/b/a.bin"] == b"other"
+    sent = json.dumps(
+        {"path": "/Workspace/b/j", "content": base64.b64encode(b"j").decode()}
+    ).encode()
+    assert send(sent, "application/json") == 200
+    assert send(sent, "application/json") == 409
+    assert stub.workspace_files["/Workspace/b/j"] == b"j"
+    bad = json.dumps({"path": "/Workspace/b/k", "content": "!"}).encode()
+    assert send(bad, "application/json") == 400
 
 
 def test_the_token_endpoint_refuses_a_malformed_exchange(stub: WorkspaceStub) -> None:
