@@ -1943,6 +1943,15 @@ def _n223_window(
             time.sleep(1)
             assert waiter.is_alive(), "each waits on the case row"
         assert not _hold_is_free(url, attempt), "the old backend holds"
+        if open_mark:
+            with connect(url) as third:
+                marked = third.execute(
+                    "SELECT count(*) FROM attempt_bill_marks"
+                    " WHERE attempt_id = %s AND owed_until > now()",
+                    (attempt,),
+                ).fetchone()
+                third.rollback()
+            assert marked == (1,), "the bill's mark is committed beside the open one"
         zombie.close()
         deadline = time.monotonic() + 5  # the backend ends a moment after close
         while not _hold_is_free(url, attempt) and time.monotonic() < deadline:
@@ -2190,9 +2199,11 @@ def test_n223_a_reclaim_ahead_of_the_bill_is_refused_beside_a_cut_backends_open_
     node and an uncommitted mark of its own; the bill's mark commits at once
     beside it (nothing to wait on) while its outcome write queues behind the
     freeze, a reclaim ahead of it in the queue; the old backend dies. The
-    node stays held by the bill's committed mark, so the reclaim is refused
-    where it used to find the node unheld (the first design's mark waited on
-    the dead backend's row and committed only after it)."""
+    node stays held by the bill's committed mark, so the reclaim is refused.
+    The mark's commit before the old backend dies is asserted from a third
+    session in `_n223_window`; that is what the first design (a mark that
+    waited on the dead backend's row) fails. The reclaim's refusal alone
+    passed on that design too."""
     case_id, run_id = prepared_run
     with connect(empty_database) as conn:
         node = approved_nodes(conn, run_id, tmp_path)["CP-0"]

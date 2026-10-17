@@ -399,6 +399,35 @@ def test_budget_reservations_and_run_events_are_immutable(
         ).fetchone() == (1,)
 
 
+def test_attempt_bill_marks_are_immutable(empty_database: str) -> None:
+    """N223/F704: the bill marks are append-only like the ledger beside them
+    (`0053_attempt_bill_marks.sql`): an UPDATE, a DELETE and a TRUNCATE are
+    refused."""
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        case_id = create_case(conn, BoundaryText.of("Acme 2026 refinancing"))
+        run_id = start_run(conn, case_id)
+        conn.commit()
+        attempt_id = start_attempt(conn, run_id, "CP-0")
+        conn.execute(
+            "INSERT INTO attempt_bill_marks (attempt_id, owed_until)"
+            " VALUES (%s, now() + interval '1 hour')",
+            (attempt_id,),
+        )
+        conn.commit()
+        for mutation in (
+            "UPDATE attempt_bill_marks SET owed_until = now()",
+            "DELETE FROM attempt_bill_marks",
+            "TRUNCATE attempt_bill_marks",
+        ):
+            with pytest.raises(psycopg.errors.RaiseException, match="immutable"):
+                conn.execute(mutation)
+            conn.rollback()
+        assert conn.execute("SELECT count(*) FROM attempt_bill_marks").fetchone() == (
+            1,
+        )
+
+
 def test_run_attempts_and_artifacts_are_immutable(empty_database: str) -> None:
     """CF-091's remainder (N16, invariant 6): the accepted-attempt ledger is
     the truth, and the app only ever inserts into it -- an attempt at

@@ -525,7 +525,10 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
     holds the session lock. The mark is bounded, not a lock: a write still
     waiting past it (a freeze held longer than the span) is not covered, and
     one that never marked (the store down from the first statement) is
-    covered by nothing, as before. Both are bounded by tests.
+    covered by nothing, as before. Likewise any STORE_UNAVAILABLE writing the
+    mark (a cut, a server error, a statement bound) fails open: the node is
+    then held only by the session lock, and a reclaim ahead of the bill can
+    pay again, exactly as before N223. Both are bounded by tests.
 
     A fault that took its session away is answered by the reconnect at once
     and costs no try: a store that then stays down is paused for
