@@ -323,5 +323,9 @@ binding survive the same-revision restore; it does not perform a provider call.
 `STORE_SCHEMA_DRIFT` where it could create in `public`. It protects the
 migrating role only. The migration refuses a role schema that role does not own,
 or that holds another role's object or a trigger, rule or policy on
-`store_schema`. A tool session as the app role with the default `search_path`
+`store_schema`, or a default-privilege entry for the schema (`pg_default_acl`):
+a co-tenant with no privilege on a schema the app already owns can still block
+the upgrade with `ALTER DEFAULT PRIVILEGES IN SCHEMA "<app role>"`; an
+administrator's `DROP OWNED BY <co-tenant>`, or the co-tenant's own revoke,
+clears it. A tool session as the app role with the default `search_path`
 resolves an unqualified `store_schema` to the tripwire table, not the store's.

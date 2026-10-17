@@ -9,6 +9,10 @@ for and answers `STORE_SCHEMA_DRIFT`. It matters where the old build can create 
 `public` (a hand-granted CREATE, F141, or a dev volume); under the bundle grant
 alone it is already refused. The old build here is the real one, read
 from git at the commit before DL-1 and run in a process of its own.
+
+These tests make and drop login roles, so the `CAOS_TEST_POSTGRES_URL` user
+needs `CREATEROLE` (the local test server's `postgres` has it); a role is
+cluster-global and outlives the test database, so each one is dropped again.
 """
 
 from __future__ import annotations
@@ -126,9 +130,28 @@ def _roles(
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin:
             for name in names:
-                admin.execute(
-                    sql.SQL("DROP OWNED BY {} CASCADE").format(sql.Identifier(name))
-                )
+                role = sql.Identifier(name)
+                admin.execute(sql.SQL("DROP OWNED BY {} CASCADE").format(role))
+                admin.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(role))
+
+
+def _role_exists(admin_url: str, name: str) -> bool:
+    with psycopg.connect(admin_url) as admin:
+        found = admin.execute(
+            "SELECT 1 FROM pg_roles WHERE rolname = %s", (name,)
+        ).fetchone()
+    return found is not None
+
+
+def test_a_role_made_for_a_test_is_gone_when_the_test_is_done(
+    empty_database: str,
+) -> None:
+    """A role is cluster-global: dropping the test database does not take it,
+    so `_roles` must drop the role itself, not only what it owned."""
+    name = _fresh_role()
+    with _roles(empty_database, name):
+        assert _role_exists(empty_database, name)
+    assert not _role_exists(empty_database, name)
 
 
 def test_a_pre_dl1_build_refuses_a_store_the_current_build_migrated(
