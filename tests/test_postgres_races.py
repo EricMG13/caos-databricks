@@ -1449,7 +1449,7 @@ def test_a_bill_landing_after_a_pass_read_the_ledger_is_replayed_not_paid_twice(
     B's pass reads the ledger -- no bill there yet, nothing to replay -- and
     while it builds its prompt A's call answers, A bills, lets go of its hold
     and is fenced out of acceptance. Under the run lock B's start finds the
-    bill that landed and refuses `ATTEMPT_UNSETTLED` with nothing written, the
+    bill that landed and refuses `ATTEMPT_BILL_OWED` with nothing written, the
     worker gives the run back, and the next pass replays A's answer: one paid
     call a node. Before the fix B started a second attempt there and paid for
     the node again (W1's residual: a bill that waits out a held case lock
@@ -1482,7 +1482,7 @@ def test_a_bill_landing_after_a_pass_read_the_ledger_is_replayed_not_paid_twice(
         workers.append(pool.submit(_drive, empty_database, run, completions))
         assert a_calling.wait(60)
         b = pool.submit(_outcome, lambda: _drive(empty_database, run, completions))
-        assert b.result(120) == RefusalCode.ATTEMPT_UNSETTLED.value
+        assert b.result(120) == RefusalCode.ATTEMPT_BILL_OWED.value
     monkeypatch.undo()
     assert len(completions.prompts) == 1, "B paid for nothing"
     assert _count(run.conn, "run_attempts", run.run_id) == 1
@@ -1494,6 +1494,79 @@ def test_a_bill_landing_after_a_pass_read_the_ledger_is_replayed_not_paid_twice(
 
     assert _drive(empty_database, run, completions) == run.run_id
     _paid_once_per_node(run.conn, run.run_id, completions)
+
+
+@pytest.mark.parametrize("held_sorts_first", [True, False])
+def test_an_owed_bill_is_refused_by_its_own_code_even_beside_a_held_call(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    held_sorts_first: bool,
+) -> None:
+    """N116: a node with a bill owed its verdict and another attempt whose call
+    a live session still holds refuses `ATTEMPT_BILL_OWED`: the next pass
+    settles the owed bill first, whatever else waits on the node. The store
+    reads attempts in id order, so the ids are pinned to meet the held attempt
+    first and last: the owed code must not depend on which row comes first."""
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+    lease = _claimed(empty_database, run_id)
+    node = nodes["CP-0"]
+    ids = iter(
+        [UUID(int=1), UUID(int=2)] if held_sorts_first else [UUID(int=2), UUID(int=1)]
+    )
+    monkeypatch.setattr(runs, "uuid4", lambda: next(ids))
+    with connect(empty_database) as a:
+        held = start_attempt(a, run_id, node, lease=lease)
+        reserve(a, held, RESERVED, lease=lease)
+        owing = start_attempt(a, run_id, node, lease=lease)
+    monkeypatch.undo()
+    with connect(empty_database) as a:
+        record_outcome(
+            a,
+            attempt_id=owing,
+            outcome=CallOutcome(CHARGE, MODEL, GENERATION, None),
+        )
+    holder = connect(empty_database)
+    try:
+        with connect(empty_database) as b, call_hold(holder, held):
+            _refused(
+                RefusalCode.ATTEMPT_BILL_OWED,
+                lambda: start_attempt(b, run_id, node, lease=lease),
+            )
+    finally:
+        holder.close()
+
+
+def test_a_replay_withholding_a_drop_kind_is_a_no_op_only_after_a_later_attempt(
+    empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
+) -> None:
+    """N169: a row stored without a drop kind answers a replay carrying one
+    only when a later attempt at the node explains the withheld kind
+    (`_counted`); with none, the replay is a different outcome and refuses
+    `CALL_OUTCOME_CONFLICT`."""
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+        node = nodes["CP-0"]
+        attempt = start_attempt(conn, run_id, node)
+        plain = CallOutcome(None, MODEL, None, None)
+        dropped = replace(plain, drop_kind=DropKind.DECLARED)
+        assert record_outcome(conn, attempt_id=attempt, outcome=plain)
+        assert not record_outcome(conn, attempt_id=attempt, outcome=plain)
+        _refused(
+            RefusalCode.CALL_OUTCOME_CONFLICT,
+            lambda: record_outcome(conn, attempt_id=attempt, outcome=dropped),
+        )
+        start_attempt(conn, run_id, node)
+        assert not record_outcome(conn, attempt_id=attempt, outcome=dropped)
+        other = replace(dropped, model="another/model")
+        _refused(
+            RefusalCode.CALL_OUTCOME_CONFLICT,
+            lambda: record_outcome(conn, attempt_id=attempt, outcome=other),
+        )
 
 
 def test_a_call_in_flight_past_its_lease_keeps_its_node_from_a_second_call(
@@ -1801,7 +1874,7 @@ def test_a_reconnected_bill_lands_beside_a_live_holder_under_a_lock_timeout(
 def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
     empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
 ) -> None:
-    """The owed half of `ATTEMPT_UNSETTLED` is the set `replay_billed` settles
+    """The owed half of `ATTEMPT_BILL_OWED` is the set `replay_billed` settles
     or `unexplained_charge` parks, and nothing else: an attempt either
     refuses but no pass settles would stop the node for ever, and one a pass
     settles that no start refuses is paid for twice. Each outcome shape is
@@ -1857,7 +1930,7 @@ def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
             assert (picked or parked is not None) is owed, name
             if owed:
                 _refused(
-                    RefusalCode.ATTEMPT_UNSETTLED,
+                    RefusalCode.ATTEMPT_BILL_OWED,
                     partial(start_attempt, conn, run_id, node),
                 )
             else:

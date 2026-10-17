@@ -450,7 +450,13 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
         # wrote it -- the same bill with its drop kind withheld (F530 round
         # 3). Counting is decided once, on insert; a replay after a later
         # start must not judge the row again.
-        if row not in (_facts(outcome), _facts(replace(outcome, drop_kind=None))):
+        # The withheld form answers a replay carrying a kind only when a later
+        # attempt exists to have withheld it (N169); with none it is a different
+        # outcome.
+        if row != _facts(outcome) and not (
+            row == _facts(replace(outcome, drop_kind=None))
+            and _later_attempt(conn, attempt)
+        ):
             raise Refusal(RefusalCode.CALL_OUTCOME_CONFLICT)
         return False
     outcome = _counted(conn, attempt, outcome)
@@ -499,13 +505,22 @@ def _counted(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> Call
     it, so it can spend no re-attempt and owe no stop. Under the run lock."""
     if outcome.drop_kind is None:
         return outcome
-    later = conn.execute(
-        "SELECT 1 FROM run_attempts t JOIN run_attempts n"
-        " ON (n.run_id, n.route_node_id) = (t.run_id, t.route_node_id)"
-        " AND n.ordinal > t.ordinal WHERE t.attempt_id = %s",
-        (attempt,),
-    ).fetchone()
-    return outcome if later is None else replace(outcome, drop_kind=None)
+    if _later_attempt(conn, attempt):
+        return replace(outcome, drop_kind=None)
+    return outcome
+
+
+def _later_attempt(conn: StoreConnection, attempt: UUID) -> bool:
+    """Whether a later attempt at the attempt's node was started."""
+    return (
+        conn.execute(
+            "SELECT 1 FROM run_attempts t JOIN run_attempts n"
+            " ON (n.run_id, n.route_node_id) = (t.run_id, t.route_node_id)"
+            " AND n.ordinal > t.ordinal WHERE t.attempt_id = %s",
+            (attempt,),
+        ).fetchone()
+        is not None
+    )
 
 
 # What the store, the run or its fence said, never what the answer was: a later
