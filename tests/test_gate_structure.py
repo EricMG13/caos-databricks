@@ -308,7 +308,9 @@ def test_a_duplicate_key_in_a_configuration_is_refused_not_resolved_to_the_last(
     ci = root / CI
     ci.write_text(
         ci.read_text(encoding="utf-8").replace(
-            "\njobs:\n", "\njobs:\n  lint:\n    timeout-minutes: 1\n    timeout-minutes: 2\n", 1
+            "\njobs:\n",
+            "\njobs:\n  lint:\n    timeout-minutes: 1\n    timeout-minutes: 2\n",
+            1,
         ),
         encoding="utf-8",
     )

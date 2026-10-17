@@ -528,6 +528,10 @@ def _python_problems(root: Path, project: dict[str, object]) -> list[str]:
     return problems
 
 
+class _RepeatedKey(yaml.YAMLError):
+    """A mapping repeats a key."""
+
+
 class _UniqueKeyLoader(yaml.SafeLoader):
     """`SafeLoader` that refuses a mapping repeating a key (N83): PyYAML keeps
     the last, so the line a reviewer reads first could say one thing and the
@@ -542,7 +546,7 @@ class _UniqueKeyLoader(yaml.SafeLoader):
             if not isinstance(key, Hashable):
                 continue  # the parent loader refuses it as unhashable
             if key in seen:
-                raise yaml.YAMLError("a repeated key")
+                raise _RepeatedKey
             seen.add(key)
         return super().construct_mapping(node, deep=deep)
 
