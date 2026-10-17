@@ -490,6 +490,16 @@ def _overriding_problems(root: Path) -> list[str]:
     ]
 
 
+def _report_problems(root: Path) -> list[str]:
+    """A tracked report or deployment record (N110): `bandit.json`,
+    `coverage.xml`, the coverage shard files and `.databricks/**` are written
+    by a CI step and read by the floor check after it."""
+    return [
+        f"report: {name} is tracked; a floor check would judge it stale"
+        for name in sorted(tracked_files(root, *STALE_REPORTS))
+    ]
+
+
 def _python_problems(root: Path, project: dict[str, object]) -> list[str]:
     problems: list[str] = []
     if _table(project, "project").get("requires-python") != REQUIRES_PYTHON:
@@ -1197,6 +1207,45 @@ CI_PARALLEL_JOBS = {
     "frontend": "f7bc9dc48458e68c4a41d3d9183ca9374b7c660147c1c9dc895662059382c4e2",
 }
 RUNS_ON = "ubuntu-latest"
+# The store a job's suites run against, exactly (N110): `services` was free,
+# so the image, its credentials or its health check could change under a
+# gate. Only these jobs carry it; every other job carries none.
+_POSTGRES_SERVICE: dict[str, object] = {
+    "postgres": {
+        "image": (
+            "postgres@sha256:"
+            "18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73"
+        ),
+        "env": dict.fromkeys(("POSTGRES_PASSWORD", "POSTGRES_DB"), "caos"),
+        "options": "--health-cmd pg_isready --health-interval 5s --health-retries 10",
+        "ports": ["5432:5432"],
+    }
+}
+CI_SERVICES: dict[str, dict[str, object]] = {
+    "test-shards": _POSTGRES_SERVICE,
+    "test": _POSTGRES_SERVICE,
+    "bundle": _POSTGRES_SERVICE,
+}
+# A step that reads a report a gate judges, the text it reads it by, and the
+# text of the step that writes it (N110): the reader must come after the
+# writer in the same job, or it judges whatever file is on disk -- a stale
+# one a commit force-added. A `--shipped` check reads its target's record,
+# which the target's deploy writes.
+CI_REPORTS = (
+    ("coverage.xml", "scan_floors.py coverage.xml", "coverage xml -o coverage.xml"),
+    ("bandit.json", "scan_floors.py bandit.json", "-o bandit.json"),
+)
+SHIPPED_READ = re.compile(r"--shipped (\.databricks/bundle/([\w-]+)/deployment\.json)")
+# Reports and records a commit must not carry: each is written by a CI step
+# and judged by the next, so a tracked copy is a file a floor could read in
+# place of a fresh one.
+STALE_REPORTS = (
+    "bandit.json",
+    "coverage.xml",
+    ":(glob).coverage*",
+    ":(glob)coverage-shards/**",
+    ":(glob).databricks/**",
+)
 # A step's own keys: `if`, `continue-on-error`, `working-directory` and
 # `shell` each change whether, where or how its script runs.
 STEP_KEYS = frozenset({"name", "uses", "with", "run", "env"})
@@ -1326,6 +1375,41 @@ def _script_problems(job: str, run: str, given: dict[object, object]) -> list[st
     return problems
 
 
+def _services_problems(name: str, job: dict[object, object]) -> list[str]:
+    """A job's `services` exactly as `CI_SERVICES` gives them, or none."""
+    if job.get("services") == CI_SERVICES.get(name):
+        return []
+    return [f"ci: job {name}'s services are not as pinned"]
+
+
+def _report_reads(script: tuple[str, ...]) -> list[tuple[str, str]]:
+    """Each (report, writer text) a step's script reads."""
+    found = []
+    for line in script:
+        for report, reader, writer in CI_REPORTS:
+            if reader in line:
+                found.append((report, writer))
+        for match in SHIPPED_READ.finditer(line):
+            found.append((match.group(1), f"bundle deploy -t {match.group(2)} "))
+    return found
+
+
+def _order_problems(name: str, job: dict[object, object]) -> list[str]:
+    """Each report read comes after a step of the same job that writes it."""
+    problems: list[str] = []
+    written: list[str] = []
+    for step in _seq(job.get("steps")):
+        run = _map(step).get("run")
+        script = script_lines(run) if isinstance(run, str) else ()
+        problems += [
+            f"ci: job {name} reads {report} before the step that writes it"
+            for report, writer in _report_reads(script)
+            if not any(writer in text for text in written)
+        ]
+        written += script
+    return problems
+
+
 def _parallel_job_problems(ci_file: dict[object, object]) -> list[str]:
     """Every parallel job's exact controls and gate placement remain pinned."""
     jobs = _map(ci_file.get("jobs"))
@@ -1360,6 +1444,7 @@ def _ci_problems(root: Path) -> list[str]:
     for name, job in _jobs(ci_file):
         if name not in CI_PARALLEL_JOBS:
             problems += _job_problems(name, job)
+        problems += _services_problems(name, job) + _order_problems(name, job)
         for step in _seq(job.get("steps")):
             problems += _step_problems(name, _map(step))
             run = _map(step).get("run")
@@ -1398,6 +1483,7 @@ def configuration_problems(root: Path = REPO) -> list[str]:
         + _parity_problems(root)
         + _bundle_problems(root)
         + _ci_problems(root)
+        + _report_problems(root)
     )
 
 
