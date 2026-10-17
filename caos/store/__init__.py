@@ -268,6 +268,15 @@ MIGRATIONS = (
         "0051_book_entries",
         Path(__file__).with_name("0051_book_entries.sql").read_text(encoding="utf-8"),
     ),
+    # 0052 belongs to the unmerged N81 branch (claude/oi-store-n81); the
+    # runner takes a gap, as it does at 0030 and 0049, so this is 0053 and
+    # whichever of the two merges second renumbers.
+    (
+        "0053_attempt_bill_marks",
+        Path(__file__)
+        .with_name("0053_attempt_bill_marks.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # DL-1: the store's own schema, beside LangGraph's `caos_graph`

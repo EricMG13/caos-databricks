@@ -2159,7 +2159,10 @@ def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
     is down, so the bound is the retry's: `BILL_TRIES` writes, a
     `BILL_PAUSE_SECONDS` between each, well inside the lease's liveness
     budget, then `STORE_UNAVAILABLE` and no more; the exposure after it is one
-    more attempt, under a reservation of its own (invariant 8)."""
+    more attempt, under a reservation of its own (invariant 8). Here only the
+    outcome write is down, so the bill's mark (N223) is in the store and holds
+    the node until it lapses -- aged below; a store down for the mark too
+    leaves none, and the node is free at once."""
     from decimal import Decimal
 
     from caos.methodology import canonical
@@ -2192,6 +2195,12 @@ def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
     assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
     assert sum(pauses) <= 180 / 10, "a small share of the lease's 180 s budget"
     worker_conn.close()
+    with pytest.raises(Refusal, match=r"^ATTEMPT_UNSETTLED$"):
+        start_attempt(run.conn, run.run_id, node, lease=lease)
+    run.conn.execute(
+        "UPDATE attempt_bill_marks SET owed_until = now() - interval '1 second'"
+    )
+    run.conn.commit()
     start_attempt(run.conn, run.run_id, node, lease=lease)
     assert count(run.conn, "run_attempts", run.run_id) == 2, "one more"
     second = run.conn.execute(

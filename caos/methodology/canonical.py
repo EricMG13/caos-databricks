@@ -172,6 +172,7 @@ from caos.store.outcomes import (
     declared_drop,
     execution_reads,
     node_attempts,
+    owe_bill,
     producer_identifier,
     record_outcome,
     require_idle,
@@ -510,9 +511,15 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
     second is inherent to a store that cannot be reached. The first is not
     lengthened by a backend still holding the old hold: the replacement asks
     for its hold without waiting for it (`wait=False`) and writes whether or
-    not it got it. That leaves the node unheld by this session, though, if
-    the try fails and the old backend then dies before the write commits:
-    no one holds it until the write lands. Both are bounded by tests.
+    not it got it. That would leave the node unheld if the try fails and the
+    old backend then dies before the write commits (N223), so every try first
+    marks the bill owed in the store (`owe_bill`, a unit of its own that waits
+    on nothing): `start_attempt` then refuses `ATTEMPT_UNSETTLED` at the node
+    until the write lands or the mark lapses (`BILL_OWED_SECONDS`), whoever
+    holds the session lock. The mark is bounded, not a lock: a write still
+    waiting past it (a freeze held longer than the span) is not covered, and
+    one that never marked (the store down from the first statement) is
+    covered by nothing, as before. Both are bounded by tests.
 
     A fault that took its session away is answered by the reconnect at once
     and costs no try: a store that then stays down is paused for
@@ -529,6 +536,10 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
                     connecting = True
                     target = sessions.enter_context(_held_fresh(attempt_id))
                     connecting = False
+                # N223: the store says the bill is owed before the write that
+                # may wait, unbounded, behind a held case row; a hold the
+                # session lock gave is gone when its backend is.
+                owe_bill(target, attempt_id)
                 record_outcome(target, attempt_id=attempt_id, outcome=outcome)
             except Refusal as refused:
                 if refused.code is not RefusalCode.STORE_UNAVAILABLE:

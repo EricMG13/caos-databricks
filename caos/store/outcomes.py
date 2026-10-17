@@ -101,6 +101,40 @@ def call_hold(
             _let_go(conn, key)
 
 
+# How long a bill's mark (`owe_bill`) holds its node with the bill unrecorded:
+# the span a held call keeps its node past its reservation at the default
+# lease (`runs.CALL_HOLD_SECONDS`, two leases). A bill waiting on a case row a
+# freeze holds is bounded by nothing else (W1), and a mark that never lapsed
+# would stop the node for ever behind a bill that was abandoned; one that
+# lapsed at once would be no hold. Written as the store's own `now()` plus
+# this, so it expires with no one to clear it.
+BILL_OWED_SECONDS = 2 * 900
+
+_OWE_BILL = (
+    "INSERT INTO attempt_bill_marks (attempt_id, owed_until)"
+    " SELECT attempt_id, now() + make_interval(secs => %s) FROM run_attempts"
+    " WHERE attempt_id = %s"
+    " ON CONFLICT (attempt_id) DO UPDATE"
+    " SET owed_until = greatest(attempt_bill_marks.owed_until, excluded.owed_until)"
+)
+
+
+def owe_bill(conn: StoreConnection, attempt_id: UUID) -> None:
+    """Say, in the store, that this attempt's bill is owed (N223): the node is
+    held `ATTEMPT_UNSETTLED` by `start_attempt` for `BILL_OWED_SECONDS` or
+    until the bill lands, whichever is first, whoever holds the session lock.
+
+    A unit of its own that takes no case or run lock, so it commits while the
+    bill's write is still waiting behind a freeze; an unknown attempt writes
+    nothing (the bill's write then refuses it). A fault answers
+    `STORE_UNAVAILABLE`, which the bill's own retry treats as it treats a
+    failed write. The session lock stays for the live holder; this covers the
+    window after that lock's backend is gone.
+    """
+    with committed_unit(conn):
+        conn.execute(_OWE_BILL, (BILL_OWED_SECONDS, attempt_id))
+
+
 def _let_go(conn: StoreConnection, key: tuple[int, str]) -> None:
     if conn.closed:
         return
