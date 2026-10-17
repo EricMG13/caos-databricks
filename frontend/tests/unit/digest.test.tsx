@@ -44,16 +44,24 @@ describe("Digest: one treatment for an id or a digest (brief 6.1)", () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     render(<Digest value={HASH} prefix="sha256:" />);
     const control = screen.getByRole("button", { name: `Copy sha256:${HASH}` });
+    // The live region is there before the press and is the same node after it:
+    // one inserted already populated is announced inconsistently (WCAG 4.1.3).
+    const region = screen.getByRole("status");
+    expect(region).toBeEmptyDOMElement();
     await act(async () => {
       fireEvent.click(control);
       await Promise.resolve();
     });
     expect(writeText).toHaveBeenCalledWith(`sha256:${HASH}`);
-    expect(screen.getByRole("status")).toHaveTextContent("Copied");
+    expect(screen.getByRole("status")).toBe(region);
+    expect(region).toHaveTextContent("Copied");
+    expect(document.querySelector("[data-said='Copied']")).not.toBeNull();
     act(() => {
       vi.advanceTimersByTime(1200);
     });
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("status")).toBe(region);
+    expect(region).toBeEmptyDOMElement();
+    expect(document.querySelector("[data-said]")).toBeNull();
   });
 
   it("says so when the browser refuses the write, rather than seeming to do nothing", async () => {
