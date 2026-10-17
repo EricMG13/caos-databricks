@@ -34,7 +34,8 @@ from dataclasses import dataclass, field, replace
 from decimal import ROUND_UP, Decimal
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from urllib.parse import urlsplit, urlunsplit
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
@@ -560,8 +561,6 @@ def test_a_set_of_more_than_one_case_can_be_admitted(
 
 def _database_url(admin_url: str, database: str) -> str:
     """The admin URL pointed at `database`, as `qualify.py` builds its own."""
-    from urllib.parse import urlsplit, urlunsplit
-
     return urlunsplit(urlsplit(admin_url)._replace(path=f"/{database}"))
 
 
@@ -1500,6 +1499,70 @@ def test_resume_of_a_database_that_holds_no_pin_refuses(
         assert qualify.main(_resume_args(root, bare)) == 2
         assert code in capsys.readouterr().err
     assert provider.prompts == []
+
+
+def test_resume_of_a_database_that_does_not_exist_reads_no_pin(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """N236 (2): a name this script could have minted, of a database the
+    server never had (dropped, or mistyped), holds no pin as much as an empty
+    one does; it is not an unreachable store."""
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+    missing = "caos_qualify_" + uuid4().hex
+
+    assert qualify.main(_resume_args(root, missing)) == 2
+
+    err = capsys.readouterr().err
+    assert "RESUME_NO_PIN" in err and "STORE_UNAVAILABLE" not in err
+    assert provider.prompts == [] and created == []
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        ("dbname", "start"),
+        ("DBNAME", "start"),
+        ("dbname", "resume"),
+        ("DBNAME", "resume"),
+    ],
+)
+def test_an_admin_url_naming_a_database_in_its_query_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+    variant: tuple[str, str],
+) -> None:
+    """N236 (1): a `dbname` parameter wins over the path `_database_url` sets,
+    so a start or a resume would reach the database it names, not the one
+    minted or asked for. Refused before anything is created or spent, naming
+    the parameter and never the URL."""
+    key, mode = variant
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    secret = uuid4().hex
+    server = urlsplit(os.environ["CAOS_TEST_POSTGRES_URL"])
+    named = urlunsplit(
+        server._replace(query=f"{key}=postgres&application_name={secret}")
+    )
+    monkeypatch.setenv("CAOS_QUALIFY_POSTGRES_URL", named)
+    root = _write_lite_set(tmp_path / "set")
+    argv = (
+        _resume_args(root, "caos_qualify_" + uuid4().hex)
+        if mode == "resume"
+        else _arguments(root)
+    )
+
+    assert qualify.main(argv) == 2
+
+    err = capsys.readouterr().err
+    assert "dbname" in err.lower() and secret not in err and "nothing was spent" in err
+    assert provider.prompts == [] and created == []
 
 
 def test_resume_of_a_pin_for_another_set_refuses_without_a_call(
