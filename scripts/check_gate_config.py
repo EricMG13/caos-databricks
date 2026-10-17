@@ -104,6 +104,9 @@ OVERRIDING = (
 # The one gitleaks both scans run (W3): the hook's rev and the version the
 # gitleaks.yml workflow installs (by release checksum) are this one version.
 GITLEAKS_VERSION = "v8.30.1"
+# The hook repositories are pinned by commit (N114), the tag a comment beside
+# each `rev:`; each commit is what `ls-remote <repo> refs/tags/<tag>` names.
+GITLEAKS_COMMIT = "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"  # v8.30.1
 GITLEAKS_CI_FILE = ".github/workflows/gitleaks.yml"
 SECRETS_WEEKLY_FILE = ".github/workflows/secrets-weekly.yml"
 # Each secret-scan workflow whole (C1): the sha256 of its parsed YAML, so a
@@ -130,15 +133,15 @@ REPO_KEYS = frozenset({"repo", "rev", "hooks"})
 # same name. `local` has no rev.
 PRE_COMMIT_REPOS: dict[str, tuple[str | None, tuple[str, ...]]] = {
     "https://github.com/astral-sh/ruff-pre-commit": (
-        "v0.14.0",
+        "f9351c924055bf6c7b4a4670237d3ce141e9f57c",  # v0.14.0
         ("ruff", "ruff-format"),
     ),
     "https://github.com/gitleaks/gitleaks": (
-        GITLEAKS_VERSION,
+        GITLEAKS_COMMIT,
         ("gitleaks", "gitleaks"),
     ),
     "https://github.com/pre-commit/pre-commit-hooks": (
-        "v5.0.0",
+        "cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b",  # v5.0.0
         (
             "check-added-large-files",
             "check-merge-conflict",

@@ -7,12 +7,13 @@ is the committed configuration's own shape changed any other way."""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 
 import check_gate_config
 import pytest
-from test_check_gate_config import _tree
+from test_check_gate_config import REPO, _tree
 from tracked import tracked_files
 
 CI = ".github/workflows/ci.yml"
@@ -260,13 +261,36 @@ def test_a_script_is_read_as_the_shell_runs_it() -> None:
     )
 
 
+def test_every_hook_repository_is_pinned_by_commit_with_its_tag_in_a_comment(
+    tmp_path: Path,
+) -> None:
+    """N114: a tag is movable; a commit is not. Each `rev:` is a 40-hex
+    commit and says which tag it is, and the gate holds the commit."""
+    text = (REPO / HOOKS).read_text(encoding="utf-8")
+    revs = re.findall(r"^    rev: (\S+)(?: +# (\S+))?$", text, re.MULTILINE)
+    assert len(revs) == 3
+    for rev, tag in revs:
+        assert re.fullmatch(r"[0-9a-f]{40}", rev), rev
+        assert re.fullmatch(r"v\d+\.\d+\.\d+", tag), (rev, tag)
+    assert check_gate_config.GITLEAKS_VERSION in [tag for _, tag in revs]
+    root = _tree(tmp_path)
+    assert check_gate_config._hook_problems(root) == []
+    config = root / HOOKS
+    tagged = re.sub(r"rev: [0-9a-f]{40} +# ", "rev: ", text)
+    config.write_text(tagged, encoding="utf-8")
+    problems = check_gate_config._hook_problems(root)
+    assert len(problems) == 3
+    assert all("is at 'v" in problem for problem in problems)
+
+
 def test_both_gitleaks_scans_run_the_one_pinned_version(tmp_path: Path) -> None:
-    """W3: the hook's rev is the version the gitleaks workflow installs."""
+    """W3: the hook's rev is the commit of the version the gitleaks workflow
+    installs (its tag is the comment beside the rev, checked above)."""
     version = check_gate_config.GITLEAKS_VERSION
     hook_rev, _ = check_gate_config.PRE_COMMIT_REPOS[
         "https://github.com/gitleaks/gitleaks"
     ]
-    assert hook_rev == version
+    assert hook_rev == check_gate_config.GITLEAKS_COMMIT
     root = _tree(tmp_path)
     assert check_gate_config._gitleaks_ci_problems(root) == []
     scan_file = root / check_gate_config.GITLEAKS_CI_FILE

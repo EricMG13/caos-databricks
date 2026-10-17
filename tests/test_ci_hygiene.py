@@ -3,12 +3,8 @@
 A job with no timeout can hold a runner for six hours on a hung step, and two
 runs of one branch racing each other report whichever finished last. Both are
 facts about the CI file, so both are asserted against that file itself.
-
-The Dockerfile is here for the same reason and was not, which is the gap: it is
-the other place this repository installs packages and the only one whose result
-ships, and no gate read it. `check_tested.py` reads Python; Trivy answers "are
-the installed packages known-vulnerable", never "was this build hashed,
-wheels-only, digest-pinned and unprivileged".
+The app's start command is stated twice, in `app.yaml` and in the bundle, and
+the two are held equal here (N114).
 """
 
 from __future__ import annotations
@@ -17,14 +13,10 @@ import re
 import tomllib
 from pathlib import Path
 
+import yaml
+
 REPO = Path(__file__).resolve().parents[1]
 CI_YAML = REPO / ".github" / "workflows" / "ci.yml"
-DOCKERFILE = REPO / "Dockerfile"
-MAKEFILE = REPO / "Makefile"
-
-
-def _dockerfile() -> str:
-    return DOCKERFILE.read_text(encoding="utf-8")
 
 
 def _jobs(text: str) -> dict[str, str]:
@@ -109,3 +101,18 @@ def test_every_install_is_locked_and_wheels_only() -> None:
     project = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["tool"]["uv"]["no-build"] is True
     assert not (REPO / "requirements.txt").exists(), "pip would take over the App"
+
+
+def test_app_yaml_and_the_bundle_state_the_same_start_command() -> None:
+    """N114: the platform reads `app.yaml` when the bundle's `config` is
+    ignored, and the bundle's otherwise; a command that moved in one would
+    start a different app depending on which was read."""
+    app = yaml.safe_load((REPO / "app.yaml").read_text(encoding="utf-8"))
+    bundle = yaml.safe_load((REPO / "databricks.yml").read_text(encoding="utf-8"))
+    commands = [
+        resource["config"]["command"]
+        for resource in bundle["resources"]["apps"].values()
+    ]
+    assert commands, "the bundle declares no app command; the layout changed"
+    assert app["command"] == commands[0]
+    assert all(command == app["command"] for command in commands)
