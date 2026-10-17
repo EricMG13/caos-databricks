@@ -895,8 +895,9 @@ def test_a_trickling_workspace_is_given_up_at_the_deadline(
     assert unasked == 0
 
 
+@pytest.mark.parametrize("recorded", [True, False])
 def test_scim_me_waits_for_its_helper_for_the_deadline_and_no_longer(
-    platform: None, monkeypatch: pytest.MonkeyPatch
+    platform: None, monkeypatch: pytest.MonkeyPatch, recorded: bool
 ) -> None:
     """ED-8, the bound `scim_me` holds itself (N197). Both trickle tests end
     their helper through `_body_by`, which sets `done` first; neither reaches
@@ -904,9 +905,11 @@ def test_scim_me_waits_for_its_helper_for_the_deadline_and_no_longer(
     never sets `done` and never answers, and the wait on it is recorded
     rather than slept: `scim_me` asks for exactly the deadline, takes the
     unanswered exchange as `IDENTITY_UNAVAILABLE`, and the slot is returned
-    when the helper does end."""
+    when the helper does end. The unrecorded case (N232) lets a real `Event`
+    give up after a short deadline: the argument is also what the wait obeys."""
     monkeypatch.setenv(identity.HOST_ENV, "https://caos.cloud.databricks.com")
-    monkeypatch.setattr(identity, "SCIM_DEADLINE_SECONDS", 7.0)
+    deadline = 7.0 if recorded else 0.2
+    monkeypatch.setattr(identity, "SCIM_DEADLINE_SECONDS", deadline)
     waits: list[float | None] = []
     ended = threading.Event()
     slots = threading.BoundedSemaphore(1)
@@ -925,7 +928,8 @@ def test_scim_me_waits_for_its_helper_for_the_deadline_and_no_longer(
             deadline: float,
         ) -> None:
             super().__init__(address, authorization, deadline)
-            self.done = _Unanswered()
+            if recorded:
+                self.done = _Unanswered()
 
         def run(self) -> None:
             # The helper outlives the wait, and sets neither `answer` nor
@@ -937,9 +941,14 @@ def test_scim_me_waits_for_its_helper_for_the_deadline_and_no_longer(
 
     monkeypatch.setattr(identity, "_Exchange", _Stalled)
     try:
+        started = time.monotonic()
         with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
             scim_me("Bearer tok")
-        assert waits == [7.0]
+        took = time.monotonic() - started
+        if recorded:
+            assert waits == [deadline]
+        else:
+            assert deadline <= took < 5, "a real Event gave up after the deadline"
         assert not slots.acquire(blocking=False), "the helper still holds its slot"
     finally:
         ended.set()

@@ -44,7 +44,9 @@ class _FakeClock:
 
 
 class _CountedLock:
-    """`lakebase._MINTING` that says how many callers have reached it."""
+    """`lakebase._MINTING` that says how many callers are waiting on it: a
+    caller counts only once it has found the lock taken, so "reached" is
+    "blocked there" and not "about to try" (N232)."""
 
     def __init__(self) -> None:
         import threading
@@ -54,17 +56,20 @@ class _CountedLock:
         self.attempts = 0
 
     def acquire(self, blocking: bool = True) -> bool:
-        with self.reached:
-            self.attempts += 1
-            self.reached.notify_all()
+        if self._lock.acquire(False):
+            return True
+        if blocking:
+            with self.reached:
+                self.attempts += 1
+                self.reached.notify_all()
         return self._lock.acquire(blocking)
 
     def release(self) -> None:
         self._lock.release()
 
-    def wait_for(self, callers: int) -> None:
+    def wait_for(self, waiting: int) -> None:
         with self.reached:
-            assert self.reached.wait_for(lambda: self.attempts == callers, 10)
+            assert self.reached.wait_for(lambda: self.attempts == waiting, 10)
 
     @classmethod
     def installed(cls, monkeypatch: pytest.MonkeyPatch) -> _CountedLock:
@@ -320,8 +325,8 @@ def test_minting_is_single_flight_bounded_and_falls_back_to_a_live_token(
     def slow_mint() -> tuple[str, float]:
         calls.append("mint")
         # Ordered on the lock, not a sleep (N197): the mint is held open
-        # until all four callers have reached the single-flight lock.
-        contended.wait_for(4)
+        # until the other three callers are blocked on the single-flight lock.
+        contended.wait_for(3)
         return "fresh", float("inf")
 
     monkeypatch.setattr(lakebase, "_mint", slow_mint)
