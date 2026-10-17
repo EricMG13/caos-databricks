@@ -189,6 +189,7 @@ def _rows(facts: RefinancingFacts) -> dict[str, list[list[str]]]:
                 "Term loan",
                 str(facts.carrying_debt),
                 "USD",
+                "million",
                 "2027-12-31",
                 str(facts.maturity_years),
                 "senior secured",

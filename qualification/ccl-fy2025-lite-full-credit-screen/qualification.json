@@ -108,8 +108,17 @@
           "row_key": {
             "Entity": "Norwegian Cruise Line Holdings Ltd."
           },
-          "column": "Total/Net/Sr Sec Leverage",
-          "expected": "[Calculated] 5.35x / 5.3x (reported)"
+          "column": "Total Leverage",
+          "expected": "[Calculated] 5.35x"
+        },
+        {
+          "module_id": "CP-1C",
+          "register_id": "T4.5",
+          "row_key": {
+            "Entity": "Norwegian Cruise Line Holdings Ltd."
+          },
+          "column": "Net Leverage",
+          "expected": "5.3x (reported)"
         },
         {
           "module_id": "CP-4C",
