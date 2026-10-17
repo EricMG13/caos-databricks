@@ -42,7 +42,7 @@ T3D.1: `source_document_id`|`source_document_name`|`source_quality`|`period / da
 7. Do not infer maturity wall unless supported by provided evidence.
 
 ## Output
-T3D.2: `Instrument`|`Amount`|`Currency`|`Maturity Date`|`Years to Maturity`|`Seniority / Lien`|`Coupon / Margin`|`Fixed / Floating`|`Call Date`|`Refinancing Pressure`|`Credit Implication`|`Source Trace`
+T3D.2: `Instrument`|`Amount`|`Currency`|`Scale`|`Maturity Date`|`Years to Maturity`|`Seniority / Lien`|`Coupon / Margin`|`Fixed / Floating`|`Call Date`|`Refinancing Pressure`|`Credit Implication`|`Source Trace`
 ## REF_CP-3C_03_LiquidityFCFMarketAccess.md
 <!-- REF_CP-3C_03 (T2) | 2026-06-03 -->
 <step_reference module="CP-3C" step="03" name="Liquidity, FCF, and Market Access Assessment">

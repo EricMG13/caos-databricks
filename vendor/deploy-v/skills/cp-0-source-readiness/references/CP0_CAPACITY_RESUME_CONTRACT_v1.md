@@ -37,11 +37,12 @@ these additional required runtime fields:
 | `parse_batches[]` | contiguous `BATCH-NNN`, sequence, status, logical source IDs and non-empty auditable work boundaries |
 | `checkpoint` | matching run/source/batch-plan identities, `checkpoint_path`, positive sequence, state/previous hashes, exact completed batches, next batch and exact resume command |
 | `parse_jobs[]` extension | `batch_ids`, positive `work_unit_count`, bounded `completed_work_unit_count`; status also permits `QUEUED`/`IN_PROGRESS`, with `coverage_status=PENDING` |
-| `representation_catalog[]` extension | parse status also permits `QUEUED`/`IN_PROGRESS`; pending rows have no active or selected content |
+| `representation_catalog[]` extension (the host's preparation record; P7 is retired) | parse status also permits `QUEUED`/`IN_PROGRESS`; pending rows have no active or selected content |
 | `readiness_summary.finalized` | true only for `FINALIZED` or `BLOCKED` |
 
-The Deploy V CP-0 validator is the executable authority for cross-row alignment,
-source-set hashing, checkpoint reconciliation and state-transition gates.
+Cross-row alignment, source-set hashing, checkpoint reconciliation and
+state-transition gates are checks CP-0 makes on its own draft against the rules
+above; the host runs no validator for them.
 
 ## Deterministic parse work
 

@@ -110,11 +110,11 @@ conclusions, never shorter reasoning or invented filler.
       - **critical_columns**: identical to columns
       - **minimum_body_rows**: 1
     - **T2H.5**: structured below
-      - **columns**: period; case; opening debt/cash; issuance; repayment; interest; closing debt/cash; accessible liquidity
+      - **columns**: period; case; opening debt; opening cash; issuance; repayment; interest; closing debt; closing cash; accessible liquidity
       - **critical_columns**: identical to columns
       - **minimum_body_rows**: 1
     - **T2H.6**: structured below
-      - **columns**: period; case; gross/net leverage; coverage; FCF/debt; liquidity runway; definition IDs
+      - **columns**: period; case; gross leverage; net leverage; coverage; FCF/debt; liquidity runway; definition IDs
       - **critical_columns**: identical to columns
       - **minimum_body_rows**: 1
     - **T2H.7**: structured below
@@ -197,7 +197,7 @@ Entry: validated history. Separate sourced guidance, consensus or user-supplied 
 
 #### Phase 3 — forecast engine
 
-Entry: locked assumptions. Build quarterly periods when source precision permits and annual periods otherwise. Forecast revenue, EBITDA, CFO, capex, FCF, cash interest, debt movement, cash, accessible liquidity, gross/net leverage and interest/fixed-charge coverage. Keep industrial/company and finance-company perimeters separate. Roll forward balance identities and expose every residual. Exit: auditable forecast engine per `REF_CP-2G_C_ForecastEngine.md`.
+Entry: locked assumptions. Build quarterly periods when source precision permits and annual periods otherwise. Forecast revenue, EBITDA, CFO, capex, FCF, cash interest, debt movement, cash, accessible liquidity, gross leverage, net leverage and interest/fixed-charge coverage. Keep industrial/company and finance-company perimeters separate. Roll forward balance identities and expose every residual. Exit: auditable forecast engine per `REF_CP-2G_C_ForecastEngine.md`.
 
 #### Phase 4 — scenarios and breakpoints
 

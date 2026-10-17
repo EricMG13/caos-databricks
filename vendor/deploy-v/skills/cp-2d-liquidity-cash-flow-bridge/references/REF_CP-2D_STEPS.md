@@ -93,7 +93,7 @@ T2E.4: `Driver`|`Evidence`|`Expected Cash Impact`|`Risk Mechanic`|`Credit Implic
 6. Flag any row where status is Provisional, Management-guided, or Analyst estimate.
 
 ## Output
-T2E.5: `Bridge Item`|`Amount`|`Source / Calculation`|`Status`|`Credit Comment`|`Source Trace`
+T2E.5: `Bridge Item`|`Amount`|`Currency and Scale`|`Source / Calculation`|`Status`|`Credit Comment`|`Source Trace`
 </step_reference>
 ## REF_CP-2D_06_MonthsToEmptyCalculation.md
 <!-- REF_CP-2D_06 (T2) | 2026-06-03 -->
