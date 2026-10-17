@@ -7,6 +7,7 @@ members are listed in the evidence's own order (D113).
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import replace
 from uuid import UUID, uuid4
@@ -183,7 +184,9 @@ def test_the_repair_block_does_not_call_the_carried_answer_the_previous_one() ->
     assert "That answer, as the host received it" in block
 
 
-def test_an_unreadable_upstream_handoff_leaves_the_owner_section_out() -> None:
+def test_an_unreadable_upstream_handoff_leaves_the_owner_section_out(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """The section is guidance: a handoff the vendor parser cannot read shows
     no half-read list, and acceptance is unchanged."""
     route = resolve_route(CATALOG, "LITE_CREDIT_22", SCREEN)
@@ -191,9 +194,16 @@ def test_an_unreadable_upstream_handoff_leaves_the_owner_section_out() -> None:
     good = handoff_markdown(first, authored={"limitation_flags": ["FLAG_ONE"]})
     junk = b"not a handoff"
     second = _on(route, "CP-L10", (upstream_ref(first, good),))
-    prompt = _built(
-        route,
-        "CP-5",
-        ((upstream_ref(first, good), good), (upstream_ref(second, junk), junk)),
-    )
+    with caplog.at_level(logging.WARNING, logger="caos.methodology.invocation"):
+        prompt = _built(
+            route,
+            "CP-5",
+            ((upstream_ref(first, good), good), (upstream_ref(second, junk), junk)),
+        )
     assert "HOST OWNER RESTRICTIONS" not in prompt
+    (record,) = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert record.getMessage() == (
+        "owner restrictions left out: an upstream handoff was unreadable"
+        " (TypeError, owner CP-L10)"
+    )
+    assert "not a handoff" not in caplog.text
