@@ -22,6 +22,7 @@ from caos.calculators.credit_model._cells import (
     CONTEXT,
     OTHER_FOOTING,
     SIGN_NORMALISED,
+    TAX_REFUND,
     UNSPANNED,
     Footing,
     anchor_period,
@@ -1890,6 +1891,14 @@ def test_components_in_any_order_that_span_the_period_are_summed() -> None:
     )
     frame = account_frame(swapped, historical_columns(swapped))
     assert frame["YTD:H1_2026"]["acct:revenue"].value == 5885
+    # A quarter worked out from the year less nine months (calculated, no row).
+    derived = _frame(
+        _regs(
+            fy={"FY2025": {"revenue": 420}},
+            ytd={"9M_2025": {"revenue": 306}},
+        )
+    )["Q:FY2025-9M_2025"]["acct:revenue"]
+    assert (derived.value, derived.note) == (Decimal(114), None)
     assert frame["LTM:LTM_Q2_2026"]["acct:revenue"].value == 11654
 
 
@@ -4098,3 +4107,110 @@ def test_twelve_months_are_noted_exactly_outside_52_to_53_weeks(days: int) -> No
     assert (odd_length(days) is None) is (364 <= days <= 371)
     if days not in range(364, 372):
         assert odd_length(days) == f"twelve months of {days} days"
+
+
+def test_a_refused_balance_names_each_footing_as_written() -> None:
+    """The note spells a basis or perimeter the period does not state as
+    `not stated`, each as the register wrote it."""
+    cell = _frame(_balance_regs((None, "Group"), ("IFRS", "Parent")))["PYTD:H1_2025"][
+        "acct:total_debt"
+    ]
+    assert cell.note == (
+        f"{OTHER_FOOTING}: H1_2025 (not stated, Group) and Q2_2025 (IFRS, Parent)"
+    )
+    cell = _frame(_balance_regs(("RESTATED", None), ("AS_REPORTED", "Group")))[
+        "PYTD:H1_2025"
+    ]["acct:total_debt"]
+    assert cell.note == (
+        f"{OTHER_FOOTING}: H1_2025 (RESTATED, not stated) and "
+        "Q2_2025 (AS_REPORTED, Group)"
+    )
+
+
+def test_a_balance_skips_a_period_on_another_footing_for_a_later_one_on_its_own() -> (
+    None
+):
+    """H1 2025 has no debt row and is RESTATED; Q2 2025 (AS_REPORTED) is
+    skipped, and a later period ending that day, also RESTATED, is read."""
+    regs = _balance_regs(("RESTATED", None), ("AS_REPORTED", None))
+    q2 = next(p for p in regs.periods if p.period_id == "Q2_2025")
+    twin = replace(q2, period_id="Q2_2025_RECAST", accounting_basis="RESTATED")
+    debt = next(
+        a
+        for a in regs.accounts
+        if (a.metric_id, a.period_id) == ("total_debt", "Q2_2025")
+    )
+    regs = replace(
+        regs,
+        periods=(*regs.periods, twin),
+        accounts=(
+            *regs.accounts,
+            replace(debt, period_id="Q2_2025_RECAST", value=Decimal(9999)),
+        ),
+    )
+    cell = _frame(regs)["PYTD:H1_2025"]["acct:total_debt"]
+    assert (cell.value, cell.note) == (Decimal(9999), None)
+
+
+def test_a_zero_or_small_cash_tax_part_is_a_refund_only_above_nil() -> None:
+    """N211 (b): a part of nil is no refund; any figure above it is."""
+    regs = example_registers()
+    for written, noted in (("0", False), ("0.5", True), ("1", True)):
+        taxed = replace(
+            regs,
+            accounts=tuple(
+                replace(a, value=Decimal(written))
+                if (a.metric_id, a.period_id) == ("cash_taxes_paid", "Q2_2026")
+                else a
+                for a in regs.accounts
+            ),
+        )
+        ltm = _frame(taxed)["LTM:LTM_Q2_2026"]["acct:cash_taxes_paid"]
+        assert (TAX_REFUND in (ltm.note or "")) is noted, written
+    series = history._Series("flow", {}, signed=True)
+    for amount, expected in (("0", None), ("1", TAX_REFUND), ("0.5", TAX_REFUND)):
+        part = Cell(Decimal(amount))
+        assert history._named_sum(series, [("a", part, 1)]).note == expected
+
+
+def test_a_refused_sum_keeps_the_note_of_the_first_part_that_refused() -> None:
+    """N205: the note of a part already refusing is not replaced by a later
+    part's not being stated."""
+    series = history._Series("flow", {})
+    cell = history._named_sum(
+        series,
+        [
+            ("a", Cell(None, "COMPONENT_MISSING", note=UNSPANNED), 1),
+            ("b", Cell(None, "NOT_STATED"), 1),
+        ],
+    )
+    assert (cell.reason, cell.note) == ("COMPONENT_MISSING", UNSPANNED)
+
+
+def test_twelve_months_without_a_figure_carry_no_length_note() -> None:
+    """A 378-day window with a quarter's revenue not stated is refused; the
+    refusal says nothing of its length."""
+    periods = []
+    first = date(2025, 1, 1)
+    for n, days in enumerate([95, 94, 95, 94], start=1):
+        periods.append(_days_period(f"Q{n}_2025", "QUARTER", first, days, str(n)))
+        first += timedelta(days=days)
+    regs = _revenue_on(tuple(periods), per_day=False)
+    regs = replace(
+        regs,
+        accounts=tuple(
+            replace(a, value=None) if a.period_id == "Q2_2025" else a
+            for a in regs.accounts
+        ),
+    )
+    cell = ltm_frames(regs, historical_columns(regs))["Q:Q4_2025"]["acct:revenue"]
+    assert (cell.value, cell.reason) == (None, "COMPONENT_MISSING")
+    assert cell.note == not_stated("Q2_2025")
+
+
+def test_only_an_ltm_column_is_noted_for_its_length() -> None:
+    """A YTD or a calculated quarter of 181 days is no twelve months."""
+    frame = _frame(example_registers())
+    for column_id in ("YTD:H1_2026", "PYTD:H1_2025", "FY:FY2025", "Q:Q2_2026"):
+        assert "twelve months" not in (frame[column_id]["acct:revenue"].note or "")
+    assert frame["YTD:H1_2026"]["acct:revenue"].value == 5885
