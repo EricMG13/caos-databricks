@@ -900,6 +900,21 @@ def test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null() -> None:
     ):
         with pytest.raises(ValidationError):
             RegisterView.model_validate(broken)
+    # N194: a refused register is named and carries no header, binding or row.
+    refused = {
+        **register,
+        "unavailable_reason": "TABLES_MALFORMED",
+        "columns": [],
+        "declared": [],
+    }
+    assert RegisterView.model_validate(refused).unavailable_reason == "TABLES_MALFORMED"
+    for cellful in (
+        {**refused, "columns": ["Test"]},
+        {**refused, "declared": ["Test"]},
+        {**refused, "rows": [[{"text": "x", "value": None}]]},
+    ):
+        with pytest.raises(ValidationError):
+            RegisterView.model_validate(cellful)
 
 
 def test_every_section_router_declares_its_store_budget() -> None:

@@ -162,7 +162,9 @@ def handoff_registers(
     cells, and the module's other registers are served as written. The
     locator raising on the answer's text refuses them all with
     `TABLES_MALFORMED`, as does `TABLES_TOO_LARGE` past a bound: a bound
-    breached anywhere leaves no register served.
+    breached anywhere leaves no register served. A malformed register still
+    counts toward the size bound (its header and rows are measured before it is
+    refused), so one oversize malformed register refuses them all.
     """
     checker = contract.completeness_check
     try:

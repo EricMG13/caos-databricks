@@ -35,6 +35,7 @@ import psycopg
 
 from caos import methodology
 from caos.blobs import BlobStore
+from caos.boundary_text import BoundaryText
 from caos.copilot import NANO_PER_CREDIT
 from caos.evidence.citations import (
     EXCERPT,
@@ -1771,8 +1772,9 @@ def node_delivery(
     pure over pinned inputs, so a reader sees the node's delivery and not the
     run's whole capture. It is not re-fitted to the model's request ceiling
     (D116), which only narrows it and which the live check already judged. The
-    pin is read once per reader. `EVIDENCE_NOT_AVAILABLE` when a pinned source
-    has been withdrawn, as for a live call.
+    pin is read once per reader, without the liveness count a live call makes:
+    a withdrawn source is judged per citation by the reader (`pinned_live_sources`),
+    so withdrawing one nothing cites refuses nothing here.
     """
     pin: list[Delivery] = []
     pinned: list[tuple[SourceSetMember, ...]] = []
@@ -1784,7 +1786,7 @@ def node_delivery(
 
     def delivery(node: RouteNode, identity: HostIdentity) -> dict[UUID, frozenset[str]]:
         if not pin:
-            pin.extend(_delivered(conn, run_id))
+            pin.extend(_pinned_deliveries(conn, run_id))
         shown, _ = _selection(
             bundle,
             node.module_id,
@@ -1808,6 +1810,35 @@ def _pinned_members(conn: StoreConnection, run_id: UUID) -> tuple[SourceSetMembe
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
     return tuple(SourceSetMember(*row) for row in rows)
 
+
+def _pinned_deliveries(conn: StoreConnection, run_id: UUID) -> list[Delivery]:
+    """Every block the run's pin captured, in the pack's own order, as
+    `_delivered` hands them but without its liveness count (`read_run_blocks`
+    refuses a short delivery): what a re-anchoring reader selects from. Empty
+    pin is `RUN_INPUT_INVALID`."""
+    rows = conn.execute(_PINNED_DELIVERIES, (run_id,)).fetchall()
+    if not rows:
+        raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+    return [
+        Delivery(
+            UUID(str(source)),
+            str(block),
+            int(page),
+            BoundaryText.of(text),
+            str(hidden or ""),
+        )
+        for source, block, page, text, hidden in rows
+    ]
+
+
+_PINNED_DELIVERIES = (
+    "SELECT b.source_id, b.block_id, b.page, b.text, b.hidden"
+    " FROM run_inputs i JOIN source_set_members m"
+    " ON (m.case_id, m.version) = (i.case_id, i.source_version)"
+    " JOIN source_blocks b ON b.source_id = m.source_id"
+    ' WHERE i.run_id = %s ORDER BY m.filename COLLATE "C", m.document_sha256,'
+    " m.source_id, b.block_id"
+)
 
 _PINNED_MEMBERS = (
     "SELECT m.source_id, m.document_sha256, m.filename, m.admitted_at,"

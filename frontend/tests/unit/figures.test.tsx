@@ -976,6 +976,25 @@ test("a register refused alone is named and the module's sound register still dr
   );
 });
 
+test("a refused register is named beside a tables refusal too (N194)", () => {
+  const refused = {
+    register_id: "T4.6",
+    unavailable_reason: "TABLES_MALFORMED" as const,
+    columns: [],
+    declared: [],
+    rows: [],
+  };
+  const container = shown({
+    ...handoffOf("CP-4"),
+    tables_unavailable_reason: "TABLES_MALFORMED",
+    registers: [refused, headroom],
+  });
+  const note = container.querySelector("[data-tables-unavailable='TABLES_MALFORMED']");
+  expect(note).toHaveTextContent("tables could not be read (TABLES_MALFORMED)");
+  expect(note).toHaveTextContent("registers T4.6 (TABLES_MALFORMED) could not be read");
+  expect(container.querySelector("[data-figure='covenant-headroom-x']")).not.toBeNull();
+});
+
 test("pressing an interquartile bar names both ends, Q1 to Q3, never n/a", () => {
   const container = shown({ ...handoffOf("CP-1C"), registers: [peers] });
   const figure = container.querySelector("[data-figure='peer-ranges-x']") as HTMLElement;

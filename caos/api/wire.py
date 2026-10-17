@@ -927,6 +927,14 @@ class RegisterView(BaseModel):
         Field(max_length=TABLE_ROWS_MAX),
     ]
 
+    @model_validator(mode="after")
+    def _refused_serves_no_cells(self) -> RegisterView:
+        if self.unavailable_reason is not None and (
+            self.columns or self.declared or self.rows
+        ):
+            raise ValueError  # a refused register carries no header or row
+        return self
+
 
 class HandoffView(BaseModel):
     """One accepted handoff, labelled per §46.3."""

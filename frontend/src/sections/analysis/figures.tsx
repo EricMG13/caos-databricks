@@ -1038,28 +1038,26 @@ function Unread({ handoff }: { handoff: HandoffView }) {
   const refused = handoff.registers
     .filter((register) => register.unavailable_reason)
     .map((register) => `${register.register_id} (${register.unavailable_reason})`);
-  if (!tables && !registers && refused.length) {
-    return (
-      <p className="note" data-registers-refused={refused.join(" ")}>
-        This module&apos;s registers {refused.join(", ")} could not be read, so no figure is drawn
-        from them. Its other registers and its prose are unaffected.
-      </p>
-    );
-  }
-  if (!tables && !registers) return null;
-  const what =
+  if (!tables && !registers && !refused.length) return null;
+  const unread =
     tables && registers
       ? `tables (${tables}) and registers (${registers}) could not be read`
       : tables
         ? `tables could not be read (${tables})`
-        : `registers could not be read (${registers})`;
+        : registers
+          ? `registers could not be read (${registers})`
+          : null;
+  const alone = refused.length ? `registers ${refused.join(", ")} could not be read` : null;
+  const what = [unread, alone].filter(Boolean).join("; ");
   return (
     <p
       className="note"
       data-tables-unavailable={tables ?? undefined}
       data-registers-unavailable={registers ?? undefined}
+      data-registers-refused={refused.length ? refused.join(" ") : undefined}
     >
-      This module&apos;s {what}, so no figure is drawn from them. Its prose below is unaffected.
+      This module&apos;s {what}, so no figure is drawn from them. Its{" "}
+      {unread ? "prose below is" : "other registers and prose are"} unaffected.
     </p>
   );
 }

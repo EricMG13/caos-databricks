@@ -43,6 +43,8 @@ from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.qualification.proof import assert_orchestration_proof
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+from caos.store.gates import withdraw_source
+from caos.store.members import Standing, grant
 from caos.store.run_inputs import load_run_input
 from caos.store.runs import start_run
 from caos.store.source_sets import load_source_set, pinned_live_sources
@@ -259,3 +261,53 @@ def test_the_pinned_members_are_the_source_sets_own_and_a_run_without_a_pin_has_
         _pinned_members(harness.conn, uuid4())
     harness.conn.rollback()
     assert unpinned.value.code is RefusalCode.RUN_INPUT_INVALID
+
+
+def _accepted_pair(harness: _Harness) -> None:
+    gate = CanonicalCompletions(
+        harness.source_id, source_files={"CP-L10": "report.txt pages 1-2"}
+    )
+    attempt, result = _run(harness, "CP-0", gate)
+    _accept(harness, attempt, result)
+    screen = CanonicalCompletions(
+        harness.source_id, cited=((harness.source_id, DUPLICATE, 1),)
+    )
+    attempt, result = _run(harness, "CP-L10", screen)
+    _accept(harness, attempt, result)
+
+
+def _withdraw(harness: _Harness, source_id: UUID) -> None:
+    actor = uuid4()
+    grant(
+        harness.conn, case_id=harness.case_id, user_id=actor, standing=Standing.APPROVER
+    )
+    harness.conn.commit()
+    withdraw_source(
+        harness.conn, case_id=harness.case_id, actor_id=actor, source_id=source_id
+    )
+
+
+def test_withdrawing_a_source_nothing_cites_leaves_the_proof_standing(
+    paged: _Harness,
+) -> None:
+    """Liveness is judged per citation (`pinned_live_sources`), not by the
+    delivery rebuild: an uncited withdrawn source refuses nothing."""
+    harness = paged
+    _accepted_pair(harness)
+    _withdraw(harness, harness.witness_id)
+    assert_orchestration_proof(
+        harness.conn, harness.blobs, harness.bundle, run_id=harness.run_id
+    )
+    harness.conn.rollback()
+
+
+def test_withdrawing_the_cited_source_is_source_not_pinned(paged: _Harness) -> None:
+    harness = paged
+    _accepted_pair(harness)
+    _withdraw(harness, harness.source_id)
+    with pytest.raises(Refusal) as gone:
+        assert_orchestration_proof(
+            harness.conn, harness.blobs, harness.bundle, run_id=harness.run_id
+        )
+    harness.conn.rollback()
+    assert gone.value.code is RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED
