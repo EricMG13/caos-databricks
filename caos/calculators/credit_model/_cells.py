@@ -41,6 +41,9 @@ FOREIGN = "different currency, not converted"
 RESIDUAL = "residual"
 # An outflow CP-1 wrote positive, read as minus its absolute value.
 SIGN_NORMALISED = "sign normalised"
+# A positive cash tax: CP-1 writes inflows positive, so it is a refund; and a
+# sum that took one.
+TAX_REFUND = "positive: read as a tax refund"
 # A derived period whose components are not distinct, contiguous and its
 # exact span; or an LTM whose fiscal year does not meet its YTD and PYTD.
 UNSPANNED = "components do not span the period"
@@ -51,6 +54,8 @@ LONG_YEAR = "long fiscal year"
 ABSENT = Cell(None, "NOT_SOURCED")  # no row, or a key the frame has no cell for
 # A sum that took a part with no row as nothing; `treated_as_zero` names it.
 TREATED_AS_ZERO = "not stated, treated as zero"
+# A sum refused because a part's row exists but states no figure.
+NOT_STATED_PART = "part not stated"
 # A figure that would combine a period on another accounting basis or entity
 # perimeter than the anchor's (`off_footing`).
 OTHER_FOOTING = "accounting basis or perimeter differs"
@@ -105,6 +110,25 @@ def join_notes(notes: tuple[str | None, ...]) -> str | None:
 def treated_as_zero(part: str) -> str:
     """The note on a sum that took `part`, which has no row, as nothing."""
     return f"{TREATED_AS_ZERO} ({part})"
+
+
+def not_stated(part: str) -> str:
+    """The note on a sum refused for `part`, whose row has no figure."""
+    return f"{NOT_STATED_PART} ({part})"
+
+
+# The days a year of 52 or 53 weeks, or a calendar year, spans: twelve months
+# beyond them are accepted (`history._twelve_months` allows a fortnight) but
+# noted by `odd_length`.
+YEAR_DAYS = (364, 371)
+
+
+def odd_length(days: int | None) -> str | None:
+    """The note on twelve months of `days` days outside `YEAR_DAYS` (a 51 or
+    54-week year, a 378-day LTM); None inside them or where unknown."""
+    if days is None or YEAR_DAYS[0] <= days <= YEAR_DAYS[1]:
+        return None
+    return f"twelve months of {days} days"
 
 
 def odd_year(period_id: str, short: bool) -> str:
@@ -194,12 +218,18 @@ def anchor_period(regs: Cp1Registers) -> PeriodRow | None:
     )
 
 
+_SEPARATORS = frozenset("_-.")
+
+
 def _footing_key(text: str | None) -> str | None:
-    """`text` casefolded, `_` and `-` as spaces, each run of whitespace one
-    space; None for none."""
+    """`text` casefolded with its whitespace, `_`, `-` and `.` removed, so
+    "US GAAP", "USGAAP", "us-gaap" and "U.S. GAAP" are one basis; different
+    standards stay different. None for none."""
     if text is None:
         return None
-    return " ".join(text.casefold().replace("_", " ").replace("-", " ").split())
+    return "".join(
+        c for c in text.casefold() if not c.isspace() and c not in _SEPARATORS
+    )
 
 
 def _differs(text: str | None, anchor: str | None) -> bool:
@@ -210,7 +240,7 @@ def _differs(text: str | None, anchor: str | None) -> bool:
 
 def footing_of(period: PeriodRow) -> Footing:
     """The period's accounting basis and entity perimeter, each compared on
-    case and separators (`_footing_key`); None where not stated."""
+    case, spacing and separators (`_footing_key`); None where not stated."""
     return _footing_key(period.accounting_basis), _footing_key(period.entity_perimeter)
 
 
