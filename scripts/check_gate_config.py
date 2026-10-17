@@ -43,7 +43,15 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from tracked import blob_at, tracked_files, tracked_python, tracked_python_at
+from tracked import (
+    VENDOR,
+    _present,
+    blob_at,
+    python_names_at,
+    tracked_files,
+    tracked_python,
+    tracked_python_at,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 BASELINE = REPO / "tests" / "gate_baseline.json"
@@ -1602,18 +1610,9 @@ def base_measure(
     `rev`'s tracked Python when already read. None when `rev` has no
     checker at all; an `ImportError` or `SyntaxError` when it has one that
     will not load."""
-    texts = tracked_python_at(root, rev) if texts is None else texts
-    scripts = {
-        name.removeprefix("scripts/"): text
-        for name, text in texts.items()
-        if name.startswith("scripts/") and name.count("/") == 1
-    }
-    if CHECKER.removeprefix("scripts/") not in scripts:
+    module = _base_module(rev, root, texts)
+    if module is None:
         return None
-    with tempfile.TemporaryDirectory() as scratch:
-        for name, text in scripts.items():
-            (Path(scratch) / name).write_text(text, encoding="utf-8")
-        module = _loaded_apart(Path(scratch), {name[:-3] for name in scripts})
     measure = getattr(module, "_measure_suppressions", None)
     if callable(measure):
         return cast(Measure, measure)
@@ -1622,6 +1621,31 @@ def base_measure(
         return lambda texts: _pattern_counts(patterns, texts)
     # A checker with neither is not one this gate can hold a tree to.
     raise ImportError(CHECKER)
+
+
+def _base_module(
+    rev: str, root: Path, texts: dict[str, str] | None = None
+) -> ModuleType | None:
+    """`rev`'s checker loaded apart with its own `scripts/` siblings, or None
+    when it has none. The siblings are read from `rev` by name -- every name
+    in `texts` and every `scripts/*.py` on disk -- not from this commit's
+    lister, which a change can narrow to hide `scripts/` itself (N108)."""
+    texts = tracked_python_at(root, rev) if texts is None else texts
+    names = {
+        name for name in texts if name.startswith("scripts/") and name.count("/") == 1
+    }
+    names |= {f"scripts/{path.name}" for path in (root / "scripts").glob("*.py")}
+    scripts = {
+        name.removeprefix("scripts/"): text
+        for name in sorted(names)
+        if (text := texts.get(name, blob_at(root, rev, name))) is not None
+    }
+    if CHECKER.removeprefix("scripts/") not in scripts:
+        return None
+    with tempfile.TemporaryDirectory() as scratch:
+        for name, text in scripts.items():
+            (Path(scratch) / name).write_text(text, encoding="utf-8")
+        return _loaded_apart(Path(scratch), {name[:-3] for name in scripts})
 
 
 def _loaded_apart(scratch: Path, names: set[str]) -> ModuleType:
@@ -1662,6 +1686,41 @@ def _pattern_counts(
     return counts
 
 
+def _unmeasured_problems(against: str, root: Path, texts: dict[str, str]) -> list[str]:
+    """N108: each tracked `.py` path that a lister names for a tree and the
+    measure of that tree left out. The lister is `against`'s own `tracked`
+    module (a change to this commit's `tracked.py` -- its `VENDOR`, its
+    `tracked_files` -- narrows the measure and anything beside it from the
+    same module, so only the base's can be trusted), run over this
+    repository for both trees. With no base checker to borrow one from, this
+    commit's `git ls-files` and `git ls-tree` stand in."""
+    module = _base_module(against, root, texts)
+    lister_here = getattr(module, "tracked_python", None)
+    lister_there = getattr(module, "tracked_python_at", None)
+    if callable(lister_here) and callable(lister_there):
+        here = {path.relative_to(root).as_posix() for path in lister_here(root)}
+        there = set(lister_there(root, against))
+    else:
+        prefix = f"{VENDOR}/"
+        here = {
+            name
+            for name in tracked_files(root, "*.py")
+            if not name.startswith(prefix) and _present(root / name)
+        }
+        there = python_names_at(root, against)
+    measured_here = {path.relative_to(root).as_posix() for path in tracked_python(root)}
+    return [
+        *(
+            f"baseline: {name} is tracked but was not measured"
+            for name in sorted(here - measured_here)
+        ),
+        *(
+            f"baseline: {name} is tracked at {against} but was not measured"
+            for name in sorted(there - texts.keys())
+        ),
+    ]
+
+
 def baseline_problems(against: str, root: Path = REPO) -> list[str]:
     """Each budget that rose against `against`, a base branch's git revision
     (F58, FP-11, W5): both trees are measured fresh, rather than trusting two
@@ -1671,8 +1730,13 @@ def baseline_problems(against: str, root: Path = REPO) -> list[str]:
     lets no pattern this commit weakened hide the suppression it spends."""
     try:
         texts = tracked_python_at(root, against)
+        unmeasured = _unmeasured_problems(against, root, texts)
     except RuntimeError as refusal:
         return [f"baseline: {refusal}"]
+    except (ImportError, SyntaxError):
+        return [f"baseline: {against}'s own checker could not be loaded"]
+    if unmeasured:
+        return unmeasured
     base = _counts_at(against, root, texts)
     now = suppression_counts(root)
     problems = [

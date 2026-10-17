@@ -136,7 +136,7 @@ def test_the_reviewed_rollback_targets_are_refused() -> None:
     assert rollback_check.rollback_problems("HEAD", "HEAD") == []
     # Since D106 that commit also reads host records by no codec (M4); HEAD
     # writes them by codec 3 since D109 (2 since D107).
-    drift, codec = rollback_check.rollback_problems("b1c1c83^", "HEAD")
+    drift, codec, *_ = rollback_check.rollback_problems("b1c1c83^", "HEAD")
     assert "0040_hidden_painted_over" in drift and "STORE_SCHEMA_DRIFT" in drift
     assert codec.startswith("b1c1c83^ reads host records by codec None, not 3")
     moved = rollback_check.rollback_problems("84eb06d", "HEAD")
@@ -162,3 +162,75 @@ def test_a_release_whose_record_codec_moved_cannot_be_rolled_back(
     ]
     same = _commit(repo, {"caos/serve.py": "a = 1\n"}, "same codec")
     assert rollback_check.rollback_problems(release, same, repo) == []
+
+
+PDF = "caos/evidence/pdf.py"
+PDF_SOURCE = """\
+class {cls}:
+    @property
+    def identity(self):
+        return ExtractorIdentity(
+            "{name}",
+            # a comment
+            "{version}",
+            {{"engine": "x"}},
+        )
+"""
+
+
+def _extractor(version: str, name: str = "caos.pdfminer") -> str:
+    return PDF_SOURCE.format(version=version, name=name, cls="PdfExtractor")
+
+
+def test_a_release_whose_extractor_version_rose_cannot_be_rolled_back(
+    repo: Path,
+) -> None:
+    """N111: equal migrations, schema and codec, but the release writes
+    PdfExtractor v7 rows the older build refuses (SOURCE_IDENTITY_INVALID)."""
+    older = _commit(repo, {**_store(), PDF: _extractor("6")}, "older")
+    release = _commit(repo, {PDF: _extractor("7")}, "release")
+    assert rollback_check.writer_versions(older, repo)["PdfExtractor version"] == "6"
+    assert rollback_check.rollback_problems(older, release, repo) == [
+        f"PdfExtractor version is 6 on {older} and 7 on {release}: {older} "
+        f"refuses the rows {release} writes"
+    ]
+    same = _commit(repo, {"caos/serve.py": "a = 1\n"}, "same versions")
+    assert rollback_check.rollback_problems(release, same, repo) == []
+
+
+def test_every_declared_writer_version_is_read_and_each_move_is_named(
+    repo: Path,
+) -> None:
+    files = {
+        "caos/evidence/extract.py": _extractor("4", "caos.plain-text"),
+        "caos/evidence/page.py": 'PDF_CROP_VERSIONS = frozenset({"2", "3"})\n',
+        "caos/evidence/citations.py": 'NORMALISATION_VERSION = "2"\n',
+        "caos/evidence/ingest.py": "PACKING_BY_WIDTH = 1\nPACKING_BY_TOKEN = 2\n",
+        "caos/methodology/__init__.py": 'CANONICAL_ADAPTER_VERSION = "v3"\n',
+        "caos/deliverable/verify_package.py": 'RENDERER_SHA256 = "aa"\n',
+    }
+    older = _commit(repo, {**_store(), **files}, "older")
+    release = _commit(
+        repo,
+        {
+            "caos/evidence/extract.py": _extractor("5", "caos.plain-text"),
+            "caos/evidence/page.py": 'PDF_CROP_VERSIONS = frozenset({"2", "3", "4"})\n',
+            "caos/evidence/citations.py": 'NORMALISATION_VERSION = "3"\n',
+            "caos/evidence/ingest.py": "PACKING_BY_WIDTH = 1\nPACKING_BY_TOKEN = 3\n",
+            "caos/methodology/__init__.py": 'CANONICAL_ADAPTER_VERSION = "v4"\n',
+            "caos/deliverable/verify_package.py": 'RENDERER_SHA256 = "bb"\n',
+        },
+        "release",
+    )
+    named = [
+        problem.split(" is ")[0]
+        for problem in rollback_check.rollback_problems(older, release, repo)
+    ]
+    assert named == [
+        "plain-text extractor version",
+        "PDF crop versions",
+        "citation normalisation version",
+        "block packing (token)",
+        "canonical adapter version",
+        "renderer digest",
+    ]
