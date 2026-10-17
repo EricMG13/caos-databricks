@@ -1733,6 +1733,8 @@ def baseline_problems(against: str, root: Path = REPO) -> list[str]:
         unmeasured = _unmeasured_problems(against, root, texts)
     except RuntimeError as refusal:
         return [f"baseline: {refusal}"]
+    except (ImportError, SyntaxError):
+        return [f"baseline: {against}'s own checker could not be loaded"]
     if unmeasured:
         return unmeasured
     base = _counts_at(against, root, texts)
