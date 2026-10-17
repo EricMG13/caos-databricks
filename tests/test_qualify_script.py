@@ -1523,12 +1523,18 @@ def test_resume_of_a_database_that_does_not_exist_reads_no_pin(
 
 
 @pytest.mark.parametrize(
-    "variant",
+    "case",
     [
-        ("dbname", "start"),
-        ("DBNAME", "start"),
-        ("dbname", "resume"),
-        ("DBNAME", "resume"),
+        (query, mode)
+        for query in (
+            "dbname=postgres",
+            "DBNAME=postgres",
+            "dbname=",
+            "DBNAME=",
+            "service=x",
+            "service=",
+        )
+        for mode in ("start", "resume")
     ],
 )
 def test_an_admin_url_naming_a_database_in_its_query_is_refused(
@@ -1536,20 +1542,19 @@ def test_an_admin_url_naming_a_database_in_its_query_is_refused(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
     created: list[str],
-    variant: tuple[str, str],
+    case: tuple[str, str],
 ) -> None:
-    """N236 (1): a `dbname` parameter wins over the path `_database_url` sets,
-    so a start or a resume would reach the database it names, not the one
-    minted or asked for. Refused before anything is created or spent, naming
-    the parameter and never the URL."""
-    key, mode = variant
+    """N236 (1): a `dbname` parameter, even an empty one, wins over the path
+    `_database_url` sets, and a `service` entry can supply one, so a start or
+    a resume would reach another database than the one minted or asked for.
+    Refused before anything is created or spent, naming the
+    parameter and never the URL."""
+    query, mode = case
     provider = _costed()
     _refused_before_the_database(monkeypatch, tmp_path, provider)
     secret = uuid4().hex
     server = urlsplit(os.environ["CAOS_TEST_POSTGRES_URL"])
-    named = urlunsplit(
-        server._replace(query=f"{key}=postgres&application_name={secret}")
-    )
+    named = urlunsplit(server._replace(query=f"{query}&application_name={secret}"))
     monkeypatch.setenv("CAOS_QUALIFY_POSTGRES_URL", named)
     root = _write_lite_set(tmp_path / "set")
     argv = (
@@ -1561,7 +1566,12 @@ def test_an_admin_url_naming_a_database_in_its_query_is_refused(
     assert qualify.main(argv) == 2
 
     err = capsys.readouterr().err
-    assert "dbname" in err.lower() and secret not in err and "nothing was spent" in err
+    assert (
+        "dbname" in err
+        and "service" in err
+        and secret not in err
+        and "nothing was spent" in err
+    )
     assert provider.prompts == [] and created == []
 
 

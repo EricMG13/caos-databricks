@@ -843,14 +843,16 @@ def _environment() -> tuple[str, str, str] | None:
             file=sys.stderr,
         )
         return None
-    if any(key.lower() == "dbname" for key in parse_qs(urlsplit(admin_url).query)):
-        # libpq reads a `dbname` parameter ahead of the URL's path, so every
-        # database URL built from this one would reach the database it names
-        # and not the one minted or asked for (N236). The URL is not echoed.
+    keys = parse_qs(urlsplit(admin_url).query, keep_blank_values=True)
+    if any(key.lower() in ("dbname", "service") for key in keys):
+        # libpq reads a `dbname` parameter ahead of the URL's path (an empty one
+        # too, which means `postgres`), and a `service` entry may supply one, so
+        # every database URL built from this one would reach another database
+        # than the one minted or asked for (N236). The URL is not echoed.
         print(
-            "CAOS_QUALIFY_POSTGRES_URL carries a dbname parameter: it would"
-            " override the run's database; name the server alone; nothing was"
-            " spent",
+            "CAOS_QUALIFY_POSTGRES_URL carries a dbname or service parameter: it"
+            " would override the run's database; name the server alone; nothing"
+            " was spent",
             file=sys.stderr,
         )
         return None
