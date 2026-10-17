@@ -231,14 +231,25 @@ def _permission_problems(document: object, groups: tuple[str, str]) -> list[str]
         problems.append(
             "resolved app permissions do not grant CAN_USE to exactly the groups given"
         )
-    # The deployer's own CAN_MANAGE is the one user or service-principal
-    # grant the CLI resolves (W3, N112); any other would open or manage the app.
+    # The deployer's own CAN_MANAGE is the one user or service-principal grant
+    # the CLI resolves (W3, N112): the entry must name the deployer the CLI
+    # resolved (`workspace.current_user`); any other would open or manage the app.
+    workspace = _mapping(_mapping(document).get("workspace"))
+    deployer = str(_mapping(workspace.get("current_user")).get("userName"))
     principals = [
-        str(entry.get("level"))
+        entry
         for entry in (_mapping(item) for item in _list(listed))
         if "group_name" not in entry
     ]
-    if principals not in ([], ["CAN_MANAGE"]):
+    if principals and (
+        len(principals) != 1
+        or principals[0].get("level") != "CAN_MANAGE"
+        or (
+            principals[0].get("user_name")
+            or principals[0].get("service_principal_name")
+        )
+        != deployer
+    ):
         problems.append(
             "resolved app permissions grant a user or service principal "
             "other than the deployer's CAN_MANAGE"

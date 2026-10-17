@@ -10,6 +10,7 @@ the filing chain's front door: nothing else in the workspace sets `?revision`.
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
@@ -18,7 +19,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
-from caos.api.commands.availability import FilingFacts, report_actions
+from caos.api.commands.availability import (
+    UNPROVEN_HEAD_CODES,
+    FilingFacts,
+    report_actions,
+)
 from caos.api.deps import (
     IDENTITY_FIRST,
     Blobs,
@@ -36,6 +41,7 @@ from caos.api.wire import (
     CommitteeDocument,
     LineView,
     ReportDocument,
+    SectionNote,
     bounded,
 )
 from caos.blobs import BlobStore
@@ -83,7 +89,17 @@ from caos.store.source_sets import cited_source_ids
 # own pass alone, one more `payload_digests` read per signer and the freezer
 # -- the same one signer, one freezer shape the rest of this budget is stated
 # for -- so "committee" pays two more for a filed revision.
-IO_BUDGET = {"report": 46, "committee": 22, "frozen": 53, "unsaved": 42}
+IO_BUDGET = {
+    "report": 46,
+    "committee": 22,
+    "frozen": 53,
+    "unsaved": 42,
+    "report_unproven": 48,
+}
+# N112: "report_unproven" is a frozen head that no longer re-proves, served from
+# its stored bytes: the "report" re-proof that refused (its statements and blob
+# downloads are spent before it does) plus the stored payload's own reads --
+# measured 48 statements and 7 blobs, over "report"'s 46 and 7.
 # N35's remainder: "report" and "frozen" (a state the store has not filed)
 # `prove_revision` -- the saved payload once, for its narrative
 # (`read_revision`), then the whole payload re-derived (`canonical_payload`),
@@ -92,7 +108,13 @@ IO_BUDGET = {"report": 46, "committee": 22, "frozen": 53, "unsaved": 42}
 # with no saved payload to read first: 3*2. A filed "committee" instead reads
 # its own two stored blobs -- the receipt `read_filed_receipt` proves and the
 # frozen payload `read_revision` then serves -- never re-deriving.
-BLOB_BUDGET = {"report": 7, "committee": 2, "frozen": 7, "unsaved": 6}
+BLOB_BUDGET = {
+    "report": 7,
+    "committee": 2,
+    "frozen": 7,
+    "unsaved": 6,
+    "report_unproven": 7,
+}
 router = APIRouter()
 
 
@@ -184,10 +206,10 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
         proof = ProvenRevision(conn, blobs, bundle, case_id, run, revision, digest)
         if committee:
             publication, payload = proven_revision(proof)
-            reproved = True
+            unproven = None
         else:
             publication = {}
-            payload, reproved = _report_payload(proof, head)
+            payload, unproven = _report_payload(proof, head)
         return dict(
             chrome=dict(
                 subject=dict(case_id=case_id, title=payload["case_title"]),
@@ -196,7 +218,7 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
                     actor.role,
                     standing,
                     _filing_facts(
-                        proof, actor, head=head, payload=payload, reproved=reproved
+                        proof, actor, head=head, payload=payload, unproven=unproven
                     ),
                 ),
             ),
@@ -207,8 +229,8 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
             },
             observed_at=observed_at,
             observed_empty=False,
-            status="complete",
-            notes=[],
+            status="partial" if unproven else "complete",
+            notes=[SectionNote.HEAD_UNPROVEN] if unproven else [],
         )
 
 
@@ -353,30 +375,37 @@ def _reproven(proof: ProvenRevision) -> dict[str, Any]:
     return dict(json.loads(data))
 
 
-def _report_payload(proof: ProvenRevision, head: object) -> tuple[dict[str, Any], bool]:
-    """The Report's payload and whether it re-proved.
+def _report_payload(
+    proof: ProvenRevision, head: object
+) -> tuple[dict[str, Any], RefusalCode | None]:
+    """The Report's payload, and the code its proof refused with when it did
+    not re-prove.
 
-    A frozen, unfiled head that no longer re-proves is served from its stored
-    bytes, as a filed one is, rather than refusing the read: the save command's
-    `_fileable` says such a head takes a draft that supersedes it (N77, N112),
-    and a refused read could not offer that save. Any other revision that does
-    not re-prove still refuses, and a store fault is never an answer.
+    A frozen, unfiled head whose re-proof refuses with a drift code the
+    superseding save accepts (`UNPROVEN_HEAD_CODES`: the renderer or the rules
+    moved since the freeze) is served from its stored bytes, as a filed one is,
+    marked `HEAD_UNPROVEN` and partial, so the save can be offered (N77, N112).
+    Every other refusal -- a tampered or missing blob, a record mismatch, a
+    store fault -- still refuses the read (invariants 5 and 11 fail closed).
+    The served fallback prints its code alone to stderr, once per read.
     """
     try:
-        return _reproven(proof), True
+        return _reproven(proof), None
     except Refusal as refused:
         if (
-            refused.code is RefusalCode.STORE_UNAVAILABLE
+            refused.code not in UNPROVEN_HEAD_CODES
             or head is None
             or UUID(str(head)) != proof.revision
             or not _frozen_unfiled(proof)
         ):
             raise
+        code = refused.code
+    print(f"REPORT_HEAD_UNPROVEN {code.value}", file=sys.stderr)
     return (
         read_revision(
             proof.conn, proof.blobs, case_id=proof.case_id, revision_id=proof.revision
         ),
-        False,
+        code,
     )
 
 
@@ -417,7 +446,7 @@ def _filing_facts(
     *,
     head: object,
     payload: dict[str, Any],
-    reproved: bool = True,
+    unproven: RefusalCode | None = None,
 ) -> FilingFacts:
     """What the section can say about this revision's filing, and no more.
 
@@ -437,6 +466,7 @@ def _filing_facts(
     signers = {who for who, _ in revision_signatures(conn, case_id, revision)}
     frozen = row is not None and row[0] is not None
     filed = frozen and row is not None and row[1] is not None
+    unfileable = None if filed or not frozen else unproven or _unrenderable(payload)
     return FilingFacts(
         signed=bool(signers),
         frozen=frozen,
@@ -445,18 +475,18 @@ def _filing_facts(
         actor_froze=frozen and row is not None and actor.user_id == UUID(str(row[0])),
         head=head is not None and UUID(str(head)) == revision,
         actor_saved=row is not None and actor.user_id == UUID(str(row[2])),
-        fileable=filed or not frozen or (reproved and _renders(payload)),
+        unfileable=unfileable,
     )
 
 
-def _renders(payload: dict[str, Any]) -> bool:
-    """Whether the proven payload renders: the save command's `_fileable`
-    asks the same of a frozen head (N77)."""
+def _unrenderable(payload: dict[str, Any]) -> RefusalCode | None:
+    """The code the renderer refuses the proven payload with, or None: the save
+    command's `_fileable` asks the same of a frozen head (N77)."""
     try:
         renderable(payload_bytes(payload))
-    except Refusal:
-        return False
-    return True
+    except Refusal as refused:
+        return refused.code
+    return None
 
 
 def _publication(

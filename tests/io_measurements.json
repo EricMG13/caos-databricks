@@ -35,12 +35,14 @@
       "committee": 2,
       "frozen": 7,
       "report": 7,
+      "report_unproven": 7,
       "unsaved": 6
     },
     "io": {
       "committee": 22,
       "frozen": 53,
       "report": 46,
+      "report_unproven": 48,
       "unsaved": 42
     }
   },

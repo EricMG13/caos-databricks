@@ -23,6 +23,18 @@ from caos.store.work import MAX_QUEUED_RUNS_PER_ACTOR
 IO_BUDGET = 0
 
 _C = RefusalCode
+# The refusals of a frozen head's re-proof that mean drift, not tamper: the
+# renderer or the rules moved since the freeze, so the head cannot be filed and
+# takes the superseding save `_fileable` lets through (N77, N112). A blob that
+# is missing or changed, a record mismatch or a store fault is none of these.
+UNPROVEN_HEAD_CODES = frozenset(
+    {
+        RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING,
+        RefusalCode.DELIVERABLE_PAYLOAD_INVALID,
+        RefusalCode.DELIVERABLE_MARKDOWN_UNSUPPORTED,
+        RefusalCode.DELIVERABLE_UNCITED_FIGURE,
+    }
+)
 _A = ActionName
 
 
@@ -97,9 +109,9 @@ class FilingFacts:
     # The caller saved this revision: its author is no independent signer
     # (FP-33, N78).
     actor_saved: bool = False
-    # A frozen head that still re-proves and renders; one that does not takes
-    # a draft that supersedes it (N77).
-    fileable: bool = True
+    # The code a frozen, unfiled head's proof or render refused with when it is
+    # not fileable: filing it is refused with this (N112).
+    unfileable: RefusalCode | None = None
 
 
 def report_actions(
@@ -145,7 +157,7 @@ def report_actions(
                 # W5: a frozen head takes no draft until it is filed, unless
                 # it can no longer be filed (N77).
                 (
-                    filing.frozen and not filing.filed and filing.fileable,
+                    filing.frozen and not filing.filed and filing.unfileable is None,
                     _C.DELIVERABLE_ALREADY_FROZEN,
                 ),
             ],
@@ -184,6 +196,11 @@ def report_actions(
                     _C.APPROVER_NOT_INDEPENDENT,
                 ),
                 (filing.filed, _C.DELIVERABLE_ALREADY_FILED),
+                # Last, as the command re-proves only after its own checks.
+                (
+                    filing.unfileable is not None,
+                    filing.unfileable or _C.DELIVERABLE_MOVED_SINCE_SIGNING,
+                ),
             ],
         ),
     ]
