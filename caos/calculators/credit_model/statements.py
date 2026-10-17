@@ -66,6 +66,7 @@ from caos.calculators.credit_model._cells import (
     FOREIGN,
     RESIDUAL,
     SIGN_NORMALISED,
+    TAX_REFUND,
     beyond_rounding,
     calc,
     join_notes,
@@ -85,8 +86,6 @@ from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.methodology.model_inputs import Cp1Registers, PfAdjustmentRow
 
 _EXCLUDED = "excluded"
-# A positive cash tax: CP-1 writes inflows positive, so it is a refund.
-TAX_REFUND = "positive: read as a tax refund"
 # The realisation statuses "exclude unrealised" leaves out (spec M7).
 UNREALISED = frozenset({"UNREALIZED", "NOT_STATED"})
 
@@ -123,6 +122,10 @@ _PF_TARGETS = {
     "cash_and_equivalents": ("cash_closing",),
     "total_debt": ("total_debt", "debt_closing"),
 }
+# The PF net debt's note: a PF adjustment to debt or cash no line takes is not
+# in it (the model's NOT_APPLIED limitation names it too).
+PF_NET_DEBT_EXCLUDES = "PF adjustment to debt or cash not applied"
+_NET_DEBT_WORDS = ("debt", "cash")
 _PF_BLANK = (
     "other_operating",
     "ffo",
@@ -435,6 +438,19 @@ def _pf_keys(adjustment: PfAdjustmentRow, regs: Cp1Registers) -> Iterable[str]:
     return (f"fac:{facility_id}", *sorted(totals))
 
 
+def _unapplied_debt_or_cash(
+    adjustments: list[PfAdjustmentRow], regs: Cp1Registers
+) -> list[PfAdjustmentRow]:
+    """The adjustments no line takes (`_pf_keys`) to a metric that names
+    debt or cash: what net debt (debt less cash) would have taken."""
+    return [
+        a
+        for a in adjustments
+        if not tuple(_pf_keys(a, regs))
+        and any(w in a.metric_id for w in _NET_DEBT_WORDS)
+    ]
+
+
 def _pf_value(adjustment: PfAdjustmentRow) -> Decimal:
     """The adjustment's figure in CP-1's own sign, a negative zero as zero."""
     return no_negative_zero(adjustment.value)
@@ -498,6 +514,14 @@ def pro_forma_column(
                 for key, cell in _balances(cells.__getitem__).items()
             }
         )
+        left_out = _unapplied_debt_or_cash(adjustments, regs)
+        net_debt = cells["net_debt"]
+        if left_out and net_debt.value is not None:
+            names = ", ".join(a.label for a in left_out)
+            cells["net_debt"] = replace(
+                net_debt,
+                note=join_notes((net_debt.note, f"{PF_NET_DEBT_EXCLUDES}: {names}")),
+            )
         blank = (*_PF_BLANK, *(key for key in cells if key.startswith("kpi:")))
         cells.update({key: Cell(None, "NOT_APPLICABLE") for key in blank})
         return column, {column.column_id: cells}

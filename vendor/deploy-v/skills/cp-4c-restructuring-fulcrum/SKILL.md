@@ -117,22 +117,22 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4E.2**: structured below
-      - **columns**: class/claim ID; obligor; principal/accrued/PIK; currency; security/guarantee; priority; disputed/contingent; evidence
+      - **columns**: class/claim ID; obligor; principal; accrued; PIK; currency; scale; security/guarantee; priority; disputed/contingent; evidence
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4E.3**: structured below
-      - **columns**: scenario; valuation date; metric/cash flow; multiple/discount; EV; source/judgment IDs; limitation
-      - **critical_columns**: scenario; valuation date; metric/cash flow; multiple/discount; EV; source/judgment IDs
+      - **columns**: scenario; valuation date; metric/cash flow; multiple/discount; EV; currency and scale; source/judgment IDs; limitation
+      - **critical_columns**: scenario; valuation date; metric/cash flow; multiple/discount; EV; currency and scale; source/judgment IDs
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4E.4**: structured below
-      - **columns**: path; process/jurisdiction; consent/vote; new money; class treatment; milestones; blockers; probability class
+      - **columns**: path; process/jurisdiction; consent/vote; new money; currency and scale; class treatment; milestones; blockers; probability class
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4E.5**: structured below
-      - **columns**: scenario; entity; available value; priority claim; allocation; residual; legal evidence ID
+      - **columns**: scenario; entity; available value; priority claim; allocation; residual; currency and scale; legal evidence ID
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
@@ -142,7 +142,7 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4E.7**: structured below
-      - **columns**: scenario; class/instrument; allowed claim; cash/debt/equity/warrant value; total recovery; timing; currency
+      - **columns**: scenario; class/instrument; allowed claim; cash value; debt value; equity value; warrant value; total recovery; timing; currency; scale
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1

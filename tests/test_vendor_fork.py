@@ -436,7 +436,8 @@ def test_cp0_and_cp_l10_smaller_confusions() -> None:
 def test_the_checker_follows_the_method_columns_and_keeps_what_is_read() -> None:
     """G2-6: CP-1, CP-1B and CP-1C registers written as their step specs say
     now pass; the columns a host qualification key reads (CP-1B T4.12
-    `values`/`changes`, CP-1C T4.5 `Total/Net/Sr Sec Leverage`) are kept, so
+    `values`/`changes`, CP-1C T4.5 `Total Leverage` and `Net Leverage`, split by
+    fork r17 from the packed `Total/Net/Sr Sec Leverage`, N192) are kept, so
     every committed key stays locatable."""
     from caos.methodology.bundle import Bundle
     from caos.qualification.matrix import unlocatable_register_keys
@@ -455,7 +456,9 @@ def test_the_checker_follows_the_method_columns_and_keeps_what_is_read() -> None
     ).split(" | ")
     t45 = [
         "Entity",
-        "Total/Net/Sr Sec Leverage",
+        "Total Leverage",
+        "Net Leverage",
+        "Sr Sec Leverage",
         "Int Coverage",
         "Adj Int Coverage",
         "FFO/Debt",
