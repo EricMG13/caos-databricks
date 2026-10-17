@@ -194,14 +194,77 @@ def periods_at(
     regs: Cp1Registers, own: str | None, day: str | None
 ) -> list[str | None]:
     """Where a balance at `day` is read: `own` first, then every period
-    ending that day, in register order; none on another footing
-    (`off_footing`), and only `own` where it is. None, no period, matches no
+    ending that day, in register order; none on another footing than the
+    anchor's (`off_footing`), and only `own` where it is; none on a footing
+    apart from `own`'s (`balance_periods`). None, no period, matches no
     row."""
+    return balance_periods(regs, own, day)[0]
+
+
+def balance_periods(
+    regs: Cp1Registers, own: str | None, day: str | None, *, read_own: bool = True
+) -> tuple[list[str | None], tuple[str, ...]]:
+    """The periods a balance at `day` is read from, and those skipped.
+    Read: `own` (unless `read_own` is false, for an opening balance), then
+    every period ending that day, in register order, none on another footing
+    than the anchor's (`off_footing`), and only `own` where it is. Skipped:
+    a period ending that day whose stated basis or perimeter is apart from
+    `own`'s (R7, N206); not stated matches anything."""
     off = off_footing(regs)
-    if own in off:
-        return [own]
-    ending = (p.period_id for p in regs.periods if day and p.end_date == day)
-    return [own, *(period_id for period_id in ending if period_id not in off)]
+    if read_own and own in off:
+        return [own], ()
+    read: list[str | None] = [own] if read_own else []
+    skipped: list[str] = []
+    for period in regs.periods:
+        if not day or period.end_date != day or period.period_id in off:
+            continue
+        if period.period_id == own:
+            continue  # read first above, or an opening's own: no balance there
+        if own is not None and _apart_periods(regs, own, period.period_id):
+            skipped.append(period.period_id)
+        else:
+            read.append(period.period_id)
+    return read, tuple(skipped)
+
+
+def _footing_at(regs: Cp1Registers, period_id: str | None) -> Footing:
+    for period in regs.periods:
+        if period.period_id == period_id:
+            return footing_of(period)
+    return UNSTATED_FOOTING
+
+
+def _apart_periods(regs: Cp1Registers, own: str, other: str) -> bool:
+    """Whether the two register periods state a different basis or perimeter
+    (a period not in the register states none)."""
+    pair = (_footing_at(regs, own), _footing_at(regs, other))
+    return combined_footing(pair) is None
+
+
+def _written(regs: Cp1Registers, period_id: str) -> str:
+    """The period's id with its basis and perimeter as written, `not stated`
+    for one it does not state."""
+    for period in regs.periods:
+        if period.period_id == period_id:
+            basis = period.accounting_basis or "not stated"
+            perimeter = period.entity_perimeter or "not stated"
+            return f"{period_id} ({basis}, {perimeter})"
+    return f"{period_id} (not stated, not stated)"
+
+
+def footing_note(regs: Cp1Registers, own: str, other: str) -> str:
+    """`OTHER_FOOTING`, naming both periods with the footing each states."""
+    return f"{OTHER_FOOTING}: {_written(regs, own)} and {_written(regs, other)}"
+
+
+def refused_balance(
+    regs: Cp1Registers, own: str | None, skipped: tuple[str, ...]
+) -> Cell:
+    """`COMPONENT_MISSING` for a balance only the `skipped` periods (see
+    `balance_periods`) hold, noted with the first one's footing and `own`'s."""
+    return Cell(
+        None, "COMPONENT_MISSING", note=footing_note(regs, str(own), skipped[0])
+    )
 
 
 def anchor_period(regs: Cp1Registers) -> PeriodRow | None:
@@ -219,6 +282,7 @@ def anchor_period(regs: Cp1Registers) -> PeriodRow | None:
 
 
 _SEPARATORS = frozenset("_-.")
+_NOT_STATED = "notstated"
 
 
 def _footing_key(text: str | None) -> str | None:
@@ -227,9 +291,10 @@ def _footing_key(text: str | None) -> str | None:
     standards stay different. None for none."""
     if text is None:
         return None
-    return "".join(
+    key = "".join(
         c for c in text.casefold() if not c.isspace() and c not in _SEPARATORS
     )
+    return None if key == _NOT_STATED else key
 
 
 def _differs(text: str | None, anchor: str | None) -> bool:

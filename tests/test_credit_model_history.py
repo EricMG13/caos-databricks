@@ -4101,6 +4101,47 @@ def test_a_378_day_ltm_is_noted() -> None:
     assert odd_length(None) is None
 
 
+def test_the_stated_day_counts_win_over_the_dated_spans_for_the_length() -> None:
+    """Dated as a calendar year, but stating day counts of 378 days: the
+    stated ones are the length (the dated spans are only the fallback)."""
+    periods = tuple(
+        replace(p, day_count=n)
+        for p, n in zip(
+            (
+                _days_period("FY2025", "FY", date(2025, 1, 1), 365, None),
+                _days_period("H1_2025", "YTD", date(2025, 1, 1), 181, None),
+                _days_period("H1_2026", "YTD", date(2026, 1, 1), 181, None),
+            ),
+            (372, 182, 188),
+            strict=True,
+        )
+    )
+    regs = _revenue_on(periods, per_day=False)
+    columns = historical_columns(regs)
+    ltm = next(c for c in columns if c.kind == "LTM")
+    cell = account_frame(regs, columns)[ltm.column_id]["acct:revenue"]
+    assert cell.note == "twelve months of 378 days"
+
+
+def test_a_378_day_ltm_is_noted_without_a_day_count() -> None:
+    """N211 Minor 5: with CP-1 stating no day count, both dates still say how
+    long the twelve months are."""
+    periods = tuple(
+        replace(p, day_count=None)
+        for p in (
+            _days_period("FY2025", "FY", date(2024, 12, 25), 372, None),
+            _days_period("H1_2025", "YTD", date(2024, 12, 25), 182, None),
+            _days_period("H1_2026", "YTD", date(2026, 1, 1), 188, None),
+        )
+    )
+    regs = _revenue_on(periods, per_day=False)
+    columns = historical_columns(regs)
+    ltm = next(c for c in columns if c.kind == "LTM")
+    cell = account_frame(regs, columns)[ltm.column_id]["acct:revenue"]
+    assert cell.value == 100 + 100 - 100
+    assert cell.note == "twelve months of 378 days"
+
+
 @settings(max_examples=100, deadline=None)
 @given(days=st.integers(min_value=300, max_value=450))
 def test_twelve_months_are_noted_exactly_outside_52_to_53_weeks(days: int) -> None:
@@ -4214,3 +4255,12 @@ def test_only_an_ltm_column_is_noted_for_its_length() -> None:
     for column_id in ("YTD:H1_2026", "PYTD:H1_2025", "FY:FY2025", "Q:Q2_2026"):
         assert "twelve months" not in (frame[column_id]["acct:revenue"].note or "")
     assert frame["YTD:H1_2026"]["acct:revenue"].value == 5885
+
+
+def test_a_footing_written_not_stated_is_not_stated() -> None:
+    """Minor 3: "Not stated", in any case or spacing, states no basis or
+    perimeter: it matches anything, as null does."""
+    for text in ("Not stated", "NOT  STATED", "not_stated", " Not-Stated "):
+        regs = _balance_regs((text, text), ("AS_REPORTED", "Group"))
+        cell = _frame(regs)["PYTD:H1_2025"]["acct:total_debt"]
+        assert (cell.value, cell.note) == (Decimal(13870), None), text
