@@ -102,6 +102,9 @@ export const STATE_ROUTES = [
   sectionRoute("directory", "acts"),
   sectionRoute("upload", "acts"),
   sectionRoute("run", "acts"),
+  // N159: the run input's command form on a route that carries CP-2G (the
+  // acts route has none, so its form shows the objective alone).
+  sectionRoute("run", "command"),
   sectionRoute("report", "acts"),
   armedRoute("report", "SIGN_OPINION"),
   armedRoute("upload", "WITHDRAW_SOURCE"),
