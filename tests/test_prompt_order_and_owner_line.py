@@ -235,12 +235,15 @@ def test_a_long_upstream_list_is_bounded_with_a_count_of_the_rest() -> None:
     shows at most MAX_OWNER_ITEMS items and says how many more are not shown."""
     line = _long_owner_line([f"FLAG_{n:03d}" for n in range(MAX_OWNER_ITEMS + 30)])
     assert line.count("«") == MAX_OWNER_ITEMS
-    assert line.endswith(", and 30 more not shown")
+    assert line.endswith(
+        ", and 30 more in the upstream handoffs above, each also required"
+    )
 
 
 def test_a_long_upstream_list_is_bounded_in_bytes() -> None:
     """N228(1): the byte bound cuts a list of long items before the count."""
     line = _long_owner_line([f"{n:03d}-" + "x" * 200 for n in range(MAX_OWNER_ITEMS)])
-    assert len(line.encode()) <= MAX_OWNER_LIST_BYTES + 300
+    shown = line.removeprefix("Required in limitation_flags: ").rsplit(", and ", 1)[0]
+    assert len(shown.encode()) <= MAX_OWNER_LIST_BYTES
     assert 0 < line.count("«") < MAX_OWNER_ITEMS
-    assert " more not shown" in line
+    assert " more in the upstream handoffs above, each also required" in line

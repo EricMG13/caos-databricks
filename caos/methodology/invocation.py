@@ -1132,7 +1132,7 @@ def _owner_items(
 def _bounded_owner_items(found: Mapping[str, Sequence[str]]) -> str:
     """One list's items, each with its owners, cut at `MAX_OWNER_ITEMS` items
     or `MAX_OWNER_LIST_BYTES` bytes (never fewer than one), then the count of
-    the rest."""
+    the rest and where to find them (acceptance still requires every item)."""
     shown: list[str] = []
     size = 0
     for item, owners in found.items():
@@ -1142,7 +1142,11 @@ def _bounded_owner_items(found: Mapping[str, Sequence[str]]) -> str:
             break
         shown.append(text)
     rest = len(found) - len(shown)
-    return ", ".join(shown) + (f", and {rest} more not shown" if rest else "")
+    return ", ".join(shown) + (
+        f", and {rest} more in the upstream handoffs above, each also required"
+        if rest
+        else ""
+    )
 
 
 def _owner_restrictions_section(
