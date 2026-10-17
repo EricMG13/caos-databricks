@@ -151,7 +151,9 @@ def _headroom_rows(facts: RatingFacts) -> list[list[str]]:
             "max-ratio",
             "Debt to EBITDA",
             f"{facts.trigger_threshold:.1f}x",
-            f"{row['case']} / {row['period']} {float(row['value']):.1f}x",
+            str(row["case"]),
+            str(row["period"]),
+            f"{float(row['value']):.1f}x",
             f"{float(row['binding_headroom']):.1f}x",
             str(row["status"]),
         ]
