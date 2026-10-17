@@ -4,11 +4,38 @@ Status: **NOT RUN LIVE (synthetic mandate, since replaced by the real fund's doc
 
 Corpus changed 2026-10-06, D115; earlier runs were on the old corpus. See "Corpus changed 2026-10-06 (D115)" below.
 
+Corpus changed 2026-10-16, R27 (D152, N147); earlier runs were on the old corpus. See "Corpus changed 2026-10-16 (R27, N147)" below.
+
 This immutable set prepares `FULL_CREDIT_32 / PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a real
 fund's holdings and policies (D115; the synthetic test mandate of D80 is unused). Its qualification-set digest is
-`1ec818789e1b5a50a9ae40038f6084f40af576917cdfa33955586292de4074fe`.
+`d5af56fb5fd0fd89be17635993f219b7eb795a2ee94f497d56fba3ec5144316c`.
+
+## Corpus changed 2026-10-16 (R27, N147)
+
+On the owner's ruling R27 of 16 October 2026 (D152; N147) 9 documents already admitted to other CZR sets are added to this set. Nothing was downloaded for them: each is a byte-identical copy of the file in `czr-2026q2-covenant-refinancing`, `czr-2026q2-liquidity`, `czr-2026q2-lite-relative-value`, `czr-2026q2-relative-value`, copied because the on-disk loader refuses a path outside the set root. CP-0 of the latest run declared that documents in hand would close its gaps: the credit agreement's Fourth and Fifth Amendments (the F508 class, for CP-4), the Q2 2026 earnings release, the merger 8-K and press release, and the MGM and PENN releases and TRACE observations RELATIVE_VALUE carries (for CP-3).
+
+| document | source | accession | text SHA-256 | raw HTML SHA-256 |
+|---|---|---|---|---|
+| `CZR_2024_Credit_Agreement_Fourth_Amendment.txt` (Ex. 10.1, Fourth Amendment, 9 May 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524135268/d827488dex101.htm | 0001193125-24-135268 | `32f91de6ef3ff93d9924eb8d4e3dc4734d28b68ed1da0f816a085ffdcb085c95` | `b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb` |
+| `CZR_2024_Credit_Agreement_Fifth_Amendment.txt` (Ex. 10.1, Fifth Amendment, 25 November 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524265157/d858083dex101.htm | 0001193125-24-265157 | `7f2b5c777dc3347938a007eaea63a623b299a1188dbcfbe8980d389a0bcfc5b3` | `0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8` |
+| `CZR_Q2_2026_Earnings_Release.txt` (Ex. 99.1, 28 July 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm | 0001590895-26-000027 | `b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8` | `a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f` |
+| `CZR_2026_Merger_Agreement_8K.txt` (Form 8-K, Item 1.01, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382d8k.htm | 0001193125-26-242995 | `6808734cfbb19b56c5624e5a69e7209ccaad8a5039de94ad64563efdedf93169` | `aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96` |
+| `CZR_2026_Merger_Press_Release.txt` (Ex. 99.1, press release, 28 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex991.htm | 0001193125-26-242995 | `4fbecbd5f5a10b15911b5749daee41b3e40090e43ed54bf33aee07a21877e68b` | `2a4ed12c96147f2171451c93524bea31ecad37247448d27039f755a3cf85f51f` |
+| `MGM_Q2_2026_Earnings_Release.txt` (MGM Ex. 99.1, 29 July 2026) | https://www.sec.gov/Archives/edgar/data/789570/000078957026000075/mgmex991q22026earningrelea.htm | 0000789570-26-000075 | `795ac68aa1c51a7e0a6799a6e1ca053ee597dc9a1a9a6550a2438280a6e76cdb` | `d23f2410e475eca7e0dfe2fdcca0210f449e4c1a93fb93a14549592c4554173c` |
+| `PENN_Q2_2026_Earnings_Release.txt` (PENN Ex. 99.1, 6 August 2026) | https://www.sec.gov/Archives/edgar/data/921738/000092173826000019/pennex991-q22026.htm | 0000921738-26-000019 | `4d12fff94b066f73e6eccce84eec937e8fd4fdc38d6061704db66a40511a210c` | `be60f25fec25022c2fd6f48c2cf9bb99912b8f78356cebc4a7719bdcae9120bc` |
+
+The two FINRA TRACE observations are coordinator-authored transcriptions of the official public FINRA pages, byte-identical to the `czr-2026q2-relative-value` set's copies.
+
+| document | source | as of | SHA-256 | raw SHA-256 |
+|---|---|---|---|---|
+| `MGM_FINRA_TRACE_552953CK5_2026-10-02.txt` (MGM 6.125% due 2029) | https://www.finra.org/finra-data/fixed-income/bond?symbol=MGM5885613&bondType=CORP | observed 2026-10-02T09:32:08Z | `e17cea1bb90debdeb8c1fea9c352132b57ae9b27ee0d3225fb67c6466d7d0e4a` | — |
+| `PENN_FINRA_TRACE_707569AV1_2026-10-02.txt` (PENN 4.125% due 2029) | https://www.finra.org/finra-data/fixed-income/bond?symbol=PENN5210723&bondType=CORP | observed 2026-10-02T09:32:31Z | `666c0f36ace32336dffbcff324eaec5b4657edade407bb0b8a0e8d8fb405de6d` | — |
+
+None is over 500 KiB as text, so no large-file pin moves; none is near the 1.5 MiB page-map threshold. The set's CP-0 request, encoded with CP-0's delivered authority (measured with the host's own builders, `check_context` on the pinned route), is 3,600,476 bytes (85.8% of `MAX_REQUEST_BYTES`), up from 3,377,783 (80.5%); no source is shown as a page map on a model with no declared context. For `openai/gpt-6-luna` (request ceiling 2,953,392 bytes under D116) the fitted request is 2,863,087 bytes with 2 sources shown as declared page maps (before: 2,868,944 bytes, 2 page maps). Set digest `1ec818789e1b5a50a9ae40038f6084f40af576917cdfa33955586292de4074fe` -> `d5af56fb5fd0fd89be17635993f219b7eb795a2ee94f497d56fba3ec5144316c`.
+
+Keys re-checked (all 16 keys and their one alternative, each scanned against every added document for a whole-line twin and for its figures): one key gains a D101 alternative and none is re-sourced. CP-1's `Cash and cash equivalents | $965 | $887` (the 10-Q) is also a whole line of the added release, the same two dates, so the release line is its alternative, as in `czr-2026q2-full-credit-assessment`. No other key line or alternative has a twin or the same figures in the added documents. The Fourth and Fifth Amendments post-date Incremental Assumption Agreement No. 3 and restate only the Term B and Term B-1 margins and the repricing premium, which no key reads, so CP-4's `(g) there shall have occurred a Change in Control;` and its other keys keep their source; the merger 8-K and press release restate the transaction, not a line any key reads; CP-3D and CP-3 keep the two CZR notes' TRACE lines, the position under review being the CZR 6.50% 2032 notes, so the MGM and PENN releases and observations are peers' evidence for CP-3 that no key reads. No key is added: a key for a peer line would be new scope, and no run has measured the set over these documents.
 
 ## Corpus changed 2026-10-06 (D115)
 
@@ -94,7 +121,7 @@ Incremental Assumption Agreement No. 3 (6 February 2024) adds the
 `$2,900.0 million` Incremental Term B-1 Loans. Its Exhibit A is the credit
 agreement conformed through Incremental Assumption Agreement No. 1, the First
 to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with
-the Fourth and Fifth Amendments, which this set does not carry, it is the
+the Fourth and Fifth Amendments (carried here since 16 October 2026, R27), it is the
 current chain, and where Exhibit A and a later amendment differ, the later
 amendment governs. Exhibit A comes without the credit agreement's own exhibits
 and schedules: after its Annex A Pricing Grid the file goes straight to
@@ -154,7 +181,7 @@ Keys authored from the documents; material figures pending owner confirmation.
 
 The conformed credit agreement's commitment, margins and covenant (Agreement
 No. 3's Exhibit A, F508) are not keyed: the Fourth and Fifth Amendments, which
-this set does not carry, post-date it; the current revolver (`$2.25 billion`,
+this set carries since 16 October 2026 (R27), post-date it; the current revolver (`$2.25 billion`,
 maturing 31 January 2028) is stated in the 10-Q.
 
 Alternative lines (D101). A figure key is also met by another whole evidence
@@ -165,6 +192,9 @@ year on the key line need not be on it. Prose keys have none: a statement is
 its sentence. Each alternative is one whole evidence line, unique in its
 document (F475), and is listed with why it states the key's figures:
 
+- CP-1, the 10-Q's `Cash and cash equivalents | $965 | $887`:
+  - the release's `Cash and cash equivalents | $965 | $887`, its balance sheet
+    row, the same two dates (added 16 October 2026, R27, with the release).
 - CP-2, the 10-Q's `Net cash provided by operating activities | 675 | 680`:
   - the 10-Q's `During the six months ended June 30, 2026, our operating
     activities generated operating cash inflows of $675 million, as compared to
@@ -173,8 +203,8 @@ document (F475), and is listed with why it states the key's figures:
     of operations described above.`, its liquidity sentence, the six months
     against the prior six months.
 
-The other figure keys (`Cash and cash equivalents`, `Net cash provided by
-operating activities`, `Total debt`, `C-01`) have none: no other whole line
+The other figure keys (`Net cash provided by
+operating activities` of the 10-K, `Total debt`, `C-01`) have none: no other whole line
 states their figures for the same measure, period and basis (rounded prose such
 as `$11.8 billion` or `$1.3 billion` is not the figure).
 
