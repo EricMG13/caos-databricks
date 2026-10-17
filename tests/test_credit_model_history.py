@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import date, timedelta
@@ -4078,6 +4079,43 @@ def test_twelve_months_of_other_than_52_or_53_weeks_are_noted() -> None:
         cell = _four_quarters(lengths)
         assert (cell.value, cell.note) == (Decimal(400), None), lengths
     assert _four_quarters([95, 94, 95, 94]).value == 400  # still read
+
+
+def test_a_quarter_of_11_12_or_15_weeks_is_noted() -> None:
+    """N220 (1): a quarter that is not 13 or 14 weeks (nor a calendar
+    quarter) passes as three months within the slack but is named with its
+    period, in a window whose four quarters still span 52 or 53 weeks."""
+    for lengths, note in (
+        ([84, 91, 91, 98], "quarter Q1_2025 of 84 days"),  # a 12-week quarter
+        ([77, 98, 98, 91], "quarter Q1_2025 of 77 days"),  # an 11-week quarter
+        (
+            [84, 98, 98, 84],
+            "quarter Q1_2025 of 84 days; quarter Q4_2025 of 84 days",
+        ),  # one note per quarter
+    ):
+        cell = _four_quarters(lengths)
+        assert (cell.value, cell.note) == (Decimal(400), note), lengths
+    for lengths in ([91] * 4, [91, 91, 91, 98], [90, 91, 92, 92], [89, 98, 92, 92]):
+        assert _four_quarters(lengths).note is None, lengths
+
+
+def test_a_window_names_each_quarter_outside_89_to_98_days() -> None:
+    """Every window of 11 to 14 week quarters: those read name exactly their
+    odd quarters, in order, and most of the draws are read."""
+    read = 0
+    for lengths in itertools.product((77, 84, 91, 98), repeat=4):
+        cell = _four_quarters(list(lengths))
+        if cell.value is None:
+            continue
+        read += 1
+        odd = [
+            f"quarter Q{n}_2025 of {days} days"
+            for n, days in enumerate(lengths, start=1)
+            if not 89 <= days <= 98
+        ]
+        named = [p for p in (cell.note or "").split("; ") if p.startswith("quarter")]
+        assert named == odd, lengths
+    assert read >= 30
 
 
 def test_a_378_day_ltm_is_noted() -> None:
