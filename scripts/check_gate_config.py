@@ -1216,7 +1216,7 @@ _POSTGRES_SERVICE: dict[str, object] = {
             "postgres@sha256:"
             "18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73"
         ),
-        "env": {"POSTGRES_PASSWORD": "caos", "POSTGRES_DB": "caos"},
+        "env": dict.fromkeys(("POSTGRES_PASSWORD", "POSTGRES_DB"), "caos"),
         "options": "--health-cmd pg_isready --health-interval 5s --health-retries 10",
         "ports": ["5432:5432"],
     }
