@@ -108,6 +108,11 @@ FREEZE_BLOBS = 7
 # already read, which the request's blob store remembers: no eighth download.
 FILE_BLOBS = 7
 BLOB_BUDGET = max(SAVE_BLOBS, SIGN_BLOBS, FREEZE_BLOBS, FILE_BLOBS)
+# N231 (2): the bytes the freeze's delivery rebuild reads (the pinned rows and
+# the accepted upstream Markdown; `reads/reports.py` states the same shape for
+# the Report), measured by `tests/test_delivery_bytes.py` at 20,072 on LITE's
+# fixtures and held to a 24 KiB ceiling, and to no less than half of it.
+FREEZE_DELIVERY_BYTES = 24576
 
 _REVISION = "/api/v1/cases/{case_id}/revisions/{revision_id}"
 
