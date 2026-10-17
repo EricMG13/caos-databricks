@@ -46,7 +46,9 @@ export type RegionStatus<D = WorkspaceDocument> =
           event tail waits it out rather than guessing (finding FE-3). */
       retryAfterSeconds?: number;
     }
-  | { kind: "unavailable" }
+  // `cause: "no-case"` is the client's own knowledge: a case section opened
+  // with no case sends no request, so nothing was refused and nothing is hidden.
+  | { kind: "unavailable"; cause?: "no-case" }
   | { kind: "stale"; document: D }
   | { kind: "offline" }
   | { kind: "partial"; document: D; notes: string[] }
@@ -129,6 +131,15 @@ export function selectionNeeded(section: Section, query: SectionQuery): Selectio
   if (!query.case || (section !== "report" && section !== "committee")) return null;
   if (!query.run) return "run";
   return section === "committee" && !query.revision ? "revision" : null;
+}
+
+/** The status of a section that sends no request. Only an enabled section
+    waiting on its case has the client's own cause ("no case is chosen"); a
+    disabled one (Admin) is plainly unavailable, whatever the address carries. */
+export function unrequestedStatus(section: Section): RegionStatus {
+  return isEnabledSection(section)
+    ? { kind: "unavailable", cause: "no-case" }
+    : { kind: "unavailable" };
 }
 
 const RESPONSE_INVALID: Refusal = {
