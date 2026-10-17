@@ -2192,6 +2192,37 @@ class ForkR17Tests(unittest.TestCase):
                       'flag.', b_steps)
 
 
+class ForkR18Tests(unittest.TestCase):
+    """Deployment fork r18 (owner-authorised 2026-10-17: N237): under a page map CP-0's T8 names the pages every receiving
+    module needs, not only the legal ones. Wording only: the checker holds no page-map data (the delivery is the host's
+    preparation record's), so a deterministic text-free refusal is not available to it."""
+
+    def steps(self):
+        text = (ROOT / 'skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md').read_text(encoding='utf-8')
+        return {int(m.group(1)): ' '.join(m.group(2).split())
+                for m in re.finditer(r'^(\d+)\. (.*?)(?=^\d+\. |\n\n|\Z)', text, re.M | re.S)}
+
+    # N237
+    def test_n237_step_i_rule_8_extends_the_pages_to_every_receiving_module(self):
+        rule = self.steps()[8]
+        self.assertIn('This holds for every receiving module, not only the legal ones: name the pages each one needs; '
+                      'a module that needs every page names the whole range and states in its row why.', rule)
+
+    def test_n237_step_i_rule_5_never_lets_a_page_mapped_source_stand_alone(self):
+        rule = self.steps()[5]
+        self.assertIn('so a page-mapped source (rule 8) is never written alone.', rule)
+
+    def test_n237_the_t8_row_format_names_pages_for_every_page_mapped_attachment(self):
+        skill = ' '.join(skill_text('cp-0-source-readiness').split())
+        self.assertIn('`source_files_to_attach` follows Step I rules 5 and 8: a page-mapped source carries the pages '
+                      'that row\'s module needs, whichever module it is.', skill)
+
+    def test_n237_the_checker_is_unchanged_by_this_fork(self):
+        """No text-free rule exists for it: the checker is never told which sources the host delivered as page maps."""
+        text = (ROOT / 'skills/cp-0-source-readiness/scripts/completeness_check.py').read_text(encoding='utf-8')
+        self.assertNotIn('page map', text.lower())
+
+
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
 class IntegrationTests(unittest.TestCase):
     def test_exporter_binds_current_catalyst_owner(self):
