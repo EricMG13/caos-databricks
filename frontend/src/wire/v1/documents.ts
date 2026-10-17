@@ -29,7 +29,12 @@ const RUN_STATUSES = ["RUNNING", "COMPLETE", "FAILED", "BLOCKED", "CANCELLED"] a
 
 const GlobalRole = enumOf(["READER", "ANALYST", "ADMIN"]);
 const Standing = enumOf(["READER", "WRITER", "APPROVER", "ADMIN"]);
-const SectionNote = enumOf(["LIST_TRUNCATED", "ROUTE_NOT_PINNED", "HANDOFFS_PENDING"]);
+const SectionNote = enumOf([
+  "LIST_TRUNCATED",
+  "ROUTE_NOT_PINNED",
+  "HANDOFFS_PENDING",
+  "HEAD_UNPROVEN",
+]);
 const NodeState = enumOf(["COMPLETE", "RUNNABLE", "RESTRICTED", "BLOCKED"]);
 const EdgeType = enumOf(["REQUIRED", "CONDITIONAL", "QA_GATE", "OPTIONAL", "ADVISORY"]);
 const Gate = enumOf(["SOURCE_SET", "RESEARCH_PLAN"]);
@@ -85,7 +90,7 @@ function sectionDocument<B extends ReturnType<typeof object>>(body: B) {
     observed_at: datetime,
     observed_empty: bool,
     status: enumOf(["complete", "partial"]),
-    notes: array(SectionNote, 3),
+    notes: array(SectionNote, 4),
   });
 }
 
@@ -863,7 +868,7 @@ const PageDocument = object({
   body: PageBody,
   observed_at: datetime,
   status: enumOf(["complete", "partial"]),
-  notes: array(SectionNote, 3),
+  notes: array(SectionNote, 4),
 });
 
 const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
