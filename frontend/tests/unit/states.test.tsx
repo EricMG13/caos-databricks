@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { App } from "@/app/App";
+import { Workspace } from "@/app/Workspace";
 import { UNAVAILABLE_WORDING } from "@/app/transport";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { RegionState, UNAVAILABLE_NEXT } from "@/states/RegionState";
@@ -45,6 +48,55 @@ describe("the states", () => {
     );
     expect(screen.getByText(UNAVAILABLE_NEXT)).toBeInTheDocument();
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  test("a case section opened with no case says no case is chosen, never that standing is missing", () => {
+    // N113: the neutral standing sentence answers a private 404, whose cause
+    // the page must not reveal; with no case the cause is known and is ours.
+    vi.stubGlobal("fetch", vi.fn());
+    try {
+      render(
+        <MemoryRouter initialEntries={["/analysis/"]}>
+          <Workspace section="analysis" />
+        </MemoryRouter>,
+      );
+      const region = screen.getByRole("main").querySelector("[data-surface-state='unavailable']")!;
+      expect(region).toHaveTextContent("No case is chosen");
+      expect(region).not.toHaveTextContent(/standing/);
+      expect(region).not.toHaveTextContent(UNAVAILABLE_WORDING);
+      expect(screen.getByRole("link", { name: "All cases" })).toHaveAttribute(
+        "href",
+        "/directory/",
+      );
+      expect(fetch).not.toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/cases"),
+        expect.anything(),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("a partial Analysis with a module open shows its notes without opening the Brief (N113)", async () => {
+    const partial = readFileSync(
+      resolve(process.cwd(), "fixtures/states/analysis.partial.json"),
+      "utf8",
+    );
+    vi.stubGlobal("fetch", async () => new Response(partial, { status: 200 }));
+    try {
+      const caseId = "00000000-0000-4000-8000-000000000001";
+      render(
+        <MemoryRouter initialEntries={[`/analysis/?case=${caseId}&tab=rn-cp-1`]}>
+          <Workspace section="analysis" />
+        </MemoryRouter>,
+      );
+      const notes = await screen.findByText(/Partial: HANDOFFS_PENDING/);
+      expect(notes.closest("[data-summary]")).toHaveAttribute("data-compact", "true");
+      expect(notes).toHaveAttribute("data-summary-notes");
+      expect(document.querySelector("[data-brief]")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   test("test_observed_empty_requires_timestamp", () => {

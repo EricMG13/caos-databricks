@@ -280,7 +280,7 @@ class ForkR3Tests(unittest.TestCase):
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.6', ['Metric', 'Comparison Basis', 'Prior Value', 'Current Value', 'Abs Change', '% Change', 'Mgmt Driver', 'Analyst Driver', 'Credit Implication']),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.12', pipes('metric_id | current_period_id | reference_period_id | comparison_basis | current_value | reference_value | absolute_change | percentage_change | calculation_status | restatement_flag | basis_change_flag | perimeter_change_flag | definition_change_flag | values | changes')),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.15', pipes('downstream_module | status | blocking_metric_ids | blocking_period_ids | conflict_refs | explanation')),
-            ('cp-1c-peer-benchmark', 'CP-1C', 'T4.5', ['Entity', 'Total/Net/Sr Sec Leverage', 'Int Coverage', 'Adj Int Coverage', 'FFO/Debt', 'Liquidity', 'Period', 'Currency', 'Calc Status', 'Comp Status']),
+            ('cp-1c-peer-benchmark', 'CP-1C', 'T4.5', ['Entity', 'Total Leverage', 'Net Leverage', 'Sr Sec Leverage', 'Int Coverage', 'Adj Int Coverage', 'FFO/Debt', 'Liquidity', 'Period', 'Currency', 'Calc Status', 'Comp Status']),
             ('cp-1c-peer-benchmark', 'CP-1C', 'T4.10', ['Method', 'Multiple Source', 'Multiple Value', 'Borrower Metric', 'Period', 'Implied EV', 'Low', 'Median', 'High', 'Calc Status', 'Limitations']),
         )
         for slug, module_id, reg, columns in cases:
@@ -290,7 +290,7 @@ class ForkR3Tests(unittest.TestCase):
         kept = complete.load_contract(skill_text('cp-1b-earnings-delta'), 'CP-1B')['registers']['T4.12']['columns']
         self.assertTrue({'metric_id', 'values', 'changes'} <= set(kept))
         kept = complete.load_contract(skill_text('cp-1c-peer-benchmark'), 'CP-1C')['registers']['T4.5']['columns']
-        self.assertIn('Total/Net/Sr Sec Leverage', kept)
+        self.assertTrue({'Total Leverage', 'Net Leverage', 'Sr Sec Leverage'} <= set(kept))  # split by fork r17 (N192)
 
     def test_forecast_cases_match_as_the_method_writes_them(self):
         # G3-13: `Base case` holds `base`; a word that only starts with it does not.
@@ -1677,25 +1677,30 @@ class ForkR13Tests(unittest.TestCase):
 
     def test_n154_a_short_register_row_names_its_width_against_the_header(self):
         # LCR4 and LCR6 CP-3C merged two cells of T3D.2 row 7 and were told only that 'Source Trace' held ''.
+        # Fork r17 (N192) added the `Scale` column and (N163) made any other width a violation too.
         skill = skill_text('cp-3c-refinancing-lme-risk')
         columns = complete.load_contract(skill, 'CP-3C')['registers']['T3D.2']['columns']
-        self.assertEqual((len(columns), columns[-1]), (12, 'Source Trace'))
-        head = '### T3D.2 — Maturity wall\n\n| ' + ' | '.join(columns) + ' |\n|' + '---|' * 12 + '\n'
+        wide = len(columns)
+        self.assertEqual((wide, columns[-1]), (13, 'Source Trace'))
+        head = '### T3D.2 \u2014 Maturity wall\n\n| ' + ' | '.join(columns) + ' |\n|' + '---|' * wide + '\n'
 
         def t3d2(*widths):
             rows = ''.join('| ' + ' | '.join(f'v{n}' for n in range(width)) + ' |\n' for width in widths)
             return [v for v in complete.check(skill, head + rows, 'CP-3C')[0] if v.startswith('T3D.2')]
-        self.assertEqual(t3d2(12, 11), ["T3D.2 row 2: critical column 'Source Trace' is empty because the row "
-                                        "has 11 cells under a 12-cell header"])
-        self.assertEqual(t3d2(10), [
-            "T3D.2 row 1: critical column 'Credit Implication' is empty because the row has 10 cells under a "
-            "12-cell header",
-            "T3D.2 row 1: critical column 'Source Trace' is empty because the row has 10 cells under a 12-cell header"])
-        # A cell written empty keeps the placeholder message; a full or long row is judged as before.
-        empty = head + '| ' + ' | '.join(f'v{n}' for n in range(11)) + ' |  |\n'
+        self.assertEqual(t3d2(wide, wide - 1), [f"T3D.2 row 2: critical column 'Source Trace' is empty because the row "
+                                                f"has {wide - 1} cells under a {wide}-cell header"])
+        self.assertEqual(t3d2(wide - 2), [
+            f"T3D.2 row 1: critical column 'Credit Implication' is empty because the row has {wide - 2} cells under a "
+            f"{wide}-cell header",
+            f"T3D.2 row 1: critical column 'Source Trace' is empty because the row has {wide - 2} cells under a "
+            f"{wide}-cell header"])
+        # A cell written empty keeps the placeholder message; a full row is judged as before.
+        empty = head + '| ' + ' | '.join(f'v{n}' for n in range(wide - 1)) + ' |  |\n'
         self.assertEqual([v for v in complete.check(skill, empty, 'CP-3C')[0] if v.startswith('T3D.2')],
                          ["T3D.2 row 1: critical column 'Source Trace' holds a disqualifying placeholder ''"])
-        self.assertEqual(t3d2(12, 13), [])
+        self.assertEqual(t3d2(wide, wide), [])
+        # A long row is no longer read with its extra cells dropped (fork r17, N163).
+        self.assertEqual(t3d2(wide, wide + 1), [f"T3D.2 row 2: the row has {wide + 1} cells under a {wide}-cell header"])
 
 
 class ForkR14Tests(unittest.TestCase):
@@ -1844,6 +1849,347 @@ class ForkR16Tests(unittest.TestCase):
                         self.assertFalse(reason.casefold().startswith(('do not', 'never')),
                                          'the dash must introduce what is missing, not a prohibition')
         self.assertEqual(kept, 5)
+
+
+class ForkR17Tests(unittest.TestCase):
+    """Deployment fork r17 (owner-authorised 2026-10-16: N219, N213, N164, N133, N132, N163, N192, N196): a row of another
+    width than its header is a violation, a bp/bps spread is a figure, captions behind a quote mark, "Table" or an
+    emphasised list item open with their ID, CP-L10's topic and OVERALL rows are bounded, packed register columns are
+    one column per figure, amount registers state their currency and scale, and the CP-0, CP-L10 and CP-4 wording that
+    contradicted the checkers is amended."""
+
+    CP4_REFERENCES = ROOT / 'skills/cp-4-legal-covenant-interpreter/references'
+
+    def reference(self, slug, name):
+        return (ROOT / 'skills' / slug / 'references' / name).read_text(encoding='utf-8')
+
+    def schema_line(self, slug, reg):
+        for path in sorted((ROOT / 'skills' / slug / 'references').glob('*.md')):
+            for line in path.read_text(encoding='utf-8').splitlines():
+                if line.startswith(f'| {reg} |'):
+                    return line
+        self.fail(f'no schema reference line for {reg}')
+
+    def columns(self, slug, module_id, reg):
+        return complete.load_contract(skill_text(slug), module_id)['registers'][reg]['columns']
+
+    # N196
+    def test_n196_a_spread_written_with_its_unit_is_a_figure_in_basis_points(self):
+        for cell, value in (('350bps', 350.0), ('350 bp', 350.0), ('350 BPS', 350.0), ('+75bp', 75.0),
+                            ('(25 bps)', -25.0), ('1,250 bps', 1250.0), ('12.5bp', 12.5), ('350 bps', 350.0)):
+            with self.subTest(cell=cell):
+                self.assertEqual(tables.parse_figure(cell, basis_points=True), value)
+                self.assertEqual(tables.to_number(cell), value)
+        for cell in ('bps', '350 bpx', 'bps350', '350 basis', '5 to 6 bps', 'roughly 350bps'):
+            with self.subTest(refused=cell):
+                with self.assertRaises(ValueError):
+                    tables.parse_figure(cell, basis_points=True)
+        # Unchanged: a bare number, a percentage and a multiple, and the ambiguous comma.
+        self.assertEqual((tables.parse_figure('350'), tables.parse_figure('3.5%'), tables.parse_figure('4.2x')),
+                         (350.0, 3.5, 4.2))
+        with self.assertRaises(tables.AmbiguousFigure):
+            tables.parse_figure('5,2 bps', basis_points=True)
+
+    def test_n196_a_calculator_input_never_reads_a_bp_suffix(self):
+        """`600bps` as a coupon is a percentage-point input read as 600 (YTM 609%): the unit is a register
+        figure's, so every calculator `_num` keeps refusing it."""
+        snippet = ('import sys, importlib\n'
+                   'sys.path.insert(0, sys.argv[1])\n'
+                   'num = importlib.import_module(sys.argv[2])._num\n'
+                   'try:\n'
+                   '    num(sys.argv[3], "coupon")\n'
+                   'except ValueError as exc:\n'
+                   '    print(exc)\n')
+        scripts = sorted(path for path in (ROOT / 'skills').glob('*/scripts/*.py')
+                         if 'return parse_figure(value, where)' in path.read_text(encoding='utf-8'))
+        self.assertGreaterEqual(len(scripts), 15)
+        for path in scripts:
+            for cell in ('600bps', '600 bp'):
+                with self.subTest(script=str(path.relative_to(ROOT)), cell=cell):
+                    result = subprocess.run([sys.executable, '-B', '-c', snippet, str(path.parent), path.stem, cell],
+                                            text=True, capture_output=True)
+                    self.assertEqual(result.stdout.strip(), f"coupon: {cell!r} is not a figure", result.stderr)
+
+    def test_n196_bond_analytics_blocks_a_bp_coupon(self):
+        script = ROOT / 'skills/cp-3d-market-implied-risk/scripts/bond_analytics.py'
+        payload = {'price': 98.5, 'coupon': '600bps', 'years_to_maturity': 5, 'benchmark_yield': '4.0'}
+        result = subprocess.run([sys.executable, '-B', str(script)], input=json.dumps(payload), text=True,
+                                capture_output=True)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertEqual(json.loads(result.stderr), {'status': 'blocked', 'error': "coupon: '600bps' is not a figure"})
+
+    def test_n196_the_register_reader_opts_in_to_basis_points(self):
+        for cell in ('350bps', '350 bp'):
+            with self.assertRaises(ValueError):
+                tables.parse_figure(cell)
+            self.assertEqual(tables.parse_figure(cell, basis_points=True), 350.0)
+        for cell in ('5xbps', '10%bp', '5%bps'):
+            with self.subTest(refused=cell):
+                with self.assertRaises(ValueError):
+                    tables.parse_figure(cell, basis_points=True)
+
+    # N164
+    @staticmethod
+    def grid(*columns):
+        return ('| ' + ' | '.join(columns) + ' |\n|' + '---|' * len(columns) + '\n| '
+                + ' | '.join('x' for _ in columns) + ' |\n\n')
+
+    def heads(self, text, ids):
+        return {reg: found[0] for reg, found in complete.find_registers(text, ids).items()}
+
+    def test_n164_a_caption_behind_a_marker_or_the_word_table_opens_with_its_id(self):
+        base = 'The summary below draws on TL10.2.\n\n' + self.grid('Metric', 'Value')
+        for caption in ('1. **TL10.2 — Covenant register**', '> **TL10.2 — Covenant register**',
+                        '**Table TL10.2 — Covenant register**', 'Table TL10.2 — Covenant register',
+                        '- **TL10.2** Covenant register', '* *TL10.2* Covenant register', '2) *TL10.2 — recap*',
+                        '> 1. **TL10.2 — Covenant register**', '> Table TL10.2: Covenant register',
+                        '*Table `TL10.2` — Covenant register*'):
+            with self.subTest(caption=caption):
+                text = base + caption + '\n\n' + self.grid('topic_id', 'status')
+                self.assertEqual(self.heads(text, ['TL10.2']), {'TL10.2': ['topic_id', 'status']})
+        # A caption bound first is not displaced by one of these forms.
+        first = '**TL10.2 — Covenant register**\n\n' + self.grid('topic_id', 'status')
+        for later in ('1. **TL10.2 — recap**', '> **TL10.2 — recap**', '**Table TL10.2 — recap**'):
+            with self.subTest(later=later):
+                twice = first + later + '\n\n' + self.grid('Metric', 'Value')
+                self.assertEqual(self.heads(twice, ['TL10.2'])['TL10.2'], ['topic_id', 'status'])
+
+    def test_n164_a_gap_note_bullet_naming_an_id_is_still_a_mention(self):
+        # 10 lines in 5 stored CP-1 answers: "- T4.18 `commitment` is null for ..." within five lines of a table.
+        notes = ('- T4.18 `commitment` is null for the revolver', '* T4.18 is not stated', '1. T4.18 lacks a floor',
+                 '> - T4.18 `commitment` is null', '- `T4.18` commitment is null', '-T4.18 note')
+        for note in notes:
+            with self.subTest(note=note):
+                text = note + '\n\n' + self.grid('Metric', 'Value') + '#### T4.18 — Debt\n\n' + self.grid('facility_id', 'x')
+                self.assertEqual(self.heads(text, ['T4.18'])['T4.18'], ['facility_id', 'x'])
+
+    # N163
+    def test_n163_a_row_of_another_width_than_its_header_is_a_violation(self):
+        skill = skill_text('cp-l10-financial-change-screen')
+        columns = self.columns('cp-l10-financial-change-screen', 'CP-L10', 'TL10.1')
+        self.assertEqual((len(columns), columns[-1]), (7, 'limitation'))
+
+        def found(*widths):
+            rows = [['v'] * width for width in widths]
+            body = ''.join('| ' + ' | '.join(row) + ' |\n' for row in rows)
+            text = register('TL10.1', columns, []).rstrip('\n') + '\n' + body
+            return about(complete.check(skill, text, 'CP-L10')[0], 'TL10.1')
+        self.assertEqual(found(7), [])
+        # Short, and the padding empties no critical cell (`limitation` is not critical): refused, naming the widths.
+        self.assertEqual(found(6), ['TL10.1 row 1: the row has 6 cells under a 7-cell header'])
+        self.assertEqual(found(7, 5, 7, 6), ['TL10.1 row 2: the row has 5 cells under a 7-cell header',
+                                              'TL10.1 row 4: the row has 6 cells under a 7-cell header'])
+        # Long: the extra cells are dropped by the reader, so the row is refused rather than read.
+        self.assertEqual(found(8), ['TL10.1 row 1: the row has 8 cells under a 7-cell header'])
+        # A short row that empties a critical cell keeps its fork-r13 message and is not reported twice.
+        self.assertEqual(found(3), [
+            "TL10.1 row 1: critical column 'scope_status' is empty because the row has 3 cells under a 7-cell header"])
+
+    # N132
+    def test_n132_cp_l10_topic_rows_are_bounded_by_the_payload_enum_and_overall_is_written_once(self):
+        slug = 'cp-l10-financial-change-screen'
+        skill = skill_text(slug)
+        contract = complete.load_contract(skill, 'CP-L10')
+        rules = {rule['rule_id']: rule for rule in contract['semantic_rules']}
+        for phase in ('10', '20', '23', '30', '40'):
+            schema_name = next((ROOT / 'skills' / slug / 'references').glob(f'CP-L{phase}__*payload.schema.txt'))
+            schema = json.loads(schema_name.read_text(encoding='utf-8'))
+            items = schema['properties']['runtime_output']['properties']['topic_allocation']['allOf'][1]['items']
+            enum = items['properties']['topic_id']['enum']
+            self.assertEqual(len(enum), 6)
+            allowed = rules[f'cp_l{phase}.topic_ids_allowed']
+            self.assertEqual((allowed['rule'], allowed['register_id'], allowed['column'], allowed['values']),
+                             ('allowed_values', f'TL{phase}.2', 'topic_id', enum))
+            once = rules[f'cp_l{phase}.overall_screen_once']
+            self.assertEqual((once['rule'], once['register_id'], once['column'], once['values']),
+                             ('exactly_once_values', f'TL{phase}.3', 'screen_item', ['OVERALL']))
+            self.assertTrue(allowed['case_sensitive'] and once['case_sensitive'])
+
+            def rows(reg, column, values):
+                cols = contract['registers'][reg]['columns']
+                return register(reg, cols, [['present' if c != column else v for c in cols] for v in values])
+            topics = rows(f'TL{phase}.2', 'topic_id', enum)
+            screens = rows(f'TL{phase}.3', 'screen_item', ['OVERALL', 'Liquidity'])
+
+            def violations(topic_text, screen_text):
+                return [v for v in complete.check(skill, topic_text + screen_text, 'CP-L10')[0]
+                        if v.startswith((f'TL{phase}.2', f'TL{phase}.3')) and f': cp_l{phase}.' in v]
+            with self.subTest(phase=phase, case='conforming'):
+                self.assertEqual(violations(topics, screens), [])
+            with self.subTest(phase=phase, case='a seventh topic'):
+                self.assertEqual(violations(rows(f'TL{phase}.2', 'topic_id', enum + ['SECTOR_OUTLOOK']), screens), [
+                    f"TL{phase}.2 row 7: cp_l{phase}.topic_ids_allowed -- column 'topic_id' holds 'SECTOR_OUTLOOK', "
+                    "not one of the allowed values"])
+            with self.subTest(phase=phase, case='no OVERALL'):
+                self.assertEqual(violations(topics, rows(f'TL{phase}.3', 'screen_item', ['Liquidity'])), [
+                    f"TL{phase}.3: cp_l{phase}.overall_screen_present -- column 'screen_item' lacks 'OVERALL'"])
+            with self.subTest(phase=phase, case='a second OVERALL'):
+                self.assertEqual(violations(topics, rows(f'TL{phase}.3', 'screen_item', ['OVERALL', 'Liquidity', 'OVERALL'])), [
+                    f"TL{phase}.3: cp_l{phase}.overall_screen_once -- column 'screen_item' must hold 'OVERALL' exactly once"])
+
+    def test_n132_exactly_once_values_leaves_the_other_cells_free(self):
+        skill = ('## Output profile \u2014 binding on CP-X\'s canonical Markdown\n\n- **completeness_contract**: structured below\n'
+                 '  - **required_registers**: structured below\n'
+                 '    - **TX.1**: structured below\n      - **columns**: item; note\n      - **critical_columns**: item\n'
+                 '      - **minimum_body_rows**: 1\n  - **semantic_rules**: structured below\n    - structured item\n'
+                 '      - **case_sensitive**: True\n      - **column**: item\n      - **register_id**: TX.1\n'
+                 '      - **rule**: exactly_once_values\n      - **rule_id**: cpx.overall_once\n'
+                 '      - **values**: OVERALL; TOTAL\n\n## Companions\n')
+
+        def flagged(*items):
+            text = register('TX.1', ['item', 'note'], [[i, 'n'] for i in items])
+            return about(complete.check(skill, text, 'CP-X')[0], 'TX.1')
+        self.assertEqual(flagged('OVERALL', 'TOTAL', 'a', 'a'), [])
+        self.assertEqual(flagged('OVERALL', 'a'), ["TX.1: cpx.overall_once -- column 'item' must hold 'TOTAL' exactly once"])
+        self.assertEqual(flagged('OVERALL', 'OVERALL', 'TOTAL'),
+                         ["TX.1: cpx.overall_once -- column 'item' must hold 'OVERALL' exactly once"])
+        self.assertEqual(flagged('a'), ["TX.1: cpx.overall_once -- column 'item' must hold 'OVERALL' exactly once",
+                                        "TX.1: cpx.overall_once -- column 'item' must hold 'TOTAL' exactly once"])
+
+    # N192
+    def test_n192_a_packed_column_is_one_column_per_figure(self):
+        self.assertNotIn('gross/net leverage', skill_text('cp-2g-forward-credit-model'))
+        cases = (
+            ('cp-1c-peer-benchmark', 'CP-1C', 'T4.5', 'Total/Net/Sr Sec Leverage',
+             ['Total Leverage', 'Net Leverage', 'Sr Sec Leverage']),
+            ('cp-2g-forward-credit-model', 'CP-2G', 'T2H.5', 'opening debt/cash', ['opening debt', 'opening cash']),
+            ('cp-2g-forward-credit-model', 'CP-2G', 'T2H.5', 'closing debt/cash', ['closing debt', 'closing cash']),
+            ('cp-2g-forward-credit-model', 'CP-2G', 'T2H.6', 'gross/net leverage', ['gross leverage', 'net leverage']),
+            ('cp-2h-ratings-migration-trigger', 'CP-2H', 'T2R.4', 'case/period value', ['case', 'period', 'value']),
+            ('cp-3d-market-implied-risk', 'CP-3D', 'T3E.2', 'spread/OAS/DM', ['spread', 'OAS', 'DM']),
+            ('cp-4c-restructuring-fulcrum', 'CP-4C', 'T4E.2', 'principal/accrued/PIK', ['principal', 'accrued', 'PIK']),
+            ('cp-4c-restructuring-fulcrum', 'CP-4C', 'T4E.7', 'cash/debt/equity/warrant value',
+             ['cash value', 'debt value', 'equity value', 'warrant value']),
+        )
+        for slug, module_id, reg, packed, split in cases:
+            with self.subTest(register=reg, packed=packed):
+                columns = self.columns(slug, module_id, reg)
+                self.assertNotIn(packed, columns)
+                at = columns.index(split[0])
+                self.assertEqual(columns[at:at + len(split)], split)
+                line = self.schema_line(slug, reg)
+                self.assertNotIn(packed, line)
+                self.assertTrue(line.endswith(', '.join(columns) + ' |'), line)
+                for extra in (skill_text(slug),):
+                    self.assertNotIn(f'**columns**: {packed}', extra)
+        # The step specs that list the columns list the new ones.
+        steps = self.reference('cp-1c-peer-benchmark', 'REF_CP-1C_STEPS.md')
+        self.assertIn('T4.5: `Entity`|`Total Leverage`|`Net Leverage`|`Sr Sec Leverage`|`Int Coverage`', steps)
+        self.assertNotIn('Total/Net/Sr Sec Leverage', steps)
+        self.assertNotIn('one cell per entity', steps)
+        # A register written with the split columns passes; the old single column no longer does.
+        skill = skill_text('cp-1c-peer-benchmark')
+        columns = self.columns('cp-1c-peer-benchmark', 'CP-1C', 'T4.5')
+        self.assertEqual(about(complete.check(skill, register('T4.5', columns, [['x'] * len(columns)]), 'CP-1C')[0], 'T4.5'), [])
+        packed = [c if c != 'Total Leverage' else 'Total/Net/Sr Sec Leverage' for c in columns if c not in ('Net Leverage', 'Sr Sec Leverage')]
+        refused = about(complete.check(skill, register('T4.5', packed, [['x'] * len(packed)]), 'CP-1C')[0], 'T4.5')
+        self.assertTrue([v for v in refused if 'Net Leverage' in v], refused)
+
+    def test_n192_amount_registers_state_their_currency_and_scale(self):
+        cases = (
+            ('cp-2d-liquidity-cash-flow-bridge', 'CP-2D', 'T2E.5', 'Currency and Scale', 'Amount'),
+            ('cp-3c-refinancing-lme-risk', 'CP-3C', 'T3D.2', 'Scale', 'Currency'),
+            ('cp-4c-restructuring-fulcrum', 'CP-4C', 'T4E.2', 'scale', 'currency'),
+            ('cp-4c-restructuring-fulcrum', 'CP-4C', 'T4E.3', 'currency and scale', 'EV'),
+            ('cp-4c-restructuring-fulcrum', 'CP-4C', 'T4E.4', 'currency and scale', 'new money'),
+            ('cp-4c-restructuring-fulcrum', 'CP-4C', 'T4E.5', 'currency and scale', 'residual'),
+            ('cp-4c-restructuring-fulcrum', 'CP-4C', 'T4E.7', 'scale', 'currency'),
+        )
+        for slug, module_id, reg, unit, after in cases:
+            with self.subTest(register=reg):
+                contract = complete.load_contract(skill_text(slug), module_id)['registers'][reg]
+                columns = contract['columns']
+                self.assertEqual(columns[columns.index(after) + 1], unit)
+                self.assertIn(unit, contract['critical_columns'])
+                line = self.schema_line(slug, reg)
+                self.assertTrue(line.endswith(', '.join(columns) + ' |'), line)
+        for slug, reg, steps in (('cp-2d-liquidity-cash-flow-bridge', 'T2E.5', 'REF_CP-2D_STEPS.md'),
+                                 ('cp-3c-refinancing-lme-risk', 'T3D.2', 'REF_CP-3C_STEPS.md')):
+            with self.subTest(steps=steps):
+                module_id = 'CP-' + slug.split('-')[1].upper()
+                columns = self.columns(slug, module_id, reg)
+                listed = f'{reg}: ' + '|'.join(f'`{c}`' for c in columns)
+                self.assertIn(listed, self.reference(slug, steps))
+        # The unit column is a critical cell: its bare placeholder is refused, "USD m" is accepted.
+        skill = skill_text('cp-2d-liquidity-cash-flow-bridge')
+        columns = self.columns('cp-2d-liquidity-cash-flow-bridge', 'CP-2D', 'T2E.5')
+        row = ['x'] * len(columns)
+        self.assertEqual(about(complete.check(skill, register('T2E.5', columns, [row]), 'CP-2D')[0], 'T2E.5'), [])
+        row[columns.index('Currency and Scale')] = 'USD m'
+        self.assertEqual(about(complete.check(skill, register('T2E.5', columns, [row]), 'CP-2D')[0], 'T2E.5'), [])
+        row[columns.index('Currency and Scale')] = '[Insufficient Information]'
+        self.assertEqual(len(about(complete.check(skill, register('T2E.5', columns, [row]), 'CP-2D')[0], 'T2E.5')), 1)
+
+    def test_n192_the_prose_naming_a_packed_value_names_each_figure(self):
+        two_g = self.reference('cp-2g-forward-credit-model', 'REF_CP-2G_STEPS.md')
+        self.assertNotIn('closing debt/cash', two_g)
+        self.assertIn('closing debt and closing cash', two_g)
+        two_h = skill_text('cp-2h-ratings-migration-trigger')
+        self.assertNotIn('case/period value', two_h)
+        self.assertIn('wherever a register asks for a case or a period', two_h)
+
+    # N133
+    def test_n133_cp_0_text_names_no_validator_no_retired_decision_and_no_retired_register(self):
+        capacity = self.reference('cp-0-source-readiness', 'CP0_CAPACITY_RESUME_CONTRACT_v1.md')
+        self.assertNotIn('executable authority', capacity)
+        self.assertNotIn('Deploy V CP-0 validator', capacity)
+        self.assertIn('are checks CP-0 makes on its own draft against the rules above; the host runs no validator '
+                      'for them', ' '.join(capacity.split()))
+        row = next(l for l in capacity.splitlines() if l.startswith('| `representation_catalog[]` extension'))
+        self.assertIn('the host\'s preparation record; P7 is retired', row)
+        steps = self.reference('cp-0-source-readiness', 'REF_CP-0_STEPS.md')
+        self.assertNotIn('defaults to `PARSE_FULL`', steps)
+        self.assertIn("A unique lender/financing deck's parse job declares `HYBRID` and `LAYOUT_TEXT`; its delivery is "
+                      "the host preparation record's, `WHOLE` or `PAGE_MAP`.", steps)
+
+    # N213
+    def test_n213_cp_l10_shows_the_reason_form_beside_its_blocklist(self):
+        skill = skill_text('cp-l10-financial-change-screen')
+        self.assertIn('critical_cell_values_casefold', skill)
+        placeholder = '[Insufficient Information]'
+        found = [m.start() for m in re.finditer(re.escape(placeholder), skill)]
+        self.assertTrue(found)
+        for at in found:
+            with self.subTest(offset=at):
+                self.assertEqual(skill[at + len(placeholder):at + len(placeholder) + 3], ' — ')
+        self.assertIn('In a register cell never write a bare placeholder, which every critical '
+                      'column refuses: write `[Insufficient Information] — ` and what is missing and where it '
+                      'was sought (for example `[Insufficient Information] — covenant compliance certificate not '
+                      'in the source set`), or `—` for a blank value.', skill)
+        contract = complete.load_contract(skill, 'CP-L10')
+        columns = contract['registers']['TL10.2']['columns']
+        reason = '[Insufficient Information] — covenant compliance certificate not in the source set'
+        row = [reason if c == 'summary' else 'present' for c in columns]
+        row[columns.index('topic_id')] = 'SOURCE_BASIS'
+        violations = about(complete.check(skill, register('TL10.2', columns, [row]), 'CP-L10')[0], 'TL10.2')
+        self.assertEqual([v for v in violations if 'disqualifying' in v], [])
+        row[columns.index('summary')] = '[Insufficient Information]'
+        violations = about(complete.check(skill, register('TL10.2', columns, [row]), 'CP-L10')[0], 'TL10.2')
+        self.assertEqual(len([v for v in violations if 'disqualifying' in v]), 1)
+
+    # N219
+    def test_n219_cp_4_reference_wording(self):
+        b_steps = self.reference('cp-4-legal-covenant-interpreter', 'REF_CP-4B_STEPS.md')
+        for redundant in ('the undisclosed asset', 'the undisclosed pledged', 'where not disclosed'):
+            self.assertNotIn(redundant, b_steps)
+        self.assertIn('mark [Insufficient Information] — the asset, EBITDA or debt figure not disclosed; do not '
+                      'estimate.', b_steps)
+        self.assertIn('mark [Insufficient Information] — the pledged or unpledged value not disclosed.', b_steps)
+        # No second em dash after the reason on the lines the review named.
+        for name, anchor in (('CP-4_RUNBOOK.md', 'If a required legal document is unavailable'),
+                             ('CP-4B_RUNBOOK.md', 'If org chart, guarantor schedule'),
+                             ('REF_CP-4B_STEPS.md', 'If org chart, guarantor schedule'),
+                             ('REF_CP-4B_STEPS.md', 'If CP-1 entity-level debt missing')):
+            text = (self.CP4_REFERENCES / name).read_text(encoding='utf-8')
+            line = next(l for l in text.splitlines() if anchor in l)
+            with self.subTest(file=name, anchor=anchor):
+                self.assertEqual(line.count(' — '), 1 if anchor != 'If CP-1 entity-level debt missing' else 2, line)
+                after = line.partition('[Insufficient Information] — ')[2]
+                self.assertNotIn(' — ', after)
+        self.assertIn('do not fabricate the section: mark [Insufficient Information] — the missing legal '
+                      'document and log the gap.', (self.CP4_REFERENCES / 'CP-4_RUNBOOK.md').read_text(encoding='utf-8'))
+        self.assertIn('leakage routes carry [Insufficient Information] — naming the missing enabling provisions; '
+                      'flag.', b_steps)
 
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')

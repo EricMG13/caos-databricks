@@ -100,11 +100,16 @@ def _finite_figure(value, where):
 _ANGLO_THOUSANDS = re.compile(r"^\d{1,3}(,\d{3})+(\.\d+)?$")
 _CONTINENTAL = re.compile(r"^\d{1,3}(\.\d{3})+(,\d+)?$")
 _AMBIGUOUS_COMMA = re.compile(r"^\d+,\d{1,2}$")
+# A spread written with its unit ("350bps", "350 bp") is a figure in basis
+# points: the unit is stripped and the number stays in basis points, as `10.4%`
+# stays in percentage points (fork r17). A bare `bp` or a trailing word is no
+# figure, and a calculator input never reads the unit (`basis_points` is off).
+_BASIS_POINTS = re.compile(r"(?<=[0-9])bps?$", re.IGNORECASE)
 # The spaces a figure may carry between digit groups, each stripped alike.
 _DIGIT_GROUP_SPACES = str.maketrans("", "", "\u00a0\u2009\u202f ")
 
 
-def parse_figure(cell, where="value"):
+def parse_figure(cell, where="value", basis_points=False):
     """Parse a figure, or return None for a recognised null.
 
     Raises AmbiguousFigure rather than guessing when the decimal separator is
@@ -122,6 +127,16 @@ def parse_figure(cell, where="value"):
     (covenant_headroom `percentage`, rate_fx_sensitivity `adverse_move_pct`,
     bond_analytics `recovery_assumption`) refuse a value above 1, so a `%` cell
     reaches them as a refusal, not a 100x misreading.
+
+    Basis-point convention: a trailing `bp` or `bps` (any case, a space before
+    it allowed) is stripped and the figure stays in basis points -- `350bps`
+    reads 350, never 3.5 (fork r17). The column or header carries the unit; a
+    reader that wants percentage points divides by 100. Only a register reader
+    opts in (`basis_points=True`, as `to_number` does): a calculator input is
+    in percentage points or a fraction, and `600bps` as a coupon would read as
+    600 percent, so every calculator's `_num` leaves it off and refuses the
+    cell. The unit ends the figure: `5xbps` and `10%bp` are refused, not read
+    as 5 and 10.
 
     Digit-group spaces -- the no-break space U+00A0, the thin space U+2009 and
     the narrow no-break space U+202F -- are stripped like an ordinary space
@@ -146,8 +161,12 @@ def parse_figure(cell, where="value"):
     # into a confident 5.0, which is worse than refusing the cell.
     core = s.translate(_DIGIT_GROUP_SPACES)
     core = re.sub(r"^[€$£¥₹]|[€$£¥₹]$", "", core)
-    core = re.sub(r"[xX]$", "", core)
-    core = re.sub(r"%$", "", core)
+    unit = _BASIS_POINTS.search(core) if basis_points else None
+    if unit:
+        core = core[: unit.start()]
+    else:
+        core = re.sub(r"[xX]$", "", core)
+        core = re.sub(r"%$", "", core)
     if not re.fullmatch(r"[-+]?[0-9][0-9.,]*(?:[eE][-+]?[0-9]+)?", core):
         raise ValueError(f"{where}: {cell!r} is not a figure")
     if core.count(",") and core.count("."):
@@ -180,10 +199,11 @@ def parse_figure(cell, where="value"):
 
 
 def to_number(cell):
-    """Lenient wrapper: returns None where parse_figure would raise on shape,
-    but still refuses to guess an ambiguous decimal separator."""
+    """Lenient wrapper for a register cell (basis points read): returns None
+    where parse_figure would raise on shape, but still refuses to guess an
+    ambiguous decimal separator."""
     try:
-        return parse_figure(cell)
+        return parse_figure(cell, basis_points=True)
     except AmbiguousFigure:
         raise
     except ValueError:

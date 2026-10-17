@@ -11,6 +11,7 @@ import {
   qualificationUrl,
   retryAfterOf,
   sectionUrl,
+  unrequestedStatus,
 } from "@/app/transport";
 import { ENABLED_SECTIONS, isEnabledSection } from "@/app/sections";
 import { Workspace } from "@/app/Workspace";
@@ -599,5 +600,13 @@ describe("the transport", () => {
       expect(existsSync(resolve(process.cwd(), `src/sections/${section}/wire.ts`))).toBe(false);
       expect(existsSync(resolve(process.cwd(), `src/wire/${section}.ts`))).toBe(false);
     }
+  });
+});
+
+describe("the status of a section that sends no request", () => {
+  test("test_unrequested_status_names_no_case_only_for_an_enabled_section", () => {
+    // Admin is disabled in every mode: no case is missing from it.
+    expect(unrequestedStatus("admin")).toEqual({ kind: "unavailable" });
+    expect(unrequestedStatus("analysis")).toEqual({ kind: "unavailable", cause: "no-case" });
   });
 });
