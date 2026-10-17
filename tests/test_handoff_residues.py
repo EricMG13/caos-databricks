@@ -25,6 +25,7 @@ from caos.graph.route import MODEL_MODULE
 from caos.methodology import handoff
 from caos.methodology.bundle import assemble_authority
 from caos.methodology.canonical import (
+    _forecast_lines,
     _owner_lines,
     _packed_items,
     _packed_key,
@@ -646,3 +647,89 @@ def test_a_non_transport_body_is_parsed_once_and_not_diagnosed(
 
 def test_the_unused_shaped_helper_is_gone() -> None:
     assert not hasattr(handoff, "_shaped")
+
+
+# --- CP-CF forecast document feedback (N209 diagnosis) -----------------------
+
+_NULL_BLOCK = (
+    '```caos-forecast-v1\n{"request":null,"bindings":{},"forecast":null}\n```\n'
+)
+_SECRET = "SECRET-ANSWER-VALUE-8841"
+
+
+def _cpcf_markdown(block: str) -> bytes:
+    return (
+        "---\nmodule_id: CP-CF\nqa_status: Restricted\n"
+        f"committee_status: Restricted\nnote: {_SECRET}\n---\n\n{block}"
+    ).encode()
+
+
+def _forecast_context(upstream_text: bytes = b"", quote: str = "") -> SimpleNamespace:
+    owner = SimpleNamespace(module_id="CP-1")
+    citation = SimpleNamespace(matched_text=quote, linked=True)
+    return SimpleNamespace(
+        upstream=[(owner, upstream_text)], citations={"CP-1": (citation,)}
+    )
+
+
+def _forecast(markdown: bytes, context: SimpleNamespace) -> list[str]:
+    assignment: Any = SimpleNamespace(module_id=MODEL_MODULE)
+    ctx: Any = context
+    return _forecast_lines(assignment, ctx, _owner_answer(markdown))
+
+
+def test_a_null_forecast_block_gets_the_fault_line_and_the_blocked_way_out() -> None:
+    lines = _forecast(_cpcf_markdown(_NULL_BLOCK), _forecast_context(b"# Body\n"))
+    assert lines == [
+        "host forecast check: the caos-forecast-v1 block's request and bindings"
+        " must be objects and its forecast the complete deterministic result of"
+        " the request; no upstream handoff states a request value as"
+        " `<pointer> = <value>`, so none can be bound: the honest answer is"
+        " qa_status: Blocked with the reason"
+    ]
+    assert _SECRET not in "".join(lines)
+    assert len(lines[0]) <= MAX_FEEDBACK_CHARS + len("host forecast check: ")
+
+
+def test_the_fault_line_omits_the_blocked_advice_when_a_request_can_bind() -> None:
+    owner = b'/opening/cash = "100"\n'
+    lines = _forecast(_cpcf_markdown(_NULL_BLOCK), _forecast_context(owner))
+    assert lines == [
+        "host forecast check: the caos-forecast-v1 block's request and bindings"
+        " must be objects and its forecast the complete deterministic result of"
+        " the request"
+    ]
+    quoted = _forecast_context(b"# Body\n", quote='/opening/cash = "100"')
+    assert _forecast(_cpcf_markdown(_NULL_BLOCK), quoted) == lines
+
+
+def test_a_valid_forecast_block_and_other_modules_get_no_forecast_line() -> None:
+    from forecast_fixtures import forecast_request
+    from test_forecast_handoff import forecast_markdown
+
+    valid = b"---\nmodule_id: CP-CF\n---\n\n" + forecast_markdown(forecast_request())
+    assert _forecast(valid, _forecast_context()) == []
+    other: Any = SimpleNamespace(module_id="CP-5")
+    ctx: Any = _forecast_context()
+    answer = _owner_answer(_cpcf_markdown(_NULL_BLOCK))
+    assert _forecast_lines(other, ctx, answer) == []
+
+
+def test_the_forecast_line_survives_bounding_and_is_a_host_line() -> None:
+    from caos.methodology.handoff import _bounded
+
+    (line,) = _forecast(_cpcf_markdown(_NULL_BLOCK), _forecast_context())
+    assert line.startswith("host forecast check: ")
+    assert _bounded("host forecast check", line.split(": ", 1)[1]) == line
+
+
+@pytest.mark.parametrize("request_value", ["{}", '{"periods": 5}', '{"drivers": 3}'])
+def test_a_request_object_the_calculator_cannot_use_is_told_the_same_line(
+    request_value: str,
+) -> None:
+    block = (
+        f'```caos-forecast-v1\n{{"request":{request_value},"bindings":{{}},'
+        '"forecast":{}}\n```\n'
+    )
+    lines = _forecast(_cpcf_markdown(block), _forecast_context())
+    assert len(lines) == 1 and lines[0].startswith("host forecast check: ")

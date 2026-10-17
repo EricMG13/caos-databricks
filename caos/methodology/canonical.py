@@ -943,6 +943,7 @@ def _prompt_context(
         *_demand_lines(bundle, assignment, context, body),
         *_coverage_lines(assignment, context, body),
         *_owner_lines(bundle, assignment, context, body),
+        *_forecast_lines(assignment, context, body),
         _anchoring_line(conn, context.delivered, answer_citations(body)),
         readiness_set_line(
             contract,
@@ -1118,6 +1119,53 @@ def _owner_lines(
         )
         return owner_messages(module, gaps)
     return []
+
+
+_FORECAST_FAULT = (
+    "the caos-forecast-v1 block's request and bindings must be objects and its"
+    " forecast the complete deterministic result of the request"
+)
+_FORECAST_BLOCKED = (
+    "; no upstream handoff states a request value as `<pointer> = <value>`, so"
+    " none can be bound: the honest answer is qa_status: Blocked with the reason"
+)
+
+
+def _forecast_lines(assignment: Assignment, context: _Context, body: str) -> list[str]:
+    """CP-CF's retry line for a refused forecast document (N209 diagnosis):
+    `forecast_projection` refuses `HANDOFF_INCOMPLETE` with no word of why, so
+    a block of nulls was retried blind. One fixed line naming the fault class,
+    quoting nothing of the answer (D152 R1); when no accepted upstream handoff
+    or linked citation states a request value (`binds_input`), no request can
+    bind, and the line adds that a validated Blocked answer is the honest one."""
+    from caos.methodology.forecast import (
+        FORECAST_OWNERS,
+        binds_input,
+        forecast_projection,
+    )
+
+    markdown = answer_markdown(body)
+    if assignment.module_id != MODEL_MODULE or markdown is None:
+        return []
+    try:
+        forecast_projection(markdown)
+    except Refusal:  # the fault this line names
+        pass
+    else:
+        return []
+    bindable = any(
+        binds_input(ref.module_id, data.decode("utf-8", "replace"))
+        for ref, data in context.upstream
+    ) or any(
+        binds_input(owner, cited.matched_text)
+        for owner in FORECAST_OWNERS
+        for cited in context.citations.get(owner, ())
+        if cited.linked
+    )
+    line = _bounded(
+        "host forecast check", _FORECAST_FAULT + ("" if bindable else _FORECAST_BLOCKED)
+    )
+    return [line] if line else []
 
 
 def owner_messages(module: str, gaps: Sequence[OwnerGap]) -> list[str]:
