@@ -314,3 +314,14 @@ backup. After restoring into a newly created database and copied blob root, it
 reads that same verdict through `current_verdict` at the recorded clock. This
 proves migration history, immutable qualification rows, and the current-reader
 binding survive the same-revision restore; it does not perform a provider call.
+
+## Version 52 — the pre-DL-1 tripwire (N81)
+
+`0052_pre_dl1_tripwire` creates the schema named for the migrating role and a
+`store_schema` row in it that matches no history, so a build from before DL-1
+(which searches `"$user", public`) refuses the store at boot with
+`STORE_SCHEMA_DRIFT` where it could create in `public`. It protects the
+migrating role only. The migration refuses a role schema that role does not own,
+or that holds another role's object or a trigger, rule or policy on
+`store_schema`. A tool session as the app role with the default `search_path`
+resolves an unqualified `store_schema` to the tripwire table, not the store's.

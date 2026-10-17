@@ -5,7 +5,9 @@ Code from before DL-1 reads `public` through Postgres's default search path
 empty store beside the real one. Migration 0052 puts a bookkeeping row that
 matches no history in the schema named for the app's own role, which that
 default path searches first, so the old build finds a store it cannot account
-for and answers `STORE_SCHEMA_DRIFT`. The old build here is the real one, read
+for and answers `STORE_SCHEMA_DRIFT`. It matters where the old build can create in
+`public` (a hand-granted CREATE, F141, or a dev volume); under the bundle grant
+alone it is already refused. The old build here is the real one, read
 from git at the commit before DL-1 and run in a process of its own.
 """
 
@@ -14,12 +16,18 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from urllib.parse import quote, urlsplit, urlunsplit
+from uuid import uuid4
 
 import psycopg
+import pytest
 from psycopg import sql
 
 import caos.store as store
+from caos.refusals import Refusal, RefusalCode
 from caos.store import apply_schema, connect, verify_schema
 
 REPO = Path(__file__).resolve().parents[1]
@@ -32,6 +40,7 @@ import sys
 
 sys.path.insert(0, sys.argv[1])
 from caos.refusals import Refusal
+from caos.refusals import Refusal, RefusalCode
 from caos.store import apply_schema, connect
 
 with connect(sys.argv[2]) as conn:
@@ -69,13 +78,117 @@ def _boot_old_build(tmp_path: Path, url: str) -> str:
     return done.stdout.strip()
 
 
+def _fresh_role() -> str:
+    """A role name of a UUID's shape: hyphens, so it needs quoting."""
+    return str(uuid4())
+
+
+@contextmanager
+def _roles(
+    database_url: str, *names: str, public_create: bool = False
+) -> Iterator[dict[str, str]]:
+    """Non-superuser login roles holding what the bundle's `CAN_CONNECT_AND_CREATE`
+    gives (CONNECT and CREATE on the database), `CREATE` on `public` besides
+    when `public_create` (F141's hand grant); their URLs by name."""
+    parts = urlsplit(database_url)
+    database = parts.path.lstrip("/")
+    password = uuid4().hex
+    urls = {
+        name: urlunsplit(
+            parts._replace(
+                netloc=f"{quote(name, safe='')}:{password}"
+                f"@{parts.hostname}:{parts.port}"
+            )
+        )
+        for name in names
+    }
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        for name in names:
+            role = sql.Identifier(name)
+            admin.execute(
+                sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
+                    role, sql.Literal(password)
+                )
+            )
+            admin.execute(
+                sql.SQL("GRANT CONNECT, CREATE ON DATABASE {} TO {}").format(
+                    sql.Identifier(database), role
+                )
+            )
+        if public_create:
+            admin.execute(
+                sql.SQL("GRANT CREATE ON SCHEMA public TO {}").format(
+                    sql.Identifier(names[0])
+                )
+            )
+    try:
+        yield urls
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            for name in names:
+                admin.execute(
+                    sql.SQL("DROP OWNED BY {} CASCADE").format(sql.Identifier(name))
+                )
+
+
 def test_a_pre_dl1_build_refuses_a_store_the_current_build_migrated(
     empty_database: str, tmp_path: Path
 ) -> None:
-    with connect(empty_database) as conn:
-        apply_schema(conn)
-        verify_schema(conn)
-    assert _boot_old_build(tmp_path, empty_database) == "REFUSED STORE_SCHEMA_DRIFT"
+    """Where the old build can create in `public` (a hand-granted CREATE, F141,
+    or a dev volume) it would otherwise boot on an empty store; under the
+    bundle grant alone it is already refused (42501) and this adds nothing."""
+    app_role = _fresh_role()
+    with _roles(empty_database, app_role, public_create=True) as urls:
+        with connect(urls[app_role]) as conn:
+            apply_schema(conn)
+            verify_schema(conn)
+        booted = _boot_old_build(tmp_path, urls[app_role])
+    assert booted == "REFUSED STORE_SCHEMA_DRIFT"
+
+
+def test_a_squatted_role_schema_is_refused_and_its_trigger_never_runs(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """W2: the role's name is public, so a co-tenant may make its schema first
+    with a trigger on `store_schema`. The migration refuses before the INSERT
+    that would run it as the app (the trigger's own SQLSTATE never appears)."""
+    app_role, other = _fresh_role(), _fresh_role()
+    with _roles(empty_database, app_role, other) as urls:
+        with psycopg.connect(urls[other], autocommit=True) as squatter:
+            app = sql.Identifier(app_role)
+            squatter.execute(sql.SQL("CREATE SCHEMA {}").format(app))
+            squatter.execute(
+                sql.SQL("GRANT USAGE, CREATE ON SCHEMA {} TO {}").format(app, app)
+            )
+            squatter.execute(
+                sql.SQL(
+                    "CREATE TABLE {}.store_schema (only_row boolean PRIMARY KEY"
+                    " DEFAULT true CHECK (only_row), applied_digest text NOT NULL)"
+                ).format(app)
+            )
+            squatter.execute(
+                sql.SQL("GRANT SELECT, INSERT, UPDATE ON {}.store_schema TO {}").format(
+                    app, app
+                )
+            )
+            squatter.execute(
+                sql.SQL(
+                    "CREATE FUNCTION {}.t() RETURNS trigger LANGUAGE plpgsql AS"
+                    " $f$ BEGIN RAISE EXCEPTION 'squatter ran' USING ERRCODE ="
+                    " 'ZZ001'; END $f$"
+                ).format(app)
+            )
+            squatter.execute(
+                sql.SQL(
+                    "CREATE TRIGGER t BEFORE INSERT ON {}.store_schema"
+                    " FOR EACH ROW EXECUTE FUNCTION {}.t()"
+                ).format(app, app)
+            )
+        with connect(urls[app_role]) as conn:
+            with pytest.raises(Refusal) as refused:
+                apply_schema(conn)
+    assert refused.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+    assert "sqlstate 23000" in capsys.readouterr().err
 
 
 def test_the_current_build_boots_again_over_its_own_tripwire(

@@ -113,7 +113,7 @@ uv run python scripts/rollback_check.py <older commit> --release <the commit the
 **Exit 1: do not redeploy that commit.** It names one of two reasons:
 
 - The release applied a migration the older commit does not carry. Its app would refuse the store at boot (`STORE_SCHEMA_DRIFT`, E6 `store` not `OK`) and production would stay down until a commit carrying the migration is deployed again.
-- The older commit is from before DL-1 (F219), which moved the store from `public` into `caos_store`. Its code reads `public`, finds no store there, creates an empty one and starts green, with every case, run and ledger row the release wrote invisible to it. No commit from before F219 is ever a rollback target. That code cannot be changed to refuse, and nothing newer can make it refuse, so this check is the only guard.
+- The older commit is from before DL-1 (F219), which moved the store from `public` into `caos_store`. Its code reads `public`, finds no store there, creates an empty one and starts green, with every case, run and ledger row the release wrote invisible to it. No commit from before F219 is ever a rollback target. That code cannot be changed; since migration 0052 (N81) a tripwire in the schema named for the app's own role makes it refuse the store (`STORE_SCHEMA_DRIFT`) when it boots as the role that migrated, and only then: another role finds no tripwire and starts empty, so this check stays the guard. The tripwire is a `store_schema` table in that role's schema; a tool session as the app role with the default `search_path` resolves an unqualified `store_schema` to it, not to the store's (use `caos_store.store_schema`).
 
 Then do one of these instead:
 
