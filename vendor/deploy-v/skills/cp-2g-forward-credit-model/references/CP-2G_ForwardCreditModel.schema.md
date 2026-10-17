@@ -11,8 +11,8 @@ the complete `cp2g.cp_model_forecast_drivers` stable table defined in REF F.
 | T2H.2 | Historical-to-base bridge | metric, historical actual, LTM/base, adjustment, basis, evidence_id |
 | T2H.3 | Assumption register | assumption_id, driver, case, period, value/range, unit, class, source, rationale |
 | T2H.4 | Forward operating model | period, case, revenue, EBITDA, margin, CFO, capex, FCF, evidence/assumption IDs |
-| T2H.5 | Debt and liquidity roll-forward | period, case, opening debt/cash, issuance, repayment, interest, closing debt/cash, accessible liquidity |
-| T2H.6 | Credit metrics | period, case, gross/net leverage, coverage, FCF/debt, liquidity runway, definition IDs |
+| T2H.5 | Debt and liquidity roll-forward | period, case, opening debt, opening cash, issuance, repayment, interest, closing debt, closing cash, accessible liquidity |
+| T2H.6 | Credit metrics | period, case, gross leverage, net leverage, coverage, FCF/debt, liquidity runway, definition IDs |
 | T2H.7 | Scenario and breakpoint matrix | driver shock, first break, period, liquidity/covenant/refinancing consequence, recovery action |
 | T2H.8 | Deleveraging and monitoring handoff | case, trajectory, target/date, dependency, trigger, downstream module |
 | T2H.9 | Gaps and conflicts | item, conflict/gap, affected case/period, model impact, required evidence |
