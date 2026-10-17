@@ -114,7 +114,7 @@ Approver = Annotated[Standing, Depends(require_case_approver)]
 
 
 def _spans(narrative: list[list[NarrativeDraft]]) -> list[list[dict[str, Any]]]:
-    """The draft in the shape `save_revision` validates."""
+    """The draft in the shape `save_revision_in` validates."""
     return [[_span(span) for span in paragraph] for paragraph in narrative]
 
 

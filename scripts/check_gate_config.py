@@ -35,7 +35,7 @@ import sys
 import tempfile
 import tokenize
 import tomllib
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Hashable, Iterable, Iterator
 from hashlib import sha256
 from pathlib import Path
 from types import ModuleType
@@ -104,6 +104,8 @@ OVERRIDING = (
 # The one gitleaks both scans run (W3): the hook's rev and the version the
 # gitleaks.yml workflow installs (by release checksum) are this one version.
 GITLEAKS_VERSION = "v8.30.1"
+# Hook repositories are pinned by commit (N114): `ls-remote <repo> refs/tags/<tag>`.
+GITLEAKS_COMMITS = {"v8.30.1": "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"}
 GITLEAKS_CI_FILE = ".github/workflows/gitleaks.yml"
 SECRETS_WEEKLY_FILE = ".github/workflows/secrets-weekly.yml"
 # Each secret-scan workflow whole (C1): the sha256 of its parsed YAML, so a
@@ -130,15 +132,15 @@ REPO_KEYS = frozenset({"repo", "rev", "hooks"})
 # same name. `local` has no rev.
 PRE_COMMIT_REPOS: dict[str, tuple[str | None, tuple[str, ...]]] = {
     "https://github.com/astral-sh/ruff-pre-commit": (
-        "v0.14.0",
+        "f9351c924055bf6c7b4a4670237d3ce141e9f57c",  # v0.14.0
         ("ruff", "ruff-format"),
     ),
     "https://github.com/gitleaks/gitleaks": (
-        GITLEAKS_VERSION,
+        GITLEAKS_COMMITS.get(GITLEAKS_VERSION, ""),
         ("gitleaks", "gitleaks"),
     ),
     "https://github.com/pre-commit/pre-commit-hooks": (
-        "v5.0.0",
+        "cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b",  # v5.0.0
         (
             "check-added-large-files",
             "check-merge-conflict",
@@ -525,13 +527,41 @@ def _python_problems(root: Path, project: dict[str, object]) -> list[str]:
     return problems
 
 
+class _RepeatedKey(yaml.YAMLError):
+    """A mapping repeats a key."""
+
+
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """`SafeLoader` that refuses a mapping repeating a key (N83): PyYAML keeps
+    the last, so the line a reviewer reads first could say one thing and the
+    file mean another."""
+
+    def construct_mapping(
+        self, node: yaml.MappingNode, deep: bool = False
+    ) -> dict[object, object]:
+        seen: set[object] = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=True)
+            if not isinstance(key, Hashable):
+                continue  # the parent loader refuses it as unhashable
+            if key in seen:
+                raise _RepeatedKey
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
 def _yaml_mapping(text: str | None) -> dict[object, object] | None:
     """`text` read as YAML, the way pre-commit and Actions read it, when it
-    is a mapping; None when it is missing, does not parse, or is not one."""
+    is a mapping; None when it is missing, does not parse, repeats a key, or
+    is not one."""
     if text is None:
         return None
     try:
-        loaded = yaml.safe_load(text)
+        loader = _UniqueKeyLoader(text)
+        try:
+            loaded = loader.get_single_data()
+        finally:
+            loader.dispose()
     except yaml.YAMLError:
         return None
     return loaded if isinstance(loaded, dict) else None
@@ -627,7 +657,15 @@ def _hook_problems(root: Path) -> list[str]:
     config = _yaml_mapping(_read(root, ".pre-commit-config.yaml"))
     if config is None:
         return ["pre-commit: .pre-commit-config.yaml is missing or not a mapping"]
-    problems = [
+    problems = (
+        []
+        if GITLEAKS_VERSION in GITLEAKS_COMMITS
+        else [
+            f"pre-commit: GITLEAKS_VERSION {GITLEAKS_VERSION} has no commit "
+            "in GITLEAKS_COMMITS"
+        ]
+    )
+    problems += [
         f"pre-commit: the config sets {key!r}; it may set only "
         f"{sorted(PRE_COMMIT_KEYS)}"
         for key in config
@@ -1924,7 +1962,11 @@ def base_measure(
     `rev`'s tracked Python when already read. None when `rev` has no
     checker at all; an `ImportError` or `SyntaxError` when it has one that
     will not load."""
-    module = _base_module(rev, root, texts)
+    return _module_measure(_base_module(rev, root, texts))
+
+
+def _module_measure(module: ModuleType | None) -> Measure | None:
+    """`base_measure` over a base checker already loaded."""
     if module is None:
         return None
     measure = getattr(module, "_measure_suppressions", None)
@@ -1952,7 +1994,8 @@ def _base_module(
     scripts = {
         name.removeprefix("scripts/"): text
         for name in sorted(names)
-        if (text := texts.get(name, blob_at(root, rev, name))) is not None
+        if (text := texts[name] if name in texts else blob_at(root, rev, name))
+        is not None
     }
     if CHECKER.removeprefix("scripts/") not in scripts:
         return None
@@ -2000,7 +2043,9 @@ def _pattern_counts(
     return counts
 
 
-def _unmeasured_problems(against: str, root: Path, texts: dict[str, str]) -> list[str]:
+def _unmeasured_problems(
+    against: str, root: Path, texts: dict[str, str], module: ModuleType | None
+) -> list[str]:
     """N108: each tracked `.py` path that a lister names for a tree and the
     measure of that tree left out. The lister is `against`'s own `tracked`
     module (a change to this commit's `tracked.py` -- its `VENDOR`, its
@@ -2008,7 +2053,6 @@ def _unmeasured_problems(against: str, root: Path, texts: dict[str, str]) -> lis
     same module, so only the base's can be trusted), run over this
     repository for both trees. With no base checker to borrow one from, this
     commit's `git ls-files` and `git ls-tree` stand in."""
-    module = _base_module(against, root, texts)
     lister_here = getattr(module, "tracked_python", None)
     lister_there = getattr(module, "tracked_python_at", None)
     if callable(lister_here) and callable(lister_there):
@@ -2044,7 +2088,8 @@ def baseline_problems(against: str, root: Path = REPO) -> list[str]:
     lets no pattern this commit weakened hide the suppression it spends."""
     try:
         texts = tracked_python_at(root, against)
-        unmeasured = _unmeasured_problems(against, root, texts)
+        module = _base_module(against, root, texts)
+        unmeasured = _unmeasured_problems(against, root, texts, module)
     except RuntimeError as refusal:
         return [f"baseline: {refusal}"]
     except (ImportError, SyntaxError):
@@ -2059,7 +2104,7 @@ def baseline_problems(against: str, root: Path = REPO) -> list[str]:
         if count > int(base.get(name, 0))
     ]
     try:
-        measure = base_measure(against, root, texts)
+        measure = _module_measure(module)
     except (ImportError, SyntaxError):
         return [*problems, f"baseline: {against}'s own checker could not be loaded"]
     if measure is None:

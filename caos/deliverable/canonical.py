@@ -215,31 +215,6 @@ class _Reader:
         return verified.markdown, verified.stored
 
 
-def freeze_canonical(
-    conn: StoreConnection,
-    blobs: BlobStore,
-    bundle: Bundle,
-    revision: Revision,
-    *,
-    actor_id: UUID,
-) -> str:
-    """Freeze the payload the store proves now, never a caller's bytes.
-
-    A pair moved since signing re-derives other bytes, so `freeze` refuses
-    `DELIVERABLE_MOVED_SINCE_SIGNING` (or the read refuses with its own code).
-    """
-    from caos.deliverable.filing import freeze
-
-    return freeze(
-        conn,
-        blobs,
-        bundle,
-        case_id=revision.case_id,
-        actor_id=actor_id,
-        revision_id=UUID(revision.revision_id.value),
-    )
-
-
 def verify_frozen(  # noqa: PLR0913 -- the revision and the bytes held for it
     conn: StoreConnection,
     blobs: BlobStore,

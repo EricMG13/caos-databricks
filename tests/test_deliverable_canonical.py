@@ -18,6 +18,7 @@ import pytest
 from canonical_fixtures import CATALOG, CONTRACT, handoff_markdown, skill
 from conftest import every_block, recorded_statements, tamper
 from conftest import reserve_at as reserve
+from governed_deliverable import freeze_canonical, save_revision, sign_opinion
 from test_execution_freshness import _Harness, harness
 from test_loop_charges import ESTIMATE, MODEL, REPORTED
 
@@ -26,14 +27,12 @@ from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import (
     Revision,
     canonical_payload,
-    freeze_canonical,
     payload_bytes,
     verify_frozen,
 )
-from caos.deliverable.filing import sign_opinion
 from caos.deliverable.package import build_package, verify_package
 from caos.deliverable.render import RenderRefused, canonical_bound, render
-from caos.deliverable.revisions import read_revision, save_revision
+from caos.deliverable.revisions import read_revision
 from caos.evidence.citations import ANY_RUN, EXCERPT, Citation, verify_citations
 from caos.graph.route import ResolvedRoute, resolve_route
 from caos.methodology.bundle import (
