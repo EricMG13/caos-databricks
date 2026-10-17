@@ -2,7 +2,7 @@
 
 A bounded pass over `rebuild/databricks` that finds where the app spends round trips, time, bytes and money, proves which of those costs can fall without changing behaviour, and lands only the proven ones. The condition that drives it is `docs/rebuild/optimization-sweep/goal.txt`; this file is what that condition points at.
 
-Written 2026-10-17 against `ddada2c0`; not yet run. The method is the owner's global one, `~/.claude/optimization-sweep.md`, the sibling of `~/.claude/refactoring-sweep.md`. Where this contract says "as the final sweep", it means `docs/rebuild/final-sweep/CONTRACT.md` at the same commit, which the two share: its operating mode, ledgers, environment lessons and agent rules apply here unless a section below replaces them.
+Written 2026-10-17 against `ddada2c0`; not yet run. The method is the owner's global one, the `sweep` skill (`~/.claude/skills/sweep/references/optimization.md`, the sibling of `refactoring.md`). Where this contract says "as the final sweep", it means `docs/rebuild/final-sweep/CONTRACT.md` at the same commit, which the two share: its operating mode, ledgers, environment lessons and agent rules apply here unless a section below replaces them.
 
 ## 0. Owner decisions
 
@@ -83,7 +83,7 @@ One fresh lead, measurement helpers, then one finder and one verifier per lane, 
    | L5 | Frontend bundle and render | gzip bytes per chunk and the first route's bytes; time to section content and long tasks for Analysis, Model, Book and Run in Chromium | 12, 13, 14 |
    | L6 | Tests and CI | the last ten successful CI runs on `rebuild/databricks` per job; the shards' spread; `frontend-a11y`'s browsers and pages; the slowest 25 tests per shard; the local `-n auto` wall | 11, `tests/`, `.github/` |
 
-   Its final message returns each finding in the method's format (`~/.claude/optimization-sweep.md`, "Finding format"), then a `Not verified:` line.
+   Its final message returns each finding in the method's format (`~/.claude/skills/sweep/references/optimization.md`, "Finding format"), then a `Not verified:` line.
 5. **Verify.** One `mx-adversary` per lane reproduces each finding's before metric on `PERF_BASE`, and where it can, measures the gain with a throwaway patch in a scratch worktree of its own. Verdicts: CONFIRMED, NOT-REPRODUCED, BELOW-THRESHOLD (under §4's threshold or within noise), FORBIDDEN (names the invariant, `Dn` or OP row it would need). A finding a `Dn` decided is FORBIDDEN, not a defect.
 6. **Synthesis.** One `mx-architect` merges findings by cause, scores and ranks them by §4, maps each FORBIDDEN row to its OP row or a new owner question, and names the `next.md` entries each repeats.
 7. **Write and commit.** The lead writes `docs/rebuild/perf-<date>/findings-<lane>.md` (every finding with its verdict and numbers), `synthesis.md` (the ranked list, the owner questions) and `harness.md` (how each lane was measured, so Phase 0 reruns it), and commits them on `perf/<date>`: documents only. Nothing is pushed; the owner merges.
@@ -233,7 +233,7 @@ Every brief carries GitNexus `impact` for the symbols it changes (implementers h
 
 ## 11. Launch
 
-1. Wait until in-flight work has merged or been parked (final sweep §11 step 1) and, by OP-9's Default, until the final sweep has merged. Make sure no other session is writing this repository and no live run is using the Docker VM. BASE is the tip after that.
+1. Wait until in-flight work has merged or been parked (final sweep §11 step 1) and, by OP-9's Default, until the final sweep has merged. Make sure no other session is writing this repository and no live run is using the Docker VM. BASE is the tip after that. Start with `/sweep optimization prepare whole-repo`, which refreshes this contract first; on a later update, the skill's default before-merge mode sets BASE to the top of that update's PR stack instead.
 2. Run Stage P (§2a) on that tip and merge its findings.
 3. Fill in §0 with Stage P's synthesis in hand.
 4. Start a session on Opus 5.5 at high effort in your worktree (§1) and run `/goal <the contents of docs/rebuild/optimization-sweep/goal.txt>`. Headless:
