@@ -130,6 +130,7 @@ from caos.calculators.credit_model._cells import (
     DIFFERS,
     OTHER_FOOTING,
     SIGN_NORMALISED,
+    TAX_REFUND,
     UNSPANNED,
     UNSTATED_FOOTING,
     Footing,
@@ -141,6 +142,8 @@ from caos.calculators.credit_model._cells import (
     footing_of,
     join_notes,
     no_negative_zero,
+    not_stated,
+    odd_length,
     odd_year,
     off_footing,
     refs,
@@ -271,6 +274,9 @@ class _Series:
     # An add-back: a one-off, so twelve months take an interim or a quarter
     # without a row as nothing, noted (never `PARTLY_STATED`).
     one_off: bool = False
+    # Cash taxes, signed: a sum with a positive part (a refund, CP-1's sign)
+    # is noted `TAX_REFUND` whatever its own sign.
+    signed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -953,9 +959,9 @@ def _series(regs: Cp1Registers) -> dict[str, _Series]:
     series: dict[str, _Series] = {}
     for key, kind, period_id, cell in _entries(regs):
         one_off = key.startswith("addback:")
-        series.setdefault(key, _Series(kind, {}, one_off=one_off)).rows[period_id] = (
-            cell
-        )
+        signed = key == _CASH_TAXES
+        made = _Series(kind, {}, one_off=one_off, signed=signed)
+        series.setdefault(key, made).rows[period_id] = cell
     return series
 
 
@@ -986,6 +992,7 @@ def _register(regs: Cp1Registers) -> _Register:
     return _Register(periods, ending, starting, shortest, off_footing(regs), footings)
 
 
+_CASH_TAXES = "acct:cash_taxes_paid"
 _MISSING = Cell(None, "COMPONENT_MISSING")  # a part not stated, or no period
 _FROM_PARTS = "differs from components"
 # Twelve months whose parts (FY, YTD and PYTD; or four quarters) are stated
@@ -1020,17 +1027,43 @@ def _sum(series: _Series, parts: Iterable[tuple[Cell, int]]) -> Cell:
     return calc((cell, sign) for cell, sign in cells if cell.value is not None)
 
 
+def _with_refund(series: _Series, parts: Iterable[Cell], total: Cell) -> Cell:
+    """`total`, noted `TAX_REFUND` where the series is cash taxes and a part
+    is a refund (positive, or itself a sum that took one): a negative sum of
+    a positive interim would otherwise say nothing (N211 b)."""
+    if not series.signed or total.value is None:
+        return total
+    if not any(
+        (cell.value is not None and cell.value > 0)
+        or (cell.note is not None and TAX_REFUND in cell.note.split("; "))
+        for cell in parts
+    ):
+        return total
+    return replace(total, note=join_notes((total.note, TAX_REFUND)))
+
+
 def _named_sum(series: _Series, parts: Iterable[tuple[str, Cell, int]]) -> Cell:
     """`_sum` of the named parts; with a figure, noted with each part it took
     as nothing (`treated_as_zero`: in a sparse series, a part without a
-    row)."""
+    row), and, for cash taxes, a refund among them (`_with_refund`)."""
     named = list(parts)
     total = _sum(series, ((cell, sign) for _, cell, sign in named))
+    if total.reason == "COMPONENT_MISSING" and total.note is None:
+        unstated = next(
+            (
+                name
+                for name, cell, _ in named
+                if cell.value is None and cell.reason == "NOT_STATED"
+            ),
+            None,
+        )
+        if unstated is not None:
+            return replace(total, note=not_stated(unstated))
     nothing = [name for name, cell, _ in named if cell.reason == "NOT_SOURCED"]
-    if total.value is None or not nothing:
-        return total
-    notes = (total.note, *map(treated_as_zero, nothing))
-    return replace(total, note=join_notes(notes))
+    if total.value is not None and nothing:
+        notes = (total.note, *map(treated_as_zero, nothing))
+        total = replace(total, note=join_notes(notes))
+    return _with_refund(series, (cell for _, cell, _ in named), total)
 
 
 def _spans(register: _Register, period: PeriodRow) -> bool:
@@ -1072,7 +1105,7 @@ def _component(series: _Series, register: _Register, period_id: str | None) -> C
         parts = period.component_period_ids
         if not register.off.isdisjoint(parts):
             return _OFF
-    return _sum(series, ((_reported(series, part), 1) for part in parts))
+    return _named_sum(series, ((part, _reported(series, part), 1) for part in parts))
 
 
 def _footing(
@@ -1322,22 +1355,58 @@ def _flow(series: _Series, register: _Register, spec: _Spec) -> Cell:
     if total.value is None:
         return Cell(None, total.reason, stated=stated, note=total.note)
     differs = stated is not None and beyond_rounding(stated, total.value)
-    note = join_notes((total.note, DIFFERS if differs else None))
+    length = odd_length(_term_days(spec.terms)) if spec.column.kind == "LTM" else None
+    note = join_notes((total.note, DIFFERS if differs else None, length))
     return replace(total, stated=stated, note=note)
+
+
+def _stated_footing(register: _Register, period_id: str | None) -> str:
+    """The period's id with its basis and perimeter as written, `not stated`
+    for one it does not state."""
+    period = register.periods.get(period_id)
+    basis = period.accounting_basis if period else None
+    perimeter = period.entity_perimeter if period else None
+    return f"{period_id} ({basis or 'not stated'}, {perimeter or 'not stated'})"
+
+
+def _apart(register: _Register, own: str | None, other: str) -> bool:
+    """Whether the two periods state a different basis or perimeter (not
+    stated matches anything)."""
+    first = register.footings.get(own, UNSTATED_FOOTING)
+    second = register.footings.get(other, UNSTATED_FOOTING)
+    return combined_footing((first, second)) is None
 
 
 def _balance(series: _Series, register: _Register, spec: _Spec) -> Cell:
     """The first observation at the column's end date: its own period's, then
-    any period's ending that day, in register order; none on another footing,
-    and only its own where it is."""
+    any period's ending that day, in register order; none on another footing
+    than the anchor's, and only its own where it is. A period ending that day
+    on a footing that differs from the column's own period's (both stated)
+    is not read: where it alone has the figure, the cell is
+    `COMPONENT_MISSING`, its note naming both footings (R7, N206)."""
     ending = register.ending.get(spec.column.end_date, ())
     if spec.own in register.off:
         ending = ()
     on = (period_id for period_id in ending if period_id not in register.off)
-    cells = [_reported(series, period_id) for period_id in (spec.own, *on)]
-    found = next((cell for cell in cells if cell.value is not None), None)
-    if found is not None:
-        return found
+    ids = (spec.own, *on)
+    cells = [_reported(series, period_id) for period_id in ids]
+    refused: Cell | None = None
+    for period_id, cell in zip(ids, cells, strict=True):
+        if cell.value is None:
+            continue
+        if period_id != spec.own and _apart(register, spec.own, str(period_id)):
+            refused = refused or Cell(
+                None,
+                "COMPONENT_MISSING",
+                note=(
+                    f"{OTHER_FOOTING}: {_stated_footing(register, spec.own)} and "
+                    f"{_stated_footing(register, period_id)}"
+                ),
+            )
+            continue
+        return cell
+    if refused is not None:
+        return refused
     return _UNSTATED if _UNSTATED in cells else ABSENT
 
 
@@ -1389,6 +1458,7 @@ class _Window:
     earlier: list[_Spec | None]
     tiled: bool
     year: str | None
+    days: int | None = None  # the days the four quarters span, where they tile
 
 
 def _fiscal_year_of(spec: _Spec, register: _Register) -> str | None:
@@ -1408,6 +1478,23 @@ def _fiscal_year_of(spec: _Spec, register: _Register) -> str | None:
         ),
         None,
     )
+
+
+def _with_length(total: Cell, days: int | None) -> Cell:
+    """`total`, with a figure, noted `odd_length` of the days it spans."""
+    length = odd_length(days)
+    if total.value is None or length is None:
+        return total
+    return replace(total, note=join_notes((total.note, length)))
+
+
+def _window_days(
+    found: list[_Spec], periods: Mapping[str | None, PeriodRow]
+) -> int | None:
+    """The days from the first quarter's start to the last's end, where four
+    quarters tile; None otherwise."""
+    span = _tiled(found, periods) if len(found) == 4 else None
+    return None if span is None else span[1] - span[0] + 1
 
 
 def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
@@ -1438,13 +1525,14 @@ def _ltm_cell(series: _Series, register: _Register, window: _Window) -> Cell:
     if recurring and _some_unstated(quarters):
         return Cell(None, "COMPONENT_MISSING", note=PARTLY_STATED)
     names = (_term_name(quarter) for quarter in four)
-    return _named_sum(
+    total = _named_sum(
         series,
         (
             (name, cell, sign)
             for name, (cell, sign) in zip(names, quarters, strict=True)
         ),
     )
+    return _with_length(total, window.days)
 
 
 def _some_unstated(cells: list[tuple[Cell, int]]) -> bool:
@@ -1483,11 +1571,13 @@ def ltm_frames(
 ) -> dict[str, dict[str, Cell]]:
     """For each quarter column in `columns`, the cells of the twelve months
     ending with it: flows summed over it and the three quarters before it,
-    `COMPONENT_MISSING` without all four (an add-back's absent quarter adds
-    nothing only where none of the four has a figure: `_ltm_cell`), and noted
-    `UNSPANNED` where the four do not tile, each three whole months starting
-    the day after the one before ends, or their span, from the first's
-    start to the last's end, is not twelve whole months (`_twelve_months`)."""
+    `COMPONENT_MISSING` without all four (an add-back's quarter without a row
+    adds nothing, noted `treated_as_zero`, whether or not the others have a
+    figure: `_ltm_cell`), and noted `UNSPANNED` where the four do not tile,
+    each three whole months starting the day after the one before ends, or
+    their span, from the first's start to the last's end, is not twelve
+    whole months (`_twelve_months`); a span that is whole months but not 364
+    to 371 days is noted `odd_length`."""
     with localcontext(CONTEXT):
         plan = {spec.column.column_id: spec for spec in _plan(regs)}
         quarters = _quarter_index(plan.values())
@@ -1503,6 +1593,7 @@ def ltm_frames(
                 earlier,
                 tiled=len(found) < 4 or _twelve_months(found, periods),
                 year=_fiscal_year_of(spec, register),
+                days=_window_days(found, periods),
             )
             frames[spec.column.column_id] = {
                 key: _ltm_cell(one, register, window) for key, one in series.items()
