@@ -1305,3 +1305,57 @@ def test_an_unfrozen_revision_that_no_longer_re_proves_still_refuses_the_report(
     )
     assert answer.status_code >= 400, answer.text
     assert answer.json()["code"] == "ARTIFACT_RECORD_MISMATCH", answer.text
+
+
+def test_a_save_over_a_frozen_head_costs_its_declared_round_trips(
+    filing_client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N112: the save over a frozen head that can no longer be filed (N77) pays
+    `_fileable`'s re-proof on top of its own derivation, and that sum is held to
+    the module's declaration -- statements and blob downloads -- like every
+    other command's cost."""
+    from caos.deliverable import revisions
+    from caos.deliverable.render import RenderRefused, render
+
+    conn = lite.conn
+    counted = _Counting(conn)
+    app.dependency_overrides[store_connection] = lambda: counted
+    frozen = _save(lite)
+    digest = _digest(lite, frozen)
+    for step in ("signature", "freeze"):
+        answer = _post(
+            filing_client,
+            f"{_case(lite)}/revisions/{frozen}/{step}",
+            _approver(lite),
+            {"payload_sha256": digest},
+        )
+        assert answer.status_code == 200, answer.text
+
+    def tightened(payload: dict[str, Any]) -> bytes:
+        if payload["revision_id"] == str(frozen):
+            raise RenderRefused("DELIVERABLE_MARKDOWN_UNSUPPORTED")
+        return render(payload)
+
+    monkeypatch.setattr(revisions, "render", tightened)
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted_get(store: BlobStore, key: str) -> bytes:
+        if store.verified is None or key not in store.verified:
+            downloaded.append(key)
+        return real_get(store, key)
+
+    monkeypatch.setattr(BlobStore, "get", counted_get)
+    writer = member(conn, lite.case_id, Standing.WRITER)
+    counted.executed = 0
+    superseding = _post(
+        filing_client,
+        f"{_case(lite)}/runs/{lite.run_id}/revisions",
+        writer,
+        {"expected_revision_id": str(frozen), "narrative": []},
+    )
+    assert superseding.status_code == 201, superseding.text
+    assert counted.executed == deliverable.SAVE_FROZEN_IO
+    assert len(downloaded) == deliverable.SAVE_FROZEN_BLOBS
+    assert deliverable.SAVE_FROZEN_IO <= deliverable.IO_BUDGET
+    assert deliverable.SAVE_FROZEN_BLOBS <= deliverable.BLOB_BUDGET

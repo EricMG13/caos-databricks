@@ -92,7 +92,13 @@ SAVE_IO = 52
 SIGN_IO = 15
 FREEZE_IO = 56
 FILE_IO = 57
-IO_BUDGET = max(SAVE_IO, SIGN_IO, FREEZE_IO, FILE_IO)
+# N112: a save over a frozen head that can no longer be filed (N77) first asks
+# `_fileable`, which re-proves that head (`prove_revision`), then derives and
+# writes the new revision: measured 92 against the 52 of a save over an open
+# head, and held exactly by `tests/test_governed_write_routes.py`. A frozen head
+# that still re-proves is refused after the same re-proof and writes nothing.
+SAVE_FROZEN_IO = 92
+IO_BUDGET = max(SAVE_IO, SAVE_FROZEN_IO, SIGN_IO, FREEZE_IO, FILE_IO)
 # N35's remainder: save derives the payload directly (`canonical_payload`,
 # the LITE route's three nodes at two blobs each); sign reads only chain
 # rows. Freeze and file each re-prove it (`prove_revision`): the saved
@@ -101,10 +107,13 @@ IO_BUDGET = max(SAVE_IO, SIGN_IO, FREEZE_IO, FILE_IO)
 SAVE_BLOBS = 6
 SIGN_BLOBS = 0
 FREEZE_BLOBS = 7
+# The re-proof of the frozen head downloads what freeze's does (seven); the
+# new revision's derivation then finds those blobs verified in the request.
+SAVE_FROZEN_BLOBS = 7
 # The package filing stores (W1) is built from the payload `prove_revision`
 # already read, which the request's blob store remembers: no eighth download.
 FILE_BLOBS = 7
-BLOB_BUDGET = max(SAVE_BLOBS, SIGN_BLOBS, FREEZE_BLOBS, FILE_BLOBS)
+BLOB_BUDGET = max(SAVE_BLOBS, SAVE_FROZEN_BLOBS, SIGN_BLOBS, FREEZE_BLOBS, FILE_BLOBS)
 
 _REVISION = "/api/v1/cases/{case_id}/revisions/{revision_id}"
 
