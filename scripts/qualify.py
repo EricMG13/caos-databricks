@@ -60,7 +60,7 @@ from dataclasses import asdict, dataclass
 from decimal import ROUND_DOWN, Decimal
 from enum import Enum
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
 import psycopg
@@ -843,6 +843,19 @@ def _environment() -> tuple[str, str, str] | None:
             file=sys.stderr,
         )
         return None
+    keys = parse_qs(urlsplit(admin_url).query, keep_blank_values=True)
+    if any(key.lower() in ("dbname", "service") for key in keys):
+        # libpq reads a `dbname` parameter ahead of the URL's path (an empty one
+        # too, which means `postgres`), and a `service` entry may supply one, so
+        # every database URL built from this one would reach another database
+        # than the one minted or asked for (N236). The URL is not echoed.
+        print(
+            "CAOS_QUALIFY_POSTGRES_URL carries a dbname or service parameter: it"
+            " would override the run's database; name the server alone; nothing"
+            " was spent",
+            file=sys.stderr,
+        )
+        return None
     model_price = os.environ.get("CAOS_MODEL_PRICE")
     if not model_price:
         print(
@@ -925,6 +938,14 @@ def _database_url(admin_url: str, database: str) -> str:
     return urlunsplit(urlsplit(admin_url)._replace(path=f"/{database}"))
 
 
+def _database_exists(admin_url: str, database: str) -> bool:
+    with psycopg.connect(admin_url, autocommit=True) as admin:
+        found = admin.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", (database,)
+        ).fetchone()
+    return found is not None
+
+
 def _create_database(admin_url: str) -> tuple[str, str]:
     """A fresh database on the persistent server: its name and its URL."""
     database = f"caos_qualify_{uuid4().hex}"
@@ -981,6 +1002,24 @@ def _refused(code: str) -> None:
     print(f"{code}: the set was refused; nothing was spent", file=sys.stderr)
 
 
+def _resumed_from(
+    admin_url: str,
+    run_url: str,
+    harness: Harness,
+    qualification: QualificationSet,
+    args: argparse.Namespace,
+) -> tuple[PreparedCase, ...]:
+    """The pins of the database `--resume` names. A database the server does
+    not have holds no pin (N236): asked of the server, as a failed connect
+    carries no code."""
+    if not _database_exists(admin_url, args.resume):
+        raise PreflightRefusal(PreflightCode.RESUME_NO_PIN)
+    with connect(run_url) as conn:
+        return _resumed_pins(
+            conn, harness, qualification, args.resume, args.resume_token
+        )
+
+
 def _opened(
     args: argparse.Namespace,
     qualification: QualificationSet,
@@ -997,10 +1036,7 @@ def _opened(
         else:
             database = args.resume
             run_url = _database_url(admin_url, database)
-            with connect(run_url) as conn:
-                resumed = _resumed_pins(
-                    conn, harness, qualification, database, args.resume_token
-                )
+            resumed = _resumed_from(admin_url, run_url, harness, qualification, args)
     except (PreflightRefusal, Refusal) as refused:
         _refused(refused.code.value)
         return None
