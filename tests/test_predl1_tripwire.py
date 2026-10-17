@@ -213,3 +213,83 @@ def test_the_current_build_boots_again_over_its_own_tripwire(
             "SELECT count(*) FROM pg_class c JOIN pg_namespace n"
             " ON n.oid = c.relnamespace WHERE n.nspname = 'public'"
         ).fetchone() == (0,)
+
+
+def _rows_written(admin_url: str, role: str) -> int:
+    """How many rows the tripwire left in the role's schema, 0 when none."""
+    with psycopg.connect(admin_url, autocommit=True) as admin:
+        table = f'"{role}".store_schema'
+        if admin.execute("SELECT to_regclass(%s)", (table,)).fetchone() == (None,):
+            return 0
+        row = admin.execute(
+            sql.SQL("SELECT count(*) FROM {}.store_schema").format(sql.Identifier(role))
+        ).fetchone()
+        assert row is not None
+        return int(row[0])
+
+
+@pytest.mark.parametrize(
+    "who, grant, premade_table",
+    [
+        ("squatter", False, False),
+        ("squatter", True, False),
+        ("squatter", True, True),
+        ("app", False, False),
+    ],
+    ids=["bare-schema", "granted-schema", "granted-schema-and-table", "app-owned-open"],
+)
+def test_a_role_schema_another_role_can_reach_is_refused_and_nothing_is_written(
+    empty_database: str, who: str, grant: bool, premade_table: bool
+) -> None:
+    """The schema exists before the migration (the gap the create-then-check
+    order closes: the check reads what exists after `CREATE ... IF NOT EXISTS`,
+    in the migration's own transaction). It is refused and no row is written:
+    a schema a co-tenant made, bare or granted to the app, with or without a
+    table of its own; and one the app owns in which another role holds CREATE."""
+    app_role, other = _fresh_role(), _fresh_role()
+    with _roles(empty_database, app_role, other) as urls:
+        app = sql.Identifier(app_role)
+        maker = urls[other] if who == "squatter" else urls[app_role]
+        with psycopg.connect(maker, autocommit=True) as made:
+            made.execute(sql.SQL("CREATE SCHEMA {}").format(app))
+            if who == "app":
+                made.execute(
+                    sql.SQL("GRANT CREATE ON SCHEMA {} TO {}").format(
+                        app, sql.Identifier(other)
+                    )
+                )
+            if grant:
+                made.execute(
+                    sql.SQL("GRANT USAGE, CREATE ON SCHEMA {} TO {}").format(app, app)
+                )
+            if premade_table:
+                made.execute(
+                    sql.SQL(
+                        "CREATE TABLE {}.store_schema (only_row boolean PRIMARY KEY"
+                        " DEFAULT true CHECK (only_row), applied_digest text NOT NULL)"
+                    ).format(app)
+                )
+                made.execute(
+                    sql.SQL("GRANT ALL ON {}.store_schema TO {}").format(app, app)
+                )
+        with connect(urls[app_role]) as conn:
+            with pytest.raises(Refusal) as refused:
+                apply_schema(conn)
+        assert refused.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+        assert _rows_written(empty_database, app_role) == 0
+
+
+def test_a_clean_schema_the_app_role_already_owns_still_boots(
+    empty_database: str, tmp_path: Path
+) -> None:
+    """A dev role that made its own schema of that name: adopted, and the old
+    build still refuses the store."""
+    app_role = _fresh_role()
+    with _roles(empty_database, app_role, public_create=True) as urls:
+        with psycopg.connect(urls[app_role], autocommit=True) as mine:
+            mine.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(app_role)))
+        with connect(urls[app_role]) as conn:
+            apply_schema(conn)
+            verify_schema(conn)
+        assert _rows_written(empty_database, app_role) == 1
+        assert _boot_old_build(tmp_path, urls[app_role]) == "REFUSED STORE_SCHEMA_DRIFT"
