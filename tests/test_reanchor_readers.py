@@ -12,10 +12,13 @@ such line) rather than search the run's whole capture again.
 from __future__ import annotations
 
 import shutil
+import traceback
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
+import psycopg
 import pytest
 from canonical_fixtures import CanonicalCompletions
 from conftest import _url_for, approve_run, tamper
@@ -35,6 +38,7 @@ from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import (
     Replayed,
     Verdict,
+    _pinned_deliveries,
     _pinned_members,
     replay_billed,
 )
@@ -311,3 +315,31 @@ def test_withdrawing_the_cited_source_is_source_not_pinned(paged: _Harness) -> N
         )
     harness.conn.rollback()
     assert gone.value.code is RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED
+
+
+def test_a_store_fault_reading_the_pinned_blocks_is_store_unavailable(
+    paged: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N231(4): the pin's blocks are read as `read_run_blocks` reads them, so
+    a database fault is `STORE_UNAVAILABLE` with nothing the statement quotes;
+    a run with no pin stays `RUN_INPUT_INVALID` (F677)."""
+    harness = paged
+    execute: Any = psycopg.Connection.execute
+
+    def fail(c: StoreConnection, query: str, *args: object, **kwargs: object) -> object:
+        if query.startswith("SELECT b.source_id, b.block_id, b.page, b.text"):
+            return execute(c, 'SELECT "private evidence"')
+        return execute(c, query, *args, **kwargs)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(psycopg.Connection, "execute", fail)
+        with pytest.raises(Refusal) as faulted:
+            _pinned_deliveries(harness.conn, harness.run_id)
+    harness.conn.rollback()
+    assert faulted.value.code is RefusalCode.STORE_UNAVAILABLE
+    assert faulted.value.__cause__ is None
+    assert "private evidence" not in "".join(traceback.format_exception(faulted.value))
+    with pytest.raises(Refusal) as unpinned:
+        _pinned_deliveries(harness.conn, uuid4())
+    harness.conn.rollback()
+    assert unpinned.value.code is RefusalCode.RUN_INPUT_INVALID

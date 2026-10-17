@@ -1815,8 +1815,12 @@ def _pinned_deliveries(conn: StoreConnection, run_id: UUID) -> list[Delivery]:
     """Every block the run's pin captured, in the pack's own order, as
     `_delivered` hands them but without its liveness count (`read_run_blocks`
     refuses a short delivery): what a re-anchoring reader selects from. Empty
-    pin is `RUN_INPUT_INVALID`."""
-    rows = conn.execute(_PINNED_DELIVERIES, (run_id,)).fetchall()
+    pin is `RUN_INPUT_INVALID` (F677); a database fault is `STORE_UNAVAILABLE`,
+    typed and `from None` as `read_run_blocks` raises it."""
+    try:
+        rows = conn.execute(_PINNED_DELIVERIES, (run_id,)).fetchall()
+    except psycopg.Error:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
     if not rows:
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
     return [
