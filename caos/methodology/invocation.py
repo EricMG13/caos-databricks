@@ -22,6 +22,7 @@ import json
 import re
 import threading
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import replace
 from typing import Any
 from uuid import UUID
@@ -88,7 +89,7 @@ from caos.store.run_inputs import (
     load_run_input,
 )
 from caos.store.runs import MAX_ATTEMPT_ORDINAL, attempt_ordinal
-from caos.store.source_sets import SourceSet
+from caos.store.source_sets import SourceSet, SourceSetMember
 
 _CATALOG = "references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
 
@@ -1045,6 +1046,101 @@ def _delivery_section(
     return _CONSUMER_PAGE_MAP.format(tag=tag, body=body)
 
 
+# N143(c): what CP-5 is told on its first attempt under the credit screen. It
+# is the comparison `owner_restriction_gaps` refuses on, which a guided retry
+# names the dropped items of (F510), said before the answer is written.
+_OWNER_RESTRICTIONS = (
+    "\n--- HOST OWNER RESTRICTIONS {tag} (host-owned note) ---\n"
+    "Your handoff must carry every restriction the upstream handoffs above"
+    " carry: its qa_status must be Restricted while an upstream handoff's is{held},"
+    " and its limitation_flags and validation_warnings must each list every item"
+    " of the upstream handoffs' own, as written, besides yours. A handoff that"
+    " drops one is refused.\n"
+    "{lists}"
+    "--- END HOST OWNER RESTRICTIONS {tag} ---\n"
+)
+
+
+def _owner_items(
+    contract: VendorContract,
+    upstream: Sequence[tuple[UpstreamRef, bytes]],
+    keys: Sequence[str],
+) -> tuple[list[str], dict[str, dict[str, list[str]]]] | None:
+    """The upstream owners that are Restricted, and for each front matter list
+    in `keys` every item with the owners that carry it; None when any handoff
+    is unreadable to the vendor parser, so no half-read list is ever shown."""
+    restricted: list[str] = []
+    items: dict[str, dict[str, list[str]]] = {key: {} for key in keys}
+    with suppress(Exception):  # a handoff the parser cannot read is no guidance
+        for ref, data in upstream:
+            fields = contract.validate_handoff.validate_text(data.decode()).fields
+            if fields["qa_status"] == "Restricted":
+                restricted.append(ref.module_id)
+            for key in keys:
+                for item in fields[key]:
+                    items[key].setdefault(str(item), []).append(ref.module_id)
+        return restricted, items
+    return None
+
+
+def _owner_restrictions_section(
+    contract: VendorContract,
+    identity: HostIdentity,
+    upstream: Sequence[tuple[UpstreamRef, bytes]],
+    tag: str = "",
+) -> str:
+    """CP-5's owner-restriction rule with its items, or nothing (N143(c)).
+
+    Only CP-5 under `CREDIT_SCREEN_SELECTION` is held to the rule. The items
+    are the direct upstream handoffs' own front matter, read as acceptance
+    reads it, each quoted once with every owner that carries it. A handoff
+    the vendor parser cannot read leaves the section out: it is guidance,
+    and acceptance (`verify_owner_restrictions`) is unchanged and still
+    refuses a handoff that drops an item.
+    """
+    from caos.methodology.verification import (  # a cycle at import time
+        CREDIT_SCREEN_SELECTION,
+        OWNER_KEYS,
+    )
+
+    if (
+        identity.module_id != "CP-5"
+        or (
+            identity.profile_id,
+            identity.selection_id,
+        )
+        != CREDIT_SCREEN_SELECTION
+    ):
+        return ""
+    read = _owner_items(contract, upstream, OWNER_KEYS)
+    if read is None:
+        return ""
+    restricted, items = read
+    lists = "".join(
+        f"Required in {key}: "
+        + ", ".join(
+            f"«{item}» (from {', '.join(dict.fromkeys(owners))})"
+            for item, owners in found.items()
+        )
+        + "\n"
+        for key, found in items.items()
+        if found
+    )
+    if not restricted and not lists:
+        return ""
+    held = (
+        f" (Restricted: {', '.join(dict.fromkeys(restricted))})" if restricted else ""
+    )
+    return _OWNER_RESTRICTIONS.format(tag=tag, held=held, lists=lists)
+
+
+def _evidence_order(member: SourceSetMember) -> tuple[bytes, str, UUID]:
+    """Where the evidence puts a source (D113): its filename bytewise
+    (`COLLATE "C"` in `read_run_blocks`), then document digest, then
+    `source_id`."""
+    return (member.filename.encode("utf-8"), member.document_sha256, member.source_id)
+
+
 def _source_preparation_section(
     source_set: SourceSet | None,
     tag: str,
@@ -1055,6 +1151,9 @@ def _source_preparation_section(
     Every source says how its evidence was delivered (§102): `PAGE_MAP` with
     its map fields (§98), and one note on what a map is; otherwise `WHOLE`, so
     CP-0 never reads the page-map rule onto a source it was handed entire.
+    The members are listed in the evidence's own order (`_evidence_order`,
+    N166), not the store's `source_id` order, so a run's block reads like its
+    evidence; the set fingerprint sorts them itself and does not move.
     """
     if source_set is None:
         return ""
@@ -1086,7 +1185,7 @@ def _source_preparation_section(
                 if member.source_id in maps
                 else {"evidence_delivery": "WHOLE"}
             )
-            for member in source_set.members
+            for member in sorted(source_set.members, key=_evidence_order)
         ],
     }
     body = json.dumps(metadata, sort_keys=True, ensure_ascii=False, indent=2)
@@ -1373,6 +1472,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _authority_sections(authority, "")
         + _upstream_section(upstream, uses, owned)
         + _citation_register(upstream, upstream_citations, "", upstream_unverified)
+        + _owner_restrictions_section(contract, identity, upstream)
         + _research_section(identity)
         + _command_section(identity)
         + _source_preparation_section(source_set, "", page_maps)
@@ -1415,6 +1515,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _authority_sections(authority, tag)
         + _upstream_section(upstream, uses, owned, tag)
         + _citation_register(upstream, upstream_citations, tag, upstream_unverified)
+        + _owner_restrictions_section(contract, identity, upstream, tag)
         + _research_section(identity, tag)
         + _command_section(identity, tag)
         + _source_preparation_section(source_set, tag, page_maps)

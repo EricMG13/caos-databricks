@@ -181,3 +181,19 @@ def test_the_repair_block_does_not_call_the_carried_answer_the_previous_one() ->
     assert "Your previous answer" not in block
     assert "An earlier answer of yours was refused" in block
     assert "That answer, as the host received it" in block
+
+
+def test_an_unreadable_upstream_handoff_leaves_the_owner_section_out() -> None:
+    """The section is guidance: a handoff the vendor parser cannot read shows
+    no half-read list, and acceptance is unchanged."""
+    route = resolve_route(CATALOG, "LITE_CREDIT_22", SCREEN)
+    first = _on(route, "CP-0")
+    good = handoff_markdown(first, authored={"limitation_flags": ["FLAG_ONE"]})
+    junk = b"not a handoff"
+    second = _on(route, "CP-L10", (upstream_ref(first, good),))
+    prompt = _built(
+        route,
+        "CP-5",
+        ((upstream_ref(first, good), good), (upstream_ref(second, junk), junk)),
+    )
+    assert "HOST OWNER RESTRICTIONS" not in prompt
