@@ -64,7 +64,7 @@ describe("Upload", () => {
     vi.stubGlobal("fetch", fetch);
     try {
       mount(live);
-      const input = screen.getByLabelText("Documents to admit");
+      const input = screen.getByLabelText("Choose documents");
       const submit = screen.getByRole("button", { name: "Admit sources" });
       fireEvent.change(input, { target: { files: [new File(["one"], "first.txt")] } });
       fireEvent.click(submit);
@@ -78,6 +78,22 @@ describe("Upload", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  test("the file input is named by the one label a sighted reader sees (WCAG 2.5.3)", () => {
+    // N113: it was "Choose documents" beside a visible, aria-hidden
+    // "Choose documents", so a voice user saying what they see found nothing.
+    const live: UploadDocument = {
+      ...fixture,
+      chrome: { ...fixture.chrome, actions: [{ action: "ADMIT_SOURCES", refusal: null }] },
+    };
+    mount(live);
+    const input = screen.getByLabelText("Choose documents") as HTMLInputElement;
+    expect(input.labels).toHaveLength(1);
+    const label = input.labels![0]!;
+    expect(label).toHaveTextContent("Choose documents");
+    expect(label.closest("[aria-hidden='true']")).toBeNull();
+    expect(label.classList.contains("sr-only")).toBe(false);
   });
 
   test("a parent source pack wins over a late local refresh", async () => {
@@ -104,7 +120,7 @@ describe("Upload", () => {
     vi.stubGlobal("fetch", fetch);
     try {
       const view = mount(live);
-      fireEvent.change(screen.getByLabelText("Documents to admit"), {
+      fireEvent.change(screen.getByLabelText("Choose documents"), {
         target: { files: [new File(["one"], "first.txt")] },
       });
       fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
@@ -254,7 +270,7 @@ describe("Upload", () => {
 
     mount(live);
     const file = new File(["contents"], "new-filing.pdf", { type: "application/pdf" });
-    const input = screen.getByLabelText("Documents to admit");
+    const input = screen.getByLabelText("Choose documents");
     // The workspace's own button and the names chosen, not the browser's
     // "No file chosen"; still the file input it labels (brief 6.10).
     const chosen = document.querySelector("[data-admit-chosen]")!;
@@ -294,7 +310,7 @@ describe("Upload", () => {
 
     mount(live);
     const file = new File(["contents"], "new-filing.pdf", { type: "application/pdf" });
-    const input = screen.getByLabelText("Documents to admit") as HTMLInputElement;
+    const input = screen.getByLabelText("Choose documents") as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
     expect(input.files).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
@@ -325,7 +341,7 @@ describe("Upload", () => {
     mount(live);
     const fileA = new File(["a"], "a.pdf", { type: "application/pdf" });
     const fileB = new File(["b"], "b.pdf", { type: "application/pdf" });
-    const input = screen.getByLabelText("Documents to admit");
+    const input = screen.getByLabelText("Choose documents");
     const control = screen.getByRole("button", { name: "Admit sources" });
 
     fireEvent.change(input, { target: { files: [fileA] } });
@@ -377,7 +393,7 @@ describe("Upload", () => {
 
     mount(live);
     const file = new File(["contents"], "new-filing.pdf", { type: "application/pdf" });
-    fireEvent.change(screen.getByLabelText("Documents to admit"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Choose documents"), { target: { files: [file] } });
     fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
 
     expect(await screen.findByText(/could not.*refresh|refresh.*failed/i)).toBeInTheDocument();
@@ -557,7 +573,7 @@ describe("Upload", () => {
       .mockResolvedValueOnce(jsonResponse(newer));
     vi.stubGlobal("fetch", fetchSpy);
     const { container } = mount(live);
-    fireEvent.change(screen.getByLabelText("Documents to admit"), {
+    fireEvent.change(screen.getByLabelText("Choose documents"), {
       target: { files: [new File(["a"], "first.txt")] },
     });
     fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
@@ -581,7 +597,7 @@ describe("Upload", () => {
     const fetchSpy = vi.fn(() => new Promise<Response>((resolve) => (answer = resolve)));
     vi.stubGlobal("fetch", fetchSpy);
     const { unmount } = mount(live);
-    fireEvent.change(screen.getByLabelText("Documents to admit"), {
+    fireEvent.change(screen.getByLabelText("Choose documents"), {
       target: { files: [new File(["a"], "first.txt")] },
     });
     fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
@@ -605,7 +621,7 @@ describe("Upload", () => {
       .mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)));
     vi.stubGlobal("fetch", fetchSpy);
     const { container, rerender } = mount(live);
-    fireEvent.change(screen.getByLabelText("Documents to admit"), {
+    fireEvent.change(screen.getByLabelText("Choose documents"), {
       target: { files: [new File(["a"], "first.txt")] },
     });
     fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
@@ -644,7 +660,7 @@ describe("Upload", () => {
         .mockResolvedValueOnce(jsonResponse(live)),
     );
     const { container } = mount(live);
-    const input = screen.getByLabelText("Documents to admit");
+    const input = screen.getByLabelText("Choose documents");
     fireEvent.change(input, { target: { files: [new File(["a"], "first.txt")] } });
     fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
     fireEvent.change(input, { target: { files: [new File(["b"], "second.txt")] } });

@@ -197,7 +197,7 @@ def _cp2d_rows(
     facts: LiquidityFacts,
 ) -> dict[str, list[list[str]]]:
     trace = "Acme liquidity schedule, FY2025"
-    return {
+    rows = {
         "T2E.1": [
             [
                 "acme-liquidity",
@@ -445,6 +445,9 @@ def _cp2d_rows(
             ]
         ],
     }
+    # Fork r17 (N192): T2E.5's amount carries its currency and scale in its own column.
+    rows["T2E.5"] = [[*row[:2], "USD million", *row[2:]] for row in rows["T2E.5"]]
+    return rows
 
 
 def _t8(readiness: dict[str, str]) -> list[list[str]]:
