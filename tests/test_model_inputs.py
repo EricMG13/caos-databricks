@@ -14,7 +14,7 @@ from decimal import ROUND_DOWN, Context, Decimal, localcontext
 
 import pytest
 from canonical_fixtures import BUNDLE
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from caos.calculators.credit_model.assemble import ModelInputs, credit_model
@@ -514,6 +514,28 @@ def test_a_reference_rate_of_none_is_kept_and_not_read_as_null() -> None:
     (facility,) = cp1_registers(tables).facilities
 
     assert facility.reference_rate == "NONE"
+
+
+@pytest.mark.parametrize(
+    ("written", "read"),
+    [
+        ("EBITDA", "ebitda"),
+        ("Adjusted_EBITDA", "adjusted_ebitda"),
+        (" Cash_Interest_Paid ", "cash_interest_paid"),
+        ("Facility:ssn31", "facility:ssn31"),  # the id after it keeps its case
+        ("FACILITY:Ssn31", "facility:Ssn31"),
+        ("facility:ssn31", "facility:ssn31"),
+    ],
+)
+def test_a_pro_forma_metric_id_is_read_in_canonical_case(
+    written: str, read: str
+) -> None:
+    """N202 (c): CP-1's metric ids are lower case; a spelling in another case
+    is the same metric, the facility id after `facility:` as written."""
+    table = replaced(pro_forma_table(), "metric_id", cell(written))
+    registers = cp1_registers(with_table(table))
+
+    assert [a.metric_id for a in registers.pro_forma] == [read]
 
 
 def test_a_missing_pro_forma_register_is_empty() -> None:
@@ -1127,6 +1149,43 @@ def test_a_percent_growth_cell_is_a_fraction_of_at_most_max_decimals(
 
     assert str(growth.value) == str(narrow.value) == fraction
     assert -int(growth.value.as_tuple().exponent) <= model_inputs.MAX_DECIMALS
+
+
+def _growth_of(written: str) -> Decimal:
+    table = drivers(
+        driver(
+            "division_growth",
+            "DIVISION_1",
+            "BASE",
+            "READY",
+            figure(f"{written}%", written),
+        )
+    )
+    (growth,) = division_growth([table])
+    return growth.value
+
+
+@pytest.mark.parametrize("written", ["-0.0000000004", "-0.0000000005", "-0.0000000006"])
+def test_a_percent_growth_that_rounds_to_zero_is_not_a_negative_zero(
+    written: str,
+) -> None:
+    """N202 (b): the fraction of a tiny negative percent rounds to zero, and
+    zero has no sign."""
+    value = _growth_of(written)
+    assert value == 0 and not value.is_signed()
+
+
+@settings(max_examples=100, deadline=None)
+@given(
+    st.decimals(
+        min_value=Decimal("-0.000000002"),
+        max_value=Decimal("0.000000002"),
+        places=10,
+    )
+)
+def test_a_percent_growth_zero_never_carries_a_sign(written: Decimal) -> None:
+    value = _growth_of(f"{written:f}")
+    assert not (value.is_zero() and value.is_signed())
 
 
 def test_a_ready_division_growth_row_in_another_unit_is_refused() -> None:

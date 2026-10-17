@@ -79,11 +79,19 @@ OPENING_INCOMPLETE = "opening stack incomplete"
 HISTORY_INCOMPLETE = "facility history incomplete"
 # A fixed coupon `model_inputs` read as a fraction (`0.065` as 6.5 percent).
 COUPON_AS_FRACTION = "coupon read as a fraction"
+# A spread or floor at or below `projection._WHOLE_PERCENT_MAX` is kept as the
+# basis points CP-1 states, though it reads like a whole percent.
+TERMS_AS_BPS = "spread or floor read as basis points"
 # The notes that carry onto every cell read through `carried`: what a figure
 # leaves out (the two exclusions), and that its coupon was read as a fraction,
 # which is no omission but a reading its readers must see (set on a weighted
 # rate and its interest).
-_CARRIED = (EXCLUDES_FOREIGN, EXCLUDES_UNALLOCATED, COUPON_AS_FRACTION)
+_CARRIED = (
+    EXCLUDES_FOREIGN,
+    EXCLUDES_UNALLOCATED,
+    COUPON_AS_FRACTION,
+    TERMS_AS_BPS,
+)
 
 # A senior row's rank by its security; super senior debt is only "Super
 # senior" where it is secured, so `secured_debt` never counts unsecured or
@@ -109,8 +117,8 @@ def notes_of(note: str | None) -> tuple[str, ...]:
 def carried(cells: Iterable[Cell]) -> str | None:
     """What the cells leave out ("excludes facility in another currency",
     "excludes unallocated CP-CF movements"), a coupon they were priced on
-    read as a fraction, then each part taken as nothing: `zeroed`, for a
-    figure read from them."""
+    read as a fraction, a spread or floor read as basis points, then each
+    part taken as nothing: `zeroed`, for a figure read from them."""
     kept = list(cells)
     found = {part for cell in kept for part in notes_of(cell.note)}
     leaves = (note for note in _CARRIED if note in found)
