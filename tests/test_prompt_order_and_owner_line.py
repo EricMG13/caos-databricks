@@ -29,7 +29,11 @@ from caos.icm import prompt_block
 from caos.methodology.bundle import delivered_authority
 from caos.methodology.executor import Delivery
 from caos.methodology.handoff import HostIdentity, UpstreamRef
-from caos.methodology.invocation import build_handoff_prompt
+from caos.methodology.invocation import (
+    MAX_OWNER_ITEMS,
+    MAX_OWNER_LIST_BYTES,
+    build_handoff_prompt,
+)
 from caos.store.source_sets import SourceSet, SourceSetMember
 
 SCREEN = "LITE_FULL_CREDIT_SCREEN"
@@ -207,3 +211,39 @@ def test_an_unreadable_upstream_handoff_leaves_the_owner_section_out(
         " (TypeError, owner CP-L10)"
     )
     assert "not a handoff" not in caplog.text
+
+
+def _long_owner_line(flags: list[str]) -> str:
+    """The `limitation_flags` line of CP-5's owner block over one upstream
+    handoff carrying `flags`."""
+    route = resolve_route(CATALOG, "LITE_CREDIT_22", SCREEN)
+    first = _on(route, "CP-0")
+    gate = handoff_markdown(first, authored={"limitation_flags": flags})
+    prompt = _built(route, "CP-5", ((upstream_ref(first, gate), gate),))
+    tag = _tag(prompt)
+    start = prompt.index(f"--- HOST OWNER RESTRICTIONS {tag} ")
+    section = prompt[start : prompt.index(f"--- END HOST OWNER RESTRICTIONS {tag} ---")]
+    return next(
+        row
+        for row in section.splitlines()
+        if row.startswith("Required in limitation_flags: ")
+    )
+
+
+def test_a_long_upstream_list_is_bounded_with_a_count_of_the_rest() -> None:
+    """N228(1): the owner block is priced with the request, so a long list
+    shows at most MAX_OWNER_ITEMS items and says how many more are not shown."""
+    line = _long_owner_line([f"FLAG_{n:03d}" for n in range(MAX_OWNER_ITEMS + 30)])
+    assert line.count("«") == MAX_OWNER_ITEMS
+    assert line.endswith(
+        ", and 30 more in the upstream handoffs above, each also required"
+    )
+
+
+def test_a_long_upstream_list_is_bounded_in_bytes() -> None:
+    """N228(1): the byte bound cuts a list of long items before the count."""
+    line = _long_owner_line([f"{n:03d}-" + "x" * 200 for n in range(MAX_OWNER_ITEMS)])
+    shown = line.removeprefix("Required in limitation_flags: ").rsplit(", and ", 1)[0]
+    assert len(shown.encode()) <= MAX_OWNER_LIST_BYTES
+    assert 0 < line.count("«") < MAX_OWNER_ITEMS
+    assert " more in the upstream handoffs above, each also required" in line

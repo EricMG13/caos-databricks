@@ -1062,6 +1062,14 @@ _OWNER_RESTRICTIONS = (
 )
 
 
+# N228(1): the owner block is part of the prompt, priced with the request; a
+# list shows at most this many items and these bytes (at least one), then
+# counts the rest. Acceptance still refuses any dropped item (F510), and a
+# guided retry names it.
+MAX_OWNER_ITEMS = 24
+MAX_OWNER_LIST_BYTES = 3000
+
+
 class _UnreadableHandoff:
     """The documented fail-open of `_owner_items`: a handoff the vendor parser
     cannot read is no guidance, so the error is swallowed and one warning is
@@ -1121,6 +1129,26 @@ def _owner_items(
     return None
 
 
+def _bounded_owner_items(found: Mapping[str, Sequence[str]]) -> str:
+    """One list's items, each with its owners, cut at `MAX_OWNER_ITEMS` items
+    or `MAX_OWNER_LIST_BYTES` bytes (never fewer than one), then the count of
+    the rest and where to find them (acceptance still requires every item)."""
+    shown: list[str] = []
+    size = 0
+    for item, owners in found.items():
+        text = f"«{item}» (from {', '.join(dict.fromkeys(owners))})"
+        size += len(text.encode()) + 2
+        if shown and (len(shown) >= MAX_OWNER_ITEMS or size > MAX_OWNER_LIST_BYTES):
+            break
+        shown.append(text)
+    rest = len(found) - len(shown)
+    return ", ".join(shown) + (
+        f", and {rest} more in the upstream handoffs above, each also required"
+        if rest
+        else ""
+    )
+
+
 def _owner_restrictions_section(
     contract: VendorContract,
     identity: HostIdentity,
@@ -1157,12 +1185,7 @@ def _owner_restrictions_section(
         return ""
     restricted, items = read
     lists = "".join(
-        f"Required in {key}: "
-        + ", ".join(
-            f"«{item}» (from {', '.join(dict.fromkeys(owners))})"
-            for item, owners in found.items()
-        )
-        + "\n"
+        f"Required in {key}: {_bounded_owner_items(found)}\n"
         for key, found in items.items()
         if found
     )
