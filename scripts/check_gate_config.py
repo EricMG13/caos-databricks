@@ -27,11 +27,13 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib.util
+import io
 import json
 import re
 import shlex
 import sys
 import tempfile
+import tokenize
 import tomllib
 from collections.abc import Callable, Iterable, Iterator
 from hashlib import sha256
@@ -241,7 +243,7 @@ PRE_COMMIT_HOOK_BODY: dict[str, list[dict[str, object]]] = {
 # notice (N46): `collect_ignore`/`collect_ignore_glob` drop a file from
 # collection outright, and a collection hook can deselect items the same
 # way pytest_collection_modifyitems already does for `live_provider`. That
-# one use is legitimate and pinned below; anything else is refused.
+# one use is legitimate and pinned with its file; anything else is refused.
 COLLECTION_ASSIGNMENTS = frozenset({"collect_ignore", "collect_ignore_glob"})
 COLLECTION_HOOKS = frozenset(
     {
@@ -250,20 +252,29 @@ COLLECTION_HOOKS = frozenset(
         "pytest_collectstart",
     }
 )  # fmt: skip
-PYTEST_COLLECTION_MODIFYITEMS = (
-    "def pytest_collection_modifyitems(config: pytest.Config, "
-    "items: list[pytest.Item]) -> None:\n"
-    "    live = [item for item in items if item.get_closest_marker"
-    "('live_provider')]\n"
-    "    if not config.getoption('--live-provider'):\n"
-    "        items[:] = [item for item in items if item not in live]\n"
-    "        config.hook.pytest_deselected(items=live)\n"
-    "        return\n"
-    "    missing = [name for name in _LIVE_CONFIGURATION if not "
-    "os.environ.get(name)]\n"
-    "    if live and missing:\n"
-    "        raise pytest.UsageError('live provider tests require: ' + "
-    "', '.join(missing))"
+# `tests/conftest.py` is pinned whole (N109), as CI's parallel jobs are: its
+# hooks, the runtime guard that ends a session whose conftest or test
+# modules implement the hooks that run a test, and every statement that
+# could disarm them. Any edit to it fails the gate until this digest is
+# updated in the same change, where review sees it. The module its
+# `pytest_plugins` names is loaded as a plugin before the guard runs, so it
+# is read under the same rules as every other conftest-loaded module the pin
+# does not cover: no hook, no `pytest_plugins`, no `del`, no attribute or
+# item store, no dynamic route.
+PYTEST_PLUGINS_PIN = ("test_lite_deep_research_route",)
+CONFTEST_PIN = "664d99d52e80e8b13ac8a34be6c68f4dca51d409785540dd8692877766b404ba"
+# Names a conftest uses to install a hook without binding a `pytest_` name:
+# the module namespace, the plugin manager, frames and PEP 562 module
+# attributes, and the builtins that run or rebuild code, each as a name or
+# an attribute (`builtins.exec`; so `re.compile` is refused in a conftest).
+CONFTEST_DYNAMIC_NAMES = frozenset(
+    {
+        "globals", "setattr", "pluginmanager", "__dict__", "_getframe",
+        "f_globals", "__getattr__", "__dir__",
+    }
+)  # fmt: skip
+CONFTEST_DYNAMIC_BUILTINS = frozenset(
+    {"vars", "locals", "exec", "eval", "compile", "__import__"}
 )
 PARITY_PACKAGE = "server"  # the legacy snapshot the goldens describe
 PARITY_CASE_FLOOR = {
@@ -325,6 +336,8 @@ PYTEST_MODULES = {("pytest",): ("pytest",), ("_pytest", "outcomes"): ("pytest",)
 PYTEST_NAMES: dict[tuple[str, ...], str] = {
     ("pytest", "skip"): "skip",
     ("pytest", "importorskip"): "skip",
+    ("pytest", "Skipped"): "skip",
+    ("pytest", "XFailed"): "xfail",
     ("pytest", "mark", "skip"): "skip",
     ("pytest", "mark", "skipif"): "skip",
     ("pytest", "xfail"): "xfail",
@@ -718,25 +731,114 @@ def _gitleaks_ci_problems(root: Path) -> list[str]:
 
 
 def _collection_hook_problems(root: Path) -> list[str]:
-    """Refuse a `conftest.py` that can drop a test with nothing to notice.
+    """Refuse a `conftest.py` that can drop or pass a test with nothing to
+    notice (N109).
 
-    `tests/conftest.py`'s own `pytest_collection_modifyitems` is legitimate
-    -- it is what makes `-m "not live_provider"` a floor rather than an
-    opt-out -- and is pinned to the body it is committed with; any other
-    `collect_ignore`, `collect_ignore_glob` or collection hook, there or in
-    a conftest.py anywhere else under `tests/`, is new and is refused.
+    `tests/conftest.py` is pinned whole by digest. Every other conftest.py
+    (at the root or anywhere under `tests/`) and the module the pinned
+    `pytest_plugins` names are read as their bytes decode, as the importer
+    reads them (a coding cookie other than utf-8 is refused by
+    `_encoding_problems`), and refused for a `pytest_*` binding,
+    `collect_ignore`, any `pytest_plugins`, a `del`, an attribute or item
+    store, a star import, or a name that rebuilds a namespace or runs code
+    (`CONFTEST_DYNAMIC_*`). This is not a proof. The pinned conftest ends a
+    session at run time when a conftest or test module implements a hook that
+    runs a test. Its limit: the gate reads only these files, and any code run
+    by a module it does not read -- a helper a conftest imports, a test
+    module, a fixture -- at import or at any later time (including
+    `config.pluginmanager.register` after both guard calls) can rewrite the
+    guard (`_EXIT`), register a hook, or rebind `request.node.runtest`.
+    Nothing here closes that; review of such code is the control.
     """
     problems: list[str] = []
-    for name in tracked_files(root, "tests/conftest.py", ":(glob)tests/**/conftest.py"):
-        path = root / name
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=name)
-        except (OSError, SyntaxError):
+    names = tracked_files(
+        root, "conftest.py", "tests/conftest.py", ":(glob)tests/**/conftest.py"
+    )
+    if "tests/conftest.py" in names:
+        names += [f"tests/{module}.py" for module in PYTEST_PLUGINS_PIN]
+    for name in dict.fromkeys(names):
+        if name == "tests/conftest.py":
+            problems += _pinned_conftest_problems(root)
+            continue
+        tree = _parsed(root, name)
+        if tree is None:
             problems.append(f"conftest: {name} could not be parsed")
             continue
-        for node in tree.body:
-            problems += _collection_node_problems(name, node)
+        problems += _conftest_tree_problems(name, tree)
     return problems
+
+
+def _pinned_conftest_problems(root: Path) -> list[str]:
+    try:
+        digest = sha256((root / "tests" / "conftest.py").read_bytes()).hexdigest()
+    except OSError:
+        return ["conftest: tests/conftest.py could not be read"]
+    if digest == CONFTEST_PIN:
+        return []
+    return [
+        f"conftest: tests/conftest.py changed (sha256 {digest}); review it, then "
+        "update CONFTEST_PIN in scripts/check_gate_config.py in the same change"
+    ]
+
+
+def _parsed(root: Path, name: str) -> ast.Module | None:
+    """The module as the importer reads it: from its bytes, so a PEP 263
+    coding cookie decodes the same code pytest would run. Bytes that do not
+    decode are a SyntaxError here, so None, never an uncaught decode error."""
+    try:
+        return ast.parse((root / name).read_bytes(), filename=name)
+    except (OSError, SyntaxError):
+        return None
+
+
+# What a text read with `encoding="utf-8"` and the importer agree on. Any
+# other PEP 263 cookie lets one file carry code (a hook) or a comment (a
+# `noqa`) that every gate reading it as utf-8 text cannot see.
+UTF8_ENCODINGS = frozenset({"utf-8", "utf-8-sig"})
+
+
+def _encoding_problems(root: Path) -> list[str]:
+    """Every tracked .py file declares utf-8 or nothing and decodes as it."""
+    problems: list[str] = []
+    for name in tracked_files(root, "*.py"):
+        problem = _file_encoding_problem(root / name)
+        if problem:
+            problems.append(f"encoding: {name} {problem}")
+    return problems
+
+
+def _file_encoding_problem(path: Path) -> str | None:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return "could not be read"
+    try:
+        encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
+    except SyntaxError:
+        return "declares an encoding Python cannot read"
+    if encoding not in UTF8_ENCODINGS:
+        return (
+            f"declares {encoding}; a coding cookie other than utf-8 hides code "
+            "from every gate that reads the file as text"
+        )
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "could not be read as utf-8"
+    return None
+
+
+def _conftest_tree_problems(name: str, tree: ast.Module) -> list[str]:
+    """One conftest-loaded module the pin does not cover: a conftest, or the
+    module the pinned `pytest_plugins` names."""
+    problems: list[str] = []
+    for statement in tree.body:
+        problems += _collection_node_problems(name, statement)
+        for node in ast.walk(statement):
+            problems += _hook_binding_problems(name, node)
+            problems += _dynamic_hook_problems(name, node)
+            problems += _store_problems(name, node)
+    return list(dict.fromkeys(problems))
 
 
 def _collection_node_problems(name: str, node: ast.stmt) -> list[str]:
@@ -749,18 +851,95 @@ def _collection_node_problems(name: str, node: ast.stmt) -> list[str]:
             if isinstance(target, ast.Name) and target.id in COLLECTION_ASSIGNMENTS
         ]
     if isinstance(node, ast.FunctionDef) and node.name in COLLECTION_HOOKS:
-        if name == "tests/conftest.py" and node.name == "pytest_collection_modifyitems":
-            if ast.unparse(node) != PYTEST_COLLECTION_MODIFYITEMS:
-                return [
-                    "conftest: tests/conftest.py's pytest_collection_modifyitems "
-                    "no longer matches what is committed"
-                ]
-            return []
+        return [_refused_hook(name, node.name)]
+    return []
+
+
+def _refused_hook(name: str, hook: str) -> str:
+    return (
+        f"conftest: {name} defines {hook}; it can change what pytest collects or runs"
+    )
+
+
+def _store_problems(name: str, node: ast.AST) -> list[str]:
+    """A `del`, or a store into an attribute or an item (plain, annotated or
+    augmented): each can swap or remove what a guard or a hook calls."""
+    if isinstance(node, ast.Delete):
+        return [f"conftest: {name} uses del; it can remove a hook or a guard"]
+    if isinstance(node, ast.Attribute | ast.Subscript) and not isinstance(
+        node.ctx, ast.Load
+    ):
         return [
-            f"conftest: {name} defines {node.name}; it can change what pytest "
-            "collects or runs"
+            f"conftest: {name} stores into an attribute or item; it can swap "
+            "what a hook or a guard calls"
         ]
     return []
+
+
+def _bound_names(node: ast.AST) -> list[str]:
+    """The names one statement or target binds that pytest could read as a
+    hook: a def, a class, an import alias or a stored name."""
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return [node.name]
+    if isinstance(node, ast.Import | ast.ImportFrom):
+        return [alias.asname or alias.name.split(".")[0] for alias in node.names]
+    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+        return [node.id]
+    return []
+
+
+def _hook_binding_problems(name: str, node: ast.AST) -> list[str]:
+    """A `pytest_*` binding, or any binding of `pytest_plugins`."""
+    return [
+        f"conftest: {name} sets pytest_plugins; it can load a module of hooks "
+        "the gate does not read"
+        if bound == "pytest_plugins"
+        else _refused_hook(name, bound)
+        for bound in _bound_names(node)
+        if bound.startswith("pytest_")
+    ]
+
+
+def _dynamic_use(node: ast.AST) -> str | None:
+    """The name by which one node can build or install a hook, or None."""
+    attributes = CONFTEST_DYNAMIC_NAMES | CONFTEST_DYNAMIC_BUILTINS
+    if isinstance(node, ast.Name) and node.id in attributes:
+        return node.id
+    if isinstance(node, ast.Attribute) and node.attr in attributes:
+        return node.attr
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        return node.name if node.name in CONFTEST_DYNAMIC_NAMES else None
+    if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names):
+        return "a star import"
+    if isinstance(node, ast.Call):
+        return _getattr_use(node, attributes)
+    return None
+
+
+def _getattr_use(call: ast.Call, attributes: frozenset[str]) -> str | None:
+    """A `getattr` whose name is computed, or names one of `attributes`."""
+    if not (
+        isinstance(call.func, ast.Name)
+        and call.func.id == "getattr"
+        and len(call.args) >= 2
+    ):
+        return None
+    wanted = call.args[1]
+    if not (isinstance(wanted, ast.Constant) and isinstance(wanted.value, str)):
+        return "getattr with a computed name"
+    return f"getattr of {wanted.value}" if wanted.value in attributes else None
+
+
+def _dynamic_hook_problems(name: str, node: ast.AST) -> list[str]:
+    """A hook can be installed with no `pytest_` binding: through the module
+    namespace, the plugin manager, a frame, a star import or code built at
+    run time, by name, by attribute (`builtins.exec`) or by `getattr`."""
+    used = _dynamic_use(node)
+    if used is None:
+        return []
+    return [
+        f"conftest: {name} uses {used}; it can register a hook the gate does not read"
+    ]
 
 
 def _parity_problems(root: Path) -> list[str]:
@@ -1479,6 +1658,7 @@ def configuration_problems(root: Path = REPO) -> list[str]:
         + _python_problems(root, project)
         + _hook_problems(root)
         + _gitleaks_ci_problems(root)
+        + _encoding_problems(root)
         + _collection_hook_problems(root)
         + _parity_problems(root)
         + _bundle_problems(root)
@@ -1513,15 +1693,25 @@ def _pytest_bindings(tree: ast.Module) -> dict[str, tuple[str, ...]]:
         if isinstance(node, ast.Import):
             bound.update(_imported(node))
         elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            module = tuple(node.module.split("."))
-            if module in PYTEST_MODULES:
-                bound.update(
-                    {
-                        alias.asname or alias.name: (*module, alias.name)
-                        for alias in node.names
-                    }
-                )
+            bound.update(_from_imported(node.module, node))
     return bound
+
+
+def _from_imported(dotted: str, node: ast.ImportFrom) -> dict[str, tuple[str, ...]]:
+    """What one `from <module> import ...` binds to pytest: the names of
+    `pytest` or `_pytest.outcomes`, and `outcomes` out of `_pytest`."""
+    module = tuple(dotted.split("."))
+    if module == ("_pytest",):
+        return {
+            alias.asname or alias.name: ("_pytest", alias.name)
+            for alias in node.names
+            if alias.name == "outcomes"
+        }
+    if module in PYTEST_MODULES:
+        return {
+            alias.asname or alias.name: (*module, alias.name) for alias in node.names
+        }
+    return {}
 
 
 def _imported(node: ast.Import) -> dict[str, tuple[str, ...]]:
@@ -1537,6 +1727,22 @@ def _imported(node: ast.Import) -> dict[str, tuple[str, ...]]:
     return bound
 
 
+def _imported_by_name(call: ast.Call) -> tuple[str, ...]:
+    """The pytest module a call such as `__import__("pytest")` or
+    `importlib.import_module("_pytest.outcomes")` loads, or `()`."""
+    function = call.func
+    name = function.id if isinstance(function, ast.Name) else ""
+    if isinstance(function, ast.Attribute):
+        name = function.attr
+    argument = call.args[0] if call.args else None
+    if name not in ("__import__", "import_module"):
+        return ()
+    if not (isinstance(argument, ast.Constant) and isinstance(argument.value, str)):
+        return ()
+    path = tuple(argument.value.split("."))
+    return path if path[0] in ("pytest", "_pytest") else ()
+
+
 def _resolved(node: ast.expr, bound: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
     """The pytest path a name or attribute chain resolves to, or `()`;
     `_pytest.outcomes.<name>` is `pytest.<name>`."""
@@ -1545,6 +1751,8 @@ def _resolved(node: ast.expr, bound: dict[str, tuple[str, ...]]) -> tuple[str, .
     elif isinstance(node, ast.Attribute):
         base = _resolved(node.value, bound)
         path = (*base, node.attr) if base else ()
+    elif isinstance(node, ast.Call):
+        path = _imported_by_name(node)
     else:
         return ()
     for prefix, module in PYTEST_MODULES.items():
@@ -1562,13 +1770,33 @@ def _pytest_counts(text: str) -> dict[str, int]:
         return {}
     bound = _pytest_bindings(tree)
     counts: dict[str, int] = {}
-    for node in ast.walk(tree) if bound else []:
-        if not isinstance(node, ast.Name | ast.Attribute):
-            continue
-        kind = PYTEST_NAMES.get(_resolved(node, bound))
+    for node in ast.walk(tree):
+        kind = _pytest_kind(node, bound)
         if kind is not None and not SUPPRESSIONS[kind].search(ast.unparse(node)):
             counts[kind] = counts.get(kind, 0) + 1
     return counts
+
+
+def _pytest_kind(node: ast.AST, bound: dict[str, tuple[str, ...]]) -> str | None:
+    """The suppression kind one node spells: a pytest name, or a `getattr`
+    of one (N109) -- a constant attribute resolves like the dotted form, and
+    a computed one cannot be read, so it counts as a skip."""
+    if isinstance(node, ast.Name | ast.Attribute):
+        return PYTEST_NAMES.get(_resolved(node, bound))
+    if not (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "getattr"
+        and len(node.args) >= 2
+    ):
+        return None
+    base = _resolved(node.args[0], bound)
+    attribute = node.args[1]
+    if not base:
+        return None
+    if isinstance(attribute, ast.Constant) and isinstance(attribute.value, str):
+        return PYTEST_NAMES.get((*base, attribute.value))
+    return "skip"
 
 
 def _measure_suppressions(texts: Iterable[str]) -> dict[str, int]:

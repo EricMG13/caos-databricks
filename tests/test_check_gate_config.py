@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -46,6 +49,7 @@ def _tree(tmp_path: Path) -> Path:
         ".github/workflows/gitleaks.yml",
         ".github/workflows/secrets-weekly.yml",
         "tests/conftest.py",
+        *(f"tests/{module}.py" for module in check_gate_config.PYTEST_PLUGINS_PIN),
     ):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / name, root / name)
@@ -469,6 +473,212 @@ def test_a_job_if_for_an_optional_job_is_not_refused(tmp_path: Path) -> None:
     ]
 
 
+_GUARD_PROJECT_TEST = "def test_a():\n    assert False\n"
+
+
+_EXEC_HOOK = (
+    "import builtins\n"
+    "builtins.exec('def pytest_' + 'pyfunc_call(pyfuncitem): return True')\n"
+)
+
+
+def _guard_project(
+    tmp_path: Path, *, hook_in: str | None, workers: int = 0
+) -> subprocess.CompletedProcess[str]:
+    """A throwaway repository whose `tests/conftest.py` carries the
+    repository's own runtime guard, run from the repository root as CI runs
+    it (outside the guarded directory), with a hook replacing how a test runs
+    placed in a plugin (`-p`), a nested conftest, code built by `exec` in a
+    nested conftest, or nowhere, over one test that fails."""
+    source = (REPO / "tests" / "conftest.py").read_text(encoding="utf-8")
+    [guard] = [
+        ast.get_source_segment(source, node)
+        for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_refuse_run_hooks_from_tests"
+    ]
+    repo = tmp_path / "repo"
+    tests = repo / "tests"
+    (tests / "sub").mkdir(parents=True)
+    (tests / "conftest.py").write_text(
+        "from pathlib import Path\n\nimport pytest\n\n\n"
+        "_EXIT = pytest.exit\n_IS_RELATIVE_TO = Path.is_relative_to\n\n\n"
+        f"{guard}\n\n\n"
+        "def pytest_sessionstart(session):\n"
+        "    _refuse_run_hooks_from_tests(session.config)\n\n\n"
+        "def pytest_collection_modifyitems(config, items):\n"
+        "    _refuse_run_hooks_from_tests(config)\n",
+        encoding="utf-8",
+    )
+    (tests / "sub" / "test_a.py").write_text(_GUARD_PROJECT_TEST)
+    bad = "def pytest_pyfunc_call(pyfuncitem):\n    return True\n"
+    arguments = ["-p", "no:cacheprovider"]
+    if hook_in == "plugin":
+        (tests / "hooks_plugin.py").write_text(bad)
+        arguments += ["-p", "hooks_plugin"]
+    elif hook_in == "nested":
+        (tests / "sub" / "conftest.py").write_text(bad)
+    elif hook_in == "exec":
+        (tests / "sub" / "conftest.py").write_text(_EXEC_HOOK)
+    if workers:
+        arguments += ["-n", str(workers)]
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")
+    }
+    environment["PYTHONPATH"] = str(tests)
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", *arguments, "-q", "tests"],
+        cwd=repo,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_the_runtime_guard_ends_a_session_that_replaces_how_a_test_runs(
+    tmp_path: Path,
+) -> None:
+    """N109 review: a conftest or a plugin module that implements
+    `pytest_pyfunc_call` can return True and pass `assert False`, including
+    one built by `exec` (its code object's file is "<string>", so the guard
+    judges the registering module's file); the guard in the pinned conftest
+    ends the session before it can. A clean session is untouched, with and
+    without xdist workers."""
+    for workers in (0, 2):
+        clean = _guard_project(
+            tmp_path / f"clean{workers}", hook_in=None, workers=workers
+        )
+        assert "1 failed" in clean.stdout, clean.stdout + clean.stderr
+        for where in ("plugin", "nested", "exec"):
+            case = tmp_path / f"{where}{workers}"
+            ended = _guard_project(case, hook_in=where, workers=workers)
+            output = ended.stdout + ended.stderr
+            if not workers:
+                assert "pytest_pyfunc_call is implemented by" in output, output
+            assert "passed" not in output, (where, workers, output)
+            assert ended.returncode != 0, (where, workers, output)
+
+
+def test_the_pinned_conftest_is_pinned_whole(tmp_path: Path) -> None:
+    """N109 re-review: pinning each function by name left the module's other
+    statements free to disarm the guard (`del` of a hook, a store on
+    `pytest.exit`, a swapped `__code__`, an edit of `__builtins__`). The
+    whole file is pinned instead: any edit to it fails the gate until
+    `CONFTEST_PIN` is updated in the same change."""
+    root = _tree(tmp_path)
+    original = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    assert _conftest_problems(root, "tests/conftest.py", original) == []
+    for extra in (
+        "\ndel pytest_sessionstart, pytest_collection_modifyitems\n",
+        "\npytest.exit = lambda *a, **k: None\n",
+        "\n_refuse_run_hooks_from_tests.__code__ = (lambda config: None).__code__\n",
+        "\n__builtins__['getattr'] = None\n",
+        "\n_refuse_run_hooks_from_tests.__defaults__ = None\n",
+        "\nPath.is_relative_to = lambda *arguments: False\n",
+    ):
+        problems = _conftest_problems(root, "tests/conftest.py", original + extra)
+        assert any(
+            problem.startswith("conftest: tests/conftest.py changed")
+            for problem in problems
+        ), (extra, problems)
+
+
+def test_the_pytest_plugins_module_is_read_like_a_conftest(tmp_path: Path) -> None:
+    """N109 re-review: the module the pinned `pytest_plugins` names is loaded
+    as a plugin before the guard runs, so a store there (`sys.modules`, its
+    own module object) disarms the guard; it is read with stores refused, and
+    reported, not skipped, when it does not parse. The committed one passes."""
+    root = _tree(tmp_path)
+    [module] = check_gate_config.PYTEST_PLUGINS_PIN
+    plugin = f"tests/{module}.py"
+    committed = (REPO / plugin).read_text(encoding="utf-8")
+    assert _conftest_problems(root, plugin, committed) == []
+    tampered = committed + (
+        "\nimport sys as _sys\n\n"
+        '_sys.modules["conftest"]._EXIT = lambda *a, **k: None\n'
+        "_sys.modules[__name__].pytest_pyfunc_call = lambda pyfuncitem: True\n"
+    )
+    assert any(
+        problem.startswith(f"conftest: {plugin} stores into an attribute or item")
+        for problem in _conftest_problems(root, plugin, tampered)
+    )
+    assert f"conftest: {plugin} could not be parsed" in _conftest_problems(
+        root, plugin, "def (\n"
+    )
+
+
+def _tracked_bytes(root: Path, name: str, data: bytes) -> None:
+    target = root / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    _git(root, "add", name)
+
+
+# A utf-7 conftest whose hook sits inside what a utf-8 read sees as one
+# comment line: `+AAo-` is a utf-7 newline, so the importer reads a `def`.
+_UTF7_HOOK = (
+    b"# coding: utf-7\n# +AAo-def pytest_pyfunc_call(pyfuncitem):+AAo-    return True\n"
+)
+
+
+def test_a_coding_cookie_other_than_utf_8_is_refused_in_every_tracked_file(
+    tmp_path: Path,
+) -> None:
+    """N109 r4 re-review: the importer honours a PEP 263 cookie, so a utf-7
+    file carries code a utf-8 text read sees as a comment (a hook; a `noqa`
+    under the suppression budget). Conftest-loaded modules are read from
+    their bytes; a cookie other than utf-8 is refused in any tracked .py; an
+    unknown codec or bytes that do not decode are typed problems."""
+    root = _tree(tmp_path)
+    assert any(
+        isinstance(node, ast.FunctionDef) and node.name == "pytest_pyfunc_call"
+        for node in ast.parse(_UTF7_HOOK).body
+    )
+    _tracked_bytes(root, "scripts/declared.py", b"# -*- coding: utf-8 -*-\nx = 1\n")
+    assert check_gate_config._encoding_problems(root) == []
+    _tracked_bytes(root, "tests/zz/conftest.py", _UTF7_HOOK)
+    for name in ("scripts/u7.py", "caos/u7.py"):
+        _tracked_bytes(root, name, b"# coding: utf-7\n# +AAo-x = 1\n")
+    _tracked_bytes(root, "scripts/broken.py", b"# coding: utf-8\nx = '\xff'\n")
+    _tracked_bytes(root, "scripts/unknown.py", b"# coding: no-such-codec\nx = 1\n")
+    _tracked_bytes(root, "tests/broken/conftest.py", b"# coding: utf-8\n\xff\n")
+    refused = check_gate_config._encoding_problems(root)
+    for name in ("tests/zz/conftest.py", "scripts/u7.py", "caos/u7.py"):
+        assert any(
+            problem.startswith(f"encoding: {name} declares utf-7")
+            for problem in refused
+        ), (name, refused)
+    assert "encoding: scripts/broken.py could not be read as utf-8" in refused
+    assert "encoding: tests/broken/conftest.py could not be read as utf-8" in refused
+    assert (
+        "encoding: scripts/unknown.py declares an encoding Python cannot read"
+        in refused
+    )
+    conftests = check_gate_config._collection_hook_problems(root)
+    assert "conftest: tests/broken/conftest.py could not be parsed" in conftests
+    assert any(
+        problem.startswith("conftest: tests/zz/conftest.py defines pytest_")
+        for problem in conftests
+    ), conftests
+    assert set(refused) <= set(check_gate_config.configuration_problems(root))
+
+
+def test_the_pinned_conftest_is_byte_pinned_in_gitattributes() -> None:
+    """N109 re-review: a checkout converting line endings would fail the
+    sha256 pin; `.gitattributes` holds the bytes (`-text`)."""
+    git = shutil.which("git")
+    assert git is not None
+    attribute = subprocess.run(
+        [git, "check-attr", "text", "tests/conftest.py"],
+        cwd=REPO,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert attribute == "tests/conftest.py: text: unset"
+
+
 def _edit_ci(root: Path, edit: Callable[[dict[str, Any]], None]) -> None:
     """Rewrite the copied workflow after `edit` has changed its parsed jobs."""
     ci = root / ".github" / "workflows" / "ci.yml"
@@ -693,10 +903,11 @@ def test_the_gitleaks_dir_scan_of_the_uncommitted_tree_is_required(
 
 def test_a_conftest_collection_hook_is_refused_unless_pinned(tmp_path: Path) -> None:
     """N46: `tests/conftest.py`'s `pytest_collection_modifyitems` is what
-    makes `-m "not live_provider"` a floor rather than an opt-out, so it is
-    pinned rather than banned outright; a change to it, a `collect_ignore`
-    anywhere, or a second collection hook elsewhere under `tests/` all drop
-    a test from a run with nothing in the tally to notice, and are refused."""
+    makes `-m "not live_provider"` a floor rather than an opt-out, so the
+    file is pinned whole rather than banned outright (a change to it fails
+    until the pin moves); a `collect_ignore` or a collection hook in any
+    other conftest under `tests/` drops a test from a run with nothing in the
+    tally to notice, and is refused."""
     root = _tree(tmp_path)
     assert check_gate_config._collection_hook_problems(root) == []
 
@@ -709,19 +920,24 @@ def test_a_conftest_collection_hook_is_refused_unless_pinned(tmp_path: Path) -> 
     )
     assert tampered != original
     conftest.write_text(tampered, encoding="utf-8")
-    assert (
-        "conftest: tests/conftest.py's pytest_collection_modifyitems no longer "
-        "matches what is committed" in check_gate_config._collection_hook_problems(root)
-    )
-
-    conftest.write_text(original + "\ncollect_ignore = ['test_security.py']\n")
-    assert (
-        "conftest: tests/conftest.py sets collect_ignore; it can drop a file "
-        "from collection with nothing reported"
-        in check_gate_config._collection_hook_problems(root)
+    [problem] = check_gate_config._collection_hook_problems(root)
+    assert problem.startswith("conftest: tests/conftest.py changed (sha256 ")
+    assert problem.endswith(
+        "update CONFTEST_PIN in scripts/check_gate_config.py in the same change"
     )
 
     conftest.write_text(original, encoding="utf-8")
+    other = root / "tests" / "other" / "conftest.py"
+    other.parent.mkdir(parents=True)
+    other.write_text("collect_ignore = ['test_security.py']\n", encoding="utf-8")
+    _git(root, "add", "tests/other/conftest.py")
+    assert (
+        "conftest: tests/other/conftest.py sets collect_ignore; it can drop a file "
+        "from collection with nothing reported"
+        in check_gate_config._collection_hook_problems(root)
+    )
+    other.write_text("", encoding="utf-8")
+
     nested = root / "tests" / "sub" / "conftest.py"
     nested.parent.mkdir(parents=True)
     nested.write_text(
@@ -734,6 +950,91 @@ def test_a_conftest_collection_hook_is_refused_unless_pinned(tmp_path: Path) -> 
         "change what pytest collects or runs"
         in check_gate_config._collection_hook_problems(root)
     )
+
+
+def _conftest_problems(root: Path, name: str, text: str) -> list[str]:
+    """What the gate says once the tracked `name` holds `text`."""
+    target = root / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    _git(root, "add", name)
+    return check_gate_config._collection_hook_problems(root)
+
+
+# Every `pytest_*` binding form the AST reads: a def, an async def, an
+# assignment, an import alias, nested or not ("it can change what pytest
+# collects or runs").
+_HOOK_CONFTESTS = (
+    "def pytest_pyfunc_call(pyfuncitem):\n    return True\n",
+    "def pytest_runtest_protocol(item, nextitem):\n    return True\n",
+    "async def pytest_runtest_call(item):\n    return True\n",
+    "pytest_runtest_protocol = lambda item, nextitem: True\n",
+    "import os\nif os:\n    def pytest_pyfunc_call(pyfuncitem):\n        return True\n",
+    "from helper import pytest_pyfunc_call\n",
+    "from helper import hook as pytest_runtest_protocol\n",
+)
+# Every binding of `pytest_plugins`: plain, augmented, annotated, a tuple
+# target, a loop target ("sets pytest_plugins").
+_PLUGINS_CONFTESTS = (
+    'pytest_plugins = ["evil"]\n',
+    "pytest_plugins += ('evil',)\n",
+    "pytest_plugins: tuple[str, ...] = ('evil',)\n",
+    "pytest_plugins, _z = ('evil',), 1\n",
+    "for pytest_plugins in [('evil',)]:\n    pass\n",
+)
+# A hook installed with no `pytest_` binding (the namespace, the plugin
+# manager, frames, PEP 562, a star import, the builtins that run code by
+# name or by attribute), and a store or `del` that can disarm the guard.
+_DYNAMIC_CONFTESTS = (
+    "globals()['pytest_' + 'pyfunc_call'] = lambda pyfuncitem: True\n",
+    "import sys\nsetattr(sys.modules[__name__], 'x', 1)\n",
+    "def pytest_configure(config):\n    config.pluginmanager.register(1)\n",
+    "vars()['pytest_' + 'pyfunc_call'] = lambda pyfuncitem: True\n",
+    "locals()['x'] = 1\n",
+    "exec('def pytest_pyfunc_call(pyfuncitem): return True')\n",
+    "eval('1')\n",
+    "compile('1', 'x', 'eval')\n",
+    "__import__('builtins')\n",
+    "import sys\nsys._getframe().f_globals['x'] = 1\n",
+    "from helper import *\n",
+    "def __getattr__(name):\n    return None\n",
+    "def __dir__():\n    return ['pytest_pyfunc_call']\n",
+    "import builtins\nbuiltins.exec('1')\n",
+    "import builtins\nbuiltins.eval('1')\n",
+    "import builtins\nbuiltins.compile('1', 'x', 'eval')\n",
+    "import builtins\ngetattr(builtins, 'ex' + 'ec')('1')\n",
+    "import builtins\ngetattr(builtins, 'exec')('1')\n",
+    "import os\nos.environ = {}\n",
+    "import os\nos.environ['x'] = '1'\n",
+    "import os\nos.counter += 1\n",
+    "import os\nos.counter: int = 1\n",
+    "x = 1\ndel x\n",
+    "import os\ndel os.environ['x']\n",
+    "def f(o):\n    o.x = 1\n",
+)
+
+
+def test_a_conftest_that_can_pass_a_test_unrun_is_refused(tmp_path: Path) -> None:
+    """N109 and its reviews: a conftest.py (at the root or anywhere under
+    `tests/`) can define `pytest_pyfunc_call`, return True and pass a test
+    without running it, load a module of hooks through `pytest_plugins`,
+    install a hook with no `pytest_` binding, or disarm the guard with a
+    store; each form is refused. The runtime guard covers what a name list
+    cannot."""
+    root = _tree(tmp_path)
+    assert check_gate_config._collection_hook_problems(root) == []
+    cases = [
+        *((t, "it can change what pytest collects or runs") for t in _HOOK_CONFTESTS),
+        *((t, "sets pytest_plugins") for t in _PLUGINS_CONFTESTS),
+        *((t, "; it can ") for t in _DYNAMIC_CONFTESTS),
+    ]
+    for index, (text, expected) in enumerate(cases):
+        name = "conftest.py" if index == 0 else f"tests/case{index}/conftest.py"
+        problems = _conftest_problems(root, name, text)
+        assert any(
+            problem.startswith(f"conftest: {name} ") and expected in problem
+            for problem in problems
+        ), (text, problems)
 
 
 def test_the_ci_file_s_commands_are_read_as_the_runner_runs_them() -> None:
