@@ -1517,7 +1517,8 @@ def _odd_quarters(
     notes: list[str] = []
     for spec in found:
         dated = _spec_dated(spec, periods)
-        note = odd_quarter(None if dated is None else dated[1] - dated[0] + 1)
+        days = None if dated is None else dated[1] - dated[0] + 1
+        note = odd_quarter(spec.own or spec.column.column_id, days)
         if note is not None:
             notes.append(note)
     return tuple(notes)

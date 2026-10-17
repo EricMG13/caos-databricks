@@ -137,12 +137,12 @@ def odd_length(days: int | None) -> str | None:
 QUARTER_DAYS = (89, 98)
 
 
-def odd_quarter(days: int | None) -> str | None:
-    """The note on a quarter of `days` days outside `QUARTER_DAYS`; None
-    inside them or where unknown."""
+def odd_quarter(period_id: str, days: int | None) -> str | None:
+    """The note on the quarter `period_id` of `days` days outside
+    `QUARTER_DAYS`; None inside them or where unknown."""
     if days is None or QUARTER_DAYS[0] <= days <= QUARTER_DAYS[1]:
         return None
-    return f"quarter of {days} days"
+    return f"quarter {period_id} of {days} days"
 
 
 def odd_year(period_id: str, short: bool) -> str:
