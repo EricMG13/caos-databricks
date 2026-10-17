@@ -27,6 +27,7 @@ from uuid import UUID
 
 import pytest
 from canonical_fixtures import (
+    BUNDLE,
     CATALOG,
     CONTRACT,
     QUOTE,
@@ -39,6 +40,8 @@ from canonical_fixtures import (
     with_markers,
 )
 from conftest import approve_run, priced
+from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import strategies as st
 from test_canonical_execution import _node, harness, route
 from test_execution_freshness import _Harness
 from test_loop_charges import ESTIMATE
@@ -72,7 +75,7 @@ from caos.methodology.handoff import (
 )
 from caos.methodology.runner import ModuleProvider
 from caos.methodology.selection import Basis, Selection
-from caos.methodology.vendor import cached_contract, catalog
+from caos.methodology.vendor import VendorContract, cached_contract, catalog
 from caos.pricing import ModelPrice, priced_request
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
@@ -3349,14 +3352,35 @@ def test_the_vendor_helpers_the_t8_locator_calls_exist_at_this_build(name: str) 
     assert callable(getattr(CONTRACT.navigation, name))
 
 
-def test_t8_locator_logs_a_failure_by_type_only(
+def test_t8_locator_does_not_log_an_answer_with_no_table(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Important 3: a locator failure is a typed, text-free log event."""
+    """M-2: an answer with no T8 table is a normal path, not a locator
+    failure: nothing is logged for it."""
     secret = "SECRET-ANSWER-TEXT"
     with caplog.at_level("WARNING", logger=handoff.__name__):
         assert handoff._t8_fault_row(CONTRACT, {}, secret, "x") is None
-    assert caplog.records, "the failure is logged"
+    assert [record.getMessage() for record in caplog.records] == []
+    assert secret not in caplog.text
+
+
+def test_t8_locator_logs_a_helper_failure_as_exactly_its_type(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M-3: a failing vendor helper (a re-pin changed its shape) is logged as
+    the type name and nothing else: not its message, not the answer."""
+    secret = "SECRET-ANSWER-TEXT"
+    table = "| Sequence | Module |\n| --- | --- |\n| 1 | " + secret + " |\n"
+
+    def broken(_line: str) -> tuple[str, ...]:
+        raise TypeError(secret)
+
+    monkeypatch.setattr(CONTRACT.navigation, "_table_cells", broken)
+    with caplog.at_level("WARNING", logger=handoff.__name__):
+        assert handoff._t8_fault_row(CONTRACT, {}, table, "x") is None
+    assert [record.getMessage() for record in caplog.records] == [
+        "t8 fault row not located: TypeError"
+    ]
     assert secret not in caplog.text
 
 
@@ -3374,3 +3398,135 @@ def test_t8_relay_prefers_the_template_to_an_id_equal_to_its_words(
     assert line == (
         "navigation: CP-0 recommends unknown or non-navigable module: row 1"
     ), line
+
+
+def _one_cell(cells: list[str]) -> None:
+    cells[:] = cells[:1]
+
+
+@pytest.mark.parametrize("row", [1, 2])
+def test_t8_relay_survives_a_one_cell_row(harness: _Harness, row: int) -> None:
+    """I-1: a data row of one cell (`| 2 |`) is refused for its width, a fault
+    that names no id; the relay says so and does not read a module cell the
+    row does not have (it raised IndexError into the retry path)."""
+    [line] = _navigation_lines(harness, _one_cell, row=row)
+    assert line == ("navigation: CP-0 T8 row width does not match its header"), line
+
+
+def test_t8_messages_keep_an_id_free_fault_of_a_one_cell_row(
+    harness: _Harness,
+) -> None:
+    """I-1, at the function the retry path calls."""
+    contract = cached_contract(harness.bundle)
+    text = _t8_text(contract.navigation.NEW_HEADERS, [["1"]])
+    assert handoff._t8_messages(contract, catalog(harness.bundle), text) == [
+        ("navigation", "CP-0 T8 row width does not match its header")
+    ]
+
+
+def test_t8_relay_keeps_an_id_free_fault_of_a_row_with_an_empty_module(
+    harness: _Harness,
+) -> None:
+    """M-1: the width fault of `| 2 | | x |` names no id; an empty module cell
+    must not make the relay drop it."""
+
+    def edit(cells: list[str]) -> None:
+        cells[:] = [cells[0], "", "x"]
+
+    [line] = _navigation_lines(harness, edit)
+    assert line == ("navigation: CP-0 T8 row width does not match its header"), line
+
+
+def _t8_text(headers: tuple[str, ...], rows: list[list[str]]) -> str:
+    return "\n".join(
+        [
+            "## Analysis",
+            "",
+            "| " + " | ".join(headers) + " |",
+            "| " + " | ".join("---" for _ in headers) + " |",
+            *("| " + " | ".join(row) + " |" for row in rows),
+            "",
+        ]
+    )
+
+
+_FIXED_WORDING = (
+    "navigation: row 1",
+    "CP-0 recommends unknown or non-navigable module: ",
+    ": command has malformed inline-code wrapper",
+    ": legacy non-runnable row has no candidate command; "
+    "rerun CP-0 with the current T8 contract",
+    " is an alias for ",
+    " cannot appear as a downstream T8 recommendation",
+)
+
+
+def _id_rows(
+    contract: VendorContract, template: str, module_id: str
+) -> tuple[Any, ...]:
+    nav = contract.navigation
+    command = "Run CP-1"
+    if template == "unknown":
+        return nav.NEW_HEADERS, [
+            "1",
+            module_id,
+            command,
+            command,
+            "p1",
+            "h",
+            "READY",
+            "w",
+        ]
+    if template == "wrapper":
+        return nav.NEW_HEADERS, [
+            "1",
+            module_id,
+            "`Run CP-1`x`",
+            command,
+            "p1",
+            "h",
+            "READY",
+            "w",
+        ]
+    return nav.LEGACY_HEADERS, [
+        "1",
+        module_id,
+        "DO NOT RUN",
+        "p1",
+        "h",
+        "BLOCKED",
+        "w",
+    ]
+
+
+@settings(
+    max_examples=200,
+    deadline=None,
+    suppress_health_check=[HealthCheck.filter_too_much],
+)
+@given(
+    template=st.sampled_from(["unknown", "wrapper", "legacy"]),
+    module_id=st.text(min_size=1, max_size=40),
+)
+def test_t8_relay_never_contains_the_answers_module_id(
+    template: str, module_id: str
+) -> None:
+    """The answer's module id, wherever the vendor's message would put it,
+    never reaches a relayed line. Ids that are text of the fixed wording or of
+    `row N` are skipped: they cannot be told apart from it. A crash is a
+    failure."""
+    assume(
+        module_id == module_id.strip()
+        and len(module_id.splitlines()) == 1
+        and not set(module_id) & set("|`*\\")
+        and module_id.isprintable()
+        and not any(module_id in wording for wording in _FIXED_WORDING)
+        and module_id not in "row 1"
+    )
+    contract = cached_contract(BUNDLE)
+    headers, row = _id_rows(contract, template, module_id)
+    text = _t8_text(headers, [row])
+    refusals = handoff._t8_messages(contract, catalog(BUNDLE), text)
+    assume(refusals)  # an id that is a real module is not refused by `unknown`
+    [(_, message)] = refusals
+    assert message is None or module_id not in message, (template, message)

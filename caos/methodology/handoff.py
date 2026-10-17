@@ -2508,20 +2508,21 @@ def _t8_without_values(
     raw = _vendor_said(refused)
     if raw is None:
         return None
+    if _T8_ID_FREE.fullmatch(raw):  # names no id: nothing to withhold
+        return raw
     row = _t8_fault_row(contract, catalog, text, raw)
     if row is None:
-        return raw if _T8_ID_FREE.fullmatch(raw) else None
+        return None
     nav = contract.navigation
-    module_id = nav._plain_value(nav._table_cells(nav._unfenced_lines(text)[row[0]])[1])
-    place = f"row {row[1]}"
+    cells = nav._table_cells(nav._unfenced_lines(text)[row[0]])
+    module_id = nav._plain_value(cells[1]) if len(cells) > 1 else ""
     if not module_id:
         return None
+    place = f"row {row[1]}"
     if raw == _T8_UNKNOWN_MODULE + module_id:
         placed = _T8_UNKNOWN_MODULE + place
     elif any(raw.startswith(module_id + lead) for lead in _T8_LEADING_ID):
         placed = place + raw[len(module_id) :]
-    elif _T8_ID_FREE.fullmatch(raw):
-        placed = raw
     else:
         return None
     return _without_values(placed)
@@ -2541,10 +2542,15 @@ def _t8_fault_row(
     try:
         lines = nav._unfenced_lines(text)
         head = next(
-            n
-            for n, line in enumerate(lines)
-            if nav._matching_header(nav._table_cells(line)) is not None
+            (
+                n
+                for n, line in enumerate(lines)
+                if nav._matching_header(nav._table_cells(line)) is not None
+            ),
+            None,
         )
+        if head is None:  # no T8 table: a refusal of the answer, not of us
+            return None
         checked = nav.validate_catalog(catalog)
         for place, index in enumerate(range(head + 2, len(lines)), start=1):
             if not nav._table_cells(lines[index]):
@@ -2554,7 +2560,7 @@ def _t8_fault_row(
             except ValueError as cut:
                 if _vendor_said(cut) == refusal:
                     return index, place
-    except (AttributeError, TypeError, ValueError, IndexError, StopIteration) as failed:
+    except (AttributeError, TypeError, ValueError, IndexError) as failed:
         _T8_LOG.warning("t8 fault row not located: %s", type(failed).__name__)
     return None
 
