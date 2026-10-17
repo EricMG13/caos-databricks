@@ -664,11 +664,15 @@ def _cpcf_markdown(block: str) -> bytes:
     ).encode()
 
 
-def _forecast_context(upstream_text: bytes = b"", quote: str = "") -> SimpleNamespace:
-    owner = SimpleNamespace(module_id="CP-1")
-    citation = SimpleNamespace(matched_text=quote, linked=True)
+def _forecast_context(
+    upstream_text: bytes = b"", quote: str = "", *, linked: bool = True
+) -> SimpleNamespace:
+    """As `_context` builds it: citations keyed by the upstream's route node id."""
+    owner = SimpleNamespace(module_id="CP-1", route_node_id="RN-CP-1-NODE")
+    citation = SimpleNamespace(matched_text=quote, linked=linked)
     return SimpleNamespace(
-        upstream=[(owner, upstream_text)], citations={"CP-1": (citation,)}
+        upstream=[(owner, upstream_text)],
+        citations={"RN-CP-1-NODE": (citation,)},
     )
 
 
@@ -701,6 +705,11 @@ def test_the_fault_line_omits_the_blocked_advice_when_a_request_can_bind() -> No
     ]
     quoted = _forecast_context(b"# Body\n", quote='/opening/cash = "100"')
     assert _forecast(_cpcf_markdown(_NULL_BLOCK), quoted) == lines
+    unlinked = _forecast_context(
+        b"# Body\n", quote='/opening/cash = "100"', linked=False
+    )
+    (blocked,) = _forecast(_cpcf_markdown(_NULL_BLOCK), unlinked)
+    assert "qa_status: Blocked" in blocked
 
 
 def test_a_valid_forecast_block_and_other_modules_get_no_forecast_line() -> None:

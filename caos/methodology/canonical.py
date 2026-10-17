@@ -1149,17 +1149,24 @@ def _forecast_lines(assignment: Assignment, context: _Context, body: str) -> lis
         return []
     try:
         forecast_projection(markdown)
-    except Refusal:  # the fault this line names
-        pass
+    except Refusal as refused:
+        # The document faults this line names: an unusable block, or a request
+        # the calculator refuses as invalid. Any other refusal stays typed.
+        if refused.code not in {
+            RefusalCode.HANDOFF_INCOMPLETE,
+            RefusalCode.METHODOLOGY_INPUT_INVALID,
+        }:
+            raise
     else:
         return []
     bindable = any(
         binds_input(ref.module_id, data.decode("utf-8", "replace"))
         for ref, data in context.upstream
     ) or any(
-        binds_input(owner, cited.matched_text)
-        for owner in FORECAST_OWNERS
-        for cited in context.citations.get(owner, ())
+        binds_input(ref.module_id, cited.matched_text)
+        for ref, _data in context.upstream
+        if ref.module_id in FORECAST_OWNERS
+        for cited in context.citations.get(ref.route_node_id, ())
         if cited.linked
     )
     line = _bounded(
