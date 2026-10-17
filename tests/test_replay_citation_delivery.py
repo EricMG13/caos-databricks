@@ -204,3 +204,16 @@ def test_the_harness_databases_are_listed_by_the_names_it_mints(
 
     assert held in replay.qualify_databases(admin_url)
     assert replay.database_url(admin_url, held).endswith(f"/{held}")
+
+
+def test_the_accepted_runs_are_listed_and_a_run_replay_carries_its_ids(
+    paged: _Harness,
+) -> None:
+    _accepted(paged)
+    with replay.read_only(paged.url) as conn:
+        assert replay.accepted_run_ids(conn) == [paged.run_id]
+        run = replay.replay_run(conn, paged.blobs, paged.bundle, paged.run_id)
+    assert isinstance(run, replay.RunReplay) and run.run_id == str(paged.run_id)
+    database = replay.DatabaseReplay("fixture", [run])
+    assert isinstance(database, replay.DatabaseReplay)
+    assert database.report()["accepted_runs"] == 1
