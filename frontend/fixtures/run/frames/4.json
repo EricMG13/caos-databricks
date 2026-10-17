@@ -314,14 +314,16 @@
         "input_per_token": "0.000005",
         "output_per_token": "0.000025",
         "as_of": "2026-09-22",
-        "configured": true
+        "configured": true,
+        "qualification": "UNQUALIFIED"
       },
       {
         "model": "databricks-claude-sonnet-5",
         "input_per_token": "0.000002",
         "output_per_token": "0.00001",
         "as_of": "2026-09-22",
-        "configured": false
+        "configured": false,
+        "qualification": "QUALIFIED"
       }
     ]
   },

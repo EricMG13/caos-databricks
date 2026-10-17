@@ -232,7 +232,14 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     WorkView: frozenset({"state", "stop_code", "cancel_requested"}),
     RouteChoice: frozenset({"profile_id", "selection_id", "accepts_model_extension"}),
     wire.ModelChoice: frozenset(
-        {"model", "input_per_token", "output_per_token", "as_of", "configured"}
+        {
+            "model",
+            "input_per_token",
+            "output_per_token",
+            "as_of",
+            "configured",
+            "qualification",
+        }
     ),
     DirectoryDocument: ENVELOPE,
     UploadDocument: ENVELOPE,

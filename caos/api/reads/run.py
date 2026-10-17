@@ -14,6 +14,7 @@ and the accepted artifacts, never stored; each carries the reason for it.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -31,8 +32,9 @@ from caos.api.deps import (
     Store,
     readable,
 )
-from caos.api.identity import Actor
+from caos.api.identity import Actor, GlobalRole
 from caos.api.reads.analysis import blocked_by_view
+from caos.api.reads.qualification import verdict_state
 from caos.api.wire import (
     ATTEMPTS_MAX,
     RUNS_MAX,
@@ -43,6 +45,7 @@ from caos.api.wire import (
     GateView,
     ModelChoice,
     NodeView,
+    QualificationState,
     RouteChoice,
     RouteEdgeView,
     RunBody,
@@ -56,6 +59,7 @@ from caos.api.wire import (
     WorkView,
 )
 from caos.blobs import BlobStore
+from caos.copilot import identity_of
 from caos.graph.route import (
     Edge,
     EdgeType,
@@ -77,7 +81,8 @@ from caos.methodology.bundle import Bundle, module_display_names
 from caos.methodology.handoff import ADAPTER_ROUTES
 from caos.methodology.invocation import named_objects
 from caos.methodology.vendor import catalog
-from caos.pricing import configured_endpoint, model_choices
+from caos.pricing import MAX_MODEL_CHOICES, configured_endpoint, model_choices
+from caos.qualification.store import Evidence
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
 from caos.store.gates import (
@@ -145,12 +150,18 @@ READINESS_ROWS = 2
 BLOCKED_BY_IO = 1
 # Its kept quotes' sources (D106, D107): one query beside that row.
 BLOCKED_QUOTES_IO = 1
+# Each approved model's qualification state (N117): one read of the candidate
+# verdicts, then `current_verdict` for at most one per approved model -- its
+# own read and the two store facts `assert_store_agrees` compares it with.
+CURRENT_VERDICT_IO = 3
+QUALIFICATION_IO = 1 + MAX_MODEL_CHOICES * CURRENT_VERDICT_IO
 IO_BUDGET = (
     SECTION_READ_IO
     + BEYOND_LIST_IO
     + READINESS_ROWS * CANONICAL_READINESS_IO
     + BLOCKED_BY_IO
     + BLOCKED_QUOTES_IO
+    + QUALIFICATION_IO
 )
 # N35's remainder: `accepted_artifacts` reads two blobs -- the artifact and
 # its record -- per readiness row (`caos.graph.runtime`), the same shape
@@ -220,7 +231,7 @@ def read_run_section(  # noqa: PLR0913 -- identity, two ids, store, blobs, bundl
             runs=runs,
             run=view,
             route_choices=_route_choices(bundle),
-            model_choices=_model_choices(),
+            model_choices=_model_choices(conn, actor, bundle, observed_at),
         ),
         observed_at=observed_at,
         observed_empty=not runs,
@@ -332,16 +343,61 @@ def _route_choices(bundle: Bundle) -> list[RouteChoice]:
     return choices
 
 
-def _model_choices() -> list[ModelChoice]:
+def _qualification_states(
+    conn: StoreConnection, models: Sequence[str], build_id: str, now: datetime
+) -> dict[str, QualificationState]:
+    """Each model's state as `read_qualification` would give an analyst for the
+    verdict that stands for it (N117): QUALIFIED only when `current_verdict`,
+    the single validator, accepts a verdict bound to this bundle build and the
+    exact provider identity the worker runs the model under (D8). The
+    candidates are chosen in SQL on those two bindings and on not yet having
+    expired, the latest decision per model -- one read; each is then validated,
+    at most one per approved model, and a refusal maps exactly as
+    `read_qualification` maps it. A model with no candidate has none."""
+    identities = {}
+    for model in models:
+        try:
+            identities[model] = identity_of(model)
+        except Refusal as refusal:
+            if refusal.code is not RefusalCode.PROVIDER_NOT_CONFIGURED:
+                raise
+    rows = conn.execute(
+        "SELECT DISTINCT ON (e.model) e.qualification_set_sha256,"
+        " e.performed_sha256, e.build_id, e.adapter_version, e.provider, e.model"
+        " FROM qualification_verdicts q"
+        " JOIN qualification_evidence e USING (evidence_sha256)"
+        " WHERE e.build_id = %s AND q.expires_at > now()"
+        " AND (e.model, e.provider) IN"
+        " (SELECT * FROM unnest(%s::text[], %s::text[]))"
+        " ORDER BY e.model, q.decided_at DESC",
+        (build_id, list(identities), list(identities.values())),
+    ).fetchall()
+    states = {model: QualificationState.UNQUALIFIED for model in models}
+    for row in rows:
+        evidence = Evidence(*row)
+        states[evidence.model] = verdict_state(conn, evidence, now)[0]
+    return states
+
+
+def _model_choices(
+    conn: StoreConnection, actor: Actor, bundle: Bundle, now: datetime
+) -> list[ModelChoice]:
     """Every model the deployment approves for a new run (F468), the
-    configured one first; none when the process configures no model, or one
-    it cannot read -- the create command then refuses `PROVIDER_NOT_CONFIGURED`
-    on its own, and health reports the worker that could not start."""
+    configured one first, each with its qualification state (N117; a label,
+    never a gate: every approved model stays selectable); none when the
+    process configures no model, or one it cannot read -- the create command
+    then refuses `PROVIDER_NOT_CONFIGURED` on its own, and health reports the
+    worker that could not start. A READER is told RESTRICTED, as
+    `read_qualification` tells one, and the store is not asked."""
     try:
         choices = model_choices()
     except Refusal:
         return []
     configured = configured_endpoint()
+    if actor.role is GlobalRole.READER:
+        states = dict.fromkeys(choices, QualificationState.RESTRICTED)
+    else:
+        states = _qualification_states(conn, list(choices), bundle.build_id, now)
     return [
         ModelChoice(
             model=price.model,
@@ -349,6 +405,7 @@ def _model_choices() -> list[ModelChoice]:
             output_per_token=format(price.output_per_token, "f"),
             as_of=price.as_of.isoformat(),
             configured=price.model == configured,
+            qualification=states[price.model],
         )
         for price in choices.values()
     ]
