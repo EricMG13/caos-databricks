@@ -1276,12 +1276,15 @@ def _refusing(code: RefusalCode) -> Callable[..., bytes]:
 
 # Exactly the drift refusals `prove_revision` can raise (the renderer's codes
 # are not among them: a head that re-proves but does not render is served
-# complete, FILE refused, SAVE offered).
+# complete, FILE refused, SAVE offered). The two BoundaryText codes are what
+# `_span` and `_resolved` raise on a stored head after a rule change (N235).
 DRIFT = [
     RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING,
     RefusalCode.DELIVERABLE_PAYLOAD_INVALID,
     RefusalCode.NARRATIVE_REFERENCE_INVALID,
     RefusalCode.NARRATIVE_FIGURE_UNREFERENCED,
+    RefusalCode.BOUNDARY_TEXT_INVALID,
+    RefusalCode.BOUNDARY_TEXT_TOO_LONG,
 ]
 
 
