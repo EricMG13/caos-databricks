@@ -283,24 +283,37 @@ def test_every_hook_repository_is_pinned_by_commit_with_its_tag_in_a_comment(
     assert all("is at 'v" in problem for problem in problems)
 
 
+@pytest.mark.parametrize(
+    ("name", "problems", "duplicate"),
+    [
+        (HOOKS, check_gate_config._hook_problems, "repos: []"),
+        (CI, check_gate_config._ci_problems, "jobs: {}"),
+        (
+            "databricks.yml",
+            lambda root: check_gate_config.bundle_auth_problems(
+                (root / "databricks.yml").read_text(encoding="utf-8")
+            ),
+            "bundle:\n  name: x",
+        ),
+    ],
+)
 def test_a_duplicate_key_in_a_configuration_is_refused_not_resolved_to_the_last(
     tmp_path: Path,
+    name: str,
+    problems: Callable[[Path], list[str]],
+    duplicate: str,
 ) -> None:
-    """N83: PyYAML keeps the last of a repeated key; each YAML the gate reads
-    is refused on a repeat, at any depth."""
+    """N83: PyYAML keeps the last of a repeated key; the pre-commit config,
+    `ci.yml` and `databricks.yml` reads each refuse a repeated top-level key."""
     root = _tree(tmp_path)
-    hooks = root / HOOKS
-    hooks.write_text(
-        hooks.read_text(encoding="utf-8").replace(
-            "      - id: ruff-format\n",
-            "      - id: ruff-format\n        exclude: ^vendor/\n        exclude: ^$\n",
-            1,
-        ),
-        encoding="utf-8",
-    )
-    assert check_gate_config._hook_problems(root) == [
-        "pre-commit: .pre-commit-config.yaml is missing or not a mapping"
-    ]
+    assert problems(root) == []
+    path = root / name
+    path.write_text(path.read_text(encoding="utf-8") + f"\n{duplicate}\n")
+    [refusal] = problems(root)
+    assert refusal.endswith(f"{name} is missing or not a mapping")
+
+
+def test_a_repeated_key_is_refused_at_any_depth() -> None:
     assert check_gate_config._yaml_mapping("a: 1\nb: {c: 1, c: 2}\n") is None
     assert check_gate_config._yaml_mapping("a: 1\nb: {c: 1, d: 2}\n") == {
         "a": 1,
