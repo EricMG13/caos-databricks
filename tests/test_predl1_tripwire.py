@@ -316,3 +316,44 @@ def test_a_clean_schema_the_app_role_already_owns_still_boots(
             verify_schema(conn)
         assert _rows_written(empty_database, app_role) == 1
         assert _boot_old_build(tmp_path, urls[app_role]) == "REFUSED STORE_SCHEMA_DRIFT"
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "CREATE OPERATOR {}.=== (LEFTARG = int4, RIGHTARG = int4, FUNCTION = int4eq)",
+        "CREATE COLLATION {}.other (LOCALE = 'C')",
+        "CREATE TEXT SEARCH CONFIGURATION {}.other (COPY = pg_catalog.simple)",
+        "CREATE TEXT SEARCH DICTIONARY {}.other (TEMPLATE = pg_catalog.simple)",
+        "CREATE CONVERSION {}.other FOR 'UTF8' TO 'LATIN1'"
+        " FROM pg_catalog.utf8_to_iso8859_1",
+    ],
+    ids=[
+        "operator",
+        "collation",
+        "text-search-configuration",
+        "dictionary",
+        "conversion",
+    ],
+)
+def test_an_object_of_another_owner_in_the_role_schema_is_refused(
+    empty_database: str, statement: str
+) -> None:
+    """N233 (3): the schema is the app's own and carries no grant, but a role
+    that owns a name-resolved object in it -- an operator, a collation, a
+    text-search configuration or dictionary, a conversion -- is refused the
+    way a relation, function or type is, and nothing is written. The object
+    is made by the administrator, so the schema's ACL stays clean and only the
+    owner check can see it."""
+    app_role = _fresh_role()
+    with _roles(empty_database, app_role) as urls:
+        app = sql.Identifier(app_role)
+        with psycopg.connect(urls[app_role], autocommit=True) as mine:
+            mine.execute(sql.SQL("CREATE SCHEMA {}").format(app))
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            admin.execute(sql.SQL(statement.format("{}")).format(app))
+        with connect(urls[app_role]) as conn:
+            with pytest.raises(Refusal) as refused:
+                apply_schema(conn)
+        assert refused.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+        assert _rows_written(empty_database, app_role) == 0
