@@ -88,10 +88,13 @@ from caos.store.members import Standing
 # Sign, freeze and file each pay one more than they used to (CF-026): `_reviewed`
 # now reads the run's head alongside the revision's own row, so a superseded
 # revision is refused before any of the three acts on it.
-SAVE_IO = 52
+# Save, freeze and file each pay one more than before N130: the payload
+# derivation rebuilds each node's own delivery, which reads the pinned members
+# once (`caos.methodology.canonical.node_delivery`).
+SAVE_IO = 53
 SIGN_IO = 15
-FREEZE_IO = 56
-FILE_IO = 57
+FREEZE_IO = 57
+FILE_IO = 58
 IO_BUDGET = max(SAVE_IO, SIGN_IO, FREEZE_IO, FILE_IO)
 # N35's remainder: save derives the payload directly (`canonical_payload`,
 # the LITE route's three nodes at two blobs each); sign reads only chain
