@@ -88,8 +88,14 @@ export function Digest({
         <span className="font-mono">{shown}</span>
         {said === "Copied" ? <CheckIcon aria-hidden="true" /> : <CopyIcon aria-hidden="true" />}
       </button>
+      {/* The live region is always mounted and only its words change: a region
+          inserted already populated is announced inconsistently (WCAG 4.1.3).
+          The sentence beside the control is for the eye alone. */}
+      <span role="status" className="sr-only" data-digest-status>
+        {said}
+      </span>
       {said ? (
-        <span role="status" className="digest-said" data-said={said}>
+        <span className="digest-said" aria-hidden="true" data-said={said}>
           {said}
         </span>
       ) : null}
