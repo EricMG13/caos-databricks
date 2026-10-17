@@ -58,7 +58,7 @@ from caos.qualification.harness import (
 from caos.qualification.matrix import QualificationSet
 from caos.qualification.on_disk import MANIFEST
 from caos.refusals import Refusal, RefusalCode
-from caos.store import RunStatus, StoreConnection, connect
+from caos.store import RunStatus, StoreConnection, apply_schema, connect
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -1340,6 +1340,282 @@ def test_a_probe_with_room_lets_the_set_run(
     assert len(created) == 1
 
 
+@dataclass
+class _StoppedOnce(_FakeProvider):
+    """A provider the gateway fails for its first `fail` calls."""
+
+    fail: int = 1
+    calls: int = 0
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        self.calls += 1
+        if self.calls <= self.fail:
+            raise Refusal(RefusalCode.PROVIDER_UNAVAILABLE)
+        return super().complete(prompt, json_object=json_object)
+
+
+def _first_run(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    provider: _FakeProvider,
+) -> tuple[Path, str, int]:
+    """Run the lite set once; the set root, its database and the exit code."""
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+    code = qualify.main(_arguments(root))
+    database = json.loads(capsys.readouterr().out.partition("\n")[0])["database"]
+    return root, database, code
+
+
+def _counts(database: str) -> tuple[int, int]:
+    url = _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], database)
+    with connect(url) as conn:
+        cases = conn.execute("SELECT count(*) FROM cases").fetchone()
+        runs = conn.execute("SELECT count(*) FROM run_inputs").fetchone()
+    assert cases is not None and runs is not None
+    return cases[0], runs[0]
+
+
+def test_resume_reenters_perform_on_the_same_pin_and_does_not_repin(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    root, database, first = _first_run(
+        monkeypatch, capsys, tmp_path, _costed(_StoppedOnce)
+    )
+    assert first != 0
+    before = _counts(database)
+    assert before == (1, 1)
+    monkeypatch.setattr(qualify, "from_environment", _costed)
+
+    code = qualify.main(_arguments(root, "--resume", database))
+
+    preamble_line, _, rest = capsys.readouterr().out.partition("\n")
+    assert json.loads(preamble_line)["database"] == database
+    assert code == 0 and json.loads(rest)["complete"] is True
+    assert _counts(database) == before
+    assert created == [database]
+
+
+def test_resume_of_a_finished_set_makes_no_new_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    root, database, first = _first_run(monkeypatch, capsys, tmp_path, provider)
+    assert first == 0
+    calls = len(provider.prompts)
+
+    assert qualify.main(_arguments(root, "--resume", database)) == 0
+
+    assert len(provider.prompts) == calls
+    assert _counts(database) == (1, 1)
+
+
+def test_resume_applies_the_free_space_floor_first(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    root, database, _ = _first_run(monkeypatch, capsys, tmp_path, provider)
+    calls = len(provider.prompts)
+
+    code = qualify.main(
+        _arguments(
+            root,
+            "--resume",
+            database,
+            "--free-space-probe",
+            _probe("1"),
+            "--min-free-bytes",
+            "2",
+        )
+    )
+
+    assert code == 2
+    assert "FREE_SPACE_BELOW_FLOOR" in capsys.readouterr().err
+    assert len(provider.prompts) == calls
+
+
+@pytest.mark.parametrize("name", ["postgres", "caos_qualify_x; DROP", "../x", "x"])
+def test_resume_names_only_a_database_this_script_creates(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    name: str,
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(_arguments(root, "--resume", name))
+
+    assert code == 2
+    assert "RESUME_DATABASE_INVALID" in capsys.readouterr().err
+    assert provider.prompts == []
+
+
+def test_resume_of_a_database_that_holds_no_pin_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+    server = os.environ["CAOS_TEST_POSTGRES_URL"]
+    bare, _ = qualify._create_database(server)
+    created.append(bare)
+    # No schema at all, then a schema with no case in it.
+    for schema_first in (False, True):
+        if schema_first:
+            with connect(_database_url(server, bare)) as conn:
+                apply_schema(conn)
+                conn.commit()
+        code = "RESUME_NO_PIN" if schema_first else "STORE_SCHEMA_DRIFT"
+        assert qualify.main(_arguments(root, "--resume", bare)) == 2
+        assert code in capsys.readouterr().err
+    assert provider.prompts == []
+
+
+def test_resume_of_a_pin_for_another_set_refuses_without_a_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _, database, _ = _first_run(monkeypatch, capsys, tmp_path, provider)
+    calls = len(provider.prompts)
+    other = _write_lite_set(tmp_path / "other")
+    manifest = json.loads((other / MANIFEST).read_text(encoding="utf-8"))
+    manifest["cases"][0]["subject"]["analysis_date"] = "2026-09-14"
+    (other / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
+
+    code = qualify.main(_arguments(other, "--resume", database))
+
+    assert code == 2
+    assert len(provider.prompts) == calls
+    assert _counts(database) == (1, 1)
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+
+
+def test_resume_of_a_pin_for_another_build_refuses_without_a_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    root, database, _ = _first_run(monkeypatch, capsys, tmp_path, provider)
+    calls = len(provider.prompts)
+    url = _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], database)
+    with connect(url) as conn:
+        conn.execute("SET session_replication_role = replica")
+        conn.execute("UPDATE run_inputs SET build_id = %s", ("0" * 64,))
+        conn.commit()
+
+    code = qualify.main(_arguments(root, "--resume", database))
+
+    assert code == 2
+    assert len(provider.prompts) == calls
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+
+
+# Fix round 1: resume binds the set, the provider and the model (I-1); the probe
+# reads strictly (M-1, M-2); public wrappers (M-4).
+
+
+def _other_model(monkeypatch: pytest.MonkeyPatch) -> _FakeProvider:
+    """The same fake under another model name, priced for that name."""
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "other/model,0.0000000001,0.00001,2026-09-13"
+    )
+    price = price_from_environment(
+        "other/model", "other/model,0.0000000001,0.00001,2026-09-13"
+    )
+    return _FakeProvider(model="other/model", price=price)
+
+
+def test_resume_under_another_model_refuses_and_makes_no_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    root, database, first = _first_run(
+        monkeypatch, capsys, tmp_path, _costed(_StoppedOnce)
+    )
+    assert first != 0
+    other = _other_model(monkeypatch)
+    monkeypatch.setattr(qualify, "from_environment", lambda: other)
+
+    code = qualify.main(_arguments(root, "--resume", database))
+
+    assert code == 2
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+    assert other.prompts == []
+
+
+def test_resume_under_another_model_refuses_when_no_snapshot_was_written(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """A driver killed before its first snapshot leaves only the ledger: the
+    calls already recorded name the model they were paid under."""
+    root, database, first = _first_run(monkeypatch, capsys, tmp_path, _costed())
+    assert first == 0
+    url = _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], database)
+    with connect(url) as conn:
+        conn.execute("SET session_replication_role = replica")
+        conn.execute("DELETE FROM qualification_verdicts")
+        conn.execute("DELETE FROM qualification_evidence")
+        conn.execute("DELETE FROM qualification_performed")
+        conn.commit()
+    other = _other_model(monkeypatch)
+    monkeypatch.setattr(qualify, "from_environment", lambda: other)
+
+    code = qualify.main(_arguments(root, "--resume", database))
+
+    assert code == 2
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+    assert other.prompts == []
+
+
+def test_resume_of_an_edited_answer_key_refuses_and_makes_no_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _, database, first = _first_run(monkeypatch, capsys, tmp_path, provider)
+    assert first == 0
+    calls = len(provider.prompts)
+    edited = _write_lite_set(tmp_path / "edited")
+    manifest = json.loads((edited / MANIFEST).read_text(encoding="utf-8"))
+    key = dict(manifest["cases"][0]["expects"][0])
+    key["matched_text"] = "Acme Holdings plc annual report 2026"
+    manifest["cases"][0]["expects"].append(key)
+    (edited / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
+
+    code = qualify.main(_arguments(edited, "--resume", database))
+
+    assert code == 2
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+    assert len(provider.prompts) == calls
+
+
 def test_a_probe_answer_of_thousands_of_digits_refuses_typed() -> None:
     with pytest.raises(qualify.PreflightRefusal) as raised:
         qualify._parsed_free_bytes("9" * 5000)
@@ -1359,6 +1635,16 @@ def test_a_container_name_docker_would_read_as_an_option_refuses(name: str) -> N
     with pytest.raises(qualify.PreflightRefusal) as raised:
         qualify._free_bytes(qualify.Probe(command=None, docker_container=name))
     assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+def test_the_harness_names_its_identities_and_eligibility_publicly() -> None:
+    from caos.qualification.harness import assert_pin_eligible, harness_identities
+
+    assert callable(assert_pin_eligible)
+    assert harness_identities(_FakeProvider()) == (
+        "test-fake-identity",
+        "a-model/for-the-test",
+    )
 
 
 def test_the_shared_argv_runner_runs_without_a_shell_and_bounds_time() -> None:

@@ -501,6 +501,24 @@ def stated_in(pin: RunInput) -> dict[str, dict[str, str]]:
     return stated
 
 
+def harness_identities(completions: CompletionProvider) -> tuple[str, str]:
+    """The provider and model identity a prepared case is bound to (a resume
+    rebuilds a `PreparedCase` and must bind the same two)."""
+    return _provider_identity(completions), _model_identity(completions)
+
+
+def assert_pin_eligible(
+    conn: StoreConnection,
+    harness: Harness,
+    case: QualificationCase,
+    prepared: PreparedCase,
+) -> None:
+    """`perform`'s own per-case check of a stored pin against the set, for a
+    caller that must refuse before it spends (raises `RUN_INPUT_INVALID`).
+    Runs inside the caller's `execution_reads` unit."""
+    _eligible(conn, harness, case, prepared)
+
+
 def _eligible(
     conn: StoreConnection,
     harness: Harness,
