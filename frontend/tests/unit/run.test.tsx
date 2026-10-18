@@ -1911,6 +1911,7 @@ describe("Run", () => {
       "../../fixtures/run.json",
       "../../fixtures/states/run.gate.json",
       "../../fixtures/states/run.superseded.json",
+      "../../fixtures/states/run.command.json",
       "../../fixtures/run/frames/1.json",
       "../../fixtures/run/frames/2.json",
       "../../fixtures/run/frames/3.json",
