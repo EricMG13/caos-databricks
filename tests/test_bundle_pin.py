@@ -53,7 +53,7 @@ CATALOG = (
 )
 
 # A run pinned to one build never executes under another.
-BUILD_ID = "2b86a4de8910e2f971b1251d6363ea4e701b8ddd0495b538c71342e22943008c"
+BUILD_ID = "7a77e6af979a0dfee3a4460ec7e828f6d19597cae5bc630470207feb16095724"
 
 
 def _load(path: Path) -> dict[str, object]:
@@ -634,7 +634,13 @@ def test_the_vendor_enforces_cp_l10s_semantic_rules() -> None:
     assert [rule["rule_id"] for rule in rules["semantic_rules"]] == [
         f"cp_l{phase}.{rule}"
         for phase in L10_PHASES
-        for rule in ("topic_ids_unique", "topic_ids_complete", "overall_screen_present")
+        for rule in (
+            "topic_ids_unique",
+            "topic_ids_complete",
+            "topic_ids_allowed",
+            "overall_screen_present",
+            "overall_screen_once",
+        )
     ]
     check = CONTRACT.completeness_check.check
     handoff = _l10_handoff()
@@ -648,7 +654,7 @@ def test_the_vendor_enforces_cp_l10s_semantic_rules() -> None:
     ]
     lowered = _with_register_cell(handoff, "TL10.3", 1, "screen_item", "overall")
     assert check(skill, lowered, "CP-L10")[0] == [
-        "TL10.3: cp_l10.overall_screen_present -- column 'screen_item' lacks 'OVERALL'"
+        "TL10.3: cp_l10.overall_screen_present -- column 'screen_item' lacks 'OVERALL'",
     ]
 
 
@@ -711,13 +717,31 @@ def test_every_absorbed_screen_s_rules_are_enforced(phase: str) -> None:
     missing = _with_register_cell(handoff, register, 6, "topic_id", "OTHER_TOPIC")
     assert check(skill, missing, "CP-L10")[0] == [
         f"{register}: cp_l{phase}.topic_ids_complete -- column 'topic_id' lacks "
-        f"{topics[5]!r}"
+        f"{topics[5]!r}",
+        f"{register} row 6: cp_l{phase}.topic_ids_allowed -- column 'topic_id' holds "
+        "'OTHER_TOPIC', not one of the allowed values",
     ]
     lowered = _with_register_cell(handoff, f"TL{phase}.3", 1, "screen_item", "overall")
     assert check(skill, lowered, "CP-L10")[0] == [
         f"TL{phase}.3: cp_l{phase}.overall_screen_present -- column 'screen_item' "
-        "lacks 'OVERALL'"
+        "lacks 'OVERALL'",
     ]
+    # Fork r17 (N132): the topics are bounded by the payload schema's enum and
+    # OVERALL is written once.
+    allowed = rules[f"cp_l{phase}.topic_ids_allowed"]
+    assert (allowed["rule"], allowed["register_id"], allowed["column"]) == (
+        "allowed_values",
+        f"TL{phase}.2",
+        "topic_id",
+    )
+    assert allowed["values"] == topics and allowed["case_sensitive"] is True
+    once = rules[f"cp_l{phase}.overall_screen_once"]
+    assert (once["rule"], once["register_id"], once["column"], once["values"]) == (
+        "exactly_once_values",
+        f"TL{phase}.3",
+        "screen_item",
+        ["OVERALL"],
+    )
 
 
 def test_cp_l10_keeps_what_the_deleted_rule_blocks_alone_said() -> None:

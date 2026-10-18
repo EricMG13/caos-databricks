@@ -88,16 +88,19 @@ from caos.store.members import Standing
 # Sign, freeze and file each pay one more than they used to (CF-026): `_reviewed`
 # now reads the run's head alongside the revision's own row, so a superseded
 # revision is refused before any of the three acts on it.
-SAVE_IO = 52
+# Save, freeze and file each pay one more than before N130: the payload
+# derivation rebuilds each node's own delivery, which reads the pinned members
+# once (`caos.methodology.canonical.node_delivery`).
+SAVE_IO = 53
 SIGN_IO = 15
-FREEZE_IO = 56
-FILE_IO = 57
+FREEZE_IO = 57
+FILE_IO = 58
 # N112: a save over a frozen head that can no longer be filed (N77) first asks
 # `_fileable`, which re-proves that head (`prove_revision`), then derives and
-# writes the new revision: measured 92 against the 52 of a save over an open
+# writes the new revision: measured 94 against the 53 of a save over an open
 # head, and held exactly by `tests/test_governed_write_routes.py`. A frozen head
 # that still re-proves is refused after the same re-proof and writes nothing.
-SAVE_FROZEN_IO = 92
+SAVE_FROZEN_IO = 94
 IO_BUDGET = max(SAVE_IO, SAVE_FROZEN_IO, SIGN_IO, FREEZE_IO, FILE_IO)
 # N35's remainder: save derives the payload directly (`canonical_payload`,
 # the LITE route's three nodes at two blobs each); sign reads only chain
@@ -123,7 +126,7 @@ Approver = Annotated[Standing, Depends(require_case_approver)]
 
 
 def _spans(narrative: list[list[NarrativeDraft]]) -> list[list[dict[str, Any]]]:
-    """The draft in the shape `save_revision` validates."""
+    """The draft in the shape `save_revision_in` validates."""
     return [[_span(span) for span in paragraph] for paragraph in narrative]
 
 

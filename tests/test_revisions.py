@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from governed_deliverable import save_revision
 from test_deliverable_canonical import QUOTE, harness, lite, route
 from test_execution_freshness import _Harness
 
@@ -19,7 +20,7 @@ __all__ = ["harness", "lite", "route"]
 
 
 def _save(lite: _Harness, narrative: object = None) -> UUID:
-    return revisions.save_revision(
+    return save_revision(
         lite.conn,
         lite.blobs,
         lite.bundle,
@@ -49,8 +50,8 @@ def test_a_revision_is_saved_from_accepted_artifacts_and_cannot_be_supplied(
     assert [a["route_node_id"] for a in payload["artifacts"]] == [
         n.route_node_id for n in lite.route.nodes
     ]
-    assert not {"payload", "payload_sha256", "revision_id"} & set(
-        inspect.signature(revisions.save_revision).parameters
+    assert not {"payload", "payload_sha256"} & set(
+        inspect.signature(revisions.save_revision_in).parameters
     )
 
 
@@ -127,7 +128,7 @@ def test_wrong_case_and_incomplete_routes_cannot_be_saved(harness: _Harness) -> 
         _save(harness)
     assert caught.value.code.value == "DELIVERABLE_PAYLOAD_INVALID"
     with pytest.raises(Refusal) as caught:
-        revisions.save_revision(
+        save_revision(
             harness.conn,
             harness.blobs,
             harness.bundle,

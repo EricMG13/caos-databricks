@@ -18,7 +18,14 @@ from caos.store import RunStatus, StoreConnection
 from caos.store.run_inputs import RunInput
 
 
-def qualification_performed(*, blocked_label: str | None = None) -> PerformedEvidence:
+def qualification_performed(
+    *,
+    blocked_label: str | None = None,
+    provider: str = "openrouter/google-ai-studio/high/65536",
+    model: str = "google/gemini-3.8-flash",
+    build_id: str = "b" * 64,
+    ordinal: int = 0,
+) -> PerformedEvidence:
     """A signable snapshot of one case, or of two when `blocked_label` is given.
 
     The second case is one whose declared refusal was met: its run ends BLOCKED
@@ -27,24 +34,26 @@ def qualification_performed(*, blocked_label: str | None = None) -> PerformedEvi
     unsignable -- the shape the Completion Phase 8 confidence review found
     refused as a wrong binding.
     """
-    run_id = UUID("00000000-0000-0000-0000-000000000001")
+    # `ordinal` gives each snapshot of a test its own run and case, so several
+    # models' snapshots can sit in one store (`record_runs`).
+    run_id = UUID(int=1 + ordinal * 0x100)
     prepared = PreparedCase(
         "case",
         RunInput(
             run_id=run_id,
-            case_id=UUID("00000000-0000-0000-0000-000000000002"),
+            case_id=UUID(int=2 + ordinal * 0x100),
             source_version=1,
             source_fingerprint="c" * 64,
             route_digest="d" * 64,
-            build_id="b" * 64,
+            build_id=build_id,
             manifest_sha256="e" * 64,
             adapter_version="canonical-markdown-v3",
             research_json=None,
             input_fingerprint="f" * 64,
         ),
         "a" * 64,
-        "openrouter/google-ai-studio/high/65536",
-        "google/gemini-3.8-flash",
+        provider,
+        model,
     )
     result = PerformedSet(
         performed=(
@@ -56,7 +65,7 @@ def qualification_performed(*, blocked_label: str | None = None) -> PerformedEvi
                 OrchestrationProof(
                     run_id=run_id,
                     route_digest="d" * 64,
-                    build_id="b" * 64,
+                    build_id=build_id,
                     artifacts=1,
                     citations=1,
                     anchored=frozenset({("CP-0", "c" * 64, "quoted text")}),
@@ -67,7 +76,7 @@ def qualification_performed(*, blocked_label: str | None = None) -> PerformedEvi
         ),
         matrix=Matrix(
             qualification_set_sha256="a" * 64,
-            build_id="b" * 64,
+            build_id=build_id,
             rows=(
                 MatrixRow(
                     case_label="case",
@@ -104,7 +113,7 @@ def qualification_performed(*, blocked_label: str | None = None) -> PerformedEvi
         OrchestrationProof(
             run_id=blocked_run,
             route_digest="d" * 64,
-            build_id="b" * 64,
+            build_id=build_id,
             artifacts=0,
             citations=0,
             anchored=frozenset(),

@@ -21,9 +21,18 @@ from pathlib import Path
 from types import ModuleType
 
 import check_gate_config
+import pytest
+from tracked import blob_at, tracked_python_at
 
 PYTEST = "py" + "test"
 MARK = "mark"
+
+
+def _base_measure(
+    rev: str, root: Path = check_gate_config.REPO
+) -> check_gate_config.Measure | None:
+    """`rev`'s own measure of suppressions, as the ratchet loads it."""
+    return check_gate_config._module_measure(check_gate_config._base_module(rev, root))
 
 
 def _git(root: Path, *args: str) -> None:
@@ -71,6 +80,57 @@ def test_a_prefixed_skip_is_counted_once_not_twice() -> None:
         ]
     )
     assert _counts(sample)["skip"] == 2
+
+
+def test_the_skipped_exception_and_a_getattr_skip_are_counted() -> None:
+    """N109: raising `Skipped` from the implementation module, reaching skip
+    through `getattr`, or through the skip function's `Exception` attribute
+    ends a test as a skip without the names the patterns read."""
+    sample = "\n".join(
+        [
+            f"import {PYTEST}",
+            f"import {PYTEST} as pt",
+            "import _pytest.outcomes",
+            "from _pytest import outcomes",
+            "from _pytest.outcomes import Skipped",
+            "def test_one() -> None:",
+            "    raise Skipped('x')",
+            "def test_two() -> None:",
+            f"    getattr({PYTEST}, 'skip')('x')",
+            "def test_three() -> None:",
+            "    getattr(pt, 'sk' + 'ip')('x')",
+            "def test_four() -> None:",
+            "    _pytest.outcomes.skip('x')",
+            "def test_five() -> None:",
+            "    outcomes.skip('x')",
+            "def test_six() -> None:",
+            f"    raise {PYTEST}.skip.Exception('x')",
+        ]
+    )
+    assert _counts(sample)["skip"] == 6
+
+
+def test_xfailed_and_a_dynamic_import_of_pytest_are_counted() -> None:
+    """N109 review: `XFailed` ends a test as an expected failure, and a
+    module imported by name still resolves to pytest's own skip."""
+    sample = "\n".join(
+        [
+            "import importlib",
+            "from _pytest.outcomes import XFailed",
+            "def test_one() -> None:",
+            "    raise XFailed('x')",
+            "def test_two() -> None:",
+            "    importlib.import_module('_pytest.outcomes').skip('x')",
+            "def test_three() -> None:",
+            f"    __import__('{PYTEST}').skip('x')",
+            "def test_four() -> None:",
+            "    importlib.import_module('os').getcwd()",
+            "    getattr(importlib.import_module('os'), name)",
+        ]
+    )
+    counts = _counts(sample)
+    assert counts["xfail"] == 1
+    assert counts["skip"] == 2
 
 
 def test_a_live_provider_marker_is_its_own_budget() -> None:
@@ -182,7 +242,7 @@ def test_the_base_rules_are_the_base_checker_s_own(tmp_path: Path) -> None:
     `SUPPRESSIONS` alone where it predates the shared measure (84eb06d);
     no checker there is no rule to hold to, and one that will not load is
     refused rather than skipped."""
-    measure = check_gate_config.base_measure("84eb06d")
+    measure = _base_measure("84eb06d")
     assert measure is not None
     assert measure(["x = 1  " + "#" + " noqa"])["noqa"] == 1
     root = tmp_path / "repo"
@@ -192,13 +252,48 @@ def test_the_base_rules_are_the_base_checker_s_own(tmp_path: Path) -> None:
     _git(root, "config", "user.name", "Ratchet test")
     (root / "m.py").write_text("x = 1\n", encoding="utf-8")
     bare = _commit(root, "no checker")
-    assert check_gate_config.base_measure(bare, root) is None
+    assert _base_measure(bare, root) is None
     (root / "scripts").mkdir()
     (root / "scripts" / "check_gate_config.py").write_text("import nowhere_at_all\n")
     broken = _commit(root, "a checker that will not load")
     assert check_gate_config.baseline_problems(broken, root) == [
         f"baseline: {broken}'s own checker could not be loaded"
     ]
+
+
+def test_the_base_checker_is_loaded_once_and_its_texts_are_not_read_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--against` loads the base checker once and reads no blob `texts` has."""
+    root = tmp_path / "repo"
+    (root / "scripts").mkdir(parents=True)
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "test@example.invalid")
+    _git(root, "config", "user.name", "Ratchet test")
+    checker = Path(check_gate_config.__file__).read_text(encoding="utf-8")
+    (root / "scripts" / "check_gate_config.py").write_text(checker, encoding="utf-8")
+    (root / "m.py").write_text("import os\n", encoding="utf-8")
+    base = _commit(root, "base")
+    texts = tracked_python_at(root, base)
+    loads: list[str] = []
+    reads: list[str] = []
+    real_load, real_blob = check_gate_config._base_module, blob_at
+
+    def counted_load(
+        rev: str, where: Path, known: dict[str, str] | None = None
+    ) -> ModuleType | None:
+        loads.append(rev)
+        return real_load(rev, where, known)
+
+    def counted_blob(repo: Path, rev: str, name: str) -> str | None:
+        reads.append(name)
+        return real_blob(repo, rev, name)
+
+    monkeypatch.setattr(check_gate_config, "_base_module", counted_load)
+    monkeypatch.setattr(check_gate_config, "blob_at", counted_blob)
+    assert check_gate_config.baseline_problems(base, root) == []
+    assert len(loads) == 1
+    assert [name for name in reads if name in texts] == []
 
 
 def test_the_base_checker_imports_its_own_siblings_not_this_commit_s(
@@ -221,7 +316,7 @@ def test_the_base_checker_imports_its_own_siblings_not_this_commit_s(
         'SUPPRESSIONS = {"noqa": re.compile(r"' + "#" + '\\s*noqa\\b")}\n'
     )
     base = _commit(root, "a base with its own tracked module")
-    measure = check_gate_config.base_measure(base, root)
+    measure = _base_measure(base, root)
     assert measure is not None
     assert measure(["x = 1  " + "#" + " noqa"]) == {"noqa": 1}
     assert sys.modules["tracked"] is tracked
