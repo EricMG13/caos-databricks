@@ -105,6 +105,8 @@ uv run python scripts/qualify.py qualification/ccl-fy2025-market-dislocation \
 
 `--expect-identity` must be `databricks/<endpoint>/none/65536`: the run refuses before spending anything otherwise. The set is two public documents and two modules (CP-0, CP-3D); the ceiling must cover one worst-case call per case at the endpoint's price. Record the outcome in the set's `RESULT.md` and in `qualification/PROVIDER_RUNBOOK.md`: set, endpoint, identity, database name, spend, and for each node accepted or its stop code. Never record a credential or a host. Repeat for each other approved model only if the owner asks: until a model qualifies, analysts who choose it should expect runs that stop at CP-0 after paying for them.
 
+Free space (N150). PostgreSQL gives the app no free-disk reading, so name the probe: `--docker-container <name>` runs `docker exec <name> df -P /var/lib/postgresql/data` (the local server), or `--free-space-probe '<command>'` runs a command (no shell) whose whole output is the free bytes (a server-side check on a remote one). Below `--min-free-bytes` (default 1 GiB), or on an answer that is not one whole number, the run refuses (`FREE_SPACE_BELOW_FLOOR`, `FREE_SPACE_UNREADABLE`) before it creates a database or reserves anything; with no probe named it says so once on stderr and checks nothing.
+
 ### 4.4 The first governed run
 
 Open the app URL (row E5), upload a small public document, choose the model, pin the subject, approve the run's gates, start it and watch the Run section. Report how far it got: COMPLETE, a validated `Blocked`, or the stop code with the run id. A refused node already had its one second attempt (D30). Do not retry it more than once, and do not change anything to make it pass.

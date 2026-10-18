@@ -398,7 +398,10 @@ def test_main_refuses_a_malformed_admin_url_without_the_password(
 
     assert code == 2
     logged = capsys.readouterr().err
-    assert logged.strip() == "STORE_UNAVAILABLE: the set was refused; nothing was spent"
+    # The unnamed free-space probe is said once (N150) before the refusal.
+    assert logged.strip().splitlines()[-1] == (
+        "STORE_UNAVAILABLE: the set was refused; nothing was spent"
+    )
     assert "SuperSecretPw" not in logged
 
 
@@ -1146,3 +1149,224 @@ def test_stop_code_reads_the_ledger_for_the_stopped_node(harness: _Harness) -> N
     reserve_at(conn, start_attempt(conn, harness.run_id, node), Decimal("0.01"))
     assert stop(RefusalCode.PROVIDER_UNAVAILABLE) is RefusalCode.PROVIDER_UNAVAILABLE
     assert stop(RefusalCode.HANDOFF_MALFORMED) is RefusalCode.HANDOFF_MALFORMED
+
+
+# N150: a free-space floor before the first paid call, and a resume option.
+
+
+def _probe(answer: str) -> str:
+    """A probe command whose whole output is `answer`; no shell is involved."""
+    return f'{sys.executable} -c "import sys; sys.stdout.write({answer!r})"'
+
+
+def _costed(cls: type[_FakeProvider] = _FakeProvider) -> _FakeProvider:
+    """A fake provider priced as the happy path prices it, so a set completes."""
+    price = price_from_environment(
+        "a-model/for-the-test", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
+    return cls(price=price)
+
+
+def _arguments(root: Path, *extra: str) -> list[str]:
+    return [
+        str(root),
+        "--expect-identity",
+        "test-fake-identity",
+        "--ceiling",
+        "5.00",
+        *extra,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("answer", "free"),
+    [("123456\n", 123456), ("0", 0), ("  42  \n", 42)],
+)
+def test_the_probe_answer_is_one_whole_number_of_bytes(answer: str, free: int) -> None:
+    assert qualify._parsed_free_bytes(answer) == free
+
+
+@pytest.mark.parametrize(
+    "answer",
+    ["", "\n", "12 GB", "1\n2", "-5", "1e9", "1.5", "0x10", "free: 7", "٣"],
+)
+def test_a_malformed_probe_answer_refuses_and_never_passes(answer: str) -> None:
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._parsed_free_bytes(answer)
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+DF = (
+    "Filesystem     1024-blocks      Used Available Capacity Mounted on\n"
+    "/dev/vda1         61255492  20000000  41255492      33% /var/lib/postgresql/data\n"
+)
+
+
+def test_df_output_is_read_as_the_available_column_in_kib_blocks() -> None:
+    assert qualify._free_bytes_from_df(DF) == 41255492 * 1024
+
+
+@pytest.mark.parametrize(
+    "answer",
+    ["", "Filesystem\n", DF.replace("41255492", "lots"), DF + DF, "a b\nc d e\n"],
+)
+def test_malformed_df_output_refuses(answer: str) -> None:
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._free_bytes_from_df(answer)
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+def _fake_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str) -> Path:
+    """A `docker` executable first on PATH that records its arguments."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "docker-args"
+    (tmp_path / "df.txt").write_text(text, encoding="utf-8")
+    script = bin_dir / "docker"
+    script.write_text(
+        f'#!/bin/sh\necho "$@" > {record}\ncat {tmp_path / "df.txt"}\n',
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    return record
+
+
+def test_the_docker_probe_runs_df_in_the_named_container(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = _fake_docker(tmp_path, monkeypatch, DF)
+    free = qualify._free_bytes(qualify.Probe(command=None, docker_container="caos-pg"))
+    assert free == 41255492 * 1024
+    assert record.read_text(encoding="utf-8").split() == [
+        "exec",
+        "caos-pg",
+        "df",
+        "-P",
+        "/var/lib/postgresql/data",
+    ]
+
+
+def test_a_probe_that_cannot_run_or_exits_nonzero_refuses(tmp_path: Path) -> None:
+    for command in (str(tmp_path / "no-such-probe"), f"{sys.executable} -c 'exit(3)'"):
+        with pytest.raises(qualify.PreflightRefusal) as raised:
+            qualify._free_bytes(qualify.Probe(command=command, docker_container=None))
+        assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+def test_a_floor_above_the_free_space_refuses_before_any_database_or_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(
+        _arguments(
+            root, "--free-space-probe", _probe("1000"), "--min-free-bytes", "1001"
+        )
+    )
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "FREE_SPACE_BELOW_FLOOR" in err and "nothing was spent" in err
+    assert "1000" not in err
+    assert created == [] and provider.prompts == []
+
+
+def test_a_malformed_probe_answer_stops_the_driver_before_any_spend(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(_arguments(root, "--free-space-probe", _probe("plenty")))
+
+    assert code == 2
+    assert "FREE_SPACE_UNREADABLE" in capsys.readouterr().err
+    assert created == [] and provider.prompts == []
+
+
+def test_a_probe_and_a_container_together_are_refused(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    code = qualify.main(
+        _arguments(tmp_path, "--free-space-probe", "true", "--docker-container", "pg")
+    )
+    assert code == 2
+    assert "one free-space probe" in capsys.readouterr().err
+
+
+def test_no_probe_means_no_check_and_it_is_said_once(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    assert qualify.main(_arguments(root)) == 0
+
+    assert capsys.readouterr().err.count("free space is not checked") == 1
+
+
+def test_a_probe_with_room_lets_the_set_run(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(
+        _arguments(
+            root, "--free-space-probe", _probe("5000"), "--min-free-bytes", "5000"
+        )
+    )
+
+    assert code == 0
+    assert "free space is not checked" not in capsys.readouterr().err
+    assert len(created) == 1
+
+
+def test_a_probe_answer_of_thousands_of_digits_refuses_typed() -> None:
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._parsed_free_bytes("9" * 5000)
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+    with pytest.raises(qualify.PreflightRefusal):
+        qualify._free_bytes_from_df(DF.replace("41255492", "9" * 5000))
+
+
+def test_df_output_in_other_than_kib_blocks_refuses() -> None:
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._free_bytes_from_df(DF.replace("1024-blocks", "512-blocks"))
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+@pytest.mark.parametrize("name", ["-v", "--help", "", "a b", "a;b"])
+def test_a_container_name_docker_would_read_as_an_option_refuses(name: str) -> None:
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._free_bytes(qualify.Probe(command=None, docker_container=name))
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+def test_the_shared_argv_runner_runs_without_a_shell_and_bounds_time() -> None:
+    import tracked
+
+    done = tracked.run_argv([sys.executable, "-c", "print('x y')"])
+    assert (done.returncode, done.stdout.strip()) == (0, "x y")
+    with pytest.raises(TimeoutError):
+        tracked.run_argv(
+            [sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.2
+        )
