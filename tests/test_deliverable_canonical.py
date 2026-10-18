@@ -18,6 +18,7 @@ import pytest
 from canonical_fixtures import CATALOG, CONTRACT, handoff_markdown, skill
 from conftest import every_block, recorded_statements, tamper
 from conftest import reserve_at as reserve
+from governed_deliverable import freeze_canonical, save_revision, sign_opinion
 from test_execution_freshness import _Harness, harness
 from test_loop_charges import ESTIMATE, MODEL, REPORTED
 
@@ -26,14 +27,12 @@ from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import (
     Revision,
     canonical_payload,
-    freeze_canonical,
     payload_bytes,
     verify_frozen,
 )
-from caos.deliverable.filing import sign_opinion
 from caos.deliverable.package import build_package, verify_package
 from caos.deliverable.render import RenderRefused, canonical_bound, render
-from caos.deliverable.revisions import read_revision, save_revision
+from caos.deliverable.revisions import read_revision
 from caos.evidence.citations import ANY_RUN, EXCERPT, Citation, verify_citations
 from caos.graph.route import ResolvedRoute, resolve_route
 from caos.methodology.bundle import (
@@ -53,6 +52,7 @@ from caos.methodology.invocation import accepted_lineage, host_identity
 from caos.methodology.vendor import authority_bundle_sha256
 from caos.methodology.verification import AcceptedRow
 from caos.refusals import Refusal, RefusalCode
+from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant
 from caos.store.outcomes import CallOutcome, record_outcome
 from caos.store.runs import Accepted, accept_attempt, start_attempt
@@ -226,6 +226,20 @@ def _rewrite(harness: _Harness, module_id: str, **changes: object) -> None:
         (harness.blobs.put(moved), artifact),
     )
     harness.conn.commit()
+
+
+def test_withdrawing_an_uncited_source_leaves_the_payload(lite: _Harness) -> None:
+    """Liveness is judged per citation: a withdrawn source no record cites
+    refuses nothing (the delivery rebuild reads the pin without a liveness
+    count)."""
+    withdraw_source(
+        lite.conn,
+        case_id=lite.case_id,
+        actor_id=lite.approver,
+        source_id=lite.witness_id,
+    )
+    assert _payload(lite)["artifacts"]
+    lite.conn.rollback()
 
 
 def test_the_payload_is_read_from_the_store_and_round_trips(lite: _Harness) -> None:

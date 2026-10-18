@@ -34,7 +34,8 @@ from dataclasses import dataclass, field, replace
 from decimal import ROUND_UP, Decimal
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from urllib.parse import urlsplit, urlunsplit
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
@@ -55,10 +56,10 @@ from caos.qualification.harness import (
     _unrun,
     perform,
 )
-from caos.qualification.matrix import QualificationSet
-from caos.qualification.on_disk import MANIFEST
+from caos.qualification.matrix import QualificationSet, qualification_set_digest
+from caos.qualification.on_disk import MANIFEST, load_qualification_set
 from caos.refusals import Refusal, RefusalCode
-from caos.store import RunStatus, StoreConnection, connect
+from caos.store import RunStatus, StoreConnection, apply_schema, connect
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -398,7 +399,10 @@ def test_main_refuses_a_malformed_admin_url_without_the_password(
 
     assert code == 2
     logged = capsys.readouterr().err
-    assert logged.strip() == "STORE_UNAVAILABLE: the set was refused; nothing was spent"
+    # The unnamed free-space probe is said once (N150) before the refusal.
+    assert logged.strip().splitlines()[-1] == (
+        "STORE_UNAVAILABLE: the set was refused; nothing was spent"
+    )
     assert "SuperSecretPw" not in logged
 
 
@@ -557,8 +561,6 @@ def test_a_set_of_more_than_one_case_can_be_admitted(
 
 def _database_url(admin_url: str, database: str) -> str:
     """The admin URL pointed at `database`, as `qualify.py` builds its own."""
-    from urllib.parse import urlsplit, urlunsplit
-
     return urlunsplit(urlsplit(admin_url)._replace(path=f"/{database}"))
 
 
@@ -1146,3 +1148,765 @@ def test_stop_code_reads_the_ledger_for_the_stopped_node(harness: _Harness) -> N
     reserve_at(conn, start_attempt(conn, harness.run_id, node), Decimal("0.01"))
     assert stop(RefusalCode.PROVIDER_UNAVAILABLE) is RefusalCode.PROVIDER_UNAVAILABLE
     assert stop(RefusalCode.HANDOFF_MALFORMED) is RefusalCode.HANDOFF_MALFORMED
+
+
+# N150: a free-space floor before the first paid call, and a resume option.
+
+
+def _probe(answer: str) -> str:
+    """A probe command whose whole output is `answer`; no shell is involved."""
+    return f'{sys.executable} -c "import sys; sys.stdout.write({answer!r})"'
+
+
+def _costed(cls: type[_FakeProvider] = _FakeProvider) -> _FakeProvider:
+    """A fake provider priced as the happy path prices it, so a set completes."""
+    price = price_from_environment(
+        "a-model/for-the-test", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
+    return cls(price=price)
+
+
+def _arguments(root: Path, *extra: str) -> list[str]:
+    return [
+        str(root),
+        "--expect-identity",
+        "test-fake-identity",
+        "--ceiling",
+        "5.00",
+        *extra,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("answer", "free"),
+    [("123456\n", 123456), ("0", 0), ("  42  \n", 42)],
+)
+def test_the_probe_answer_is_one_whole_number_of_bytes(answer: str, free: int) -> None:
+    assert qualify._parsed_free_bytes(answer) == free
+
+
+@pytest.mark.parametrize(
+    "answer",
+    ["", "\n", "12 GB", "1\n2", "-5", "1e9", "1.5", "0x10", "free: 7", "٣"],
+)
+def test_a_malformed_probe_answer_refuses_and_never_passes(answer: str) -> None:
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._parsed_free_bytes(answer)
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+DF = (
+    "Filesystem     1024-blocks      Used Available Capacity Mounted on\n"
+    "/dev/vda1         61255492  20000000  41255492      33% /var/lib/postgresql/data\n"
+)
+
+
+def test_df_output_is_read_as_the_available_column_in_kib_blocks() -> None:
+    assert qualify._free_bytes_from_df(DF) == 41255492 * 1024
+
+
+@pytest.mark.parametrize(
+    "answer",
+    ["", "Filesystem\n", DF.replace("41255492", "lots"), DF + DF, "a b\nc d e\n"],
+)
+def test_malformed_df_output_refuses(answer: str) -> None:
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._free_bytes_from_df(answer)
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+def _fake_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str) -> Path:
+    """A `docker` executable first on PATH that records its arguments."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "docker-args"
+    (tmp_path / "df.txt").write_text(text, encoding="utf-8")
+    script = bin_dir / "docker"
+    script.write_text(
+        f'#!/bin/sh\necho "$@" > {record}\ncat {tmp_path / "df.txt"}\n',
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    return record
+
+
+def test_the_docker_probe_runs_df_in_the_named_container(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = _fake_docker(tmp_path, monkeypatch, DF)
+    free = qualify._free_bytes(qualify.Probe(command=None, docker_container="caos-pg"))
+    assert free == 41255492 * 1024
+    assert record.read_text(encoding="utf-8").split() == [
+        "exec",
+        "caos-pg",
+        "df",
+        "-P",
+        "/var/lib/postgresql/data",
+    ]
+
+
+def test_a_probe_that_cannot_run_or_exits_nonzero_refuses(tmp_path: Path) -> None:
+    for command in (str(tmp_path / "no-such-probe"), f"{sys.executable} -c 'exit(3)'"):
+        with pytest.raises(qualify.PreflightRefusal) as raised:
+            qualify._free_bytes(qualify.Probe(command=command, docker_container=None))
+        assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+def test_a_floor_above_the_free_space_refuses_before_any_database_or_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(
+        _arguments(
+            root, "--free-space-probe", _probe("1000"), "--min-free-bytes", "1001"
+        )
+    )
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "FREE_SPACE_BELOW_FLOOR" in err and "nothing was spent" in err
+    assert "1000" not in err
+    assert created == [] and provider.prompts == []
+
+
+def test_a_malformed_probe_answer_stops_the_driver_before_any_spend(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(_arguments(root, "--free-space-probe", _probe("plenty")))
+
+    assert code == 2
+    assert "FREE_SPACE_UNREADABLE" in capsys.readouterr().err
+    assert created == [] and provider.prompts == []
+
+
+def test_a_probe_and_a_container_together_are_refused(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    code = qualify.main(
+        _arguments(tmp_path, "--free-space-probe", "true", "--docker-container", "pg")
+    )
+    assert code == 2
+    assert "one free-space probe" in capsys.readouterr().err
+
+
+def test_no_probe_means_no_check_and_it_is_said_once(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    assert qualify.main(_arguments(root)) == 0
+
+    assert capsys.readouterr().err.count("free space is not checked") == 1
+
+
+def test_a_probe_with_room_lets_the_set_run(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(
+        _arguments(
+            root, "--free-space-probe", _probe("5000"), "--min-free-bytes", "5000"
+        )
+    )
+
+    assert code == 0
+    assert "free space is not checked" not in capsys.readouterr().err
+    assert len(created) == 1
+
+
+@dataclass
+class _StoppedOnce(_FakeProvider):
+    """A provider the gateway fails for its first `fail` calls."""
+
+    fail: int = 1
+    calls: int = 0
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        self.calls += 1
+        if self.calls <= self.fail:
+            raise Refusal(RefusalCode.PROVIDER_UNAVAILABLE)
+        return super().complete(prompt, json_object=json_object)
+
+
+def _first_run(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    provider: _FakeProvider,
+) -> tuple[Path, str, int]:
+    """Run the lite set once; the set root, its database and the exit code.
+    The resume token the run printed is kept for `_resume_args`."""
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+    code = qualify.main(_arguments(root))
+    captured = capsys.readouterr()
+    database = json.loads(captured.out.partition("\n")[0])["database"]
+    printed = re.findall(r"^resume token: ([0-9a-f]{64})$", captured.err, re.M)
+    assert len(printed) == 1
+    _TOKENS[database] = printed[0]
+    return root, database, code
+
+
+_TOKENS: dict[str, str] = {}
+
+
+def _token_for(root: Path, database: str, model: str = "a-model/for-the-test") -> str:
+    """The token a start of `root` under `model` in `database` prints."""
+    digest = qualification_set_digest(load_qualification_set(root))
+    return qualify.resume_token(digest, "test-fake-identity", model, database)
+
+
+def _resume_args(
+    root: Path, database: str, *extra: str, token: str | None = None
+) -> list[str]:
+    """`--resume` with the token its start printed (or the one given)."""
+    given = token or _TOKENS.get(database, "0" * 64)
+    return _arguments(root, "--resume", database, "--resume-token", given, *extra)
+
+
+def _counts(database: str) -> tuple[int, int]:
+    url = _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], database)
+    with connect(url) as conn:
+        cases = conn.execute("SELECT count(*) FROM cases").fetchone()
+        runs = conn.execute("SELECT count(*) FROM run_inputs").fetchone()
+    assert cases is not None and runs is not None
+    return cases[0], runs[0]
+
+
+def test_resume_reenters_perform_on_the_same_pin_and_does_not_repin(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    root, database, first = _first_run(
+        monkeypatch, capsys, tmp_path, _costed(_StoppedOnce)
+    )
+    assert first != 0
+    before = _counts(database)
+    assert before == (1, 1)
+    monkeypatch.setattr(qualify, "from_environment", _costed)
+
+    code = qualify.main(_resume_args(root, database))
+
+    preamble_line, _, rest = capsys.readouterr().out.partition("\n")
+    assert json.loads(preamble_line)["database"] == database
+    assert code == 0 and json.loads(rest)["complete"] is True
+    assert _counts(database) == before
+    assert created == [database]
+
+
+def test_resume_of_a_finished_set_makes_no_new_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    root, database, first = _first_run(monkeypatch, capsys, tmp_path, provider)
+    assert first == 0
+    calls = len(provider.prompts)
+
+    assert qualify.main(_resume_args(root, database)) == 0
+
+    assert len(provider.prompts) == calls
+    assert _counts(database) == (1, 1)
+
+
+def test_resume_applies_the_free_space_floor_first(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    root, database, _ = _first_run(monkeypatch, capsys, tmp_path, provider)
+    calls = len(provider.prompts)
+
+    code = qualify.main(
+        _resume_args(
+            root, database, "--free-space-probe", _probe("1"), "--min-free-bytes", "2"
+        )
+    )
+
+    assert code == 2
+    assert "FREE_SPACE_BELOW_FLOOR" in capsys.readouterr().err
+    assert len(provider.prompts) == calls
+
+
+@pytest.mark.parametrize("name", ["postgres", "caos_qualify_x; DROP", "../x", "x"])
+def test_resume_names_only_a_database_this_script_creates(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    name: str,
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(_resume_args(root, name))
+
+    assert code == 2
+    assert "RESUME_DATABASE_INVALID" in capsys.readouterr().err
+    assert provider.prompts == []
+
+
+def test_resume_of_a_database_that_holds_no_pin_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+    server = os.environ["CAOS_TEST_POSTGRES_URL"]
+    bare, _ = qualify._create_database(server)
+    created.append(bare)
+    # No schema at all, then a schema with no case in it.
+    for schema_first in (False, True):
+        if schema_first:
+            with connect(_database_url(server, bare)) as conn:
+                apply_schema(conn)
+                conn.commit()
+        code = "RESUME_NO_PIN" if schema_first else "STORE_SCHEMA_DRIFT"
+        assert qualify.main(_resume_args(root, bare)) == 2
+        assert code in capsys.readouterr().err
+    assert provider.prompts == []
+
+
+def test_resume_of_a_database_that_does_not_exist_reads_no_pin(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """N236 (2): a name this script could have minted, of a database the
+    server never had (dropped, or mistyped), holds no pin as much as an empty
+    one does; it is not an unreachable store."""
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+    missing = "caos_qualify_" + uuid4().hex
+
+    assert qualify.main(_resume_args(root, missing)) == 2
+
+    err = capsys.readouterr().err
+    assert "RESUME_NO_PIN" in err and "STORE_UNAVAILABLE" not in err
+    assert provider.prompts == [] and created == []
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        (query, mode)
+        for query in (
+            "dbname=postgres",
+            "DBNAME=postgres",
+            "dbname=",
+            "DBNAME=",
+            "service=x",
+            "service=",
+        )
+        for mode in ("start", "resume")
+    ],
+)
+def test_an_admin_url_naming_a_database_in_its_query_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+    case: tuple[str, str],
+) -> None:
+    """N236 (1): a `dbname` parameter, even an empty one, wins over the path
+    `_database_url` sets, and a `service` entry can supply one, so a start or
+    a resume would reach another database than the one minted or asked for.
+    Refused before anything is created or spent, naming the
+    parameter and never the URL."""
+    query, mode = case
+    provider = _costed()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    secret = uuid4().hex
+    server = urlsplit(os.environ["CAOS_TEST_POSTGRES_URL"])
+    named = urlunsplit(server._replace(query=f"{query}&application_name={secret}"))
+    monkeypatch.setenv("CAOS_QUALIFY_POSTGRES_URL", named)
+    root = _write_lite_set(tmp_path / "set")
+    argv = (
+        _resume_args(root, "caos_qualify_" + uuid4().hex)
+        if mode == "resume"
+        else _arguments(root)
+    )
+
+    assert qualify.main(argv) == 2
+
+    err = capsys.readouterr().err
+    assert (
+        "dbname" in err
+        and "service" in err
+        and secret not in err
+        and "nothing was spent" in err
+    )
+    assert provider.prompts == [] and created == []
+
+
+def test_resume_of_a_pin_for_another_set_refuses_without_a_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _, database, _ = _first_run(monkeypatch, capsys, tmp_path, provider)
+    calls = len(provider.prompts)
+    other = _write_lite_set(tmp_path / "other")
+    manifest = json.loads((other / MANIFEST).read_text(encoding="utf-8"))
+    manifest["cases"][0]["subject"]["analysis_date"] = "2026-09-14"
+    (other / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
+
+    code = qualify.main(
+        _resume_args(other, database, token=_token_for(other, database))
+    )
+
+    assert code == 2
+    assert len(provider.prompts) == calls
+    assert _counts(database) == (1, 1)
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+
+
+def test_resume_of_a_pin_for_another_build_refuses_without_a_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    root, database, _ = _first_run(monkeypatch, capsys, tmp_path, provider)
+    calls = len(provider.prompts)
+    url = _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], database)
+    with connect(url) as conn:
+        conn.execute("SET session_replication_role = replica")
+        conn.execute("UPDATE run_inputs SET build_id = %s", ("0" * 64,))
+        conn.commit()
+
+    code = qualify.main(_resume_args(root, database))
+
+    assert code == 2
+    assert len(provider.prompts) == calls
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+
+
+# Fix round 1: resume binds the set, the provider and the model (I-1); the probe
+# reads strictly (M-1, M-2); public wrappers (M-4).
+
+
+OTHER = "other/model"
+
+
+def _other_model(monkeypatch: pytest.MonkeyPatch) -> _FakeProvider:
+    """The same fake under another model name, priced for that name."""
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "other/model,0.0000000001,0.00001,2026-09-13"
+    )
+    price = price_from_environment(
+        "other/model", "other/model,0.0000000001,0.00001,2026-09-13"
+    )
+    return _FakeProvider(model="other/model", price=price)
+
+
+def test_resume_under_another_model_refuses_and_makes_no_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    root, database, first = _first_run(
+        monkeypatch, capsys, tmp_path, _costed(_StoppedOnce)
+    )
+    assert first != 0
+    other = _other_model(monkeypatch)
+    monkeypatch.setattr(qualify, "from_environment", lambda: other)
+
+    code = qualify.main(
+        _resume_args(root, database, token=_token_for(root, database, OTHER))
+    )
+
+    assert code == 2
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+    assert other.prompts == []
+
+
+def test_resume_under_another_model_refuses_when_no_snapshot_was_written(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """A driver killed before its first snapshot leaves only the ledger: the
+    calls already recorded name the model they were paid under."""
+    root, database, first = _first_run(monkeypatch, capsys, tmp_path, _costed())
+    assert first == 0
+    url = _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], database)
+    with connect(url) as conn:
+        conn.execute("SET session_replication_role = replica")
+        conn.execute("DELETE FROM qualification_verdicts")
+        conn.execute("DELETE FROM qualification_evidence")
+        conn.execute("DELETE FROM qualification_performed")
+        conn.commit()
+    other = _other_model(monkeypatch)
+    monkeypatch.setattr(qualify, "from_environment", lambda: other)
+
+    code = qualify.main(
+        _resume_args(root, database, token=_token_for(root, database, OTHER))
+    )
+
+    assert code == 2
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+    assert other.prompts == []
+
+
+def test_resume_of_an_edited_answer_key_refuses_and_makes_no_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    _, database, first = _first_run(monkeypatch, capsys, tmp_path, provider)
+    assert first == 0
+    calls = len(provider.prompts)
+    edited = _write_lite_set(tmp_path / "edited")
+    manifest = json.loads((edited / MANIFEST).read_text(encoding="utf-8"))
+    key = dict(manifest["cases"][0]["expects"][0])
+    key["matched_text"] = "Acme Holdings plc annual report 2026"
+    manifest["cases"][0]["expects"].append(key)
+    (edited / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
+
+    code = qualify.main(
+        _resume_args(edited, database, token=_token_for(edited, database))
+    )
+
+    assert code == 2
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+    assert len(provider.prompts) == calls
+
+
+def test_a_probe_answer_of_thousands_of_digits_refuses_typed() -> None:
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._parsed_free_bytes("9" * 5000)
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+    with pytest.raises(qualify.PreflightRefusal):
+        qualify._free_bytes_from_df(DF.replace("41255492", "9" * 5000))
+
+
+def test_df_output_in_other_than_kib_blocks_refuses() -> None:
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._free_bytes_from_df(DF.replace("1024-blocks", "512-blocks"))
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+
+
+@pytest.mark.parametrize("name", ["-v", "--help", "", "a b", "a;b"])
+def test_a_container_name_docker_would_read_as_an_option_refuses(
+    name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A `docker` on PATH that answers any arguments with a valid reading, so
+    only the script's own name check can refuse (the real docker refuses these
+    names itself, which hid a missing check)."""
+    record = _fake_docker(tmp_path, monkeypatch, DF)
+    with pytest.raises(qualify.PreflightRefusal) as raised:
+        qualify._free_bytes(qualify.Probe(command=None, docker_container=name))
+    assert raised.value.code is qualify.PreflightCode.FREE_SPACE_UNREADABLE
+    assert not record.exists()  # refused before docker was run at all
+
+
+def test_the_harness_names_its_identities_and_eligibility_publicly() -> None:
+    from caos.qualification.harness import assert_pin_eligible, harness_identities
+
+    assert callable(assert_pin_eligible)
+    assert harness_identities(_FakeProvider()) == (
+        "test-fake-identity",
+        "a-model/for-the-test",
+    )
+
+
+def test_the_shared_argv_runner_runs_without_a_shell_and_bounds_time() -> None:
+    import tracked
+
+    done = tracked.run_argv([sys.executable, "-c", "print('x y')"])
+    assert (done.returncode, done.stdout.strip()) == (0, "x y")
+    with pytest.raises(TimeoutError):
+        tracked.run_argv(
+            [sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.2
+        )
+
+
+def _kill_before_the_first_snapshot(database: str) -> None:
+    """What a driver killed before `perform` returned leaves: the ledger, no
+    snapshot (the immutable rows are removed as a test fixture only)."""
+    url = _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], database)
+    with connect(url) as conn:
+        conn.execute("SET session_replication_role = replica")
+        conn.execute("DELETE FROM qualification_verdicts")
+        conn.execute("DELETE FROM qualification_evidence")
+        conn.execute("DELETE FROM qualification_performed")
+        conn.commit()
+
+
+def _edited_key_set(root: Path) -> Path:
+    edited = _write_lite_set(root)
+    manifest = json.loads((edited / MANIFEST).read_text(encoding="utf-8"))
+    key = dict(manifest["cases"][0]["expects"][0])
+    key["matched_text"] = "Acme Holdings plc annual report 2026"
+    manifest["cases"][0]["expects"].append(key)
+    (edited / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
+    return edited
+
+
+def test_resume_after_a_kill_before_the_first_snapshot_refuses_an_edited_key(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """N-2: with no snapshot, nothing in the database records the set digest,
+    so an edited key used to resume, pay, and bind its calls to the new digest."""
+    _, database, first = _first_run(
+        monkeypatch, capsys, tmp_path, _costed(_StoppedOnce)
+    )
+    assert first != 0
+    _kill_before_the_first_snapshot(database)
+    resumed = _costed()
+    monkeypatch.setattr(qualify, "from_environment", lambda: resumed)
+
+    code = qualify.main(_resume_args(_edited_key_set(tmp_path / "edited"), database))
+
+    assert code == 2
+    assert resumed.prompts == []
+
+
+def test_the_resume_token_names_the_set_and_the_identity_exactly() -> None:
+    here = "caos_qualify_" + "0" * 32
+    base = qualify.resume_token("a" * 64, "copilot/m/high/65536", "m", here)
+    assert len(base) == 64 and base == qualify.resume_token(
+        "a" * 64, "copilot/m/high/65536", "m", here
+    )
+    # Every part counts, the output-cap segment of the identity included.
+    assert base != qualify.resume_token("b" * 64, "copilot/m/high/65536", "m", here)
+    assert base != qualify.resume_token("a" * 64, "copilot/m/high/32768", "m", here)
+    assert base != qualify.resume_token("a" * 64, "copilot/m/high/65536", "n", here)
+
+
+def test_a_start_prints_its_resume_token_once_before_any_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    root, database, first = _first_run(monkeypatch, capsys, tmp_path, _costed())
+    assert first == 0
+    assert _TOKENS[database] == _token_for(root, database)
+
+
+def test_resume_without_its_token_is_an_argparse_error(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    database = "caos_qualify_" + "0" * 32
+    with pytest.raises(SystemExit) as raised:
+        qualify.main(_arguments(tmp_path, "--resume", database))
+    assert raised.value.code == 2
+    assert "--resume-token" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        qualify.main(_arguments(tmp_path, "--resume-token", "0" * 64))
+
+
+def test_resume_with_a_token_from_another_identity_refuses_without_a_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    provider = _costed()
+    root, database, _ = _first_run(monkeypatch, capsys, tmp_path, provider)
+    calls = len(provider.prompts)
+
+    code = qualify.main(
+        _resume_args(root, database, token=_token_for(root, database, OTHER))
+    )
+
+    assert code == 2
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+    assert len(provider.prompts) == calls
+
+
+def _donor_start(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], root: Path
+) -> tuple[str, str]:
+    """Another start of `root`, in a database of its own: its name and the
+    resume token it printed."""
+    donor = _costed()
+    monkeypatch.setattr(qualify, "from_environment", lambda: donor)
+    # Performed (0 or 1: a set with an edited key does not qualify), not refused.
+    assert qualify.main(_arguments(root)) in (0, 1)
+    assert donor.prompts != []
+    captured = capsys.readouterr()
+    database = json.loads(captured.out.partition("\n")[0])["database"]
+    (token,) = re.findall(r"^resume token: ([0-9a-f]{64})$", captured.err, re.M)
+    return database, token
+
+
+def test_resume_with_a_donor_databases_token_refuses_without_a_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """N-3: the token binds the database too. One that named only the set and
+    the identity let a crashed database resume with an edited key under the
+    token another start of that edited set printed, and pay."""
+    _, crashed, first = _first_run(monkeypatch, capsys, tmp_path, _costed(_StoppedOnce))
+    assert first != 0
+    _kill_before_the_first_snapshot(crashed)
+    edited = _edited_key_set(tmp_path / "edited")
+    donor, donor_token = _donor_start(monkeypatch, capsys, edited)
+    assert donor != crashed
+    resumed = _costed()
+    monkeypatch.setattr(qualify, "from_environment", lambda: resumed)
+
+    code = qualify.main(_resume_args(edited, crashed, token=donor_token))
+
+    assert code == 2
+    assert "RESUME_PIN_MISMATCH" in capsys.readouterr().err
+    assert resumed.prompts == []
+
+
+def test_the_resume_token_names_the_database_too() -> None:
+    here = "caos_qualify_" + "0" * 32
+    there = "caos_qualify_" + "1" * 32
+    base = qualify.resume_token("a" * 64, "copilot/m/high/65536", "m", here)
+    assert base == qualify.resume_token("a" * 64, "copilot/m/high/65536", "m", here)
+    assert base != qualify.resume_token("a" * 64, "copilot/m/high/65536", "m", there)

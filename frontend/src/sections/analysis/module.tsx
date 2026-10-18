@@ -200,13 +200,17 @@ function DatedRows({ table }: { table: MdTable }) {
   );
 }
 
+/** A register of this many columns or more is wide (N95): its long text
+    cells are clamped to two lines. */
+const WIDE_REGISTER = 10;
+
 /** A register's table in the form its shape reads best in. */
 function RegisterBody({ table, shape, label }: { table: MdTable; shape: Shape; label: string }) {
   if (shape === "findings" || shape === "triggers" || shape === "debate") {
     return <ItemRows table={table} />;
   }
   if (shape === "timeline") return <DatedRows table={table} />;
-  return <MdTableView table={table} label={label} />;
+  return <MdTableView table={table} label={label} clamp={table.head.length >= WIDE_REGISTER} />;
 }
 
 function RegisterNotes({ register, label }: { register: Register; label: string }) {
@@ -928,7 +932,7 @@ export function Depth({
               Audit
               {issues ? (
                 <span className="count">
-                  <span className="glyph warn" aria-hidden="true" /> {issues}
+                  <span className="glyph restricted" aria-hidden="true" /> {issues}
                 </span>
               ) : null}
             </TabsTrigger>

@@ -184,6 +184,7 @@ describe("Analysis", () => {
       registers: [
         {
           register_id: "T5.9",
+          unavailable_reason: null,
           columns,
           declared: columns,
           rows: [
@@ -519,6 +520,52 @@ describe("Analysis", () => {
     expect(document.activeElement).toBe(panel);
     expect(panel).toHaveAttribute("role", "region");
     expect(panel).toHaveAccessibleName(/T4\.14.*all 10 rows/);
+  });
+
+  test("a wide register clamps its long text cells to two lines, whole for assistive tech, open on focus or click", () => {
+    const heads = Array.from({ length: 10 }, (_, index) => `col_${index}`);
+    const long = "A long covenant definition that runs well past two lines of a narrow column.";
+    const wide = {
+      ...complete.body.handoffs[0]!,
+      model_analysis: [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### T9.1 — Wide register",
+        `| ${heads.join(" | ")} |`,
+        `| ${heads.map(() => "---").join(" | ")} |`,
+        `| ${[long, ...heads.slice(1).map((_, index) => `s${index}`)].join(" | ")} |`,
+        "#### T9.2 — Narrow register",
+        "| a | b |",
+        "| --- | --- |",
+        `| ${long} | x |`,
+      ].join("\n"),
+    };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [wide] } }}
+        tab={wide.route_node_id}
+      />,
+    );
+    const panel = container.querySelector('[data-depth-panel="appendix"]')!;
+    const [first, second] = [...panel.querySelectorAll<HTMLElement>("[data-register-open]")];
+    fireEvent.click(first!);
+    const cell = panel.querySelector<HTMLElement>("td[data-clamp]")!;
+    // Only the long cell is a stop; its full text stays in the document.
+    expect(panel.querySelectorAll("td[data-clamp]")).toHaveLength(1);
+    expect(cell).toHaveAttribute("tabindex", "0");
+    expect(cell).toHaveTextContent(long);
+    expect(cell).toHaveAttribute("data-clamp", "closed");
+    fireEvent.focus(cell);
+    expect(cell).toHaveAttribute("data-clamp", "open");
+    fireEvent.blur(cell);
+    expect(cell).toHaveAttribute("data-clamp", "closed");
+    fireEvent.click(cell);
+    expect(cell).toHaveAttribute("data-clamp", "open");
+    // A register of fewer columns keeps its cells whole.
+    fireEvent.click(second!);
+    expect(panel.querySelector("td[data-clamp]")).toBeNull();
   });
 
   test("the opening leads, its drivers are key points, the contrary view sits beside it", () => {
@@ -944,5 +991,61 @@ describe("Analysis", () => {
     const { container } = mount(empty);
     expect(container.querySelectorAll("[data-handoff]")).toHaveLength(0);
     expect(container).toHaveTextContent("No handoff has been accepted on this run yet.");
+  });
+});
+
+describe("Analysis residue (N221)", () => {
+  const withText = (model_analysis: string) => ({
+    ...complete.body.handoffs[0]!,
+    model_analysis,
+  });
+  const mountText = (model_analysis: string) => {
+    const handoff = withText(model_analysis);
+    return mountAt(
+      { ...complete, body: { ...complete.body, handoffs: [handoff] } },
+      handoff.module_id,
+    );
+  };
+
+  test("a model-text Restricted status word wears the ring, not the warning (D71)", () => {
+    const { container } = mountText(
+      [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### B2 — Status",
+        "| Check | Status |",
+        "| --- | --- |",
+        "| Leverage | Restricted |",
+        "| Liquidity | Stale |",
+      ].join("\n"),
+    );
+    openTab(container, "appendix");
+    fireEvent.click(container.querySelector("[data-register-open]")!);
+    const words = [...container.querySelectorAll("[data-status-word]")];
+    const restricted = words.find((word) => word.textContent === "Restricted")!;
+    expect(restricted.classList.contains("warn")).toBe(false);
+    expect(restricted.querySelector(".glyph")).toHaveClass("restricted");
+    const stale = words.find((word) => word.textContent === "Stale")!;
+    expect(stale.querySelector(".glyph")).toHaveClass("warn");
+  });
+
+  test("the Audit tab's issue count is drawn as the ring, not a warning (D71)", () => {
+    const { container } = mountText(
+      [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### B9 — Conflicts & gaps register",
+        "| Gap ID | Gap description |",
+        "| --- | --- |",
+        "| G1 | Missing FY25 notes |",
+      ].join("\n"),
+    );
+    const glyph = container.querySelector('[data-depth-tab="audit"] .count .glyph')!;
+    expect(glyph).toHaveClass("restricted");
+    expect(glyph).not.toHaveClass("warn");
   });
 });

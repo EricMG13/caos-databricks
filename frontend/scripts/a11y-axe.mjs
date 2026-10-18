@@ -221,6 +221,20 @@ async function scan(page, route, viewport) {
         .getAttribute("value");
       await picker.selectOption(value ?? "");
     }
+    // A register a route names is opened, and its clamped cell (N95) waited
+    // for closed; `clamp=open` then focuses the cell, which opens it. A route
+    // with no clamped cell to scan is a scan error, never a quiet scan.
+    if (params.get("register")) {
+      await page.locator("[data-register-open]").first().click();
+      const cell = page.locator("td[data-clamp]").first();
+      await cell.waitFor({ state: "visible", timeout: 15_000 });
+      const wanted = params.get("clamp") === "open" ? "open" : "closed";
+      if (wanted === "open") await cell.focus();
+      await page
+        .locator(`td[data-clamp="${wanted}"]`)
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+    }
     // A dialog or panel a route names is opened, and waited for, before the
     // scan; one that cannot be opened is a scan error.
     const dialog = params.get("dialog");
