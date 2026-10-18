@@ -102,6 +102,9 @@ export const STATE_ROUTES = [
   sectionRoute("directory", "acts"),
   sectionRoute("upload", "acts"),
   sectionRoute("run", "acts"),
+  // N159: the run input's command form on a route that carries CP-2G (the
+  // acts route has none, so its form shows the objective alone).
+  sectionRoute("run", "command"),
   sectionRoute("report", "acts"),
   armedRoute("report", "SIGN_OPINION"),
   armedRoute("upload", "WITHDRAW_SOURCE"),
@@ -123,9 +126,19 @@ export const STATE_ROUTES = [
   ...["rn-cp-1", "rn-cp-1b"].map((tab) => `${sectionRoute("analysis")}&tab=${tab}&open=audit`),
   `${sectionRoute("report", "acts")}&pick=unverified`,
   sectionRoute("run", "blocked"),
+  // N141: the same quotes on Analysis, under the node whose verdict ended the run.
+  sectionRoute("analysis", "blocked"),
+  // N142: the artifact's "Signed record (JSON)" disclosure, opened by the gate
+  // (`disclose`), since closed by default it was never scanned.
+  `${sectionRoute("report")}&disclose=record`,
+  `${sectionRoute("committee")}&disclose=record`,
   // D107: a module's text with an anchored citation's marker chip (CP-0); the
   // unverified one's is CP-1B's above, the artifacts' Report's and Committee's.
   `${sectionRoute("analysis")}&tab=rn-cp-0`,
+  // N95: a wide register's clamped text cell, closed and then open on focus
+  // (`open` the appendix, `register` its first table, `clamp` the cell).
+  `${sectionRoute("analysis", "wide")}&tab=rn-cp-4&open=appendix&register=1`,
+  `${sectionRoute("analysis", "wide")}&tab=rn-cp-4&open=appendix&register=1&clamp=open`,
   "/analysis/",
   "/nothing/",
 ];

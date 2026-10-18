@@ -130,7 +130,7 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.5**: structured below
-      - **columns**: Entity; Total/Net/Sr Sec Leverage; Int Coverage; Adj Int Coverage; FFO/Debt; Liquidity; Period; Currency; Calc Status; Comp Status
+      - **columns**: Entity; Total Leverage; Net Leverage; Sr Sec Leverage; Int Coverage; Adj Int Coverage; FFO/Debt; Liquidity; Period; Currency; Calc Status; Comp Status
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1

@@ -60,7 +60,7 @@ from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant
 from caos.store.routes import _canonical
 from caos.store.runs import start_run
-from caos.store.source_sets import pinned_live_sources
+from caos.store.source_sets import PinnedSources, pinned_live_sources, pinned_sources
 
 __all__ = ["harness", "route"]
 
@@ -201,7 +201,7 @@ def test_a_host_control_reads_orchestration_proof_never_qualified(
     """
     proof = _prove(ran)
     assert proof.assurance is Assurance.ORCHESTRATION_PROOF
-    assert proof.build_id.startswith("2b86a4de")
+    assert proof.build_id.startswith("7a77e6af")
     assert proof.route_digest == route_digest(ran.route)
     assert proof.artifacts == len(ran.route.nodes)
     assert names_qualified() == {
@@ -551,7 +551,29 @@ def test_a_withdrawn_source_refuses_the_proof_and_the_deliverable(
         ran.conn, case_id=ran.case_id, actor_id=actor, source_id=ran.source_id
     )
     assert _refusal(ran) is RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED
-    assert _delivered(ran) is MISMATCH
+    # CF-019: the harness's records cite this source, so the deliverable names
+    # the cause, `EVIDENCE_NOT_AVAILABLE`, rather than a record mismatch.
+    assert _delivered(ran) is RefusalCode.EVIDENCE_NOT_AVAILABLE
+
+
+def test_pinned_sources_names_a_document_whose_every_copy_is_withdrawn(
+    ran: _Harness,
+) -> None:
+    """CF-019: one statement says which captured documents have no live copy
+    because a source was withdrawn (`PinnedSources.withdrawn`)."""
+    digest = sha256(REPORT).hexdigest()
+    before = pinned_sources(ran.conn, ran.run_id)
+    assert isinstance(before, PinnedSources)
+    assert digest in before.live and not before.withdrawn
+    actor = uuid4()
+    grant(ran.conn, case_id=ran.case_id, user_id=actor, standing=Standing.APPROVER)
+    ran.conn.commit()
+    withdraw_source(
+        ran.conn, case_id=ran.case_id, actor_id=actor, source_id=ran.source_id
+    )
+    after = pinned_sources(ran.conn, ran.run_id)
+    assert digest not in after.live
+    assert digest in after.withdrawn
 
 
 def test_a_readmitted_copy_of_a_withdrawn_source_does_not_revive_the_proof(
@@ -597,18 +619,23 @@ def test_a_changed_extraction_refuses_the_proof_and_the_deliverable(
         )
     ran.conn.commit()
     assert _refusal(ran) is RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED
+    # The member is still live and only its extraction moved: nothing was
+    # withdrawn, so this stays a record mismatch (CF-019 is about withdrawal).
     assert _delivered(ran) is MISMATCH
 
 
-@pytest.fixture
-def twice(harness: _Harness) -> tuple[_Harness, UUID]:
-    """A second run whose pin captures the cited document under two sources."""
+def _pinned_with_copies(harness: _Harness, extra: int) -> tuple[_Harness, list[UUID]]:
+    """A second run whose pin captures the cited document under `extra` more
+    sources than the harness's own."""
     conn = harness.conn
-    [copy] = admit_pack(
+    copies = admit_pack(
         conn,
         harness.blobs,
         case_id=harness.case_id,
-        documents=[Document(filename=BoundaryText.of("copy.txt"), data=REPORT)],
+        documents=[
+            Document(filename=BoundaryText.of(f"copy{n}.txt"), data=REPORT)
+            for n in range(extra)
+        ],
     )
     run_id = start_run(conn, harness.case_id)
     conn.commit()
@@ -619,7 +646,14 @@ def twice(harness: _Harness) -> tuple[_Harness, UUID]:
         route=harness.route,
         bundle=harness.bundle,
     )
-    return _run(replace(harness, run_id=run_id, approver=approver)), copy
+    return _run(replace(harness, run_id=run_id, approver=approver)), copies
+
+
+@pytest.fixture
+def twice(harness: _Harness) -> tuple[_Harness, UUID]:
+    """A second run whose pin captures the cited document under two sources."""
+    ran, [copy] = _pinned_with_copies(harness, 1)
+    return ran, copy
 
 
 def test_a_document_pinned_twice_proves_in_the_proof_and_the_deliverable(
@@ -690,3 +724,29 @@ def test_a_blocked_run_proves_only_what_it_accepted(harness: _Harness) -> None:
     assert (proof.artifacts, proof.citations) == (2, 2)
     assert len(harness.route.nodes) == 3
     assert _delivered(harness) is RefusalCode.DELIVERABLE_PAYLOAD_INVALID
+
+
+def test_a_withdrawn_copy_beside_two_live_copies_with_different_outputs_is_neither(
+    harness: _Harness,
+) -> None:
+    """The document has a live copy, so it is not `withdrawn` (CF-019), and its
+    live copies disagree on the extraction, so it is not `live` either: a
+    citation to it is a record mismatch, not `EVIDENCE_NOT_AVAILABLE`."""
+    ran, [moved, _kept] = _pinned_with_copies(harness, 2)
+    digest = sha256(REPORT).hexdigest()
+    actor = uuid4()
+    grant(ran.conn, case_id=ran.case_id, user_id=actor, standing=Standing.APPROVER)
+    ran.conn.commit()
+    withdraw_source(
+        ran.conn, case_id=ran.case_id, actor_id=actor, source_id=ran.source_id
+    )
+    for table in ("source_extractions", "source_set_members"):
+        with _extraction_fault(ran.conn, table):
+            ran.conn.execute(
+                f"UPDATE {table} SET output_sha256 = %s WHERE source_id = %s",
+                ("e" * 64, moved),
+            )
+        ran.conn.commit()
+    found = pinned_sources(ran.conn, ran.run_id)
+    assert digest not in found.live
+    assert digest not in found.withdrawn
