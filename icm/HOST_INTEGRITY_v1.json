@@ -9,8 +9,8 @@
       "sha256": "3584effed3240f54f203d8a9db9bc7203657be0f0f6126695f885ea159c16185"
     },
     "final_check.md": {
-      "bytes": 3518,
-      "sha256": "b47bdad5dddd8acdf208552ddb196f8b5ce1b918e8de24b400df71a5e621b433"
+      "bytes": 3622,
+      "sha256": "de7f61584beae1af0f3b5d53e0b311035b0daecc746b10e121f1bd5832a7950d"
     },
     "forecast_extension.md": {
       "bytes": 7320,
@@ -37,8 +37,8 @@
       "sha256": "26f320929bb8ff4de2d6786cf6e936ffa5add4c33f329189460fe8b01323c16e"
     },
     "validator_repair.md": {
-      "bytes": 908,
-      "sha256": "0f007a0dc592741b502ffb76c75e7faaf86417e636f28331dd8b4aa421ee14e6"
+      "bytes": 905,
+      "sha256": "c035b0ebedad574f83eeda1ec527f1a999b41cf1757750690318d067fc9dbbd2"
     }
   },
   "module_id": "CP-CF",
