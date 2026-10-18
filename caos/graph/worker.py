@@ -89,11 +89,14 @@ STORE_FAULTS = frozenset(
 )
 # What a refused pass gives its claim back for and backs off on, rather than
 # parking the run: the store's own faults, and a node whose last attempt is
-# not settled yet (`ATTEMPT_UNSETTLED`) -- another worker may still bill its
-# call, or its bill landed as this pass started and the next pass replays it.
-# Waiting is what clears each; a park would ask an operator to requeue a run
-# nothing is wrong with.
-RELEASED = STORE_FAULTS | {RefusalCode.ATTEMPT_UNSETTLED}
+# not settled yet -- `ATTEMPT_UNSETTLED`, another worker may still bill its
+# call, or `ATTEMPT_BILL_OWED`, its bill landed as this pass started and the
+# next pass replays it (N116). Waiting is what clears each; a park would ask
+# an operator to requeue a run nothing is wrong with.
+RELEASED = STORE_FAULTS | {
+    RefusalCode.ATTEMPT_UNSETTLED,
+    RefusalCode.ATTEMPT_BILL_OWED,
+}
 
 ExecutionFor = Callable[[StoreConnection, UUID, Lease], Execution]
 
@@ -380,9 +383,10 @@ def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
             print(unmet.value, file=sys.stderr)
             return _settle(conn, lambda: stop(conn, lease, unmet))
     if code in RELEASED:
-        # An unsettled attempt is this run's own wait, so it goes behind the
-        # queue: at its old place it was the head of every claim, each worker
-        # took it and was refused, and no other actor's run was claimed.
+        # An attempt another session still holds is this run's own wait, so it
+        # goes behind the queue: at its old place it was the head of every
+        # claim, each worker took it and was refused, and no other actor's run
+        # was claimed. An owed bill keeps its place: the next pass replays it.
         behind = code is RefusalCode.ATTEMPT_UNSETTLED
         _settle(conn, lambda: release(conn, lease, behind=behind))
         raise Refusal(code)

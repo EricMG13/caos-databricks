@@ -6,7 +6,7 @@
 | T4.2 | Metric Alignment Register | Metric, Borrower Value, Borrower Period, Peer Entity, Peer Value, Peer Period, AP1-AP11, Comparability Status, Limitation Notes |
 | T4.3 | Operating Benchmark | Entity, Revenue, Rev Growth, Gross Margin, EBITDA, EBITDA Margin, EBIT Margin, Period, Currency, Calc Status, Comp Status |
 | T4.4 | Cash Flow & Cap Intensity | Entity, FCF, FCF Conversion, Capex/Rev, Capex/EBITDA, WC/Rev, Period, Currency, Calc Status, Comp Status |
-| T4.5 | Credit Metric Benchmark | Entity, Total/Net/Sr Sec Leverage, Int Coverage, Adj Int Coverage, FFO/Debt, Liquidity, Period, Currency, Calc Status, Comp Status |
+| T4.5 | Credit Metric Benchmark | Entity, Total Leverage, Net Leverage, Sr Sec Leverage, Int Coverage, Adj Int Coverage, FFO/Debt, Liquidity, Period, Currency, Calc Status, Comp Status |
 | T4.6 | Summary Statistics | Metric, Borrower Value, Peer Avg, Median, Min, Max, Q1, Q3, N, Borrower Position |
 | T4.7 | Outlier Register | Entity, Metric, Value, Peer Range (Min/Max/Med/Avg), Deviation, Direction, Operating Impl, CF Impl, Lev/Liq Impl, Refi Impl, Valuation Impl, Downstream Handoff |
 | T4.8 | Public Trading Comps | Entity, Mkt Cap, Mkt Cap Date, EV, EV/Rev, EV/EBITDA, Period Used, Metric Def, Comp Status, Source |

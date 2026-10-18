@@ -1,0 +1,277 @@
+Execution Version
+AMENDED AND RESTATED OMNIBUS AMENDMENT TO LEASES
+THIS AMENDED AND RESTATED OMNIBUS AMENDMENT TO LEASES (this “Amendment”), is dated as of October 27, 2020 (the “Effective Date”) by and among the entities listed on Schedule A attached hereto (collectively, and together with their respective successors and assigns, “Non-CPLV Landlord”), CPLV Property Owner LLC, a Delaware limited liability company (together with its successors and assigns, “CPLV Landlord”), Claudine Propco LLC, a Delaware limited liability company (together with its successors and assigns, “HLV Landlord”), Harrah’s Joliet Landco LLC, a Delaware limited liability company (together with its successors and assigns, “Joliet Landlord” and, together with Non-CPLV Landlord, CPLV Landlord and HLV Landlord, collectively or individually as the context may require, “Landlord”), CEOC, LLC, a Delaware limited liability company (“CEOC”), the entities listed on Schedule B attached hereto (collectively with CEOC, and together with their respective successors and assigns, “Non-CPLV Tenant”), Desert Palace LLC, a Nevada limited liability company (collectively with CEOC (for itself, and as successor by merger to Caesars Entertainment Operating Company, Inc., a Delaware corporation), and together with their respective successors and assigns, “CPLV Tenant”), Harrah’s Las Vegas, LLC, a Nevada limited liability company (together with its successors and assigns, “HLV Tenant”), and Des Plaines Development Limited Partnership, a Delaware limited partnership (together with its successors and assigns, “Joliet Tenant” and, together with Non-CPLV Tenant, CPLV Tenant and HLV Tenant, collectively or individually as the context may require, “Tenant”).
+RECITALS
+A.Certain of the parties hereto are party to that certain Omnibus Amendment to Leases, dated as of June 1, 2020 (the “Existing Omnibus Amendment”).
+B.Non-CPLV Landlord and Non-CPLV Tenant are parties to that certain LEASE (NON-CPLV) dated October 6, 2017 (as amended by (i) that certain First Amendment to Lease (Non-CPLV) dated December 22, 2017, (ii) that certain Second Amendment to Lease (Non-CPLV) and Ratification of SNDA dated February 16, 2018, (iii) that certain Third Amendment to Lease (Non-CPLV) dated April 2, 2018, (iv) that certain Fourth Amendment to Lease (Non-CPLV) dated December 26, 2018, (v) the Existing Omnibus Amendment, (vi) that certain Fifth Amendment to Lease (Non-CPLV) dated July 20, 2020 (the “Non-CPLV July 2020 Amendment”), and (vii) that certain Sixth Amendment to Lease, dated as of September 30, 2020, and as further amended, restated, supplemented or otherwise modified from time to time, the “Non-CPLV Lease”);
+C.CPLV Landlord, HLV Landlord, CPLV Tenant and HLV Tenant are parties to that certain LEASE (CPLV) dated October 6, 2017 (as amended by (i) that certain First Amendment to Lease (CPLV) dated December 26, 2018, (ii) the Existing Omnibus Amendment, (iii) that certain Second Amendment to Lease (CPLV) dated July 20, 2020, and (iv) that certain Third Amendment to Lease, dated September 30, 2020, and as further amended restated, supplemented or otherwise modified from time to time, the “CPLV Lease”);
+D.Joliet Landlord and Joliet Tenant are parties to that certain LEASE (JOLIET) dated October 6, 2017 (as amended by (i) that certain First Amendment to Lease (JOLIET) dated December 26, 2018, (ii) the Existing Omnibus Amendment, (iii) that certain Second Amendment to Lease (Joliet) dated July 20, 2020 (the “Joliet July 2020 Amendment”), and (iv) that certain Third Amendment to Lease, dated
+as of September 30, 2020, and as further amended, restated, supplemented or otherwise modified from time to time, the “Joliet Lease” and, together with the Non-CPLV Lease and the CPLV Lease, collectively, the “Leases” and each a “Lease”); and
+E.As a result of the addition of the Fifth Amendment Additional Property to the Non-CPLV Lease, the parties hereto desire to amend and restate the Existing Omnibus Amendment.
+F.Capitalized terms used in this Amendment and not otherwise defined herein shall have the meanings ascribed to such terms in the applicable Lease, respectively.
+The term “Minimum Cap Ex Requirements” as used herein shall mean, collectively, the Minimum Cap Ex Requirements (as defined in the Non-CPLV Lease and the Joliet Lease) and the Minimum Cap Ex Requirements (CPLV) (as defined in the CPLV Lease).
+NOW THEREFORE, in consideration of the premises and the mutual covenants hereinafter contained, the parties hereto do hereby stipulate, covenant and agree as follows:
+1.Amendments to Leases.
+(a)Deemed Satisfaction of 2020 Minimum Cap Ex Requirements and Deemed 2020 Capital Expenditure Amounts.
+Notwithstanding the terms of Sections 10.5(a)(iii) and (iv) of the CPLV Lease and Sections 10.5(a)(i) – (iv) of each of the Non-CPLV Lease and the Joliet Lease, if, and for so long as,
+(x) from the Effective Date until and including January 1, 2024 (the “Compliance Period”) (a) each Tenant, as applicable, pays each monthly installment of Rent no later than (i) six (6) days following the date such payment is due under the CPLV Lease and (ii) ten (10) days following the date such payment is due under the Non-CPLV Lease and the Joliet Lease (“Punctual Payment of Rent Condition”) and (b) no Tenant Event of Default occurs under any of the Leases (“No Default Condition”, and together with the Punctual Payment of Rent Condition, collectively, the “Tenant Compliance Conditions”) and (y) the 2020 Cap Ex Conditions (as defined below) are satisfied, Tenant shall be deemed to have:
+(i) expended Capital Expenditures in an amount and of a nature sufficient to satisfy each of the Minimum Cap Ex Requirements under each Lease for the 2020 Fiscal Year and any Triennial Period ending December 31, 2020, as applicable, and
+(ii) expended Capital Expenditures during the 2020 Fiscal Year in an amount equal to (x) Two Hundred Sixty Million Two Hundred Thousand and No/100 Dollars ($260,200,000.00) to be applied against the Triennial Minimum Cap Ex Requirement A under each of the Non-CPLV Lease and the Joliet Lease in respect of the Triennial Periods ending on December 31, 2020, December 31, 2021 and December 31, 2022, as the case may be and (y) Two Hundred Thirty-Two Million Seven Hundred Thousand and No/100 Dollars $232,700,000.00) to be applied against the Triennial Minimum Cap Ex Requirement B under each of the Leases (and, for purposes of determining compliance with the Triennial Allocated Minimum Cap Ex Amount B Floors, allocated twenty percent (20%) to the Triennial Allocated Minimum Cap Ex Amount B Floor set forth in the CPLV Lease and eighty percent (80%) to the Triennial Allocated Minimum Cap Ex Amount B Floor set forth in the Non-CPLV Lease and Joliet Leases) in respect of the
+2
+Triennial Periods ending on December 31, 2020, December 31, 2021 and December 31, 2022, as the case may be.
+(b)2020 Cap Ex Conditions.
+The following shall collectively constitute the “2020 Cap Ex Conditions”:
+(i)During the 2020 Fiscal Year, Tenant shall collectively expend Capital Expenditures pursuant to Section 10.5(a)(ii) of each of the Non-CPLV Lease and the Joliet Lease and Section 10.5(a)(iii) of the CPLV Lease that, in each case, constitute installation or restoration and repair or other improvements of items with respect to the Leased Property thereunder, in an aggregate amount among the Leases equal to no less than Forty-One Million Five Hundred Thousand and No/100 Dollars ($41,500,000.00); and
+(ii)During the 2020 Fiscal Year, Tenant shall collectively expend Capital Expenditures under the Leases pursuant to Section 10.5(a)(iii) of each of the Non-CPLV Lease and the Joliet Lease in an aggregate amount equal to no less than One Hundred Four Million One Hundred Thousand and No/100 Dollars ($104,100,000.00) (the “2020 Triennial Cap Ex Amount”) (provided, that, notwithstanding anything to the contrary herein or in the Leases, for purposes of calculating the 2020 Triennial Cap Ex Amount pursuant to this Amendment, Capital Expenditures expended during the 2020 Fiscal Year (x) may count and include Services Co Capital Expenditures (as defined in the Non-CPLV Lease and the Joliet Lease prior to giving effect to the Non-CPLV July 2020 Amendment and the Joliet July 2020 Amendment, as applicable) but (y) shall not include Services Co Capital Expenditures or Capital Expenditures in respect of the London Clubs in an aggregate amount in excess of Eleven Million and No/100 Dollars ($11,000,000.00)) comprising at least Ninety-Three Million One Hundred Thousand and No/100 Dollars ($93,100,000.00) in the aggregate collectively expended by Tenant pursuant to Section 10.5(a)(iv) of each of the Leases (provided, that, for purposes of calculating such amount, (1) the proviso in the first sentence in the definition of “Triennial Minimum Cap Ex Amount B” of the applicable Lease shall apply, and (2) Services Co Capital Expenditures shall not be included).
+For the avoidance of doubt the provisions of Section 10.5(a)(viii) of the respective Leases shall apply to the foregoing Capital Expenditures.
+(c)Failure to Satisfy 2020 Cap Ex Conditions and Tenant Compliance Conditions.
+(i)Any failure to satisfy any of the Tenant Compliance Conditions during the Compliance Period is referred to herein as a “Tenant Non Compliance Trigger Event” and any failure to satisfy any of the 2020 Cap Ex Conditions as of January 1, 2021 is referred to herein as a “Cap Ex Trigger Event.”
+(ii)If, during the 2020 Fiscal Year, any Tenant Compliance Condition is not satisfied, then, in any such case, without the need for notice or any other precondition, the terms of this Amendment shall immediately become null and void and of no further force or effect.
+(iii)If (a) any Cap Ex Trigger Event occurs as of January 1, 2021, or (b) any Tenant Non Compliance Trigger Event occurs at any time from and including January 1, 2021 until and including December 31, 2021, then (x) Tenant shall be obligated, within five (5) Business Days after such Trigger Event Date (as defined below), to deposit funds into the Cap Ex Reserve under
+3
+each applicable Lease in an aggregate amount equal to the difference between (A) the amount of Capital Expenditures each Tenant would have been required to expend in the 2020 Fiscal Year (determined pursuant to the terms of the Leases then in effect without giving effect to this Amendment or the Existing Omnibus Amendment) in order to satisfy the respective Minimum Cap Ex Requirements under each Lease (calculated as of December 31, 2020), and
+(B) the amount of Capital Expenditures each Tenant actually expended in the 2020 Fiscal Year with respect to such Minimum Cap Ex Requirements (the “2020 Cap Ex Shortfall Amount”),
+(y) Tenant shall be required to expend the 2020 Cap Ex Shortfall Amount on Capital Expenditures within six (6) months of the date of such Cap Ex Trigger Event or Tenant Non Compliance Trigger Event (“Trigger Event Date”), in each case, as necessary to satisfy the respective Minimum Cap Ex Requirements for the 2020 Fiscal Year, as applicable (calculated as of December 31, 2020), and
+(z) it is understood that compliance with the requirements of this clause (iii) shall not be deemed to relieve Tenant of compliance with (a) the Triennial Minimum Cap Ex Requirement A and the Triennial Minimum Cap Ex Requirement B, in each case with respect to the Triennial Periods ending December 31, 2021 and December 31, 2022;
+provided, however, such shortfall deposit shall be applied towards such Minimum Cap Ex Requirements, as applicable, in accordance with the provisions of the respective Leases as if the amount of such shortfall deposit was expended for applicable Capital Expenditures in the year in respect of which such shortfall deposit was made and (b) the Annual Minimum Per-Lease B&I Cap Ex Requirement and, if applicable, the Annual Minimum Cap Ex Requirement, in each case with respect to the 2021 Fiscal Year.
+(iv)If a Tenant Non Compliance Trigger Event occurs at any time from and including January 1, 2022 until and including December 31, 2022, then (x) Tenant shall be obligated, within five (5) Business Days after such Trigger Event Date, to immediately deposit funds into the Cap Ex Reserve under each applicable Lease in an aggregate amount equal to the sum of (I) the 2020 Cap Ex Shortfall Amount, and
+(II) the difference between (A) the amount of Capital Expenditures each Tenant would have been required to expend in the 2021 Fiscal Year pursuant to the terms of the Leases (determined pursuant to the terms of the Leases then in effect without giving effect to this Amendment or the Existing Omnibus Amendment), in order to satisfy the respective Minimum Cap Ex Requirements under each Lease (calculated as of December 31, 2021, and determined after giving effect to the deposit of the 2020 Cap Ex Shortfall Amount into the Cap Ex Reserve, and as if such deposited 2020 Cap Ex Shortfall Amount had been expended in Fiscal Year 2020), and
+(B) the amount of Capital Expenditures each Tenant actually expended in the 2021 Fiscal Year with respect to such Minimum Cap Ex Requirements (the “2021 Cap Ex Shortfall Amount”),
+(y) Tenant shall be required to expend at least fifty percent (50%) of each of the 2020 Cap Ex Shortfall Amount and 2021 Cap Ex Shortfall Amount on Capital Expenditures within six (6) months of the Trigger Event Date with the remaining portions of such amounts to be expended within twelve (12) months of the Trigger Event Date, in each case, as necessary to satisfy the respective Minimum Cap Ex Requirements for the 2020 and 2021 Fiscal Years, as applicable (calculated as of December 31, 2020 and December 31, 2021, respectively), and
+(z) it is understood that compliance with the requirements of this clause (iv) shall not be deemed to relieve Tenant of compliance with (a) the Triennial Minimum Cap Ex Requirement A and the Triennial Minimum Cap Ex Requirement B, in each case with respect to the Triennial Periods ending December 31, 2022 and December 31, 2023;
+provided, however, such shortfall deposit shall be applied towards such Minimum Cap Ex Requirements, as applicable, in accordance with the provisions of the respective Leases as if the amount of such shortfall deposit was expended for applicable Capital Expenditures in the applicable year(s) in respect of which such shortfall deposit was made and (b) the Annual Minimum Per-Lease B&I Cap Ex Requirement and, if
+4
+applicable, the Annual Minimum Cap Ex Requirement, in each case with respect to the 2021 and 2022 Fiscal Years.
+(v)If a Tenant Non Compliance Trigger Event occurs on or after January 1, 2023 and prior to the expiration of the Compliance Period, then (x) Tenant shall be obligated, within five (5) Business Days after such Trigger Event Date, to immediately deposit funds into the Cap Ex Reserve under each applicable Lease in an aggregate amount equal to the sum of (I) the 2020 Cap Ex Shortfall Amount,
+(II) the 2021 Cap Ex Shortfall Amount, and
+(III) the difference between (A) the amount of Capital Expenditures each Tenant would have been required to expend in the 2022 Fiscal Year (determined pursuant to the terms of the Leases then in effect without giving effect to this Amendment or the Existing Omnibus Amendment) in order to satisfy the respective Minimum Cap Ex Requirements under each Lease (calculated as of December 31, 2022, and determined after giving effect to the deposit of the 2020 Cap Ex Shortfall Amount and the 2021 Cap Ex Shortfall Amount into the Cap Ex Reserve, and as if such deposited 2020 Cap Ex Shortfall Amount and 2021 Cap Ex Shortfall Amount had been expended in Fiscal Years 2020 or 2021, as applicable), and
+(B) the amount of Capital Expenditures each Tenant actually expended in the 2022 Fiscal Year with respect to such Minimum Cap Ex Requirements (the “2022 Cap Ex Shortfall Amount” and together with the 2020 Cap Ex Shortfall Amount and 2021 Cap Ex Shortfall Amount, collectively, the “Cap Ex Shortfall Amount”),
+(y) Tenant shall be required to expend at least fifty percent (50%) of the Cap Ex Shortfall Amount on Capital Expenditures within six (6) months of the Trigger Event Date with the remaining portion of such amount to be expended within twelve (12) months of the Trigger Event Date, in each case, as necessary to satisfy the respective Minimum Cap Ex Requirements for the 2020, 2021 and 2022 Fiscal Years, as applicable (calculated as of December 31, 2020, December 31, 2021 and December 31, 2022, respectively), and
+(z) it is understood that compliance with the requirements of this clause (v) shall not be deemed to relieve Tenant of compliance with (a) the Triennial Minimum Cap Ex Requirement A and the Triennial Minimum Cap Ex Requirement B, in each case with respect to the Triennial Periods ending December 31, 2023 and December 31, 2024;
+provided, however, such shortfall deposit shall be applied towards such Minimum Cap Ex Requirements, as applicable, in accordance with the provisions of the respective Leases as if the amount of such shortfall deposit was expended for applicable Capital Expenditures in the applicable year(s) in respect of which such deposit was made and (b) the Annual Minimum Per-Lease B&I Cap Ex Requirement and, if applicable, the Annual Minimum Cap Ex Requirement, in each case with respect to (I) the 2021 and 2022 Fiscal Years and (II) the Fiscal Year in which the Tenant Non Compliance Trigger Event occurs.
+(vi)Any portion of the Cap Ex Shortfall Amount expended by Tenant shall be credited against (and shall count towards satisfaction of) the applicable Minimum Cap Ex Requirements that include the Fiscal Year for which such funds were deposited.
+It is further understood that if Tenant is required to deposit and expend a Cap Ex Shortfall Amount pursuant to this Section 1(c), then for so long as Tenant is in compliance with the provisions of this Section 1(c), then any Tenant Event of Default that may otherwise exist as a result of Section 1(a) no longer being in effect shall be deemed cured.
+5
+(d)Unavoidable Delay.
+The provisions of Section 10.5(a)(ix) of the respective Leases shall not apply to any Unavoidable Delay directly or indirectly resulting from the coronavirus (COVID-19) pandemic.
+2.No Waiver.
+Except to the extent expressly set forth in this Amendment, Landlord is not waiving any obligations of Tenants under their respective Leases or any rights of Landlord under the Leases or at law, nor is Landlord waiving or consenting to any other events that may have occurred under or in relation to any of the Leases.
+3.Incorporation into the Lease.
+The provisions of this Amendment applicable to each Lease are hereby incorporated into each such Lease and made an integrated, non-severable part thereof.
+4.Other Documents.
+Any and all agreements entered into in connection with any Lease which make reference therein to “the Lease” shall be intended to, and are deemed hereby, to refer to such Lease as amended by this Amendment.
+5.Miscellaneous.
+(a)This Amendment shall be construed according to and governed by the laws of the jurisdiction(s) which are specified by the Leases without regard to its conflicts of law principles.
+The parties hereto hereby irrevocably submit to the jurisdiction of any court of competent jurisdiction located in such applicable jurisdiction in connection with any proceeding arising out of or relating to this Amendment.
+(b)If any provision of this Amendment is adjudicated to be invalid, illegal or unenforceable, in whole or in part, it will be deemed omitted to that extent and all other provisions of this Amendment will remain in full force and effect.
+(c)Neither this Amendment nor any provision hereof may be changed, modified, waived, discharged or terminated orally, but only by an instrument in writing signed by the party against whom enforcement of such change, modification, waiver, waiver, discharge or termination is sought.
+(d)The paragraph headings and captions contained in this Amendment are for convenience of reference only and in no event define, describe or limit the scope or intent of this Amendment or any of the provisions or terms hereof.
+(e)This Amendment shall be binding upon and inure to the benefit of the parties and their respective heirs, legal representatives, successors and permitted assigns.
+(f)This Amendment may be executed in any number of counterparts with the same effect as if all parties hereto had signed the same document.
+All such counterparts shall be construed
+6
+together and shall constitute one instrument, but in making proof hereof it shall only be necessary to produce one such counterpart.
+(g)Except as specifically modified in this Amendment, all of the provisions of the Leases remain unchanged and continue in full force and effect.
+(h)This Amendment amends, restates, replaces and supersedes the Existing Omnibus Amendment.
+(i)This Amendment shall not be effective unless and until (i) all requisite notices in respect hereof have been filed with all applicable Gaming Authorities,
+(ii) any advance notice period with respect to Gaming Authorities applicable hereto shall have expired and (iii) all approvals from all applicable Gaming Authorities required for the parties hereto to consummate the amendments to the Leases hereunder shall have been obtained, whereupon this Amendment shall be effective retroactive as of the Effective Date.
+Each of Tenant and Landlord hereby agrees to give prompt written notice to the other upon the satisfaction of the foregoing clauses (i) through (iii) with respect to such party.
+[THE REMAINDER OF THIS PAGE IS INTENTIONALLY LEFT BLANK]
+7
+IN WITNESS WHEREOF, the parties hereto have caused this Amendment to be duly executed by their duly authorized representatives, all as of the Effective Date.
+LANDLORD:
+HORSESHOE COUNCIL BLUFFS LLC
+HARRAH’S COUNCIL BLUFFS LLC
+HARRAH’S METROPOLIS LLC
+HORSESHOE SOUTHERN INDIANA LLC
+NEW HORSESHOE HAMMOND LLC
+NEW HARRAH’S NORTH KANSAS CITY LLC
+GRAND BILOXI LLC
+HORSESHOE TUNICA LLC
+NEW TUNICA ROADHOUSE LLC
+CAESARS ATLANTIC CITY LLC
+BALLY’S ATLANTIC CITY LLC
+HARRAH’S LAKE TAHOE LLC
+HARVEY’S LAKE TAHOE LLC
+HARRAH’S RENO LLC
+BLUEGRASS DOWNS PROPERTY OWNER LLC
+VEGAS DEVELOPMENT LLC
+VEGAS OPERATING PROPERTY LLC
+MISCELLANEOUS LAND LLC
+PROPCO GULFPORT LLC
+PHILADELPHIA PROPCO LLC
+CPLV PROPERTY OWNER LLC
+HARRAH’S JOLIET LANDCO LLC
+HARRAH’S ATLANTIC CITY LLC
+NEW LAUGHLIN OWNER LLC
+HARRAH’S NEW ORLEANS LLC
+CLAUDINE PROPCO LLC,
+each, a Delaware limited liability company
+By: /s/ David A. Kieske
+Name: David A. Kieske
+Title: Treasurer
+HORSESHOE BOSSIER CITY PROP LLC
+HARRAH’S BOSSIER CITY LLC,
+each, a Louisiana limited liability company
+By: /s/ David A. Kieske
+Name: David A. Kieske
+Title: Treasurer
+[Signature Page to Amended and Restated Omnibus Amendment]
+TENANT:
+[Signature Page to Amended and Restated Omnibus Amendment]
+CEOC, LLC, a Delaware limited liability company,
+HBR REALTY COMPANY LLC, a Nevada limited liability company,
+HARVEYS IOWA MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+SOUTHERN ILLINOIS RIVERBOAT/CASINO CRUISES LLC, an Illinois limited liability company,
+CAESARS RIVERBOAT CASINO, LLC, an Indiana limited liability company,
+ROMAN HOLDING COMPANY OF INDIANA LLC, an Indiana limited liability company,
+HORSESHOE HAMMOND, LLC, an Indiana limited liability company,
+HARRAH’S BOSSIER CITY INVESTMENT COMPANY, L.L.C., a Louisiana limited liability company,
+HARRAH’S NORTH KANSAS CITY LLC, a Missouri limited liability company,
+GRAND CASINOS OF BILOXI, LLC, a Minnesota limited liability company,
+ROBINSON PROPERTY GROUP LLC, a Mississippi limited liability company,
+TUNICA ROADHOUSE LLC, a Delaware limited liability company,
+CAESARS NEW JERSEY LLC, a New Jersey limited liability company,
+HARVEYS TAHOE MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+PLAYERS BLUEGRASS DOWNS LLC, a Kentucky limited liability company,
+CASINO COMPUTER PROGRAMMING, INC., an Indiana corporation,
+HARVEYS BR MANAGEMENT COMPANY, INC., a Nevada corporation,
+HARRAH’S LAUGHLIN, LLC, a Nevada limited liability company,
+JAZZ CASINO COMPANY, L.L.C., a Louisiana limited liability company,
+DESERT PALACE LLC, a Nevada limited liability company,
+HARRAH’S LAS VEGAS, LLC, a Nevada limited liability company
+By:/s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and SecretaryHORSESHOE ENTERTAINMENT,
+[Signature Page to Amended and Restated Omnibus Amendment]
+a Louisiana limited partnership
+By: New Gaming Capital Partnership,
+a Nevada limited partnership,
+its general partner
+By: Horseshoe GP, LLC,
+a Nevada limited liability company,
+its general partner
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+BOARDWALK REGENCY LLC,
+a New Jersey limited liability company
+By: Caesars New Jersey LLC,
+a New Jersey limited liability company,
+its sole member
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+BALLY’S PARK PLACE LLC,
+a New Jersey limited liability company
+By: CEOC, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+HOLE IN THE WALL, LLC,
+[Signature Page to Amended and Restated Omnibus Amendment]
+a Nevada limited liability company
+By: CEOC, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+CHESTER DOWNS AND MARINA, LLC,
+a Pennsylvania limited liability company
+By: Harrah’s Chester Downs Investment Company, LLC,
+its sole member
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+HARRAH’S ATLANTIC CITY OPERATING COMPANY, LLC,
+a New Jersey limited liability company
+By: Caesars Resort Collection, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+DES PLAINES DEVELOPMENT LIMITED PARTNERSHIP,
+a Delaware limited partnership
+By: Harrah’s Illinois Corporation,
+an Illinois corporation,
+its general partner
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+[Signature Page to Amended and Restated Omnibus Amendment]
+Title: Executive Vice President, Chief Legal Officer and Secretary
+[Signature Page to Amended and Restated Omnibus Amendment]
+Execution Version
+ACKNOWLEDGED AND AGREED:
+PROPCO TRS LLC,
+a Delaware limited liability company
+By: /s/ David A. Kieske
+Name: David A. Kieske
+Title: Treasurer
+CONSENT AND RATIFICATION
+By executing this Amendment in the space provided below, Guarantor hereby: (i) consents to each Tenant’s execution and delivery of this Amendment; and (ii) ratifies and confirms that the Guaranty executed by Guarantor is in full force and effect.
+CAESARS ENTERTAINMENT, INC.,
+a Delaware corporation
+By: /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
+[Signature Page to Amended and Restated Omnibus Amendment]
+Schedule A
+NON-CPLV LANDLORD ENTITIES
+Horseshoe Council Bluffs LLC
+Harrah’s Council Bluffs LLC
+Harrah’s Metropolis LLC
+Horseshoe Southern Indiana LLC
+New Horseshoe Hammond LLC
+Horseshoe Bossier City Prop LLC
+Harrah’s Bossier City LLC
+New Harrah’s North Kansas City LLC
+Grand Biloxi LLC
+Horseshoe Tunica LLC
+New Tunica Roadhouse LLC
+Caesars Atlantic City LLC
+Bally’s Atlantic City LLC
+Harrah’s Lake Tahoe LLC
+Harvey’s Lake Tahoe LLC
+Harrah’s Reno LLC
+Bluegrass Downs Property Owner LLC
+Vegas Development LLC
+Vegas Operating Property LLC
+Miscellaneous Land LLC
+Propco Gulfport LLC
+Philadelphia Propco LLC
+Harrah’s Atlantic City LLC
+New Laughlin Owner LLC
+Harrah’s New Orleans LLC
+Schedule A
+Schedule B
+NON-CPLV TENANT ENTITIES
+CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+HBR Realty Company LLC
+Harveys Iowa Management Company LLC
+Southern Illinois Riverboat/Casino Cruises LLC
+Caesars Riverboat Casino LLC
+Roman Holding Company of Indiana LLC
+Horseshoe Hammond, LLC
+Horseshoe Entertainment
+Harrah’s Bossier City Investment Company, LLC
+Harrah’s North Kansas City LLC
+Grand Casinos of Biloxi, LLC
+Robinson Property Group LLC
+Tunica Roadhouse LLC
+Boardwalk Regency LLC
+Caesars New Jersey LLC
+Bally’s Park Place LLC
+Harveys Tahoe Management Company LLC
+Players Bluegrass Downs LLC
+Casino Computer Programming, Inc.
+Harveys BR Management Company, Inc.
+Hole in the Wall, LLC
+Chester Downs and Marina, LLC
+Harrah’s Atlantic City Operating Company, LLC
+Harrah’s Laughlin, LLC
+Jazz Casino Company, L.L.C.
+Schedule B

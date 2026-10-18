@@ -279,3 +279,23 @@ def test_validate_owned_debt_service_refuses_hidden_history_faults(defect: str) 
     with pytest.raises(Refusal) as caught:
         validate_owned_debt_service(request, regs)
     assert caught.value.code is RefusalCode.HANDOFF_MALFORMED
+
+
+@pytest.mark.parametrize(
+    "change", [{"accounting_basis": "IFRS"}, {"entity_perimeter": "Other"}]
+)
+def test_validate_owned_debt_service_refuses_a_same_day_twin_on_another_footing(
+    change: dict[str, Any],
+) -> None:
+    """N206 (R7): a period ending the opening's day on another stated basis
+    or perimeter is refused, never read for the opening stack or cash."""
+    request, regs = debt_inputs()
+    twin = replace(
+        next(p for p in regs.periods if p.period_id == "FY2025"),
+        period_id="FY2025_RECAST",
+        **change,
+    )
+    regs = replace(regs, periods=(*regs.periods, twin))
+    with pytest.raises(Refusal) as caught:
+        validate_owned_debt_service(request, regs)
+    assert caught.value.code is RefusalCode.HANDOFF_MALFORMED

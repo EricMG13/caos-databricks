@@ -1,0 +1,22 @@
+Run the optimization sweep of caos-databricks on your own branch off rebuild/databricks (contract section 1). This run is unattended: nobody can answer, approve or unblock you, so never ask, never wait, never end a turn with a plan or a promise. First read docs/rebuild/optimization-sweep/CONTRACT.md in full and follow it, and the final-sweep contract sections it points to; its section 0 Owner decisions bind you and may not be edited. BASE is the commit its section 3 records. Land only CONFIRMED register rows at or above the section 4 floor, in rank order, each with its before and after metric.
+
+DONE means your final message contains an EVIDENCE table copied verbatim from tool output produced in that same final turn, in the main session, one row per check with its exit code and one summary line:
+- A1-A37: every gate in CLAUDE.md run exactly as written on the final commit with a clean tracked tree, exit 0 each; the pytest line shows 0 failed, 0 skipped, 0 xfailed and coverage >= 80%.
+- S1: the pytest suite and frontend gates rerun from a fresh detached worktree at the final commit, same pass counts.
+- S2: git diff --stat BASE..HEAD -- tests/parity/golden vendor/deploy-v icm/HOST_INTEGRITY_v1.json prints nothing.
+- S3: every landed row's metric measured again in this turn on its harness, its gain over baseline.md still above the threshold; round trips, statements, request bytes and built bytes not above BASE anywhere; every IO_BUDGET, BLOB_BUDGET and tests/io_measurements.json value, suppression count and complexity_baselined <= BASE; tests passed >= BASE.
+- S4: docs/rebuild/runs/optimization-sweep/register.md: every Stage P finding on a row with a class; every worked row LANDED with its metric and guard, or recorded in next.md with its numbers.
+- S5: tests/shipped_boot.py and tests/test_enterprise_deploy.py pass.
+- S6: the final-sweep scenario streak passes on the final commit.
+- S7: a final independent review of git diff BASE..HEAD leaves zero open CRITICAL or HIGH findings.
+- S8: git status --short shows only the untracked paths recorded at BASE; git log --oneline BASE..HEAD printed, grouped as pull requests; nothing pushed or merged.
+
+Then print baseline.md's before and after columns, the rows not landed with their reasons, and the FORBIDDEN rows as owner questions.
+
+A blocked finish also counts as done: a check may cite a blockers.md entry whose cause is a missing external resource, quoted with the exact command and error from this run, when every other check passes. A failing test, gate, parity check, metric or review finding is never a blocker.
+
+The result is void if any of these slipped: a change without its before and after metric on the same harness; a wall-clock assertion added to the suite; a raised IO_BUDGET, BLOB_BUDGET or io_measurements.json value; a lowered threshold, limit, deadline, lease or retry count; a new noqa, type: ignore, nosec, pragma, skip or xfail; a test removed or weakened; a parity golden, vendor byte or integrity pin changed; a behaviour change presented as an optimization; a cache over verified bytes or shared across actors; a float on money; a ledger write merged, reordered or deferred; a reservation skipped or approximated; document text in a log or profile; a new dependency; a migration, live provider spend or Copilot call beyond section 0; git add -A; a key printed; a stub presented as the platform; evidence reused from an earlier turn; a push, or a commit on rebuild/databricks.
+
+Commit each landed row on your branch once it is green, with its Fn entry in docs/rebuild/decisions.md naming the dimension, the metric before and after, K and the spread. Keep docs/rebuild/runs/optimization-sweep/progress.md current after every step so a resumed session continues from it.
+
+Or stop after 200 turns, printing status against every check and the rows still open.
