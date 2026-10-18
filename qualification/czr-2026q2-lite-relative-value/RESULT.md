@@ -2,12 +2,26 @@
 
 Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (citation and register keys)**. Prepared offline; the live results are in the last section.
 
+Corpus changed 2026-10-16, R27 (D152, N147); earlier runs were on the old corpus. See "Corpus changed 2026-10-16 (R27, N147)" below.
+
 This immutable set prepares `LITE_CREDIT_22 / LITE_RELATIVE_VALUE` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`99a498e0085d5cd725547129b2d30bbd808f7c43fec6fb44c1d7ac295b37db78`.
+`c3a98020f07848d31e2e1aac10cb3cdc50da02b4ac0115dc495a93fe9147d4e6`.
+
+## Corpus changed 2026-10-16 (R27, N147)
+
+On the owner's ruling R27 of 16 October 2026 (D152; N147) 1 document already admitted to other CZR sets is added to this set. Nothing was downloaded for them: each is a byte-identical copy of the file in `czr-2026q2`, copied because the on-disk loader refuses a path outside the set root. CP-0 of the latest run declared that the FY2025 10-K, in hand, would close a gap.
+
+| document | source | accession | text SHA-256 | raw HTML SHA-256 |
+|---|---|---|---|---|
+| `CZR_FY2025_10K.txt` (Form 10-K, year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
+
+None is over 500 KiB as text, so no large-file pin moves; none is near the 1.5 MiB page-map threshold. The set's CP-0 request, encoded with CP-0's delivered authority (measured with the host's own builders, `check_context` on the pinned route), is 2,865,903 bytes (68.3% of `MAX_REQUEST_BYTES`), up from 2,416,893 (57.6%); no source is shown as a page map on a model with no declared context. For `openai/gpt-6-luna` (request ceiling 2,953,392 bytes under D116) the fitted request is 2,865,900 bytes with no source shown as a page map (before: 2,416,890 bytes, no page map). Set digest `99a498e0085d5cd725547129b2d30bbd808f7c43fec6fb44c1d7ac295b37db78` -> `c3a98020f07848d31e2e1aac10cb3cdc50da02b4ac0115dc495a93fe9147d4e6`.
+
+Keys re-checked (all 8 keys, each scanned against the added 10-K for a whole-line twin and for its figures): none changes. No key line has a twin in the 10-K; the nearest, CP-1C's debt-table row `CEI Senior Secured Notes due 2032 | 2032 | 6.50% | 1,500 | 1,487 | 1,486`, meets only the 10-K's sentence on the February 2024 issue (`$1.5 billion ... 6.50% senior secured notes due 2032`), which states neither carrying amount. The CZR keys read the 30 June 2026 10-Q and the 28 July release, later than the 10-K's statements, and the peer keys read the peers' releases. No key is added.
 
 ## Corpus provenance
 
@@ -125,7 +139,7 @@ about 0.9 MB of every request. No key here bound it.
 
 ## Keys
 
-Keys authored from the documents; material figures pending owner confirmation.
+Keys authored from the documents; material figures stand as authored by the owner's ruling of 2026-10-17 (N126, F702).
 
 - CP-L10: the 10-Q's `$1.9 billion` of available CEI revolver capacity at
   30 June 2026, and its annual maturities of long-term debt totalling

@@ -74,6 +74,8 @@ if TYPE_CHECKING:
     from copilot.generated.rpc import PermissionDecisionReject
 
 PLATFORM = "copilot"
+# The platform a gateway endpoint (a name that is not a Copilot one) qualifies under.
+GATEWAY_PLATFORM = "databricks"
 # The CLI fallback (D78): parsed so that it is never read as an endpoint, and
 # refused at readiness while only the SDK transport is built (decision (a)).
 CLI_PLATFORM = "copilot-cli"
@@ -363,6 +365,24 @@ def output_cap(model: str) -> int:
     if target is not None and target.platform == CLI_PLATFORM:
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     return MAX_COMPLETION_TOKENS
+
+
+def identity_of(model: str, reasoning_effort: str | None = None) -> str:
+    """The execution profile a verdict binds (D8), from the names alone, so a
+    caller can refuse an unexpected one before any client is built. A Copilot
+    model names its own platform, its runtime model id, the effort its name
+    pins and its output cap (D77), so it qualifies apart from the same model
+    on a gateway; a Copilot name that does not parse, or whose transport is
+    not built, is refused `PROVIDER_NOT_CONFIGURED`.
+
+    Here rather than in `caos.models` so the API, which may not import that
+    module (D4), composes the identity from the one definition (N117)."""
+    target = parsed(model)
+    if target is None:
+        parts = (GATEWAY_PLATFORM, model, reasoning_effort or "none")
+    else:
+        parts = (target.platform, target.name, target.reasoning_effort or "none")
+    return "/".join((*parts, str(output_cap(model))))
 
 
 def context_tokens(model: str) -> int | None:

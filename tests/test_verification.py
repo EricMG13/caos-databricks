@@ -15,7 +15,6 @@ from functools import partial
 from uuid import UUID
 
 import pytest
-from conftest import every_block
 from test_canonical_execution import _node, harness, route
 from test_canonical_proof import _run
 from test_execution_freshness import _Harness
@@ -27,6 +26,7 @@ from caos.evidence.citations import TokenIndex
 from caos.graph.runtime import accepted_artifacts
 from caos.methodology import canonical as runtime_reader
 from caos.methodology import verification
+from caos.methodology.canonical import node_delivery
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.methodology.verification import (
     AcceptedRow,
@@ -72,7 +72,7 @@ def _evidence(ran: _Harness) -> PinnedEvidence:
     sources = pinned_live_sources(ran.conn, ran.run_id)
     return PinnedEvidence(
         sources=sources,
-        delivered=every_block(ran.conn, *sources.values()),
+        delivery=node_delivery(ran.conn, ran.blobs, ran.bundle, ran.run_id),
         index=TokenIndex(),
     )
 
