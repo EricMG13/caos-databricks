@@ -171,6 +171,7 @@ _STATUS = {
     # the earlier call finishing is what repairs it -- the same shape. Raised
     # by the worker's own start; listed so no route could serve it otherwise.
     RefusalCode.ATTEMPT_UNSETTLED: 503,
+    RefusalCode.ATTEMPT_BILL_OWED: 503,
     RefusalCode.STORE_NOT_TRANSACTIONAL: 500,
     RefusalCode.STORE_SCHEMA_DRIFT: 500,
     RefusalCode.BLOB_NOT_FOUND: 500,

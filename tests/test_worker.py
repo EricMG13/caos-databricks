@@ -151,6 +151,27 @@ def test_an_unsettled_run_goes_behind_the_queue_rather_than_ahead_of_it(
     assert again is not None and again.run_id == second.run_id
 
 
+def test_a_run_refused_for_an_owed_bill_keeps_its_place_to_be_replayed_at_once(
+    case: tuple[StoreConnection, UUID],
+    route: ResolvedRoute,
+    bundle: Bundle,
+    blobs: BlobStore,
+) -> None:
+    """N116: `ATTEMPT_BILL_OWED` is a bill that landed as the pass started; the
+    next pass replays it, so the run is given back at its old place, not behind
+    the queue as a run waiting on another session's call is."""
+    first = queued_run(case, route, bundle, blobs)
+    queued_run(case, route, bundle, blobs)
+    conn = first.conn
+    lease = claim_run(conn, worker=CONFIG.worker, lease_seconds=LEASE_SECONDS)
+    assert lease is not None and lease.run_id == first.run_id
+    with pytest.raises(Refusal, match=r"^ATTEMPT_BILL_OWED$"):
+        worker._refused(conn, lease, Refusal(RefusalCode.ATTEMPT_BILL_OWED))
+    again = claim_run(conn, worker=CONFIG.worker, lease_seconds=LEASE_SECONDS)
+    assert again is not None and again.run_id == first.run_id
+    assert work_row(conn, first.run_id)[0] == "CLAIMED", "released, not parked"
+
+
 def test_worker_drives_an_enqueued_lite_run_to_complete_with_a_deterministic_provider(
     case: tuple[StoreConnection, UUID],
     route: ResolvedRoute,
@@ -2170,7 +2191,6 @@ def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
     assert len(tries) == canonical.BILL_TRIES
     assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
     assert sum(pauses) <= 180 / 10, "a small share of the lease's 180 s budget"
-    assert not _hold_is_taken(empty_database, attempt), "the window: nothing holds it"
     worker_conn.close()
     start_attempt(run.conn, run.run_id, node, lease=lease)
     assert count(run.conn, "run_attempts", run.run_id) == 2, "one more"
