@@ -369,7 +369,7 @@ def _qualification_states(
         " WHERE e.build_id = %s AND q.expires_at > now()"
         " AND (e.model, e.provider) IN"
         " (SELECT * FROM unnest(%s::text[], %s::text[]))"
-        " ORDER BY e.model, q.decided_at DESC",
+        " ORDER BY e.model, q.decided_at DESC, q.evidence_sha256, q.reviewer_id",
         (build_id, list(identities), list(identities.values())),
     ).fetchall()
     states = {model: QualificationState.UNQUALIFIED for model in models}
