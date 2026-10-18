@@ -138,7 +138,7 @@ MAX_LINE_BYTES = 65_536
 # only ever shortens when read. The vendor's reader goes to `MAX_FILE_BYTES`,
 # where validation took 6-22 s on every read of an accepted handoff.
 MAX_HANDOFF_BYTES = MAX_RESPONSE_BYTES
-# The longest run of spaces or tabs any line of a handoff may carry.
+# The longest run of whitespace characters any line of a handoff may carry.
 #
 # The vendor's heading expressions are `^ {0,3}##(?!#)[ \t]+(.+?)[ \t]*$` and
 # its sibling, which backtrack quadratically on a heading padded with a long
@@ -477,7 +477,10 @@ def _run_bound(text: str) -> str:
     if " " * (MAX_WHITESPACE_RUN + 1) in spaced or any(
         len(run.group()) > MAX_WHITESPACE_RUN for run in _SPACE_RUN.finditer(text)
     ):
-        return f"a line carries a run of more than {MAX_WHITESPACE_RUN} spaces or tabs"
+        return (
+            f"a line carries a run of more than {MAX_WHITESPACE_RUN}"
+            " whitespace characters"
+        )
     if _heading_backtracks(text, spaced):
         return (
             f"a heading's title carries a run of more than {MAX_HEADING_RUN}"
