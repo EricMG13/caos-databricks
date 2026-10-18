@@ -305,19 +305,19 @@ COMMITTED_SET_DIGESTS = {
         "5ee867579762d61ce42a5665fc7e0d7adb35e42e1fea503a44f932c725c902f1"
     ),
     "czr-2026q2-lite-relative-value": (
-        "99a498e0085d5cd725547129b2d30bbd808f7c43fec6fb44c1d7ac295b37db78"
+        "c3a98020f07848d31e2e1aac10cb3cdc50da02b4ac0115dc495a93fe9147d4e6"
     ),
     "czr-2026q2-relative-value": (
         "a645d01e13330854836b371a4096cf4637b527bf06784151005ef9f5d0745c91"
     ),
     "czr-2026q2-lite-full-credit-screen": (
-        "25deb8d623c64914d22523da7c2269a4c8d901a220f8d4cfa38cd787e03f84e4"
+        "d8ca1c81161a7043e87cdf7b9ed4d03614618044a091b4fd9f15f9864e89a752"
     ),
     "czr-2026q2-lite-portfolio": (
-        "a1b09b156bead903eed0fa30ad2ae4341123f7dd9b407b02b41a9702de19fc12"
+        "d5f88732e1c3036efcd83f99fcb5ac259ac1d8b325c8ecd3ab31fd8603470e94"
     ),
     "czr-2026q2-portfolio": (
-        "1ec818789e1b5a50a9ae40038f6084f40af576917cdfa33955586292de4074fe"
+        "d5af56fb5fd0fd89be17635993f219b7eb795a2ee94f497d56fba3ec5144316c"
     ),
     "czr-2026q2-full-credit-assessment": (
         "dd7e23561abb23e220ba1948428b28acd74a9a14a4f0b6bc498c2b694389fecc"
