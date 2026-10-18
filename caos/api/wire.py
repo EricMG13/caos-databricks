@@ -630,7 +630,9 @@ class ModelChoice(BaseModel):
     """A model the deployment approves for a new run (`CAOS_MODEL_CHOICES`),
     at the dated price a run started on it is pinned to (F468). `configured`
     marks the deployment's own model, the one a `CreateRun` naming none gets.
-    Rates are per token, in plain notation (invariant 7)."""
+    `qualification` is QUALIFIED when a verdict bound to the model is current
+    and UNQUALIFIED otherwise (N117): a label, never a gate. Rates are per
+    token, in plain notation (invariant 7)."""
 
     model_config = _CLOSED
 
@@ -639,6 +641,7 @@ class ModelChoice(BaseModel):
     output_per_token: DecimalText
     as_of: Annotated[str, Field(max_length=10, pattern=r"^\d{4}-\d{2}-\d{2}$")]
     configured: StrictBool
+    qualification: QualificationState
 
 
 class BlockedByView(BaseModel):

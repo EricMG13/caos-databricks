@@ -352,12 +352,14 @@ const RouteChoice = object({
 // a run started on it is pinned to (F468). `configured` marks the model a
 // create naming none gets. Rates are the server's exact decimal strings.
 const perToken = string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" });
+const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
 const ModelChoice = object({
   model: short,
   input_per_token: perToken,
   output_per_token: perToken,
   as_of: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
   configured: bool,
+  qualification: QualificationState,
 });
 // The node whose validated Blocked verdict ended the run, as the transition
 // recorded it (§68). Nullable on `RunView`: a run the frontier emptied is
@@ -868,7 +870,6 @@ const PageDocument = object({
   notes: array(SectionNote, 3),
 });
 
-const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
 const QualificationRead = object({
   evidence_sha256: hash,
   state: QualificationState,
