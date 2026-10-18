@@ -21,7 +21,8 @@
 -- the check does the refusing.) The check refuses, as `owned_schema` does for
 -- `caos_store`, a schema this role does not own; any privilege on it, or a
 -- default privilege for it, held by another role or PUBLIC; any relation,
--- function or type in it owned by another role; and a `store_schema` carrying a
+-- function, type, operator, collation, text-search configuration or dictionary
+-- or conversion in it owned by another role; and a `store_schema` carrying a
 -- trigger, rule, policy or a table or column grant. `apply_schema` answers
 -- STORE_SCHEMA_DRIFT. A co-tenant's empty schema of this name therefore blocks
 -- the upgrade, fail closed (docs/DEPLOYMENT.md section 6).
@@ -44,6 +45,16 @@ BEGIN
             AND p.proowner <> n.nspowner)
         OR EXISTS (SELECT 1 FROM pg_type t WHERE t.typnamespace = n.oid
             AND t.typowner <> n.nspowner)
+        OR EXISTS (SELECT 1 FROM pg_operator o WHERE o.oprnamespace = n.oid
+            AND o.oprowner <> n.nspowner)
+        OR EXISTS (SELECT 1 FROM pg_collation l WHERE l.collnamespace = n.oid
+            AND l.collowner <> n.nspowner)
+        OR EXISTS (SELECT 1 FROM pg_ts_config f WHERE f.cfgnamespace = n.oid
+            AND f.cfgowner <> n.nspowner)
+        OR EXISTS (SELECT 1 FROM pg_ts_dict k WHERE k.dictnamespace = n.oid
+            AND k.dictowner <> n.nspowner)
+        OR EXISTS (SELECT 1 FROM pg_conversion v WHERE v.connamespace = n.oid
+            AND v.conowner <> n.nspowner)
         OR EXISTS (SELECT 1 FROM pg_class c
             WHERE c.relnamespace = n.oid AND c.relname = 'store_schema'
             AND (EXISTS (SELECT 1 FROM pg_trigger g

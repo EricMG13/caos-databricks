@@ -20,6 +20,7 @@ from uuid import uuid4
 
 from canonical_fixtures import CATALOG, fields_from_prompt
 from conftest import priced
+from governed_deliverable import freeze_canonical, save_revision, sign_opinion
 from lite_route_fixtures import CONFLICT_TEXT, RealisticLiteCompletions
 from test_canonical_execution import harness, route
 from test_execution_freshness import _Harness
@@ -29,14 +30,12 @@ from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import (
     Revision,
     canonical_payload,
-    freeze_canonical,
     payload_bytes,
     verify_frozen,
 )
-from caos.deliverable.filing import sign_opinion
 from caos.deliverable.package import build_package, verify_package
 from caos.deliverable.render import render
-from caos.deliverable.revisions import read_revision, save_revision
+from caos.deliverable.revisions import read_revision
 from caos.graph.route import resolve_route
 from caos.graph.runtime import Execution, run_route
 from caos.methodology.runner import ModuleProvider

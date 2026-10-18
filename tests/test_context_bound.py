@@ -273,9 +273,39 @@ def test_the_gate_starts_from_its_per_source_bound() -> None:
 # --- through the host's builders ---------------------------------------------
 
 
+# The lease documents R27 (N147) added to FCA. The fixture-based tests below
+# cover the pack FCA3-dec was refused on (D116), the committed pack without
+# them: admitting 4.3 MB more text into the test database got its backend
+# killed on a small docker VM. What the leases change is held by the
+# size-only test below; the fit of the whole committed pack is measured in the
+# set's RESULT.md, not asserted by a test that admits it.
+LEASE_PREFIXES = ("CZR_GLPI_", "CZR_VICI_")
+
+
+def _fca_sizes() -> dict[str, int]:
+    [listed] = json.loads((FCA / "qualification.json").read_text())["cases"]
+    return {Path(n).name: len((FCA / n).read_bytes()) for n in listed["documents"]}
+
+
+def test_fcas_committed_pack_is_past_the_transport_ceiling_as_a_whole() -> None:
+    """R27 (N147): with the 21 lease documents the committed FCA pack's text
+    exceeds `MAX_REQUEST_BYTES` on its own, so CP-0 can see it only through
+    page maps (`pack_view`); and the conformed Regional Lease alone is past the
+    gate's per-source bound. Sizes only, from `qualification/`: no admission."""
+    sizes = _fca_sizes()
+    leases = {n: s for n, s in sizes.items() if n.startswith(LEASE_PREFIXES)}
+    assert len(leases) == 21
+    assert sum(sizes.values()) > MAX_REQUEST_BYTES
+    # Without the leases the text is inside it (the pack D116 measured).
+    assert sum(sizes.values()) - sum(leases.values()) < MAX_REQUEST_BYTES
+    past = {n for n, s in leases.items() if s > GATE_SOURCE_BYTES}
+    assert past == {"CZR_VICI_Regional_Lease_Conformed_Fifth_Amendment.txt"}
+
+
 @pytest.fixture
 def fca(case: tuple[StoreConnection, UUID], tmp_path: Path) -> _Harness:
-    """FCA's committed CP-0 pack, admitted and pinned on its FULL route."""
+    """FCA's CP-0 pack as D116 measured it (without the R27 lease documents),
+    admitted and pinned on its FULL route."""
     conn, case_id = case
     root = tmp_path / "bundle"
     shutil.copytree(VENDORED, root)
@@ -285,6 +315,7 @@ def fca(case: tuple[StoreConnection, UUID], tmp_path: Path) -> _Harness:
     documents = [
         Document(filename=BoundaryText.of(Path(n).name), data=(FCA / n).read_bytes())
         for n in listed["documents"]
+        if not Path(n).name.startswith(LEASE_PREFIXES)
     ]
     admit_pack(conn, blobs, case_id=case_id, documents=documents)
     run_id = start_run(conn, case_id)

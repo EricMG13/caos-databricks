@@ -12,7 +12,10 @@ is therefore a rollback only when the older commit carries exactly the
 release's migrations, byte for byte and in order, reads the same schema,
 and reads and writes the same host records (`RECORD_CODEC_VERSION` in
 `caos/methodology/handoff.py`, D106: an older codec refuses the release's
-records, and every reader of them then refuses the run):
+records, and every reader of them then refuses the run), and records the
+same writer versions (N111: extractor identities, crop versions, citation
+normalisation, block packing, the canonical adapter and the renderer pin;
+an older build refuses a row written under a version it does not know):
 
     uv run python scripts/rollback_check.py <older> [--release <commit>]
 
@@ -39,6 +42,34 @@ from tracked import blob_at
 REPO = Path(__file__).resolve().parents[1]
 STORE = "caos/store"
 CODEC = "caos/methodology/handoff.py"
+# Each writer version a release records, as (label, file, name): a module
+# constant by its name, or the version in the `ExtractorIdentity` whose first
+# argument is the quoted name. The receipt and package carry no version of
+# their own: the renderer pin (`RENDERER_SHA256`) is what binds both.
+WRITERS = (
+    ("PdfExtractor version", "caos/evidence/pdf.py", "identity:caos.pdfminer"),
+    (
+        "plain-text extractor version",
+        "caos/evidence/extract.py",
+        "identity:caos.plain-text",
+    ),
+    ("PDF crop versions", "caos/evidence/page.py", "PDF_CROP_VERSIONS"),
+    (
+        "citation normalisation version",
+        "caos/evidence/citations.py",
+        "NORMALISATION_VERSION",
+    ),
+    ("block packing (width)", "caos/evidence/ingest.py", "PACKING_BY_WIDTH"),
+    ("block packing (token)", "caos/evidence/ingest.py", "PACKING_BY_TOKEN"),
+    (
+        "canonical adapter version",
+        "caos/methodology/__init__.py",
+        "CANONICAL_ADAPTER_VERSION",
+    ),
+    ("renderer digest", "caos/deliverable/verify_package.py", "RENDERER_SHA256"),
+    ("host record format", CODEC, "RECORD_FORMAT"),
+    ("blocked-citations format", CODEC, "BLOCKED_FORMAT"),
+)
 # What code with no `STORE_SCHEMA` reads: Postgres's default search path.
 PUBLIC = "public"
 
@@ -139,6 +170,54 @@ def record_codec(rev: str, repo: Path = REPO) -> object:
     return value.value if isinstance(value, ast.Constant) else None
 
 
+def _literal(node: ast.expr) -> object:
+    """A constant's value, a `frozenset({...})` as a sorted tuple, else None."""
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "frozenset"
+        and len(node.args) == 1
+    ):
+        try:
+            return tuple(sorted(ast.literal_eval(node.args[0])))
+        except (ValueError, TypeError):
+            return None
+    return node.value if isinstance(node, ast.Constant) else None
+
+
+def _identity_version(tree: ast.Module, name: str) -> object:
+    """The version (second argument) of the `ExtractorIdentity` named `name`."""
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "ExtractorIdentity"
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Constant)
+            and node.args[0].value == name
+        ):
+            return _literal(node.args[1])
+    return None
+
+
+def writer_versions(rev: str, repo: Path = REPO) -> dict[str, object]:
+    """Each version in `WRITERS` as git recorded it at `rev`; None for one
+    the commit does not declare (or declares in a form this cannot read)."""
+    versions: dict[str, object] = {}
+    for label, path, name in WRITERS:
+        try:
+            tree = ast.parse(blob_at(repo, rev, path) or "")
+        except SyntaxError:
+            versions[label] = None
+            continue
+        if name.startswith("identity:"):
+            versions[label] = _identity_version(tree, name.removeprefix("identity:"))
+        else:
+            value = _module_constants(tree).get(name)
+            versions[label] = None if value is None else _literal(value)
+    return versions
+
+
 def rollback_problems(
     older: str, release: str = "HEAD", repo: Path = REPO
 ) -> list[str]:
@@ -172,6 +251,23 @@ def rollback_problems(
             f"{older} reads host records by codec {codecs[0]}, not {codecs[1]}: "
             f"it refuses the records {release} wrote (D106)"
         )
+    was_writes, now_writes = (
+        writer_versions(older, repo),
+        writer_versions(release, repo),
+    )
+    # A writer the release declares in no form this reads would compare equal
+    # to the same gap on the older commit: refuse it, never pass it.
+    problems.extend(
+        f"{label} is not declared in a form this check reads on {release}"
+        for label, value in now_writes.items()
+        if value is None
+    )
+    problems.extend(
+        f"{label} is {was_writes[label]} on {older} and {now_writes[label]} on "
+        f"{release}: {older} refuses the rows {release} writes"
+        for label in was_writes
+        if now_writes[label] is not None and was_writes[label] != now_writes[label]
+    )
     return problems
 
 
@@ -186,7 +282,10 @@ def main(argv: list[str] | None = None) -> int:
     if problems:
         print("not a rollback: roll forward, or restore (docs/DEPLOYMENT.md section 6)")
         return 1
-    print(f"{args.older} carries {args.release}'s migrations and schema: redeploy it")
+    print(
+        f"{args.older} carries {args.release}'s migrations, schema and writer "
+        "versions: redeploy it"
+    )
     return 0
 
 

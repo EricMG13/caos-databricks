@@ -21,3 +21,7 @@ tests/fixtures/** -text
 caos/calculators/cash_flow.py -text
 caos/deliverable/render.py -text
 caos/deliverable/verify_package.py -text
+# The suite's conftest is pinned whole by sha256 (`CONFTEST_PIN` in
+# scripts/check_gate_config.py, N109); a checkout that converts its line
+# endings would fail that gate.
+tests/conftest.py -text

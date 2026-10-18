@@ -131,6 +131,20 @@ def odd_length(days: int | None) -> str | None:
     return f"twelve months of {days} days"
 
 
+# The days a quarter spans (13 or 14 weeks, or a calendar quarter): a quarter
+# of 11, 12 or 15 weeks still reads as three months (`history._whole_months`
+# allows a fortnight) but is named by `odd_quarter`.
+QUARTER_DAYS = (89, 98)
+
+
+def odd_quarter(period_id: str, days: int | None) -> str | None:
+    """The note on the quarter `period_id` of `days` days outside
+    `QUARTER_DAYS`; None inside them or where unknown."""
+    if days is None or QUARTER_DAYS[0] <= days <= QUARTER_DAYS[1]:
+        return None
+    return f"quarter {period_id} of {days} days"
+
+
 def odd_year(period_id: str, short: bool) -> str:
     """The note on an LTM that is a fiscal year, `period_id`, of fewer
     (`short`) or more than twelve months."""
@@ -265,6 +279,18 @@ def refused_balance(
     return Cell(
         None, "COMPONENT_MISSING", note=footing_note(regs, str(own), skipped[0])
     )
+
+
+def merged_footing_note(regs: Cp1Registers, period_ids: Iterable[str]) -> str | None:
+    """`footing_note` of the first two of the periods, in order, that state a
+    different basis or perimeter (`_apart_periods`); None where none do."""
+    seen: list[str] = []
+    for period_id in dict.fromkeys(period_ids):
+        for earlier in seen:
+            if _apart_periods(regs, earlier, period_id):
+                return footing_note(regs, earlier, period_id)
+        seen.append(period_id)
+    return None
 
 
 def anchor_period(regs: Cp1Registers) -> PeriodRow | None:

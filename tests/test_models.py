@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from datetime import date
 from decimal import Decimal
@@ -1088,3 +1089,79 @@ def test_the_seconds_are_those_since_the_first_send(
 
     fake_completions(ScriptedChat(answer=slow)).complete(PROMPT)
     assert capsys.readouterr().err.endswith(" elapsed=3.5\n")
+
+
+class _TornStderr:
+    """A non-blocking stderr whose first write takes a few characters and
+    raises `BlockingIOError`, as a full pipe does; later writes succeed."""
+
+    def __init__(self) -> None:
+        self.text = ""
+        self.torn = False
+
+    def write(self, text: str) -> int:
+        if not self.torn:
+            self.torn = True
+            self.text += text[:11]
+            raise BlockingIOError(11, "would block", 11)
+        self.text += text
+        return len(text)
+
+    def flush(self) -> None:
+        return None
+
+
+def test_a_torn_stderr_line_is_ended_before_the_next_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N155: a partial write on a non-blocking stderr left an unterminated
+    fragment that the next call's line ran into. The fragment is ended."""
+    torn = _TornStderr()
+    monkeypatch.setattr(sys, "stderr", torn)
+    for _ in range(2):
+        completion = fake_completions(ScriptedChat(answer=ValueError("p"))).complete(
+            PROMPT
+        )
+        assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    lines = torn.text.split("\n")
+    assert lines[0] == "PROVIDER_UN"
+    assert lines[1].startswith("PROVIDER_UNAVAILABLE call=raised ")
+    assert lines[1].count("PROVIDER_") == 1
+
+
+@pytest.mark.parametrize("stop", [KeyboardInterrupt, SystemExit])
+def test_an_interrupt_inside_the_stderr_write_never_changes_the_refusal(
+    stop: type[BaseException], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N155: the line is a fail-open, so a `BaseException` raised inside its
+    write is dropped like any other write failure; the call's refusal and
+    outcome are the ones it had before the line existed."""
+
+    class Interrupted:
+        def write(self, text: str) -> int:
+            raise stop
+
+        def flush(self) -> None:
+            return None
+
+    monkeypatch.setattr(sys, "stderr", Interrupted())
+    completion = fake_completions(ScriptedChat(answer=ValueError("p"))).complete(PROMPT)
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+
+
+def test_a_base_exception_reading_an_escaped_failure_is_still_escaped(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """N155: a `BaseException` raised by a property while the facts of an
+    escaped failure are read labelled the line `deadline`; it is `escaped`,
+    its facts unknown, and the refusal is unchanged."""
+    import threading
+
+    class Hostile(BaseException):
+        @property
+        def body(self) -> object:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(threading, "excepthook", lambda args: None)
+    line = _said(Hostile("private"), capsys)
+    assert "call=escaped class=? cause=? status=? error_code=? error_type=? " in line
