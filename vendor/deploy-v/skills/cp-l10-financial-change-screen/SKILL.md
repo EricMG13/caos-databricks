@@ -201,10 +201,24 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **values**: SOURCE_BASIS; EARNINGS_MARGIN_CHANGE; CASH_CONVERSION; LEVERAGE_COVERAGE; LIQUIDITY_MATURITIES; KPI_COMPARABILITY
     - structured item
       - **case_sensitive**: True
+      - **column**: topic_id
+      - **register_id**: TL10.2
+      - **rule**: allowed_values
+      - **rule_id**: cp_l10.topic_ids_allowed
+      - **values**: SOURCE_BASIS; EARNINGS_MARGIN_CHANGE; CASH_CONVERSION; LEVERAGE_COVERAGE; LIQUIDITY_MATURITIES; KPI_COMPARABILITY
+    - structured item
+      - **case_sensitive**: True
       - **column**: screen_item
       - **register_id**: TL10.3
       - **rule**: required_values
       - **rule_id**: cp_l10.overall_screen_present
+      - **values**: OVERALL
+    - structured item
+      - **case_sensitive**: True
+      - **column**: screen_item
+      - **register_id**: TL10.3
+      - **rule**: exactly_once_values
+      - **rule_id**: cp_l10.overall_screen_once
       - **values**: OVERALL
     - structured item
       - **columns**: topic_id
@@ -220,10 +234,24 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **values**: BUSINESS_DURABILITY; MARGIN_FCF_RESILIENCE; LEVERAGE_REFINANCING_CONTEXT; GOVERNANCE_SPONSOR_BEHAVIOR; FINANCIAL_POLICY_CAPITAL_ALLOCATION; ESG_TRANSITION
     - structured item
       - **case_sensitive**: True
+      - **column**: topic_id
+      - **register_id**: TL20.2
+      - **rule**: allowed_values
+      - **rule_id**: cp_l20.topic_ids_allowed
+      - **values**: BUSINESS_DURABILITY; MARGIN_FCF_RESILIENCE; LEVERAGE_REFINANCING_CONTEXT; GOVERNANCE_SPONSOR_BEHAVIOR; FINANCIAL_POLICY_CAPITAL_ALLOCATION; ESG_TRANSITION
+    - structured item
+      - **case_sensitive**: True
       - **column**: screen_item
       - **register_id**: TL20.3
       - **rule**: required_values
       - **rule_id**: cp_l20.overall_screen_present
+      - **values**: OVERALL
+    - structured item
+      - **case_sensitive**: True
+      - **column**: screen_item
+      - **register_id**: TL20.3
+      - **rule**: exactly_once_values
+      - **rule_id**: cp_l20.overall_screen_once
       - **values**: OVERALL
     - structured item
       - **columns**: topic_id
@@ -239,10 +267,24 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **values**: ACCESSIBLE_LIQUIDITY_USES; WORKING_CAPITAL_CAPEX_CASH_BURN; RATES_HEDGES; FX_COMMODITY_INFLATION; BASE_DOWNSIDE_TRAJECTORY; BREAKPOINTS_REFINANCING
     - structured item
       - **case_sensitive**: True
+      - **column**: topic_id
+      - **register_id**: TL23.2
+      - **rule**: allowed_values
+      - **rule_id**: cp_l23.topic_ids_allowed
+      - **values**: ACCESSIBLE_LIQUIDITY_USES; WORKING_CAPITAL_CAPEX_CASH_BURN; RATES_HEDGES; FX_COMMODITY_INFLATION; BASE_DOWNSIDE_TRAJECTORY; BREAKPOINTS_REFINANCING
+    - structured item
+      - **case_sensitive**: True
       - **column**: screen_item
       - **register_id**: TL23.3
       - **rule**: required_values
       - **rule_id**: cp_l23.overall_screen_present
+      - **values**: OVERALL
+    - structured item
+      - **case_sensitive**: True
+      - **column**: screen_item
+      - **register_id**: TL23.3
+      - **rule**: exactly_once_values
+      - **rule_id**: cp_l23.overall_screen_once
       - **values**: OVERALL
     - structured item
       - **columns**: topic_id
@@ -258,10 +300,24 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **values**: DATED_MARKET_SNAPSHOT; CURVE_COMPARABLE_COMPENSATION; LIQUIDITY_TECHNICALS; STRUCTURAL_RECOVERY_PROTECTION; DOWNSIDE_LME_EXPOSURE; INTEGRATED_SCREENING_POSTURE
     - structured item
       - **case_sensitive**: True
+      - **column**: topic_id
+      - **register_id**: TL30.2
+      - **rule**: allowed_values
+      - **rule_id**: cp_l30.topic_ids_allowed
+      - **values**: DATED_MARKET_SNAPSHOT; CURVE_COMPARABLE_COMPENSATION; LIQUIDITY_TECHNICALS; STRUCTURAL_RECOVERY_PROTECTION; DOWNSIDE_LME_EXPOSURE; INTEGRATED_SCREENING_POSTURE
+    - structured item
+      - **case_sensitive**: True
       - **column**: screen_item
       - **register_id**: TL30.3
       - **rule**: required_values
       - **rule_id**: cp_l30.overall_screen_present
+      - **values**: OVERALL
+    - structured item
+      - **case_sensitive**: True
+      - **column**: screen_item
+      - **register_id**: TL30.3
+      - **rule**: exactly_once_values
+      - **rule_id**: cp_l30.overall_screen_once
       - **values**: OVERALL
     - structured item
       - **columns**: topic_id
@@ -277,10 +333,24 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **values**: CONTROLLING_DOCUMENT_AVAILABILITY; PROTECTION_WEAKNESS_FLAGS; ENTITY_GUARANTEE_COLLATERAL; LEAKAGE_PRIMING_FLAGS; CAPACITY_AVAILABILITY; PRESSURE_POINT_UPGRADE_PRIORITY
     - structured item
       - **case_sensitive**: True
+      - **column**: topic_id
+      - **register_id**: TL40.2
+      - **rule**: allowed_values
+      - **rule_id**: cp_l40.topic_ids_allowed
+      - **values**: CONTROLLING_DOCUMENT_AVAILABILITY; PROTECTION_WEAKNESS_FLAGS; ENTITY_GUARANTEE_COLLATERAL; LEAKAGE_PRIMING_FLAGS; CAPACITY_AVAILABILITY; PRESSURE_POINT_UPGRADE_PRIORITY
+    - structured item
+      - **case_sensitive**: True
       - **column**: screen_item
       - **register_id**: TL40.3
       - **rule**: required_values
       - **rule_id**: cp_l40.overall_screen_present
+      - **values**: OVERALL
+    - structured item
+      - **case_sensitive**: True
+      - **column**: screen_item
+      - **register_id**: TL40.3
+      - **rule**: exactly_once_values
+      - **rule_id**: cp_l40.overall_screen_once
       - **values**: OVERALL
   - **status_by_evidence_class**: structured below
     - **presentation_fixture**: source_limited_complete
@@ -378,6 +448,7 @@ Each screen keeps its own four registers and all six of its topic rows: a topic 
 - The authority prohibitions bind without being restated: no cell or line repeats that no conclusion, calculation, forecast or inference is made.
 - A screen's posture is the `assessment` of its decision-screen `OVERALL` row, and the run's status and outcome are stated where the Audit Summary states them; no other line in the appendix restates them, except the one row Workflow step 7 requires in a `LITE_COMPLETE` screen's gaps register (`TL10.4`, `TL20.4`, `TL23.4`, `TL30.4` or `TL40.4`) to say no gap or FULL upgrade is needed.
 - A sourced figure or finding is never dropped to save space; it stays where the method puts it.
+- In a register cell never write a bare placeholder, which every critical column refuses: write `[Insufficient Information] — ` and what is missing and where it was sought (for example `[Insufficient Information] — covenant compliance certificate not in the source set`), or `—` for a blank value.
 
 ## Absorbed phase — CP-L20, binding on every CP-L10 run
 
