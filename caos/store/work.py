@@ -35,7 +35,9 @@ from caos.store.outcomes import require_idle
 # session cut released `call_hold` (D117), they are the safety margin in which
 # the live lease alone keeps a second worker off the node. Brief D5's two
 # deadlines held until D83. 900 s since D117, raised with the deadline so the
-# 180 s stay (`CALL_HOLD_SECONDS`, two leases, follows it).
+# 180 s stay (`CALL_HOLD_SECONDS`, two leases at this default; `call_hold_seconds`
+# sizes it from the lease a claim was made with, never under the call's
+# deadline plus one lease).
 LEASE_SECONDS = 900
 MAX_WORKER_BYTES = 128
 # N15 (D39): the most runs one actor may hold queued or in a worker's hands at

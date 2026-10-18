@@ -68,7 +68,8 @@ from caos.store.source_sets import cited_source_ids
 # shape any fixture has and no longer the only shape the store allows: the
 # opinions table is keyed per signer and `sign_opinion_in` refuses only a frozen
 # revision, so a second approver may sign before the freeze and costs one more
-# read. Measured at 53 for the frozen path with two signers. Recorded in
+# read. Counted at 53 statements for the frozen Committee read with one
+# signer and 54 with two. Recorded in
 # CLAUDE.md rather than absorbed into the number, because a budget fitted to the
 # widest shape stops measuring the common one.
 # The head a save is judged against rides the revision's own statement, so it

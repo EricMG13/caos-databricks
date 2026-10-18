@@ -57,11 +57,14 @@ def _read_committed(conn: StoreConnection) -> None:
 # Arbitrary and permanent.
 CALL_HOLD_LOCK = 0x0CA0_0006
 _HOLD = "SELECT pg_advisory_lock(%s::integer, hashtext(%s))"
+_TRY_HOLD = "SELECT pg_try_advisory_lock(%s::integer, hashtext(%s))"
 _LET_GO = "SELECT pg_advisory_unlock(%s::integer, hashtext(%s))"
 
 
 @contextmanager
-def call_hold(conn: StoreConnection, attempt_id: UUID) -> Iterator[None]:
+def call_hold(
+    conn: StoreConnection, attempt_id: UUID, *, wait: bool = True
+) -> Iterator[None]:
     """Say, for as long as the scope runs, that this session may still call
     for the attempt or bill its call (invariant 6).
 
@@ -75,19 +78,27 @@ def call_hold(conn: StoreConnection, attempt_id: UUID) -> Iterator[None]:
     killed, a socket lost -- lets go of it with everything else, so a dead
     holder keeps nothing. On exit it is let go in a unit of its own; a
     connection that cannot do that is closed, which lets go too.
+
+    `wait=False` is for a session that must write, not wait (the bill's
+    replacement connection, N80): it asks for the hold without blocking and
+    runs the scope whether or not it got it -- the old session's backend may
+    still hold it, half-open, and a write that waits behind that is a bill
+    that never lands -- and lets go only of a hold it obtained.
     """
     key = (CALL_HOLD_LOCK, str(attempt_id))
     require_idle(conn)
     try:
-        conn.execute(_HOLD, key)
+        row = conn.execute(_HOLD if wait else _TRY_HOLD, key).fetchone()
         conn.rollback()
     except psycopg.Error:
         rollback_or_close(conn)
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    obtained = wait or (row is not None and row[0] is True)
     try:
         yield
     finally:
-        _let_go(conn, key)
+        if obtained:
+            _let_go(conn, key)
 
 
 def _let_go(conn: StoreConnection, key: tuple[int, str]) -> None:
@@ -439,7 +450,13 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
         # wrote it -- the same bill with its drop kind withheld (F530 round
         # 3). Counting is decided once, on insert; a replay after a later
         # start must not judge the row again.
-        if row not in (_facts(outcome), _facts(replace(outcome, drop_kind=None))):
+        # The withheld form answers a replay carrying a kind only when a later
+        # attempt exists to have withheld it (N169); with none it is a different
+        # outcome.
+        if row != _facts(outcome) and not (
+            row == _facts(replace(outcome, drop_kind=None))
+            and _later_attempt(conn, attempt)
+        ):
             raise Refusal(RefusalCode.CALL_OUTCOME_CONFLICT)
         return False
     outcome = _counted(conn, attempt, outcome)
@@ -488,13 +505,22 @@ def _counted(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> Call
     it, so it can spend no re-attempt and owe no stop. Under the run lock."""
     if outcome.drop_kind is None:
         return outcome
-    later = conn.execute(
-        "SELECT 1 FROM run_attempts t JOIN run_attempts n"
-        " ON (n.run_id, n.route_node_id) = (t.run_id, t.route_node_id)"
-        " AND n.ordinal > t.ordinal WHERE t.attempt_id = %s",
-        (attempt,),
-    ).fetchone()
-    return outcome if later is None else replace(outcome, drop_kind=None)
+    if _later_attempt(conn, attempt):
+        return replace(outcome, drop_kind=None)
+    return outcome
+
+
+def _later_attempt(conn: StoreConnection, attempt: UUID) -> bool:
+    """Whether a later attempt at the attempt's node was started."""
+    return (
+        conn.execute(
+            "SELECT 1 FROM run_attempts t JOIN run_attempts n"
+            " ON (n.run_id, n.route_node_id) = (t.run_id, t.route_node_id)"
+            " AND n.ordinal > t.ordinal WHERE t.attempt_id = %s",
+            (attempt,),
+        ).fetchone()
+        is not None
+    )
 
 
 # What the store, the run or its fence said, never what the answer was: a later
