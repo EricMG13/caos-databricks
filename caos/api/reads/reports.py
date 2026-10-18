@@ -121,6 +121,14 @@ BLOB_BUDGET = {
     "unsaved": 6,
     "report_unproven": 7,
 }
+# N231 (2): the bytes the delivery rebuild above reads, per derivation: the rows
+# of the two pinned statements (the pin's blocks with their text, the members)
+# and the accepted upstream Markdown each node's selection is rebuilt over.
+# Measured on LITE's fixtures by `tests/test_delivery_bytes.py` at 20,072 for
+# one derivation (1,270 from the store, 18,802 from the blobs, three nodes);
+# the bound is 24 KiB, held as a ceiling and, to keep it a measurement, as
+# no less than half of it. A larger pin or upstream moves it.
+DELIVERY_BYTES = {"report": 24576, "frozen": 24576, "unsaved": 24576}
 router = APIRouter()
 
 

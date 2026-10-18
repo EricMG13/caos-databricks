@@ -274,6 +274,14 @@ MIGRATIONS = (
         .with_name("0052_pre_dl1_tripwire.sql")
         .read_text(encoding="utf-8"),
     ),
+    # 0052 (N81) merged first; the runner keys migrations by position in
+    # `MIGRATIONS`, so 0053 stays after it.
+    (
+        "0053_attempt_bill_marks",
+        Path(__file__)
+        .with_name("0053_attempt_bill_marks.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # DL-1: the store's own schema, beside LangGraph's `caos_graph`
