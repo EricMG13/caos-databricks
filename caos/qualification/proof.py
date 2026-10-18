@@ -48,7 +48,7 @@ from caos.blobs import BlobStore
 from caos.evidence.citations import AnchoredCitation, TokenIndex
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import Bundle
-from caos.methodology.executor import captured_blocks
+from caos.methodology.canonical import node_delivery
 from caos.methodology.handoff import CanonicalRecord, UnverifiedCitation
 from caos.methodology.verification import (
     CREDIT_SCREEN_SELECTION,
@@ -150,9 +150,7 @@ def assert_orchestration_proof(
         raise Refusal(RefusalCode.ORCHESTRATION_BUILD_MOVED)
 
     live = pinned_live_sources(conn, run_id)
-    captured = captured_blocks(conn, run_id)
-    delivered = {s: captured.get(s, frozenset()) for s in live.values()}
-    reader = _CanonicalReader(conn, blobs, bundle, route, run_id, live, delivered)
+    reader = _CanonicalReader(conn, blobs, bundle, route, run_id, live)
     # One reading of the accepted pairs, which every record's lineage is read against.
     reader.pairs = {
         str(row[1]): (str(row[0]), None if row[6] is None else str(row[6]))
@@ -262,15 +260,17 @@ class _CanonicalReader:
         route: ResolvedRoute,
         run_id: UUID,
         live: dict[str, UUID],
-        delivered: dict[UUID, frozenset[str]],
     ) -> None:
         self.conn, self.blobs, self.bundle = conn, blobs, bundle
         self.route, self.run_id = route, run_id
         self.pairs: dict[str, tuple[str, str | None]] = {}
         self.verified_markdown: dict[tuple[str, str], bytes] = {}
         # One reading of the token index for the whole proof: records cluster
-        # on the same pages of the same sources.
-        self.evidence = PinnedEvidence(live, delivered, TokenIndex())
+        # on the same pages of the same sources. Each node's citations anchor
+        # in the blocks that node was handed (N130).
+        self.evidence = PinnedEvidence(
+            live, node_delivery(conn, blobs, bundle, run_id), TokenIndex()
+        )
         self.vendor = load_vendor_authority(bundle)
 
     def proven(
