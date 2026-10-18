@@ -237,6 +237,36 @@ describe("the Blocked answer's quotes (owner: Show its quotes)", () => {
     neverVerified(model);
   });
 
+  test("test_a_blocked_chip_is_named_by_its_marker_never_by_its_place_in_the_list", () => {
+    // N142: the fixture's marker always equalled its index + 1, so naming by
+    // index passed. Here the markers are 4 and 7 at places 0 and 1, and the
+    // third quote predates markers.
+    const base = blocked.verified[0]!;
+    const { container } = render(
+      <BlockedQuotes
+        blocked={{
+          ...blocked,
+          verified: [
+            { ...base, marker: 4 },
+            { ...base, marker: 7 },
+            { ...base, marker: null },
+          ],
+          unverified: [],
+        }}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "C4, citation 4: open its source, page 4" }),
+    ).toHaveTextContent(/^C4$/);
+    expect(
+      screen.getByRole("button", { name: "C7, citation 7: open its source, page 4" }),
+    ).toHaveTextContent(/^C7$/);
+    expect(
+      screen.getByRole("button", { name: "p.4, verified quote: open its source, page 4" }),
+    ).toHaveTextContent(/^p\.4$/);
+    expect(container.querySelectorAll("[data-blocked-chip]")).toHaveLength(3);
+  });
+
   test("test_a_verified_blocked_quote_resolves_to_the_source_drawer", () => {
     // Its identity is the verdict's attempt; the drawer gets its source,
     // page and line, with no rectangle.

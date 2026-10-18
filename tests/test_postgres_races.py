@@ -10,12 +10,12 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
-from threading import Barrier, Event
+from threading import Barrier, Event, Thread
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -1449,7 +1449,7 @@ def test_a_bill_landing_after_a_pass_read_the_ledger_is_replayed_not_paid_twice(
     B's pass reads the ledger -- no bill there yet, nothing to replay -- and
     while it builds its prompt A's call answers, A bills, lets go of its hold
     and is fenced out of acceptance. Under the run lock B's start finds the
-    bill that landed and refuses `ATTEMPT_UNSETTLED` with nothing written, the
+    bill that landed and refuses `ATTEMPT_BILL_OWED` with nothing written, the
     worker gives the run back, and the next pass replays A's answer: one paid
     call a node. Before the fix B started a second attempt there and paid for
     the node again (W1's residual: a bill that waits out a held case lock
@@ -1482,7 +1482,7 @@ def test_a_bill_landing_after_a_pass_read_the_ledger_is_replayed_not_paid_twice(
         workers.append(pool.submit(_drive, empty_database, run, completions))
         assert a_calling.wait(60)
         b = pool.submit(_outcome, lambda: _drive(empty_database, run, completions))
-        assert b.result(120) == RefusalCode.ATTEMPT_UNSETTLED.value
+        assert b.result(120) == RefusalCode.ATTEMPT_BILL_OWED.value
     monkeypatch.undo()
     assert len(completions.prompts) == 1, "B paid for nothing"
     assert _count(run.conn, "run_attempts", run.run_id) == 1
@@ -1494,6 +1494,79 @@ def test_a_bill_landing_after_a_pass_read_the_ledger_is_replayed_not_paid_twice(
 
     assert _drive(empty_database, run, completions) == run.run_id
     _paid_once_per_node(run.conn, run.run_id, completions)
+
+
+@pytest.mark.parametrize("held_sorts_first", [True, False])
+def test_an_owed_bill_is_refused_by_its_own_code_even_beside_a_held_call(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    held_sorts_first: bool,
+) -> None:
+    """N116: a node with a bill owed its verdict and another attempt whose call
+    a live session still holds refuses `ATTEMPT_BILL_OWED`: the next pass
+    settles the owed bill first, whatever else waits on the node. The store
+    reads attempts in id order, so the ids are pinned to meet the held attempt
+    first and last: the owed code must not depend on which row comes first."""
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+    lease = _claimed(empty_database, run_id)
+    node = nodes["CP-0"]
+    ids = iter(
+        [UUID(int=1), UUID(int=2)] if held_sorts_first else [UUID(int=2), UUID(int=1)]
+    )
+    monkeypatch.setattr(runs, "uuid4", lambda: next(ids))
+    with connect(empty_database) as a:
+        held = start_attempt(a, run_id, node, lease=lease)
+        reserve(a, held, RESERVED, lease=lease)
+        owing = start_attempt(a, run_id, node, lease=lease)
+    monkeypatch.undo()
+    with connect(empty_database) as a:
+        record_outcome(
+            a,
+            attempt_id=owing,
+            outcome=CallOutcome(CHARGE, MODEL, GENERATION, None),
+        )
+    holder = connect(empty_database)
+    try:
+        with connect(empty_database) as b, call_hold(holder, held):
+            _refused(
+                RefusalCode.ATTEMPT_BILL_OWED,
+                lambda: start_attempt(b, run_id, node, lease=lease),
+            )
+    finally:
+        holder.close()
+
+
+def test_a_replay_withholding_a_drop_kind_is_a_no_op_only_after_a_later_attempt(
+    empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
+) -> None:
+    """N169: a row stored without a drop kind answers a replay carrying one
+    only when a later attempt at the node explains the withheld kind
+    (`_counted`); with none, the replay is a different outcome and refuses
+    `CALL_OUTCOME_CONFLICT`."""
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+        node = nodes["CP-0"]
+        attempt = start_attempt(conn, run_id, node)
+        plain = CallOutcome(None, MODEL, None, None)
+        dropped = replace(plain, drop_kind=DropKind.DECLARED)
+        assert record_outcome(conn, attempt_id=attempt, outcome=plain)
+        assert not record_outcome(conn, attempt_id=attempt, outcome=plain)
+        _refused(
+            RefusalCode.CALL_OUTCOME_CONFLICT,
+            lambda: record_outcome(conn, attempt_id=attempt, outcome=dropped),
+        )
+        start_attempt(conn, run_id, node)
+        assert not record_outcome(conn, attempt_id=attempt, outcome=dropped)
+        other = replace(dropped, model="another/model")
+        _refused(
+            RefusalCode.CALL_OUTCOME_CONFLICT,
+            lambda: record_outcome(conn, attempt_id=attempt, outcome=other),
+        )
 
 
 def test_a_call_in_flight_past_its_lease_keeps_its_node_from_a_second_call(
@@ -1617,7 +1690,7 @@ def test_a_held_call_keeps_its_node_only_while_a_live_session_holds_it(
             )
             assert _count(b, "run_attempts", run_id) == 3, "nothing written"
             start_attempt(b, run_id, nodes["CP-L10"], lease=fresh)
-            monkeypatch.setattr(runs, "CALL_HOLD_SECONDS", 0)
+            monkeypatch.setattr(runs, "call_hold_seconds", lambda _lease: 0)
             start_attempt(b, run_id, nodes["CP-5"], lease=fresh)
             monkeypatch.undo()
         _refused(
@@ -1630,10 +1703,230 @@ def test_a_held_call_keeps_its_node_only_while_a_live_session_holds_it(
         assert _count(b, "run_attempts", run_id) == 6
 
 
+def test_a_held_call_keeps_its_node_two_of_the_leases_it_was_claimed_with(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N80: the hold is sized from the lease the worker claimed with
+    (`WorkerConfig.lease_seconds`), not from the module default. A three-second
+    lease keeps a held node six seconds past its reservation (the call's own
+    deadline, which floors the span, set aside): a holder silent two leases is
+    wedged, and the 1800 s of the default would keep its node 30 minutes for a
+    worker configured for one."""
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+    stale = _claimed(empty_database, run_id)
+    with connect(empty_database) as a:
+        attempt = start_attempt(a, run_id, nodes["CP-0"], lease=stale)
+        reserve(a, attempt, RESERVED, lease=stale)
+    monkeypatch.setattr(runs, "TIMEOUT_SECONDS", 0.0)
+    fresh = replace(_reclaimed(empty_database, run_id), seconds=3)
+    holder = connect(empty_database)
+    try:
+        with connect(empty_database) as b, call_hold(holder, attempt):
+            # The first refusal must fall inside the hold's six seconds; under
+            # a loaded server the setup alone can use a second or more.
+            age = b.execute(
+                "SELECT extract(epoch FROM now() - reserved_at)"
+                " FROM budget_reservations WHERE attempt_id = %s",
+                (attempt,),
+            ).fetchone()
+            b.rollback()
+            assert age is not None and float(age[0]) < 3.0, "the setup used the margin"
+            _refused(
+                RefusalCode.ATTEMPT_UNSETTLED,
+                lambda: start_attempt(b, run_id, nodes["CP-0"], lease=fresh),
+            )
+            time.sleep(6.2)  # past two three-second leases (a reservation is immutable)
+            start_attempt(b, run_id, nodes["CP-0"], lease=fresh)
+            assert _count(b, "run_attempts", run_id) == 2
+    finally:
+        holder.close()
+
+
+_BILL = CallOutcome(Decimal("0.05"), "a-model/for-the-test", "generation")
+
+
+def _bill_beside_a_live_holder(
+    url: str,
+    run_id: UUID,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[float, int]:
+    """Bill an attempt over a closed connection while a second live session
+    (the old backend a half-open failover left) still holds the attempt's
+    hold. Returns the seconds the bill took and the outcome rows it left."""
+    from caos.methodology import canonical
+
+    with connect(url) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+    lease = _claimed(url, run_id)
+    with connect(url) as a:
+        attempt = start_attempt(a, run_id, nodes["CP-0"], lease=lease)
+        reserve(a, attempt, RESERVED, lease=lease)
+    zombie = connect(url)
+    closed = connect(url)
+    closed.close()
+    monkeypatch.setenv("CAOS_DATABASE_URL", url)
+    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    try:
+        with call_hold(zombie, attempt):
+            started = time.monotonic()
+            biller = Thread(
+                target=canonical.bill, args=(closed, attempt, _BILL), daemon=True
+            )
+            biller.start()
+            biller.join(timeout=5)
+            took = time.monotonic() - started
+            with connect(url) as b:
+                billed = _count(b, "call_outcomes", run_id)
+    finally:
+        zombie.close()
+        biller.join(timeout=10)
+    return took, billed
+
+
+def _hold_is_free(url: str, attempt: UUID) -> bool:
+    """Whether a session of its own could take the attempt's hold now."""
+    from caos.store.outcomes import CALL_HOLD_LOCK
+
+    with connect(url) as probe:
+        row = probe.execute(
+            "SELECT pg_try_advisory_lock(%s::integer, hashtext(%s))",
+            (CALL_HOLD_LOCK, str(attempt)),
+        ).fetchone()
+        probe.rollback()
+    return row is not None and row[0] is True
+
+
+def test_a_hold_not_waited_for_runs_beside_its_holder_and_lets_go_only_of_its_own(
+    empty_database: str,
+) -> None:
+    """`call_hold(wait=False)` asks for the hold and runs the scope whether or
+    not it got it, where the default waits (a `lock_timeout` cuts that wait
+    short as a store fault). It lets go of a hold it obtained, never of the
+    holder's."""
+    attempt = uuid4()
+    holder, other = connect(empty_database), connect(empty_database)
+    try:
+        other.execute("SET lock_timeout = 200")
+        other.commit()
+        with call_hold(holder, attempt):
+            ran: list[str] = []
+            with call_hold(other, attempt, wait=False):
+                ran.append("beside the holder")
+            assert ran == ["beside the holder"]
+            assert not _hold_is_free(empty_database, attempt), "the holder's stands"
+            _refused(
+                RefusalCode.STORE_UNAVAILABLE,
+                lambda: call_hold(other, attempt).__enter__(),
+            )
+        assert _hold_is_free(empty_database, attempt)
+        with call_hold(other, attempt, wait=False):
+            assert not _hold_is_free(empty_database, attempt), "taken when free"
+        assert _hold_is_free(empty_database, attempt), "and let go at the scope's end"
+    finally:
+        holder.close()
+        other.close()
+
+
+def test_a_reconnected_bill_lands_at_once_beside_a_live_holder_of_the_hold(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N80: the replacement connection takes the hold without waiting for it.
+    A half-open old backend still holding the attempt's lock must not wedge
+    the bill, or the node is started again (invariant 6) while the bill
+    waits, and paid for twice once it lands."""
+    _case_id, run_id = prepared_run
+    took, billed = _bill_beside_a_live_holder(
+        empty_database, run_id, tmp_path, monkeypatch
+    )
+    assert billed == 1 and took < 3
+
+
+def test_a_reconnected_bill_lands_beside_a_live_holder_under_a_lock_timeout(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N80: a database `lock_timeout` (a DBA's setting) cancels a waiting
+    hold; the bill took that for a store fault on every reconnect and was
+    abandoned unbilled. It writes whether or not it obtained the hold."""
+    import psycopg
+
+    dbname = psycopg.conninfo.conninfo_to_dict(empty_database)["dbname"]
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute(f'ALTER DATABASE "{dbname}" SET lock_timeout = 300')
+    _case_id, run_id = prepared_run
+    took, billed = _bill_beside_a_live_holder(
+        empty_database, run_id, tmp_path, monkeypatch
+    )
+    assert billed == 1 and took < 3
+
+
+def test_n223_a_bill_that_lost_the_try_lock_leaves_its_node_unheld_while_it_waits(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N223, the window as it stands (recorded, not closed): the replacement
+    connection's try-lock fails beside the old backend, which then dies while a
+    freeze holds the case row. The bill waits on that row, unbounded by design
+    (`_UNBOUNDED_UNIT`, W1: a cancelled write leaves no row and the next claim
+    pays again), and nothing holds the node in the meantime. It lands once the
+    row is let go."""
+    from caos.methodology import canonical
+
+    case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+    lease = _claimed(empty_database, run_id)
+    with connect(empty_database) as a:
+        attempt = start_attempt(a, run_id, nodes["CP-0"], lease=lease)
+        reserve(a, attempt, RESERVED, lease=lease)
+    zombie, closed, freeze = (connect(empty_database) for _ in range(3))
+    closed.close()
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    biller = Thread(target=canonical.bill, args=(closed, attempt, _BILL), daemon=True)
+    try:
+        old_hold = call_hold(zombie, attempt)  # kept: a dropped one lets go
+        old_hold.__enter__()
+        freeze.execute("SELECT 1 FROM cases WHERE case_id = %s FOR UPDATE", (case_id,))
+        biller.start()
+        time.sleep(1)
+        assert biller.is_alive(), "the bill waits on the case row"
+        assert not _hold_is_free(empty_database, attempt), "the old backend holds"
+        zombie.close()
+        deadline = time.monotonic() + 5  # the backend ends a moment after close
+        while (
+            not _hold_is_free(empty_database, attempt) and time.monotonic() < deadline
+        ):
+            time.sleep(0.05)
+        assert _hold_is_free(empty_database, attempt), "the window: no one holds it"
+        assert biller.is_alive(), "and the bill has still not landed"
+        freeze.rollback()
+        biller.join(timeout=10)
+        with connect(empty_database) as b:
+            assert _count(b, "call_outcomes", run_id) == 1
+    finally:
+        zombie.close()
+        freeze.close()
+        biller.join(timeout=10)
+
+
 def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
     empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
 ) -> None:
-    """The owed half of `ATTEMPT_UNSETTLED` is the set `replay_billed` settles
+    """The owed half of `ATTEMPT_BILL_OWED` is the set `replay_billed` settles
     or `unexplained_charge` parks, and nothing else: an attempt either
     refuses but no pass settles would stop the node for ever, and one a pass
     settles that no start refuses is paid for twice. Each outcome shape is
@@ -1689,7 +1982,7 @@ def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
             assert (picked or parked is not None) is owed, name
             if owed:
                 _refused(
-                    RefusalCode.ATTEMPT_UNSETTLED,
+                    RefusalCode.ATTEMPT_BILL_OWED,
                     partial(start_attempt, conn, run_id, node),
                 )
             else:

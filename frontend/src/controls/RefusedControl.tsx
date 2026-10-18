@@ -28,6 +28,10 @@ const PLAIN: Record<string, string> = {
   SIGN_OUT_UNPLACED: "Sign out through your organisation's sign-in page.",
   VIEW_UNPLACED: "This section has no such view.",
   GATE_PREVIEW_NOT_READ: "Read the preview before approving.",
+  RUN_QUALIFIER_INVALID:
+    "The server did not accept one of the command values. Check the forecast scope, cases and objective, then pin again.",
+  REPORTING_PERIOD_UNREADABLE:
+    "The reporting period could not be read to derive the forecast scope. Write it as FY2025 or Q2 2026, or state the horizon and base period.",
   COMMAND_EXPECTATION_STALE: "Preview again: the run changed since you looked.",
   CAPABILITY_UNAVAILABLE: "Not available in this deployment.",
   // The narrative editor's rule is a caption; its refusal carries the detail.
