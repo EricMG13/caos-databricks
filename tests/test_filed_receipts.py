@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import psycopg
 import pytest
+from governed_deliverable import file_deliverable
 from test_deliverable_canonical import harness, lite, route
 from test_execution_freshness import _Harness
 from test_filing_chain import _actor, _default_signer, _freeze, _sign
@@ -21,7 +22,6 @@ from caos.blobs import BlobStore
 from caos.deliverable import revisions
 from caos.deliverable.filing import (
     Receipt,
-    file_deliverable,
     freeze_in,
     receipt_bytes,
     revision_signatures,

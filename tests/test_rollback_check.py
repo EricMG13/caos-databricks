@@ -58,8 +58,23 @@ def repo(tmp_path: Path) -> Path:
     return root
 
 
+HANDOFF = "caos/methodology/handoff.py"
+# Every `WRITERS` entry the release must declare in a form the check reads.
+WRITER_FILES = {
+    "caos/evidence/pdf.py": 'ExtractorIdentity("caos.pdfminer", "6", {})\n',
+    "caos/evidence/extract.py": 'ExtractorIdentity("caos.plain-text", "4", {})\n',
+    "caos/evidence/page.py": 'PDF_CROP_VERSIONS = frozenset({"2"})\n',
+    "caos/evidence/citations.py": 'NORMALISATION_VERSION = "2"\n',
+    "caos/evidence/ingest.py": "PACKING_BY_WIDTH = 1\nPACKING_BY_TOKEN = 2\n",
+    "caos/methodology/__init__.py": 'CANONICAL_ADAPTER_VERSION = "v3"\n',
+    "caos/deliverable/verify_package.py": 'RENDERER_SHA256 = "aa"\n',
+    HANDOFF: 'RECORD_FORMAT = "r"\nBLOCKED_FORMAT = "b"\nRECORD_CODEC_VERSION = 1\n',
+}
+
+
 def _store(extra: str = "", schema: str = MOVED) -> dict[str, str]:
     return {
+        **WRITER_FILES,
         "caos/store/__init__.py": STORE_MODULE.format(extra=extra, schema=schema),
         "caos/store/schema.sql": "CREATE TABLE cases (case_id uuid);\n",
         "caos/store/0002_extraction.sql": "ALTER TABLE cases ADD COLUMN x int;\n",
@@ -152,9 +167,11 @@ def test_a_release_whose_record_codec_moved_cannot_be_rolled_back(
     """M4 (D106): the same migrations, but an older record codec, is an app
     that refuses every record the release wrote, so it is no rollback; the
     same codec on both sides is."""
-    codec = "caos/methodology/handoff.py"
-    older = _commit(repo, {**_store(), codec: "RECORD_FORMAT = 'v2'\n"}, "older")
-    release = _commit(repo, {codec: "RECORD_CODEC_VERSION = 1\n"}, "release")
+    formats = 'RECORD_FORMAT = "r"\nBLOCKED_FORMAT = "b"\n'
+    older = _commit(repo, {**_store(), HANDOFF: formats}, "older")
+    release = _commit(
+        repo, {HANDOFF: formats + "RECORD_CODEC_VERSION = 1\n"}, "release"
+    )
     assert rollback_check.record_codec(older, repo) is None
     assert rollback_check.record_codec(release, repo) == 1
     assert rollback_check.rollback_problems(older, release, repo) == [
@@ -235,3 +252,21 @@ def test_every_declared_writer_version_is_read_and_each_move_is_named(
         "canonical adapter version",
         "renderer digest",
     ]
+
+
+def test_a_release_with_an_unreadable_writer_is_refused_not_passed(
+    repo: Path,
+) -> None:
+    """A writer unreadable on both sides compared equal and passed."""
+    older = _commit(repo, {**_store(), HANDOFF: "RECORD_CODEC_VERSION = 1\n"}, "older")
+    release = _commit(repo, {"caos/serve.py": "a = 1\n"}, "release")
+    assert rollback_check.rollback_problems(older, release, repo) == [
+        f"{label} is not declared in a form this check reads on {release}"
+        for label in ("host record format", "blocked-citations format")
+    ]
+
+
+def test_every_writer_reads_a_value_at_head() -> None:
+    versions = rollback_check.writer_versions("HEAD")
+    assert [label for label, value in versions.items() if value is None] == []
+    assert {"host record format", "blocked-citations format"} <= versions.keys()
