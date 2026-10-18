@@ -2,12 +2,27 @@
 
 Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (stopped; never completed)**. Prepared offline; the live results are in the last section.
 
+Corpus changed 2026-10-16, R27 (D152, N147); earlier runs were on the old corpus. See "Corpus changed 2026-10-16 (R27, N147)" below.
+
 This immutable set prepares `LITE_CREDIT_22 / LITE_FULL_CREDIT_SCREEN` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`e63265aaf3004c4bc9ce7b755cda587786240647b50e70a26567beaa3741bb39`.
+`d8ca1c81161a7043e87cdf7b9ed4d03614618044a091b4fd9f15f9864e89a752`.
+
+## Corpus changed 2026-10-16 (R27, N147)
+
+On the owner's ruling R27 of 16 October 2026 (D152; N147) 2 documents already admitted to other CZR sets are added to this set. Nothing was downloaded for them: each is a byte-identical copy of the file in `czr-2026q2`, `czr-2026q2-covenant-refinancing`, copied because the on-disk loader refuses a path outside the set root. CP-0 of the latest run declared that documents in hand would close its gaps: the FY2025 10-K, and the full Merger Agreement, admitted since D115 to five other sets and now to this one. N147 lists LFCS2 G-1 beside the commitment-letter gaps; the run's capture (`LFCS2-czr-lite-full-credit-screen.json`) holds no CP-0 gap text, only CP-0's citation of the 8-K sentence that Parent "has delivered ... fully executed debt commitment letters", so G-1 is read as the commitment letters, which are not on EDGAR. G-1 stays open: the Merger Agreement does not close it.
+
+| document | source | accession | text SHA-256 | raw HTML SHA-256 |
+|---|---|---|---|---|
+| `CZR_FY2025_10K.txt` (Form 10-K, year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
+| `CZR_2026_Merger_Agreement.txt` (Ex. 2.1 to the 8-K of 28 May 2026, Agreement and Plan of Merger, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm | 0001193125-26-242995 | `e01077c1ed37c5b08c4d2dbfc15da19b78d50b4b38a42e3da22c3cf0e4c3038c` | `fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b` |
+
+None is over 500 KiB as text, so no large-file pin moves; none is near the 1.5 MiB page-map threshold. The set's CP-0 request, encoded with CP-0's delivered authority (measured with the host's own builders, `check_context` on the pinned route), is 3,350,506 bytes (79.9% of `MAX_REQUEST_BYTES`), up from 2,466,935 (58.8%); no source is shown as a page map on a model with no declared context. For `openai/gpt-6-luna` (request ceiling 2,953,392 bytes under D116) the fitted request is 2,872,746 bytes with 2 sources shown as declared page maps (before: 2,466,932 bytes, no page map). Set digest `25deb8d623c64914d22523da7c2269a4c8d901a220f8d4cfa38cd787e03f84e4` (after the T4E.1 key was dropped, R26/N128) -> `d8ca1c81161a7043e87cdf7b9ed4d03614618044a091b4fd9f15f9864e89a752`; before either change it was `e63265aaf3004c4bc9ce7b755cda587786240647b50e70a26567beaa3741bb39`.
+
+Keys re-checked (all 12 keys, each scanned against the added 10-K and Merger Agreement for a whole-line twin and for its figures): none changes. One twin: CP-3C's `CEI is party to a credit agreement, dated as of July 20, 2020, ...` (the 10-Q) is also a whole line of the 10-K, a sentence with no figure that dates a statement; the key stays on the 10-Q with no alternative, as in `czr-2026q2-full-credit-assessment`, which carries the same two documents. CP-1A's two keys, the merger 8-K's opening sentence and the press release's first paragraph, stay on the filings that say them: the Agreement's preamble (`This AGREEMENT AND PLAN OF MERGER ... dated as of May 27, 2026 ...`) is a different sentence, and its clause lines would be a new key, not a better source for these. CP-3C's Change of Control key reads the indenture. No key is added.
 
 ## Corpus provenance
 
@@ -16,7 +31,8 @@ plain text the same day. The 10-Q and the CZR earnings release are
 byte-identical to the `czr-2026q2` set's copies,  the indenture and the merger
 8-K and press release to the `czr-2026q2-covenant-refinancing` set's copies,
 and the MGM and PENN releases to the `czr-2026q2-lite-relative-value` set's
-copies. No document is admitted here for the first time. The text SHA-256 is
+copies. Since 16 October 2026 (R27) the FY2025 10-K and the Merger Agreement are carried too,
+byte-identical to the `czr-2026q2` and `czr-2026q2-covenant-refinancing` sets' copies. The text SHA-256 is
 the digest the keys bind; the raw SHA-256 is the HTML as fetched.
 
 | document | source | accession | text SHA-256 | raw HTML SHA-256 |
@@ -200,15 +216,18 @@ CP-3C, CP-4C and CP-5 are expected `Restricted`:
   its missing FULL inputs and stays `Restricted` (each `SKILL.md`'s `UPGRADE`
   rule).
 
-Two register keys are set. CP-L10's `TL10.2` `LIQUIDITY_MATURITIES` row must
+One register key is set. CP-L10's `TL10.2` `LIQUIDITY_MATURITIES` row must
 read `SUFFICIENT`: the 10-Q carries both the revolver availability and the
 full maturity ladder (`Annual maturities of long-term debt`, `$11,807`
 million in total), so the evidence status is unambiguous. CP-4C's `T4E.1` row
-`No documented distress trigger` must read `Not Applicable`: the admitted
-sources document no payment default, failed refinancing, distressed exchange,
-covenant breach, adviser engagement or filing, the 10-Q states covenant
-compliance, and CP-4C's gate returns `Not Applicable` without a documented
-distress trigger. The row key follows `ccl-fy2025-lite-full-credit-screen`.
+`No documented distress trigger` (`Not Applicable`) was keyed here and is
+dropped by owner ruling R26 of 16 October 2026 (N128): its row key is free text
+the module may word differently, and the matrix compares a row key exactly. The
+admitted sources still document no payment default, failed refinancing,
+distressed exchange, covenant breach, adviser engagement or filing. The previous
+digest was `e63265aaf3004c4bc9ce7b755cda587786240647b50e70a26567beaa3741bb39`;
+`ccl-fy2025-lite-full-credit-screen` drops the same key. The live-run table
+below predates the change and is unaltered.
 No arithmetic is keyed; no leverage cell is keyed, because each issuer's
 denominator is its own non-GAAP measure.
 

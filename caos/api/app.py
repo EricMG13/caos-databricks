@@ -171,6 +171,7 @@ _STATUS = {
     # the earlier call finishing is what repairs it -- the same shape. Raised
     # by the worker's own start; listed so no route could serve it otherwise.
     RefusalCode.ATTEMPT_UNSETTLED: 503,
+    RefusalCode.ATTEMPT_BILL_OWED: 503,
     RefusalCode.STORE_NOT_TRANSACTIONAL: 500,
     RefusalCode.STORE_SCHEMA_DRIFT: 500,
     RefusalCode.BLOB_NOT_FOUND: 500,
@@ -229,8 +230,9 @@ _STATUS = {
     RefusalCode.RESERVATION_BELOW_REQUEST: 500,
     # A charge the provider settled above the attempt's reservation (R2.6): not
     # the caller's request, and no later retry on the same pinned price clears
-    # it. Re-pricing the model and a successor run is the discharge.
-    RefusalCode.BUDGET_CHARGE_OVER_RESERVATION: 500,
+    # it. Re-pricing the model and a successor run is the discharge. 409 like
+    # any command refused for the run's state (R10, D152; was 500, N183).
+    RefusalCode.BUDGET_CHARGE_OVER_RESERVATION: 409,
     # Served only by `_undeclared`, for a path under `/api/` nobody declared;
     # an undeclared method on a declared path is routing's own 405.
     RefusalCode.ENDPOINT_NOT_FOUND: 404,
