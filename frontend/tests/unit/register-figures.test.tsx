@@ -56,7 +56,13 @@ function register(
   rows: readonly Served[][],
   declared: readonly (string | null)[] = columns,
 ): Register {
-  return { register_id: id, columns: [...columns], declared: [...declared], rows: [...rows] };
+  return {
+    register_id: id,
+    unavailable_reason: null,
+    columns: [...columns],
+    declared: [...declared],
+    rows: [...rows],
+  };
 }
 
 const withRegisters = (module: string, registers: Register[]): HandoffView => ({
@@ -170,6 +176,20 @@ function ranges(figure: Figure) {
 }
 const peers = (rows: Served[][], columns = PEERS) =>
   peerRanges(withRegisters("CP-1C", [register("T4.6", columns, rows)])).map(ranges);
+
+test("a refused register blanks its own rows and leaves the module's other registers read (N194)", () => {
+  const refused: Register = {
+    register_id: "T4.6",
+    unavailable_reason: "TABLES_MALFORMED",
+    columns: [],
+    declared: [],
+    rows: [],
+  };
+  const sound = register("T4.10", ["Metric", "Value"], [[c("x"), c("1", "1")]]);
+  const handoff = withRegisters("CP-1C", [refused, sound]);
+  expect(registerRows(handoff, "CP-1C", "T4.6")).toBeNull();
+  expect(registerRows(handoff, "CP-1C", "T4.10")![0]!["Value"]).toEqual(c("1", "1"));
+});
 
 test("registerRows reads a register only for its own module, keyed by the profile's column", () => {
   const written = ["metric", "borrower value", ...PEERS.slice(2)];

@@ -1035,20 +1035,30 @@ function ModelKey({ figures }: { figures: readonly Figure[] }) {
 function Unread({ handoff }: { handoff: HandoffView }) {
   const tables = handoff.tables_unavailable_reason;
   const registers = handoff.registers_unavailable_reason;
-  if (!tables && !registers) return null;
-  const what =
+  // A register refused alone (N194): its own figures are blank, the rest draw.
+  const refused = handoff.registers
+    .filter((register) => register.unavailable_reason)
+    .map((register) => `${register.register_id} (${register.unavailable_reason})`);
+  if (!tables && !registers && !refused.length) return null;
+  const unread =
     tables && registers
       ? `tables (${tables}) and registers (${registers}) could not be read`
       : tables
         ? `tables could not be read (${tables})`
-        : `registers could not be read (${registers})`;
+        : registers
+          ? `registers could not be read (${registers})`
+          : null;
+  const alone = refused.length ? `registers ${refused.join(", ")} could not be read` : null;
+  const what = [unread, alone].filter(Boolean).join("; ");
   return (
     <p
       className="note"
       data-tables-unavailable={tables ?? undefined}
       data-registers-unavailable={registers ?? undefined}
+      data-registers-refused={refused.length ? refused.join(" ") : undefined}
     >
-      This module&apos;s {what}, so no figure is drawn from them. Its prose below is unaffected.
+      This module&apos;s {what}, so no figure is drawn from them. Its{" "}
+      {refused.length ? "other registers and prose are" : "prose below is"} unaffected.
     </p>
   );
 }

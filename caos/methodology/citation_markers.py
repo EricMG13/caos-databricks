@@ -25,6 +25,10 @@ ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
 _IN_CELL = re.compile(r"(?<! )(?: *\\?\[C[0-9]+(?:\\?, ?C[0-9]+)*\\?\])+")
 # What a figure is written with on either side of a marker that splits it.
 _FIGURE_EDGE = frozenset("0123456789.,")
+_DIGITS = frozenset("0123456789")
+_POINTS = frozenset(".,")
+# A sign that leads a figure: `-[C1]45` is not -45 (N142).
+_SIGNS = frozenset("+-\u2212")
 # What stands for such a marker: no figure reader takes it (`4 | 5`).
 _SPLIT = " | "
 
@@ -50,16 +54,28 @@ def unmarked(cell: str) -> str:
     """`cell` as a host reader parses it for a figure, status or other value:
     each run of markers in it removed with the spaces before it, so that
     `(45) [C1]` reads as `(45)`, or, where it splits a figure -- figure marks
-    on both sides, as in `4[C1]5` or `1,2[C1]50` -- replaced by ` | `, which
-    no figure reader takes, so the two halves are never joined into another
-    figure. Pure; a cell with no marker is returned as it is."""
+    on both sides, as in `4[C1]5` or `1,2[C1]50`, a sign and a digit, as in
+    `-[C1]45`, or, across spaces, a figure and the start of another, as in
+    `4 [C1]5` (but not prose punctuation: `12 [C1], 3`) -- replaced by
+    ` | `, which no figure reader takes, so the two halves are never joined
+    into another figure. Pure; a cell with no marker is returned as it is."""
 
     def replaced(found: re.Match[str]) -> str:
+        # `before` and the rest are "" at an edge, which no figure mark is.
         before = cell[found.start() - 1 : found.start()]
         after = cell[found.end() : found.end() + 1]
-        # `before` and `after` are "" at an edge, which no figure mark is.
-        split = before in _FIGURE_EDGE and after in _FIGURE_EDGE
-        return _SPLIT if split and not found.group().startswith(" ") else ""
+        spaced = found.group().startswith(" ")
+        if before in _SIGNS:
+            split = after in _DIGITS
+        elif spaced:
+            # Only a figure's own start joins one across spaces: a digit, or
+            # a point or comma with a digit behind it.
+            then = cell[found.end() + 1 : found.end() + 2]
+            starts = after in _DIGITS or (after in _POINTS and then in _DIGITS)
+            split = before in _FIGURE_EDGE and starts
+        else:
+            split = before in _FIGURE_EDGE and after in _FIGURE_EDGE
+        return _SPLIT if split else ""
 
     return _IN_CELL.sub(replaced, cell)
 

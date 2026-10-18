@@ -51,9 +51,10 @@ from caos.store.source_sets import snapshot_source_set
 __all__ = ["ready"]
 
 _MEMBERS = "SELECT m.filename,m.document_sha256 FROM source_set_members m"
-# The run's captured pins, still read on their own by the proof and the
-# deliverable; a module's delivery is now the one batched read beside it.
-_BLOCKS = "SELECT b.source_id, b.block_id FROM run_inputs i"
+# The run's pinned blocks, read on their own by the proof and the deliverable
+# to rebuild each node's delivery (N130, no liveness count); a module's delivery
+# is the one batched read beside it.
+_BLOCKS = "SELECT b.source_id, b.block_id, b.page, b.text, b.hidden FROM run_inputs i"
 _DELIVERED = "WITH captured AS (SELECT inputs.case_id"
 _PROOF = "SELECT a.artifact_sha256, t.route_node_id, (a.model, a.generation_id)"
 
