@@ -96,6 +96,7 @@ const MODEL_CHOICES = [
     output_per_token: "0.00001",
     as_of: "2026-09-22",
     configured: false,
+    qualification: "QUALIFIED" as const,
   },
   {
     model: "databricks-claude-opus-5",
@@ -103,6 +104,7 @@ const MODEL_CHOICES = [
     output_per_token: "0.000025",
     as_of: "2026-09-22",
     configured: true,
+    qualification: "UNQUALIFIED" as const,
   },
 ];
 
@@ -1043,9 +1045,11 @@ describe("Run", () => {
       const select = container.querySelector("[data-model-select]") as HTMLSelectElement;
       // Rates are read off the server's exact strings, never through a float.
       expect([...select.options].map((option) => option.textContent)).toEqual([
-        "databricks-claude-sonnet-5",
-        "databricks-claude-opus-5 (configured)",
+        "databricks-claude-sonnet-5 · qualified",
+        "databricks-claude-opus-5 (configured) · not qualified",
       ]);
+      // A label, never a gate (N117): every approved model stays selectable.
+      expect([...select.options].some((option) => option.disabled)).toBe(false);
       expect(select.value).toBe("1");
       const price = container.querySelector("[data-model-price]")!;
       expect(price).toHaveTextContent("5 in / 25 out per 1M tokens, priced 2026-09-22");
@@ -1062,6 +1066,30 @@ describe("Run", () => {
     }
   });
 
+  test("test_a_restricted_or_unavailable_state_is_not_called_not_qualified", () => {
+    const caseId = routeNotPinned.body.case_id;
+    const labelled = (qualification: "RESTRICTED" | "UNAVAILABLE") => {
+      const doc: RunSectionDocument = {
+        ...EMPTY_RUN,
+        body: {
+          ...EMPTY_RUN.body,
+          model_choices: MODEL_CHOICES.map((choice) => ({ ...choice, qualification })),
+        },
+      };
+      const { container, unmount } = mountAt(doc, `/run/?case=${caseId}`);
+      const select = container.querySelector("[data-model-select]") as HTMLSelectElement;
+      const labels = [...select.options].map((option) => option.textContent);
+      unmount();
+      return labels;
+    };
+    expect(labelled("RESTRICTED").every((text) => text!.endsWith("qualification not shown"))).toBe(
+      true,
+    );
+    expect(
+      labelled("UNAVAILABLE").every((text) => text!.endsWith("qualification unavailable")),
+    ).toBe(true);
+  });
+
   test("test_with_no_model_offered_there_is_no_select_and_none_is_named", async () => {
     const caseId = routeNotPinned.body.case_id;
     const doc: RunSectionDocument = {
@@ -1075,13 +1103,14 @@ describe("Run", () => {
             output_per_token: "5",
             as_of: "2026-09-22",
             configured: true,
+            qualification: "UNQUALIFIED" as const,
           },
         ],
       },
     };
     const { container, unmount } = mountAt(doc, `/run/?case=${caseId}`);
     const [option] = (container.querySelector("[data-model-select]") as HTMLSelectElement).options;
-    expect(option!.textContent).toBe("tiny (configured)");
+    expect(option!.textContent).toBe("tiny (configured) · not qualified");
     expect(container.querySelector("[data-model-price]")).toHaveTextContent(
       "0.1 in / 5000000 out per 1M tokens, priced 2026-09-22",
     );
@@ -1882,6 +1911,7 @@ describe("Run", () => {
       "../../fixtures/run.json",
       "../../fixtures/states/run.gate.json",
       "../../fixtures/states/run.superseded.json",
+      "../../fixtures/states/run.command.json",
       "../../fixtures/run/frames/1.json",
       "../../fixtures/run/frames/2.json",
       "../../fixtures/run/frames/3.json",

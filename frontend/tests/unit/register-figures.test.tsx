@@ -56,7 +56,13 @@ function register(
   rows: readonly Served[][],
   declared: readonly (string | null)[] = columns,
 ): Register {
-  return { register_id: id, columns: [...columns], declared: [...declared], rows: [...rows] };
+  return {
+    register_id: id,
+    unavailable_reason: null,
+    columns: [...columns],
+    declared: [...declared],
+    rows: [...rows],
+  };
 }
 
 const withRegisters = (module: string, registers: Register[]): HandoffView => ({
@@ -170,6 +176,20 @@ function ranges(figure: Figure) {
 }
 const peers = (rows: Served[][], columns = PEERS) =>
   peerRanges(withRegisters("CP-1C", [register("T4.6", columns, rows)])).map(ranges);
+
+test("a refused register blanks its own rows and leaves the module's other registers read (N194)", () => {
+  const refused: Register = {
+    register_id: "T4.6",
+    unavailable_reason: "TABLES_MALFORMED",
+    columns: [],
+    declared: [],
+    rows: [],
+  };
+  const sound = register("T4.10", ["Metric", "Value"], [[c("x"), c("1", "1")]]);
+  const handoff = withRegisters("CP-1C", [refused, sound]);
+  expect(registerRows(handoff, "CP-1C", "T4.6")).toBeNull();
+  expect(registerRows(handoff, "CP-1C", "T4.10")![0]!["Value"]).toEqual(c("1", "1"));
+});
 
 test("registerRows reads a register only for its own module, keyed by the profile's column", () => {
   const written = ["metric", "borrower value", ...PEERS.slice(2)];
@@ -1299,6 +1319,7 @@ const WALL = [
   "Instrument",
   "Amount",
   "Currency",
+  "Scale",
   "Maturity Date",
   "Years to Maturity",
   "Seniority / Lien",
@@ -1309,9 +1330,16 @@ const WALL = [
   "Credit Implication",
   "Source Trace",
 ];
-const t3d2 = (name: string, amount: Served, currency: string, date: string, lien: string) =>
-  [name, amount, currency, date, "", lien, "", "", "", "", "", `Trace ${name}`].map((cell) =>
-    typeof cell === "string" ? c(cell) : cell,
+const t3d2 = (
+  name: string,
+  amount: Served,
+  currency: string,
+  date: string,
+  lien: string,
+  scale = "",
+) =>
+  [name, amount, currency, scale, date, "", lien, "", "", "", "", "", `Trace ${name}`].map(
+    (cell) => (typeof cell === "string" ? c(cell) : cell),
   );
 const cp3cWith = (rows: Served[][]): HandoffView => ({
   ...cp2dWith([register("T3D.2", WALL, rows)]),
@@ -1499,27 +1527,34 @@ const RECOVERY = [
   "scenario",
   "class/instrument",
   "allowed claim",
-  "cash/debt/equity/warrant value",
+  "cash value",
+  "debt value",
+  "equity value",
+  "warrant value",
   "total recovery",
   "timing",
   "currency",
+  "scale",
 ];
 const t4e7 = (scenario: string, name: string, claim: Served, total: Served, currency: string) =>
-  [scenario, name, claim, "60 / 20 / 10 / 0", total, "Exit", currency].map((cell) =>
+  [scenario, name, claim, "60", "20", "10", "0", total, "Exit", currency, "millions"].map((cell) =>
     typeof cell === "string" ? c(cell) : cell,
   );
 const CLAIMS = [
   "class/claim ID",
   "obligor",
-  "principal/accrued/PIK",
+  "principal",
+  "accrued",
+  "PIK",
   "currency",
+  "scale",
   "security/guarantee",
   "priority",
   "disputed/contingent",
   "evidence",
 ];
 
-test("recoveryByClass: claim beside recovery per scenario and currency; the packed value not drawn", () => {
+test("recoveryByClass: claim beside recovery per scenario and currency; the four value columns not drawn", () => {
   const figures = recoveryByClass(
     cp4cWith([
       register("T4E.7", RECOVERY, [
@@ -1531,14 +1566,14 @@ test("recoveryByClass: claim beside recovery per scenario and currency; the pack
     ]),
   ).map(bars);
   expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
-    ["recovery-by-class-0", "Recovery by class, Base, USD", "USD"],
-    ["recovery-by-class-1", "Recovery by class, Base, EUR", "EUR"],
-    ["recovery-by-class-2", "Recovery by class, Downside", "USD"],
+    ["recovery-by-class-0", "Recovery by class, Base, USD millions", "USD millions"],
+    ["recovery-by-class-1", "Recovery by class, Base, EUR millions", "EUR millions"],
+    ["recovery-by-class-2", "Recovery by class, Downside", "USD millions"],
   ]);
   const [usd, , downside] = figures;
   expect(usd).toMatchObject({ table: "T4E.7", categoryLabel: "class/instrument" });
   expect(usd!.categories).toEqual(["Senior", "Junior"]);
-  // N192: the packed column is never a series.
+  // N192: the split value columns are a mark's source, never a series.
   expect(usd!.series.map((series) => [series.key, series.label, series.data])).toEqual([
     ["claim", "allowed claim", [{ value: "100" }, { value: "50" }]],
     ["recovery", "total recovery", [{ value: "90" }, { value: "10" }]],
@@ -1548,7 +1583,7 @@ test("recoveryByClass: claim beside recovery per scenario and currency; the pack
   );
   expect(downside!.series[1]!.data).toEqual([{ value: null, reason: "TBD" }]);
   expect(usd!.sourceOf({ ...pick("claim", "Junior"), index: 1 })).toBe(
-    "timing: Exit; cash/debt/equity/warrant value: 60 / 20 / 10 / 0",
+    "timing: Exit; cash value: 60; debt value: 20; equity value: 10; warrant value: 0",
   );
 });
 
@@ -1569,7 +1604,7 @@ test("a blank scenario leaves its part out of a title", () => {
       t4e7("", "Senior", c("1", "1"), c("1", "1"), "USD"),
       t4e7("", "Euro notes", c("1", "1"), c("1", "1"), "EUR"),
     ]),
-  ).toEqual(["Recovery by class, USD", "Recovery by class, EUR"]);
+  ).toEqual(["Recovery by class, USD millions", "Recovery by class, EUR millions"]);
 });
 
 test("a recovery written in % or x draws in its own unit's figure, not on the currency's", () => {
@@ -1578,7 +1613,7 @@ test("a recovery written in % or x draws in its own unit's figure, not on the cu
     t4e7("Base", "Junior", c("50", "50"), c("10", "10"), "USD"),
   ]);
   expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
-    ["recovery-by-class-0", "Recovery by class, Base", "USD"],
+    ["recovery-by-class-0", "Recovery by class, Base", "USD millions"],
     ["recovery-by-class-0-percent", "Recovery by class, Base, %", "%"],
   ]);
   const elsewhere = (text: string) => ({
@@ -1594,10 +1629,21 @@ test("a recovery written in % or x draws in its own unit's figure, not on the cu
   expect(said(percent!)).toEqual([[elsewhere("100")], [{ value: "45" }]]);
 });
 
-test("T4E.2 draws nothing: its one amount column packs principal, accrued and PIK (N192)", () => {
-  const row = ["Senior", "OpCo", "100 / 5 / 2", "USD", "First lien", "1", "No", "E-1"].map((cell) =>
-    c(cell),
-  );
+test("T4E.2 draws nothing: principal, accrued and PIK are claims, no recovery (N192)", () => {
+  const cells = [
+    "Senior",
+    "OpCo",
+    "100",
+    "5",
+    "2",
+    "USD",
+    "millions",
+    "First lien",
+    "1",
+    "No",
+    "E-1",
+  ];
+  const row = cells.map((cell) => c(cell));
   expect(registerFigures(cp4cWith([register("T4E.2", CLAIMS, [row])]))).toEqual([]);
 });
 
@@ -1644,14 +1690,22 @@ const t2h4 = (period: string, kase: string, revenue: Served, ebitda: Served, fcf
 const CREDIT_PATH = [
   "period",
   "case",
-  "gross/net leverage",
+  "gross leverage",
+  "net leverage",
   "coverage",
   "FCF/debt",
   "liquidity runway",
   "definition IDs",
 ];
-const t2h6 = (period: string, kase: string, leverage: Served, coverage: Served, ratio: Served) =>
-  [period, kase, leverage, coverage, ratio, "18 months", `D-${period}`].map((cell) =>
+const t2h6 = (
+  period: string,
+  kase: string,
+  leverage: Served,
+  coverage: Served,
+  ratio: Served,
+  net = c(""),
+) =>
+  [period, kase, leverage, net, coverage, ratio, "18 months", `D-${period}`].map((cell) =>
     typeof cell === "string" ? c(cell) : cell,
   );
 const cp2gWith = (registers: Register[], module = "CP-2G"): HandoffView => ({
@@ -1713,26 +1767,38 @@ test("forecastCases: a line figure a metric, base then downside then the rest, a
   expect(revenue!.sourceOf(pick("UPSIDE", "FY27"))).toBeNull();
 });
 
-test("creditPath: leverage, coverage and FCF/debt, a packed leverage cell a gap (N192)", () => {
+test("creditPath: gross and net leverage as two figures beside coverage and FCF/debt (N192)", () => {
   const figures = creditPath(
     cp2gWith([
       register("T2H.6", CREDIT_PATH, [
-        t2h6("FY26", "BASE", c("4.2x / 3.9x"), c("2.5x", "2.5"), c("10%", "10")),
-        t2h6("FY27", "BASE", c("3.8x", "3.8"), c("2.8x", "2.8"), c("12%", "12")),
-        t2h6("FY26", "DOWNSIDE", c("5.1x", "5.1"), c("1.9x", "1.9"), c("6%", "6")),
+        t2h6("FY26", "BASE", c("4.2x", "4.2"), c("2.5x", "2.5"), c("10%", "10"), c("3.9x", "3.9")),
+        t2h6("FY27", "BASE", c("3.8x", "3.8"), c("2.8x", "2.8"), c("12%", "12"), c("3.5x", "3.5")),
+        t2h6(
+          "FY26",
+          "DOWNSIDE",
+          c("5.1x", "5.1"),
+          c("1.9x", "1.9"),
+          c("6%", "6"),
+          c("4.8x", "4.8"),
+        ),
       ]),
     ]),
   ).map(line);
   expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
-    ["credit-path-gross-net-leverage", "Gross/net leverage, base and downside", "x"],
+    ["credit-path-gross-leverage", "Gross leverage, base and downside", "x"],
+    ["credit-path-net-leverage", "Net leverage, base and downside", "x"],
     ["credit-path-coverage", "Coverage, base and downside", "x"],
     ["credit-path-fcf-debt", "FCF/debt, base and downside", "%"],
   ]);
-  const [leverage] = figures;
+  const [leverage, net] = figures;
   expect(leverage!.series.map((series) => series.key)).toEqual(["BASE", "DOWNSIDE"]);
   expect(said(leverage!)).toEqual([
-    [{ value: null, reason: "4.2x / 3.9x" }, { value: "3.8" }],
+    [{ value: "4.2" }, { value: "3.8" }],
     [{ value: "5.1" }, { value: null, reason: "not stated" }],
+  ]);
+  expect(said(net!)).toEqual([
+    [{ value: "3.9" }, { value: "3.5" }],
+    [{ value: "4.8" }, { value: null, reason: "not stated" }],
   ]);
   expect(leverage!.sourceOf(pick("BASE", "FY26"))).toBe("definition IDs: D-FY26");
 });
@@ -1747,12 +1813,13 @@ test("a metric written in two units draws a figure per unit, each cell in its ow
     ]),
   ).map(line);
   expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
-    ["credit-path-gross-net-leverage", "Gross/net leverage, base and downside", "x"],
+    ["credit-path-gross-leverage", "Gross leverage, base and downside", "x"],
+    ["credit-path-net-leverage", "Net leverage, base and downside", undefined],
     ["credit-path-coverage", "Coverage, base and downside", "x"],
     ["credit-path-fcf-debt-percent", "FCF/debt, base and downside, %", "%"],
     ["credit-path-fcf-debt-x", "FCF/debt, base and downside, x", "x"],
   ]);
-  const [, , percent, multiple] = figures;
+  const [, , , percent, multiple] = figures;
   expect(said(percent!)).toEqual([
     [{ value: "10" }, { value: null, reason: "0.5x, drawn in its unit's figure" }],
   ]);
@@ -1774,7 +1841,8 @@ test("the case lines draw only for CP-2G, and past MAX_MARKS are stated", () => 
     "forecast-cases-revenue",
     "forecast-cases-ebitda",
     "forecast-cases-fcf",
-    "credit-path-gross-net-leverage",
+    "credit-path-gross-leverage",
+    "credit-path-net-leverage",
     "credit-path-coverage",
     "credit-path-fcf-debt",
   ]);
@@ -1791,7 +1859,7 @@ test("the case lines draw only for CP-2G, and past MAX_MARKS are stated", () => 
 });
 
 test("a period and case stated twice draws a gap naming both, unless they agree", () => {
-  const [leverage, coverage] = creditPath(
+  const [leverage, , coverage] = creditPath(
     cp2gWith([
       register("T2H.6", CREDIT_PATH, [
         t2h6("FY26", "Base", c("4.0x", "4.0"), c("2x", "2"), c("10%", "10")),
@@ -1807,8 +1875,8 @@ test("a period and case stated twice draws a gap naming both, unless they agree"
   // Both rows name the one definition: a point's source states it once.
   expect(leverage!.sourceOf(pick("BASE", "FY26"))).toBe("definition IDs: D-FY26");
   expect(leverage!.summary).toBe(
-    "Gross/net leverage as served, Base: FY26 n/a (stated twice: 4.0x, 5.0x); FY27 3.0." +
-      " Base FY26: gross/net leverage stated twice.",
+    "Gross leverage as served, Base: FY26 n/a (stated twice: 4.0x, 5.0x); FY27 3.0." +
+      " Base FY26: gross leverage stated twice.",
   );
 });
 
@@ -1879,7 +1947,9 @@ const TRIGGERS = [
   "trigger direction",
   "metric",
   "threshold",
-  "case/period value",
+  "case",
+  "period",
+  "value",
   "headroom",
   "status",
 ];
@@ -1892,9 +1962,10 @@ const t2r4 = (
   current: Served,
   headroom: Served,
   status = "Within range",
+  [kase, period] = ["", ""],
 ) =>
-  [agency, type, direction, metric, threshold, current, headroom, status].map((cell) =>
-    typeof cell === "string" ? c(cell) : cell,
+  [agency, type, direction, metric, threshold, kase, period, current, headroom, status].map(
+    (cell) => (typeof cell === "string" ? c(cell) : cell),
   );
 const moduleWith = (module: string, registers: Register[]) => cp2gWith(registers, module);
 function diverging(figure: Figure) {
@@ -2048,7 +2119,7 @@ test("ratingTriggers: bullets per agency, direction only as the bundle reads it"
       "Downgrade",
       "Max leverage",
       c("6.0x", "6.0"),
-      c("4.2x / 3.9x"),
+      c("TBD"),
       c("TBD"),
       "Not Calculable",
     ),
@@ -2074,7 +2145,7 @@ test("ratingTriggers: bullets per agency, direction only as the bundle reads it"
       label: "Max leverage (Senior, downgrade)",
       direction: null,
       threshold: { value: "6.0" },
-      current: { value: null, reason: "4.2x / 3.9x" },
+      current: { value: null, reason: "TBD" },
       headroom: { value: null, reason: "TBD" },
       origin: "model",
     },
@@ -2921,7 +2992,7 @@ test("a currency column wins over a written sign: a USD group of $100 and 250 is
     t4e7("Base", "Junior", c("250", "250"), c("1", "1"), "USD"),
   ]);
   expect(figures.map((figure) => [figure.key, figure.unit, figure.categories])).toEqual([
-    ["recovery-by-class-0", "USD", ["Senior", "Junior"]],
+    ["recovery-by-class-0", "USD millions", ["Senior", "Junior"]],
   ]);
 });
 
@@ -3000,4 +3071,215 @@ test("a score summary carries its unit; equal scores with a gap; an agreeing tot
   const begin = "Beginning accessible liquidity";
   const [bridge] = liquidity([t2e5(begin, c("100", "100")), t2e5(begin, c("100", "100"))]);
   expect(bridge!.summary).toMatch(/^Beginning accessible liquidity 100 to no ending/);
+});
+
+// The host's SPELLINGS (tests/test_handoff_tables.py) that carry a basis-point
+// mark: each is read as the figure it writes, in basis points (N196).
+const BASIS_POINTS: [string, string][] = [
+  ["350bps", "350"],
+  ["350 bp", "350"],
+  ["350 BPS", "350"],
+  ["+75bp", "75"],
+  ["(25 bps)", "-25"],
+  ["1,250 bps", "1250"],
+  ["12.5Bp", "12.5"],
+];
+// The host reads no figure from these, so it serves no value.
+const UNREAD = ["350bpx", "bps", "bps350", "5,2 bps", "350 bps%", "350bp x", "roughly 350bps"];
+// A basis-point mark after an `x` or `%` is no figure to the host; a value
+// served for one anyway never takes the basis-point unit.
+const STACKED = ["5xbps", "10%bp", "5%bps", "5Xbp"];
+
+const impactUnit = (cell: Served) =>
+  rateSensitivities(
+    moduleWith("CP-2E", [register("T2F.5", RATE_SENSITIVITY, [t2f5("Shift", cell)])]),
+  ).map((figure) => [figure.key, figure.unit]);
+
+test("a spread written in basis points is a figure in bp, as the host reads it (N196)", () => {
+  for (const [written, value] of BASIS_POINTS) {
+    expect(impactUnit(c(written, value)), written).toEqual([["rate-sensitivities-bp", "bp"]]);
+  }
+  for (const written of UNREAD) {
+    expect(impactUnit(c(written)), written).toEqual([["rate-sensitivities", undefined]]);
+  }
+  for (const written of STACKED) {
+    expect(impactUnit(c(written, "5")), written).toEqual([["rate-sensitivities", undefined]]);
+  }
+});
+
+test("basis points never share an axis with a percentage or a plain figure", () => {
+  const figures = rateSensitivities(
+    moduleWith("CP-2E", [
+      register("T2F.5", RATE_SENSITIVITY, [
+        t2f5("Spread", c("350bps", "350")),
+        t2f5("Margin", c("2%", "2")),
+        t2f5("Plain", c("4", "4")),
+      ]),
+    ]),
+  ).map(diverging);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["rate-sensitivities-bp", "Rate and FX sensitivities, bp", "bp"],
+    ["rate-sensitivities-percent", "Rate and FX sensitivities, %", "%"],
+    ["rate-sensitivities", "Rate and FX sensitivities", undefined],
+  ]);
+});
+
+test("ratingTriggers: one trigger tested in two cases is two bullets, each at its case and period (N192)", () => {
+  const [figure] = triggers([
+    t2r4("A", "", "ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1"), "OK", [
+      "Base",
+      "FY26",
+    ]),
+    t2r4(
+      "A",
+      "",
+      "ceiling",
+      "Leverage",
+      c("5", "5"),
+      c("5.5", "5.5"),
+      c("-0.5", "-0.5"),
+      "Breach",
+      ["Downside", "FY26"],
+    ),
+  ]);
+  expect(figure!.bullets!.map((bullet) => [bullet.label, bullet.current, bullet.headroom])).toEqual(
+    [
+      ["Leverage (ceiling, Base, FY26)", { value: "4" }, { value: "1" }],
+      ["Leverage (ceiling, Downside, FY26)", { value: "5.5" }, { value: "-0.5" }],
+    ],
+  );
+  expect(figure!.summary).toBe(
+    "Headroom as served: Leverage (ceiling, Base, FY26) 1; Leverage (ceiling, Downside, FY26) -0.5.",
+  );
+});
+
+// Fork r17's scale columns (T3D.2 `Scale`, T4E.7 `scale`, T4E.5 `currency and
+// scale`, T2E.5 `Currency and Scale`): one currency in two scales never shares
+// an axis, a sum or a subtraction.
+test("refinancingWall: 500 USD m and 1.2 USD bn in one year are two walls, never 501.2", () => {
+  const figures = refinancingWall(
+    cp3cWith([
+      t3d2("Term loan", c("500", "500"), "USD", "2029-03-31", "First lien", "m"),
+      t3d2("Notes", c("1.2", "1.2"), "USD", "2029-06-30", "First lien", "bn"),
+    ]),
+  ).map(stack);
+  expect(figures.map((figure) => [figure.key, figure.title, figure.unit])).toEqual([
+    ["refinancing-wall-USD-m", "Maturities by seniority, USD m", "USD m"],
+    ["refinancing-wall-USD-bn", "Maturities by seniority, USD bn", "USD bn"],
+  ]);
+  expect(figures.map((figure) => figure.series.map((series) => series.data))).toEqual([
+    [[{ value: "500" }]],
+    [[{ value: "1.2" }]],
+  ]);
+  expect(figures[0]!.summary).toContain("500 USD m amount in 1 instrument");
+  expect(figures[1]!.summary).toContain("1.2 USD bn amount in 1 instrument");
+});
+
+test("recoveryByClass: one currency in two scales is two figures, each unit saying its scale", () => {
+  const row = (name: string, claim: string, scale: string) =>
+    t4e7("Base", name, c(claim, claim), c(claim, claim), "USD").map((cell, index) =>
+      index === 10 ? c(scale) : cell,
+    );
+  const figures = recoveries([row("Senior", "500", "m"), row("Notes", "1.2", "bn")]);
+  expect(figures.map((figure) => [figure.title, figure.unit])).toEqual([
+    ["Recovery by class, Base, USD m", "USD m"],
+    ["Recovery by class, Base, USD bn", "USD bn"],
+  ]);
+  expect(figures.map((figure) => figure.categories)).toEqual([["Senior"], ["Notes"]]);
+});
+
+const SCALED_ALLOCATION = [...ALLOCATION.slice(0, 6), "currency and scale", "legal evidence ID"];
+const scaled = (row: Served[], scale: string) => [...row.slice(0, 6), c(scale), row[6]!];
+
+test("valueAllocation: one entity in two scales is two waterfalls, never subtracting across them", () => {
+  const rows = [
+    scaled(t4e5("Base", "HoldCo", c("90", "90"), "Senior", c("60", "60"), c("30", "30")), "USD m"),
+    scaled(
+      t4e5("Base", "HoldCo", c("1.2", "1.2"), "Notes", c("1", "1"), c("0.2", "0.2")),
+      "USD bn",
+    ),
+  ];
+  const figures = valueAllocation(
+    cp4cWith([register("T4E.5", SCALED_ALLOCATION, rows), register("T4E.6", FULCRUM, [])]),
+  ).map(waterfall);
+  expect(figures.map((figure) => [figure.title, figure.unit])).toEqual([
+    ["Value allocation, Base, USD m", "USD m"],
+    ["Value allocation, Base, USD bn", "USD bn"],
+  ]);
+  expect(figures.map((figure) => figure.steps.map((step) => step.value))).toEqual([
+    ["90", "-60", "30"],
+    ["1.2", "-1", "0.2"],
+  ]);
+});
+
+test("liquidityBridge: a step in another scale than the opening total is a gap, never subtracted", () => {
+  const [figure] = liquidityBridgeOf(SCALED_LIQUIDITY, [
+    t2e5Scaled("Beginning accessible liquidity", c("100", "100"), "USD m"),
+    t2e5Scaled("Cash interest", c("8", "8"), "USD m"),
+    t2e5Scaled("Cash taxes", c("0.002", "0.002"), "USD bn"),
+    t2e5Scaled("Ending accessible liquidity", c("92", "92"), "USD m"),
+  ]);
+  expect(figure!.unit).toBe("USD m");
+  expect(figure!.steps.map((step) => step.value)).toEqual(["100", "-8", null, "92"]);
+  expect(figure!.steps[2]).toMatchObject({
+    reason: "0.002 in USD bn, not the bridge's USD m",
+  });
+});
+
+const liquidityBridgeOf = (columns: string[], rows: Served[][]) =>
+  liquidityBridge(cp2dWith([register("T2E.5", columns, rows)])).map(waterfall);
+
+test("ratingTriggers: Base and BASE are one case; a case-only and a period-only row stay apart", () => {
+  const same = (kase: string) =>
+    t2r4("A", "", "ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1"), "OK", [
+      kase,
+      "FY26",
+    ]);
+  const [merged] = triggers([same("Base"), same("BASE")]);
+  expect(merged!.bullets).toHaveLength(1);
+  const withOnly = (kase: string, period: string) =>
+    t2r4("A", "", "ceiling", "Leverage", c("5", "5"), c("4", "4"), c("1", "1"), "OK", [
+      kase,
+      period,
+    ]);
+  const [apart] = triggers([withOnly("FY26", ""), withOnly("", "FY26")]);
+  expect(apart!.bullets).toHaveLength(2);
+});
+
+const SCALED_LIQUIDITY = [...LIQUIDITY.slice(0, 2), "Currency and Scale", ...LIQUIDITY.slice(2)];
+const t2e5Scaled = (item: string, amount: Served, scale: string) => {
+  const base = t2e5(item, amount);
+  return [base[0]!, base[1]!, c(scale), ...base.slice(2)];
+};
+
+test("liquidityBridge: with no opening total, the first stated scale is the bridge's; others are gaps", () => {
+  const [figure] = liquidityBridgeOf(SCALED_LIQUIDITY, [
+    t2e5Scaled("Cash interest", c("8", "8"), "USD m"),
+    t2e5Scaled("Cash taxes", c("0.002", "0.002"), "USD bn"),
+    t2e5Scaled("Ending accessible liquidity", c("92", "92"), "USD m"),
+  ]);
+  expect(figure!.unit).toBe("USD m");
+  expect(figure!.steps.map((step) => step.value)).toEqual(["-8", null, "92"]);
+});
+
+test("liquidityBridge: an opening total without a scale draws no step, none stands on a missing base", () => {
+  const [figure] = liquidityBridgeOf(SCALED_LIQUIDITY, [
+    t2e5Scaled("Beginning accessible liquidity", c("100", "100"), ""),
+    t2e5Scaled("Cash interest", c("8", "8"), "USD m"),
+    t2e5Scaled("Cash taxes", c("2", "2"), "USD m"),
+  ]);
+  expect(figure!.unit).toBe("USD m");
+  expect(figure!.steps.map((step) => step.value)).toEqual([null, null, null]);
+  expect(figure!.steps[1]).toMatchObject({
+    reason: "opening total in no stated scale, not the bridge's USD m",
+  });
+});
+
+test("liquidityBridge: steps in another scale than the opening total are gaps beside it", () => {
+  const [figure] = liquidityBridgeOf(SCALED_LIQUIDITY, [
+    t2e5Scaled("Beginning accessible liquidity", c("100", "100"), "USD bn"),
+    t2e5Scaled("Cash interest", c("8", "8"), "USD m"),
+  ]);
+  expect(figure!.unit).toBe("USD bn");
+  expect(figure!.steps.map((step) => step.value)).toEqual(["100", null]);
 });

@@ -13,6 +13,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, firefox, webkit } from "playwright";
 import { summarizeAxeViolations } from "./axe-results.mjs";
+import { openDisclosure } from "./a11y-disclose.mjs";
 import { gotoWithInternalErrorRetry } from "./a11y-navigation.mjs";
 import { ENGINES, LOADING, ROUTES, SETTLED, VIEWPORTS } from "./fixture-routes.mjs";
 
@@ -209,6 +210,9 @@ async function scan(page, route, viewport) {
         .locator(`[data-depth-panel="${params.get("open")}"]`)
         .waitFor({ state: "visible", timeout: 15_000 });
     }
+    // A disclosure closed by default (the signed record, D107, F506) is opened
+    // so its region is scanned as a reader who asks for it meets it.
+    if (params.get("disclose")) await openDisclosure(page, params.get("disclose"));
     if (params.get("pick")) {
       const picker = page.locator("#figure-citation");
       const value = await picker
@@ -216,6 +220,20 @@ async function scan(page, route, viewport) {
         .first()
         .getAttribute("value");
       await picker.selectOption(value ?? "");
+    }
+    // A register a route names is opened, and its clamped cell (N95) waited
+    // for closed; `clamp=open` then focuses the cell, which opens it. A route
+    // with no clamped cell to scan is a scan error, never a quiet scan.
+    if (params.get("register")) {
+      await page.locator("[data-register-open]").first().click();
+      const cell = page.locator("td[data-clamp]").first();
+      await cell.waitFor({ state: "visible", timeout: 15_000 });
+      const wanted = params.get("clamp") === "open" ? "open" : "closed";
+      if (wanted === "open") await cell.focus();
+      await page
+        .locator(`td[data-clamp="${wanted}"]`)
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
     }
     // A dialog or panel a route names is opened, and waited for, before the
     // scan; one that cannot be opened is a scan error.

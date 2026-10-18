@@ -52,6 +52,7 @@ from caos.methodology.invocation import accepted_lineage, host_identity
 from caos.methodology.vendor import authority_bundle_sha256
 from caos.methodology.verification import AcceptedRow
 from caos.refusals import Refusal, RefusalCode
+from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant
 from caos.store.outcomes import CallOutcome, record_outcome
 from caos.store.runs import Accepted, accept_attempt, start_attempt
@@ -225,6 +226,20 @@ def _rewrite(harness: _Harness, module_id: str, **changes: object) -> None:
         (harness.blobs.put(moved), artifact),
     )
     harness.conn.commit()
+
+
+def test_withdrawing_an_uncited_source_leaves_the_payload(lite: _Harness) -> None:
+    """Liveness is judged per citation: a withdrawn source no record cites
+    refuses nothing (the delivery rebuild reads the pin without a liveness
+    count)."""
+    withdraw_source(
+        lite.conn,
+        case_id=lite.case_id,
+        actor_id=lite.approver,
+        source_id=lite.witness_id,
+    )
+    assert _payload(lite)["artifacts"]
+    lite.conn.rollback()
 
 
 def test_the_payload_is_read_from_the_store_and_round_trips(lite: _Harness) -> None:

@@ -397,6 +397,7 @@ function runSection(): { [key: string]: Json } {
           output_per_token: "0.000025",
           as_of: "2026-09-22",
           configured: true,
+          qualification: "UNQUALIFIED",
         },
       ],
     },
@@ -482,6 +483,7 @@ function analysis(): { [key: string]: Json } {
           registers: [
             {
               register_id: "T4C.4",
+              unavailable_reason: null,
               columns: ["Test", "Headroom", "Note"],
               declared: ["Test", "Headroom", null],
               rows: [

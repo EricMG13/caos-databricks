@@ -38,7 +38,7 @@ from caos.graph.runtime import Execution, run_route
 from caos.methodology.bundle import verified_bytes
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.methodology.runner import ModuleProvider
-from caos.methodology.tables import handoff_registers
+from caos.methodology.tables import HandoffRegister, TableCell, handoff_registers
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.gates import withdraw_source
@@ -198,6 +198,24 @@ def test_analysis_labels_source_facts_model_analysis_and_no_host_calculation(
         assert fact.line.excerpt == completions.quotes[0]
         assert fact.withdrawn_at is None
         assert fact.rects and all(r.x1 > r.x0 for r in fact.rects)
+
+
+def test_a_refused_register_is_served_named_with_its_code_and_no_cells() -> None:
+    """N194: one register the host would not key blanks only itself; the
+    module's sound register beside it keeps its cells."""
+    refused = analysis_read._register_view(
+        HandoffRegister("T4.6", (), (), (), "TABLES_MALFORMED")
+    )
+    sound = analysis_read._register_view(
+        HandoffRegister("T4.4", ("a",), ("a",), ((TableCell("7", "7"),),))
+    )
+    assert (refused.register_id, refused.unavailable_reason) == (
+        "T4.6",
+        "TABLES_MALFORMED",
+    )
+    assert (refused.columns, refused.declared, refused.rows) == ([], [], [])
+    assert sound.unavailable_reason is None
+    assert sound.rows[0][0].value == "7"
 
 
 def test_an_excerpt_is_served_inside_the_whole_line_it_anchored_in() -> None:

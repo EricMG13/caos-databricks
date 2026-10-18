@@ -268,6 +268,12 @@ MIGRATIONS = (
         "0051_book_entries",
         Path(__file__).with_name("0051_book_entries.sql").read_text(encoding="utf-8"),
     ),
+    (
+        "0052_pre_dl1_tripwire",
+        Path(__file__)
+        .with_name("0052_pre_dl1_tripwire.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # DL-1: the store's own schema, beside LangGraph's `caos_graph`

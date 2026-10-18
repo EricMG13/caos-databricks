@@ -68,13 +68,14 @@ from caos.store.source_sets import cited_source_ids
 # shape any fixture has and no longer the only shape the store allows: the
 # opinions table is keyed per signer and `sign_opinion_in` refuses only a frozen
 # revision, so a second approver may sign before the freeze and costs one more
-# read. Measured at 53 for the frozen path with two signers. Recorded in
+# read. Counted at 54 statements for the frozen Committee read with one
+# signer and 55 with two. Recorded in
 # CLAUDE.md rather than absorbed into the number, because a budget fitted to the
 # widest shape stops measuring the common one.
 # The head a save is judged against rides the revision's own statement, so it
 # costs no round trip. "unsaved" is a run with no revision, measured on the
 # same LITE route: isolation and standing (2), the head (1), the run and its
-# title (1), and the payload derivation a first save would make (38) -- the
+# title (1), and the payload derivation a first save would make (39) -- the
 # derivation the saved path proves, less the stored revision's own reads.
 # Every path that finds a revision lists the run's revisions too (1), so a
 # committee member can reach a frozen one from Report; "unsaved" has none.
@@ -83,7 +84,12 @@ from caos.store.source_sets import cited_source_ids
 # own pass alone, one more `payload_digests` read per signer and the freezer
 # -- the same one signer, one freezer shape the rest of this budget is stated
 # for -- so "committee" pays two more for a filed revision.
-IO_BUDGET = {"report": 46, "committee": 22, "frozen": 53, "unsaved": 42}
+# N130: the payload's proof now rebuilds each node's own delivery rather than
+# anchoring in the run's whole capture, so a route with a demand pays one more
+# read, the pinned members `select_sources` reads (`node_delivery`); the pin's
+# blocks replace the old capture read one for one. It is paid once per payload
+# derivation, so "report", "frozen" and "unsaved" each pay one.
+IO_BUDGET = {"report": 47, "committee": 22, "frozen": 54, "unsaved": 43}
 # N35's remainder: "report" and "frozen" (a state the store has not filed)
 # `prove_revision` -- the saved payload once, for its narrative
 # (`read_revision`), then the whole payload re-derived (`canonical_payload`),
