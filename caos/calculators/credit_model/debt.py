@@ -47,11 +47,13 @@ from caos.calculators.credit_model._cells import (
     CONTEXT,
     DIFFERS,
     FOREIGN,
+    OTHER_FOOTING,
     RESIDUAL,
     balance_periods,
     beyond_rounding,
     calc,
     join_notes,
+    merged_footing_note,
     no_negative_zero,
     opening_date,
     refs,
@@ -118,12 +120,14 @@ def notes_of(note: str | None) -> tuple[str, ...]:
 def carried(cells: Iterable[Cell]) -> str | None:
     """What the cells leave out ("excludes facility in another currency",
     "excludes unallocated CP-CF movements"), a coupon they were priced on
-    read as a fraction, a spread or floor read as basis points, then each
-    part taken as nothing: `zeroed`, for a figure read from them."""
+    read as a fraction, a spread or floor read as basis points, a merge of
+    periods on different footings (`merged_footing_note`), then each part
+    taken as nothing: `zeroed`, for a figure read from them."""
     kept = list(cells)
     found = {part for cell in kept for part in notes_of(cell.note)}
     leaves = (note for note in _CARRIED if note in found)
-    return join_notes((*leaves, *zeroed(kept)))
+    merges = sorted(part for part in found if part.startswith(f"{OTHER_FOOTING}: "))
+    return join_notes((*leaves, *merges, *zeroed(kept)))
 
 
 def is_operating_lease(row: FacilityRow) -> bool:
@@ -335,21 +339,50 @@ def _stated_at(
     return ABSENT
 
 
+def _would_feed(row: FacilityRow, currency: str) -> frozenset[str]:
+    """The totals the row would enter in the register's currency
+    (`left_out` reads the same): a row in another currency is counted as one
+    in `currency`, so a refusal is scoped to what it would have fed."""
+    return facility_keys(replace(row, currency=currency), currency)
+
+
 def _refused_stack(
     regs: Cp1Registers,
     own: str | None,
     skipped: tuple[str, ...],
     stack: dict[str, FacilityRow],
-) -> dict[str, Cell]:
-    """A refused cell (`refused_balance`) for each facility the `skipped`
-    periods have a row for and the `stack` has none."""
-    refused: dict[str, Cell] = {}
+) -> dict[str, tuple[Cell, frozenset[str]]]:
+    """For each facility the `skipped` periods have a row for and the `stack`
+    has none (or none with a carrying value, a skipped row having one), a
+    refused cell (`refused_balance`, the first skipped row's period) and the
+    totals it would feed: the union over the stack's row and every skipped
+    row of the facility."""
+    rows: dict[str, list[FacilityRow]] = {}
     for row in regs.facilities:
-        if row.period_id in skipped and row.facility_id not in stack:
-            refused.setdefault(
-                row.facility_id, refused_balance(regs, own, (row.period_id,))
-            )
+        if row.period_id in skipped:
+            rows.setdefault(row.facility_id, []).append(row)
+    refused: dict[str, tuple[Cell, frozenset[str]]] = {}
+    for facility_id, apart in rows.items():
+        held = stack.get(facility_id)
+        if held is not None and (
+            held.carrying_value is not None
+            or all(row.carrying_value is None for row in apart)
+        ):
+            continue
+        keys = frozenset(k for row in apart for k in _would_feed(row, regs.currency))
+        if held is not None:
+            keys |= _would_feed(held, regs.currency)
+        refused[facility_id] = (
+            refused_balance(regs, own, (apart[0].period_id,)),
+            keys,
+        )
     return refused
+
+
+def _refusal(refused: dict[str, tuple[Cell, frozenset[str]]], key: str) -> Cell | None:
+    """The first refused facility's cell among those that would feed the
+    `key` total; None where none would."""
+    return next((cell for cell, keys in refused.values() if key in keys), None)
 
 
 def _without_history(
@@ -390,6 +423,23 @@ def _history(cell: Cell) -> tuple[str, ...]:
     return (HISTORY_INCOMPLETE,) if HISTORY_INCOMPLETE in notes_of(cell.note) else ()
 
 
+def _merged(
+    regs: Cp1Registers, stack: dict[str, FacilityRow], key: str, cell: Cell
+) -> Cell:
+    """`cell`, noted where the rows of the `key` total come from periods
+    that state different bases or perimeters (`merged_footing_note`): the
+    column's own period states none, so nothing refused them."""
+    feeding = (
+        row.period_id
+        for row in stack.values()
+        if key in facility_keys(row, regs.currency)
+    )
+    note = merged_footing_note(regs, feeding)
+    if note is None or cell.value is None:
+        return cell
+    return replace(cell, note=join_notes((cell.note, note)))
+
+
 def _column_debt(
     regs: Cp1Registers, column: Column, accounts: dict[str, Cell]
 ) -> dict[str, Cell]:
@@ -405,7 +455,9 @@ def _column_debt(
         f"fac:{facility_id}": _fac_cell(row, currency)
         for facility_id, row in stack.items()
     }
-    cells.update({f"fac:{facility_id}": cell for facility_id, cell in refused.items()})
+    cells.update(
+        {f"fac:{facility_id}": cell for facility_id, (cell, _) in refused.items()}
+    )
     excluded = left_out(stack.values(), currency)
     raw = _stack_totals(((row, row.carrying_value) for row in stack.values()), currency)
     totals = {key: _excluding(cell, key, excluded) for key, cell in raw.items()}
@@ -416,14 +468,25 @@ def _column_debt(
         "total_debt",
         excluded,
     )
-    if refused:
-        # A facility only another footing holds: no total, none partial.
-        totals = dict.fromkeys(totals, next(iter(refused.values())))
+    for key in totals:
+        # A facility only another footing holds: no total it feeds, none
+        # partial.
+        refusal = _refusal(refused, key)
+        if refusal is not None:
+            totals[key] = refusal
+        else:
+            totals[key] = _merged(regs, stack, key, totals[key])
+    if _refusal(refused, "total_debt") is not None:
         total = totals["total_debt"]
+    else:
+        total = _merged(regs, stack, "total_debt", total)
     opened = _opening_debt(regs, day, stack, opening, own)
     open_refused = _refused_stack(regs, own, open_skipped, opening)
-    if open_refused:
-        opened = next(iter(open_refused.values()))
+    open_refusal = _refusal(open_refused, "total_debt")
+    if open_refusal is not None:
+        opened = open_refusal
+    else:
+        opened = _merged(regs, opening, "total_debt", opened)
     raised = _account(accounts, "net_debt_issue_repay")
     undrawn = (
         (_account(accounts, "rcf_commitment"), 1),
