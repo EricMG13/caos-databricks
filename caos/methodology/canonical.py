@@ -21,8 +21,8 @@ from __future__ import annotations
 import hashlib
 import sys
 import time
-from collections.abc import Callable, Collection, Mapping, Sequence
-from contextlib import suppress
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
@@ -35,6 +35,7 @@ import psycopg
 
 from caos import methodology
 from caos.blobs import BlobStore
+from caos.boundary_text import BoundaryText
 from caos.copilot import NANO_PER_CREDIT
 from caos.evidence.citations import (
     EXCERPT,
@@ -137,6 +138,7 @@ from caos.methodology.verification import (
     CREDIT_SCREEN_SELECTION,
     OWNER_KEYS,
     AcceptedRow,
+    NodeDelivery,
     OwnerGap,
     Step,
     VendorAuthority,
@@ -179,7 +181,7 @@ from caos.store.outcomes import (
 )
 from caos.store.run_inputs import load_run_input
 from caos.store.runs import attempt_ordinal
-from caos.store.source_sets import SourceSet, load_source_set
+from caos.store.source_sets import SourceSet, SourceSetMember, load_source_set
 from caos.store.work import require_resendable
 
 if TYPE_CHECKING:
@@ -490,34 +492,73 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
 
     `record_outcome` replays an exact outcome as a no-op, so a write whose
     commit landed but whose answer was lost is safe to repeat. A connection the
-    fault closed is replaced by a fresh one to the same store for the retry,
-    when this environment names one; a store that stays down still refuses
-    `STORE_UNAVAILABLE`, and the run is released as before. `BILL_TRIES`
-    writes a `BILL_PAUSE_SECONDS` apart sit well inside the lease the call
-    was made under.
+    fault closed is replaced at once by a fresh one to the same store, when
+    this environment names one, and the attempt is held again on it
+    (`call_hold`) for as long as it writes: the hold went with the old
+    session, and the replacement takes it before the write and lets it go
+    with the bill (N80). A store that stays down still refuses
+    `STORE_UNAVAILABLE`, and the run is released as before.
+
+    Two windows stay. The attempt is unheld from the loss of the old session
+    to the new hold's lock round trip (a connect with no connect timeout of
+    its own, then one statement; `idle_session_timeout` is off for these
+    sessions, so idleness never ends them). And once the tries are spent
+    (`BILL_TRIES` writes, `BILL_PAUSE_SECONDS` apart -- a few seconds, a small
+    share of the lease's liveness budget -- and up to `BILL_TRIES` more after
+    cuts, below), the bill is abandoned with no session left to hold the
+    attempt, so the next claim may start the node once more under a
+    reservation of its own (invariant 8); nothing can be written to a store
+    that is down, and a longer wait would hold the run's lease for it. The
+    second is inherent to a store that cannot be reached. The first is not
+    lengthened by a backend still holding the old hold: the replacement asks
+    for its hold without waiting for it (`wait=False`) and writes whether or
+    not it got it. That leaves the node unheld by this session, though, if
+    the try fails and the old backend then dies before the write commits:
+    no one holds it until the write lands. Both are bounded by tests.
+
+    A fault that took its session away is answered by the reconnect at once
+    and costs no try: a store that then stays down is paused for
+    `BILL_TRIES - 1` times, as on every other path. Such a cut-and-reconnect
+    is itself bounded (`BILL_TRIES` of them), so a store that cuts every
+    fresh session cannot loop the bill.
     """
-    for tries_left in range(BILL_TRIES - 1, -1, -1):
-        try:
-            _billed_once(conn, attempt_id, outcome)
-        except Refusal as refused:
-            if refused.code is not RefusalCode.STORE_UNAVAILABLE or not tries_left:
-                raise
-            _pause(BILL_PAUSE_SECONDS)
-            continue
-        return
+    pauses_left, free_cuts = BILL_TRIES - 1, BILL_TRIES
+    with ExitStack() as sessions:
+        target, connecting = conn, False
+        while True:
+            try:
+                if target.closed:
+                    connecting = True
+                    target = sessions.enter_context(_held_fresh(attempt_id))
+                    connecting = False
+                record_outcome(target, attempt_id=attempt_id, outcome=outcome)
+            except Refusal as refused:
+                if refused.code is not RefusalCode.STORE_UNAVAILABLE:
+                    raise
+                if not connecting and target.closed and free_cuts:
+                    # The session went with the fault: reconnect and hold at
+                    # once, not after a pause that leaves the attempt unheld.
+                    free_cuts -= 1
+                    continue
+                if not pauses_left:
+                    raise
+                pauses_left -= 1
+                _pause(BILL_PAUSE_SECONDS)
+                continue
+            return
 
 
-def _billed_once(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
-    if not conn.closed:
-        record_outcome(conn, attempt_id=attempt_id, outcome=outcome)
-        return
+@contextmanager
+def _held_fresh(attempt_id: UUID) -> Iterator[StoreConnection]:
+    """A fresh connection to the same store, holding the attempt (`call_hold`)
+    when the hold is free; it writes either way (N80)."""
     try:
         fresh = connect(store_url())
     except (psycopg.Error, Refusal):
         # No store to retry against: the fault that closed it stands.
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
-    with fresh:
-        record_outcome(fresh, attempt_id=attempt_id, outcome=outcome)
+    with fresh, call_hold(fresh, attempt_id, wait=False):
+        yield fresh
 
 
 def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
@@ -781,25 +822,39 @@ def _selected(
     the host's CP-CF, a row whose source-files cell is empty -- costs no extra
     round trip. (The vendor's parser reads the legacy header's column too.)
     """
-    if assignment.module_id == GATE_MODULE:
+    return _selection(
+        bundle,
+        assignment.module_id,
+        upstream,
+        delivered,
+        lambda: _pinned_source_set(conn, assignment.run_id).members,
+    )
+
+
+def _selection(
+    bundle: Bundle,
+    module_id: str,
+    upstream: Sequence[tuple[UpstreamRef, bytes]],
+    delivered: list[Delivery],
+    members: Callable[[], tuple[SourceSetMember, ...]],
+) -> tuple[list[Delivery], Selection]:
+    """`_selected` with the pinned members read through `members`, which is
+    called only when the node's cell has items to map."""
+    if module_id == GATE_MODULE:
         # §98: the whole pin, a source past the gate bound as its page map.
         shown, maps = gate_view(delivered)
         basis = Basis.PAGE_MAP if maps else Basis.WHOLE_NO_DEMAND
         return shown, Selection(basis, None, page_maps=maps)
     gate = next(data for ref, data in upstream if ref.module_id == GATE_MODULE)
     cell = demand_cells(_contract(bundle).navigation, catalog(bundle), gate).get(
-        assignment.module_id
+        module_id
     )
     if cell is None or not demand_items(cell):
         return delivered, Selection(Basis.WHOLE_NO_DEMAND, None)
     last_pages: dict[UUID, int] = {}
     for item in delivered:
         last_pages[item.source_id] = max(item.page, last_pages.get(item.source_id, 0))
-    selection = select_sources(
-        _pinned_source_set(conn, assignment.run_id).members,
-        cell,
-        last_pages=last_pages,
-    )
+    selection = select_sources(members(), cell, last_pages=last_pages)
     if selection.whole:
         return delivered, selection
     return [d for d in delivered if selection.delivers(d.source_id, d.page)], selection
@@ -1107,11 +1162,13 @@ def _owner_lines(
     module, markdown = assignment.module_id, answer_markdown(body)
     if module not in {MODEL_MODULE, "CP-5"} or markdown is None:
         return []
+    # By module, as `_forecast_inputs` reads it: the later ref of a module wins.
+    upstream = {ref.module_id: data for ref, data in context.upstream}
     with suppress(Exception):  # an answer the validator cannot read says so itself
         gaps = owner_restriction_gaps(
             _contract(bundle),
             markdown,
-            [data for _ref, data in context.upstream],
+            list(upstream.values()),
             selection=(CREDIT_SCREEN_SELECTION if module == "CP-5" else None),
         )
         return owner_messages(module, gaps)
@@ -1130,19 +1187,24 @@ def owner_messages(module: str, gaps: Sequence[OwnerGap]) -> list[str]:
             f"host owner check: {module}'s qa_status must be Restricted while an"
             f" upstream owner's is; Restricted: {', '.join(restricted)}"
         )
-    packed = _packed_items(module, gaps)
+    packed, hidden = _packed_items(module, gaps)
     lines += [
         line
         for text, _n in packed[:MAX_OWNER_LINES]
         if (line := _bounded("host owner check", text))
     ]
-    if rest := sum(n for _text, n in packed[MAX_OWNER_LINES:]):
+    if rest := hidden + sum(n for _text, n in packed[MAX_OWNER_LINES:]):
         lines.append(f"host owner check: {rest} more missing items not shown")
     return lines
 
 
-def _packed_items(module: str, gaps: Sequence[OwnerGap]) -> list[tuple[str, int]]:
-    """(line text, items on it) for the dropped items, by front matter list."""
+def _packed_items(
+    module: str, gaps: Sequence[OwnerGap]
+) -> tuple[list[tuple[str, int]], int]:
+    """(line text, items on it) for the dropped items, by front matter list,
+    and how many items were left out because they cannot cross the boundary
+    (text no reader can see, a control character): each is bounded alone, so
+    one such item does not take the line it would have shared (N143)."""
     owners: dict[tuple[str, str], list[str]] = {}
     for gap in gaps:
         if gap.key != "qa_status":
@@ -1152,19 +1214,33 @@ def _packed_items(module: str, gaps: Sequence[OwnerGap]) -> list[tuple[str, int]
         " limitation_flags and validation_warnings exactly; "
     )
     packed: list[tuple[str, int]] = []
+    hidden = 0
     for key in OWNER_KEYS:
-        text, count = f"{head}missing from {key}: ", 0
-        for (listed, item), named in owners.items():
-            if listed != key:
-                continue
-            entry = f"«{item}» (from {', '.join(dict.fromkeys(named))})"
-            if count and len(text) + 2 + len(entry) > MAX_FEEDBACK_CHARS:
-                packed.append((text, count))
-                text, count = f"also missing from {key}: ", 0
-            text, count = text + (", " if count else "") + entry, count + 1
-        if count:
+        entries = [
+            f"«{item}» (from {', '.join(dict.fromkeys(named))})"
+            for (listed, item), named in owners.items()
+            if listed == key
+        ]
+        shown = [e for e in entries if _bounded("host owner check", e) is not None]
+        hidden += len(entries) - len(shown)
+        lines = _packed_key(f"{head}missing from {key}: ", key, shown)
+        head = "" if lines else head
+        packed += lines
+    return packed, hidden
+
+
+def _packed_key(first: str, key: str, entries: Sequence[str]) -> list[tuple[str, int]]:
+    """The `entries` of one front matter list packed into lines of at most
+    `MAX_FEEDBACK_CHARS`, the first opened by `first`."""
+    packed: list[tuple[str, int]] = []
+    text, count = first, 0
+    for entry in entries:
+        if count and len(text) + 2 + len(entry) > MAX_FEEDBACK_CHARS:
             packed.append((text, count))
-            head = ""
+            text, count = f"also missing from {key}: ", 0
+        text, count = text + (", " if count else "") + entry, count + 1
+    if count:
+        packed.append((text, count))
     return packed
 
 
@@ -1719,6 +1795,101 @@ def _covered(
     if taken is None or not bills_at(provider, taken.price):
         return False
     return priced_request(taken.price, size) <= taken.amount
+
+
+def node_delivery(
+    conn: StoreConnection,
+    blobs: BlobStore,
+    bundle: Bundle,
+    run_id: UUID,
+) -> NodeDelivery:
+    """The blocks each node of `run_id` was handed, rebuilt for a reader that
+    re-anchors a stored record (N130, D94).
+
+    `_selection` over the run's pin and the node's accepted upstream (§95, the
+    gate's own answer), the selection the live call and `replay_billed` made:
+    pure over pinned inputs, so a reader sees the node's delivery and not the
+    run's whole capture. It is not re-fitted to the model's request ceiling
+    (D116), which only narrows it and which the live check already judged. The
+    pin is read once per reader, without the liveness count a live call makes:
+    a withdrawn source is judged per citation by the reader (`pinned_live_sources`),
+    so withdrawing one nothing cites refuses nothing here.
+    """
+    pin: list[Delivery] = []
+    pinned: list[tuple[SourceSetMember, ...]] = []
+
+    def members() -> tuple[SourceSetMember, ...]:
+        if not pinned:
+            pinned.append(_pinned_members(conn, run_id))
+        return pinned[0]
+
+    def delivery(node: RouteNode, identity: HostIdentity) -> dict[UUID, frozenset[str]]:
+        if not pin:
+            pin.extend(_pinned_deliveries(conn, run_id))
+        shown, _ = _selection(
+            bundle,
+            node.module_id,
+            upstream_markdown(blobs, identity.upstream),
+            pin,
+            members,
+        )
+        return _by_source(shown)
+
+    return delivery
+
+
+def _pinned_members(conn: StoreConnection, run_id: UUID) -> tuple[SourceSetMember, ...]:
+    """The members of the run's pinned source-set version in one statement:
+    what `select_sources` reads. `_pinned_source_set` also re-verifies the pin
+    and the set's fingerprint, which the live call has done; a reader that
+    selects for every node of a run reads the members once, as the delivery's
+    own `read_run_blocks` is joined to the pin."""
+    rows = conn.execute(_PINNED_MEMBERS, (run_id,)).fetchall()
+    if not rows:
+        raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+    return tuple(SourceSetMember(*row) for row in rows)
+
+
+def _pinned_deliveries(conn: StoreConnection, run_id: UUID) -> list[Delivery]:
+    """Every block the run's pin captured, in the pack's own order, as
+    `_delivered` hands them but without its liveness count (`read_run_blocks`
+    refuses a short delivery): what a re-anchoring reader selects from. Empty
+    pin is `RUN_INPUT_INVALID` (F677); a database fault is `STORE_UNAVAILABLE`,
+    typed and `from None` as `read_run_blocks` raises it."""
+    try:
+        rows = conn.execute(_PINNED_DELIVERIES, (run_id,)).fetchall()
+    except psycopg.Error:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    if not rows:
+        raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+    return [
+        Delivery(
+            UUID(str(source)),
+            str(block),
+            int(page),
+            BoundaryText.of(text),
+            str(hidden or ""),
+        )
+        for source, block, page, text, hidden in rows
+    ]
+
+
+_PINNED_DELIVERIES = (
+    "SELECT b.source_id, b.block_id, b.page, b.text, b.hidden"
+    " FROM run_inputs i JOIN source_set_members m"
+    " ON (m.case_id, m.version) = (i.case_id, i.source_version)"
+    " JOIN source_blocks b ON b.source_id = m.source_id"
+    ' WHERE i.run_id = %s ORDER BY m.filename COLLATE "C", m.document_sha256,'
+    " m.source_id, b.block_id"
+)
+
+_PINNED_MEMBERS = (
+    "SELECT m.source_id, m.document_sha256, m.filename, m.admitted_at,"
+    " m.extractor_identity, m.output_sha256, m.extraction_sha256"
+    " FROM run_inputs i JOIN source_set_members m"
+    " ON (m.case_id, m.version) = (i.case_id, i.source_version)"
+    " WHERE i.run_id = %s ORDER BY m.source_id"
+)
 
 
 def _by_source(delivered: Sequence[Delivery]) -> dict[UUID, frozenset[str]]:

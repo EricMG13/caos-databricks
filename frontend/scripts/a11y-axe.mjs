@@ -13,6 +13,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, firefox, webkit } from "playwright";
 import { summarizeAxeViolations } from "./axe-results.mjs";
+import { openDisclosure } from "./a11y-disclose.mjs";
 import { gotoWithInternalErrorRetry } from "./a11y-navigation.mjs";
 import { ENGINES, LOADING, ROUTES, SETTLED, VIEWPORTS } from "./fixture-routes.mjs";
 
@@ -209,6 +210,9 @@ async function scan(page, route, viewport) {
         .locator(`[data-depth-panel="${params.get("open")}"]`)
         .waitFor({ state: "visible", timeout: 15_000 });
     }
+    // A disclosure closed by default (the signed record, D107, F506) is opened
+    // so its region is scanned as a reader who asks for it meets it.
+    if (params.get("disclose")) await openDisclosure(page, params.get("disclose"));
     if (params.get("pick")) {
       const picker = page.locator("#figure-citation");
       const value = await picker

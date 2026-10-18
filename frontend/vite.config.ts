@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { blockedResponse } from "./demo-fixtures.ts";
 import { defineConfig, loadEnv, type Connect, type Plugin, type ProxyOptions } from "vite";
 
 // Explicit demo dev and preview serve fixtures at the v1 wire's routes, for the
@@ -181,10 +182,15 @@ async function serveSection(section: string, fixture: string | null, res: Server
   const wide = section === "analysis" && fixture === "wide";
   if (granted || wide) path = "analysis.json";
   else if (offered) path = "model.json";
+  else if (section === "analysis" && fixture === "blocked") path = "states/analysis.partial.json";
   else if (fixture && !STREAM_FIXTURES.has(fixture)) path = `states/${section}.${fixture}.json`;
   else if (section === "run" && runFrame > 0) path = `run/frames/${runFrame}.json`;
   const body = await readJson(path);
   if (body === null) return send(res, 404, "{}");
+  if (section === "analysis" && fixture === "blocked") {
+    const run = await readJson("states/run.blocked.json");
+    return send(res, ...blockedResponse(body, run));
+  }
   send(
     res,
     200,
