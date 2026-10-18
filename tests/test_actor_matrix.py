@@ -24,6 +24,7 @@ import anyio
 import pytest
 from command_fixtures import command_client, command_headers, member
 from fastapi.testclient import TestClient
+from governed_deliverable import freeze, save_revision, sign_opinion
 from test_deliverable_canonical import harness, lite, route
 from test_execution_commands import ROUTE, _ready, _Run
 from test_execution_freshness import _Harness
@@ -37,8 +38,6 @@ from caos.api.identity import (
 )
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.deliverable.filing import freeze, sign_opinion
-from caos.deliverable.revisions import save_revision
 from caos.evidence.ingest import Document, admit_pack
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection

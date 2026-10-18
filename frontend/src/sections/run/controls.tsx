@@ -34,6 +34,14 @@ import {
   sharedRefusal,
 } from "@/controls/RefusedControl";
 import { useAnnouncer } from "@/states/Announcer";
+import {
+  EMPTY_COMMAND_FORM,
+  commandErrors,
+  derivedScope,
+  runCommand,
+  type CommandForm,
+  type CommandRoute,
+} from "@/sections/run/command";
 import type {
   ActionView,
   CreateRun,
@@ -289,6 +297,24 @@ function perMillion(rate: string): string {
   return rest ? `${integer}.${rest}` : integer;
 }
 
+/** What each qualification state is called beside a model. A state the caller
+    is not told (RESTRICTED) or the server could not read (UNAVAILABLE) is not
+    "not qualified": that would claim a verdict nobody looked up. */
+const QUALIFICATION_LABEL: Record<ModelChoice["qualification"], string> = {
+  QUALIFIED: "qualified",
+  UNQUALIFIED: "not qualified",
+  RESTRICTED: "qualification not shown",
+  UNAVAILABLE: "qualification unavailable",
+};
+
+/** The model's name as the select offers it: marked where it is the
+    configured one, and labelled with its qualification state (N117) -- a label
+    only, no model is withheld. */
+function modelLabel(choice: ModelChoice): string {
+  const name = choice.configured ? `${choice.model} (configured)` : choice.model;
+  return `${name} \u00b7 ${QUALIFICATION_LABEL[choice.qualification]}`;
+}
+
 /** The dated price a run on this model is pinned to, per million tokens. */
 function modelPrice(choice: ModelChoice): string {
   return `${perMillion(choice.input_per_token)} in / ${perMillion(choice.output_per_token)} out per 1M tokens, priced ${choice.as_of}`;
@@ -402,7 +428,7 @@ export function CreateRunControl({
                 >
                   {models.map((model, index) => (
                     <option key={model.model} value={index}>
-                      {model.configured ? `${model.model} (configured)` : model.model}
+                      {modelLabel(model)}
                     </option>
                   ))}
                 </select>
@@ -552,6 +578,7 @@ export function PinInputControl({
   action,
   initial,
   requiresResearch,
+  route,
   onPinned,
   onRefetch,
 }: {
@@ -560,12 +587,27 @@ export function PinInputControl({
   action: ActionView | undefined;
   initial: RunSubjectView | null;
   requiresResearch: boolean;
+  /** Which command modules the pinned route carries (N159, D109). */
+  route: CommandRoute;
   onPinned: (fingerprint: string) => void;
   onRefetch: (runId: string | null) => void;
 }) {
   const [subject, setSubject] = useState<RunSubjectView>(initial ?? EMPTY_SUBJECT);
   const [research, setResearch] = useState<ResearchBrief>(EMPTY_RESEARCH);
+  const [command, setCommand] = useState<CommandForm>(EMPTY_COMMAND_FORM);
   const { pending, result, run } = useCommand<RunInputPinned>();
+  const errors = commandErrors(command, route);
+  const invalid = Object.keys(errors).length > 0;
+  const scope = route.forecast ? derivedScope(subject.reporting_period) : null;
+  const errorId = useId();
+  const hintId = `${errorId}-scope`;
+  const commandRef = useRef<HTMLFieldSetElement>(null);
+  // A value is flagged once its field is left, and every invalid one once a
+  // pin is attempted; only then does an error become an assertive alert.
+  const [left, setLeft] = useState<ReadonlySet<keyof CommandForm>>(new Set());
+  const [attempted, setAttempted] = useState(false);
+  const shown = (key: keyof CommandForm) =>
+    errors[key] !== undefined && (attempted || left.has(key));
   const field = (key: keyof RunSubjectView) => ({
     value: subject[key],
     onChange: (event: ChangeEvent<HTMLInputElement>) =>
@@ -590,6 +632,27 @@ export function PinInputControl({
       })),
   });
   const payload = requiresResearch ? research : null;
+  const commandField = (key: keyof CommandForm, field: string) => ({
+    "data-field": field,
+    value: command[key],
+    "aria-invalid": shown(key) ? (true as const) : undefined,
+    "aria-describedby":
+      [
+        (key === "horizon" || key === "base") && route.forecast ? hintId : null,
+        shown(key) ? `${errorId}-${key}` : null,
+      ]
+        .filter(Boolean)
+        .join(" ") || undefined,
+    onBlur: () => setLeft((current) => new Set(current).add(key)),
+    onChange: (event: ChangeEvent<HTMLInputElement>) =>
+      setCommand((current: CommandForm) => ({ ...current, [key]: event.target.value })),
+  });
+  const commandError = (key: keyof CommandForm) =>
+    shown(key) ? (
+      <p className="fld-hint" role={attempted ? "alert" : undefined} id={`${errorId}-${key}`}>
+        {errors[key]}
+      </p>
+    ) : null;
   return (
     <section className="pnl" data-pin-input>
       <header>
@@ -677,6 +740,50 @@ export function PinInputControl({
             </label>
           </fieldset>
         ) : null}
+        {route.forecast || route.objective ? (
+          <fieldset className="fld" data-run-command ref={commandRef}>
+            <legend>Command</legend>
+            {route.forecast ? (
+              <>
+                <p className="fld-hint" data-derived-scope id={hintId}>
+                  {scope
+                    ? `Derived from the reporting period: forecast horizon ${scope.forecast_horizon}, base period ${scope.base_period}. Leave a field empty to use it.`
+                    : "The host cannot read this reporting period, so it cannot derive the forecast scope. Write it as FY2025 or Q2 2026, or state both values below."}
+                </p>
+                <label className="fld">
+                  Forecast horizon (override)
+                  <input
+                    placeholder={scope?.forecast_horizon ?? "FY2026-FY2028"}
+                    {...commandField("horizon", "forecast_horizon")}
+                  />
+                </label>
+                {commandError("horizon")}
+                <label className="fld">
+                  Base period (override)
+                  <input
+                    placeholder={scope?.base_period ?? "FY2025"}
+                    {...commandField("base", "base_period")}
+                  />
+                </label>
+                {commandError("base")}
+                <label className="fld">
+                  Cases
+                  <input placeholder="Base/Downside" {...commandField("cases", "cases")} />
+                </label>
+                {commandError("cases")}
+              </>
+            ) : null}
+            {route.objective ? (
+              <>
+                <label className="fld">
+                  Objective
+                  <input {...commandField("objective", "objective")} />
+                </label>
+                {commandError("objective")}
+              </>
+            ) : null}
+          </fieldset>
+        ) : null}
         <RefusedControl
           refusal={action ? action.refusal : null}
           busy={pending}
@@ -685,8 +792,25 @@ export function PinInputControl({
           onClick={
             action
               ? () => {
-                  void run({ subject, research: payload }, (intent) =>
-                    pinRunInput(caseId, runId, subject, payload, intent),
+                  if (invalid) {
+                    setAttempted(true);
+                    const first = (["horizon", "base", "cases", "objective"] as const).find(
+                      (key) => errors[key] !== undefined,
+                    );
+                    const names = {
+                      horizon: "forecast_horizon",
+                      base: "base_period",
+                      cases: "cases",
+                      objective: "objective",
+                    };
+                    commandRef.current
+                      ?.querySelector<HTMLInputElement>(`[data-field="${names[first!]}"]`)
+                      ?.focus();
+                    return;
+                  }
+                  const stated = runCommand(command, route);
+                  void run({ subject, research: payload, ...stated }, (intent) =>
+                    pinRunInput(caseId, runId, subject, payload, intent, stated),
                   ).then((outcome) => {
                     if (outcome?.kind === "ok") {
                       onPinned(outcome.receipt.input_fingerprint);

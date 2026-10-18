@@ -240,6 +240,8 @@ def test_a_re_anchoring_reader_carries_linked_and_never_locates_unverified(
         citations=(dataclasses.replace(anchored, linked=False),), unverified=(LOST,)
     )
     asked: list[Citation] = []
+    handed: list[Mapping[UUID, frozenset[str]]] = []
+    own = {SOURCE: frozenset({"block-1"})}
 
     def located(
         _conn: StoreConnection,
@@ -250,13 +252,41 @@ def test_a_re_anchoring_reader_carries_linked_and_never_locates_unverified(
         rule: CitationRule,
     ) -> list[AnchoredCitation]:
         asked.extend(citation for citation, _cited in citations)
+        handed.append(delivered)
         return [dataclasses.replace(c, linked=True) for c in record.citations]
 
     monkeypatch.setattr(verification, "verify_stored_citations", located)
-    evidence = verification.PinnedEvidence({"c" * 64: SOURCE}, {}, TokenIndex())
-    kept = verification._reanchored(_NO_STORE, record, evidence, lambda _step: None)
+    evidence = verification.PinnedEvidence(
+        {"c" * 64: SOURCE}, lambda *_: {}, TokenIndex()
+    )
+    kept = verification._reanchored(
+        _NO_STORE, record, evidence, lambda _step: None, lambda: own
+    )
     assert kept == record.citations and not kept[0].linked
     assert [c.matched_text for c in asked] == [EXCERPTED]
+    # N130: located in what the node was handed, not in anything wider.
+    assert handed == [own]
+
+
+def test_a_record_with_no_anchored_citation_asks_for_no_delivery() -> None:
+    """A record whose only citations are unverified (D106) locates nothing, so
+    its node's delivery is never rebuilt for it."""
+    record = _excerpt_record(citations=(), unverified=(LOST,))
+    evidence = verification.PinnedEvidence(
+        {"c" * 64: SOURCE}, lambda *_: {}, TokenIndex()
+    )
+
+    asked: list[str] = []
+
+    def never() -> Mapping[UUID, frozenset[str]]:
+        asked.append("delivery")
+        return {}
+
+    assert (
+        verification._reanchored(_NO_STORE, record, evidence, lambda _step: None, never)
+        == ()
+    )
+    assert asked == []
 
 
 def test_a_quote_the_host_cannot_keep_is_told_by_number() -> None:

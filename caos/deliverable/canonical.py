@@ -29,7 +29,7 @@ from caos.boundary_text import BoundaryText
 from caos.evidence.citations import TokenIndex
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import Bundle
-from caos.methodology.executor import captured_blocks
+from caos.methodology.canonical import node_delivery
 from caos.methodology.verification import (
     CREDIT_SCREEN_SELECTION,
     AcceptedRow,
@@ -43,7 +43,7 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.outcomes import execution_reads
 from caos.store.routes import resolved_route
-from caos.store.source_sets import pinned_live_sources
+from caos.store.source_sets import pinned_sources
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,10 +80,16 @@ def canonical_payload(
 
     Owns one read unit. Refuses `RUN_NOT_FOUND` for a run of another case;
     `DELIVERABLE_PAYLOAD_INVALID` for an unpinned route or a pinned node with no
-    accepted artifact; `ARTIFACT_RECORD_MISMATCH` when a blob, the binding, the
-    lineage, a projection or a rectangle disagrees, or a citation names a
-    document that is not among `pinned_live_sources` (withdrawn, re-extracted,
-    admitted after the pin, or captured twice with two extractions); a
+    accepted artifact; `EVIDENCE_NOT_AVAILABLE` when a citation names a
+    document the pin captured that has a withdrawn copy and no live copy
+    whose extraction matches its member (CF-019, `pinned_sources`: a live
+    copy whose extraction identity moved does not count, so a moved-only
+    copy beside a withdrawn one answers this code; an uncited withdrawn
+    member changes nothing); `ARTIFACT_RECORD_MISMATCH` when a blob, the
+    binding, the lineage, a projection or a rectangle disagrees, or a
+    citation names a document that is neither among `pinned_live_sources`
+    nor withdrawn (every copy live with its extraction identity moved,
+    admitted after the pin, or two live copies with two extractions); a
     citation's own code when it no longer anchors; and whatever `host_identity`
     refuses (`ROUTE_IDENTITY_INVALID` for a node without its CP-0 anchor). No
     refusal carries text.
@@ -104,9 +110,9 @@ def canonical_payload(
         }
         if route is None or any(n.route_node_id not in rows for n in route.nodes):
             raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
-        pinned = pinned_live_sources(conn, run_id)
-        captured = captured_blocks(conn, run_id)
-        reader = _Reader(conn, blobs, bundle, route, pinned, captured)
+        found = pinned_sources(conn, run_id)
+        pinned = found.live
+        reader = _Reader(conn, blobs, bundle, route, pinned, run_id, found.withdrawn)
         # One reading of the accepted pairs for every record's lineage.
         reader.pairs = {
             node: (artifact, None if record is None else str(record))
@@ -161,19 +167,21 @@ class _Reader:
         bundle: Bundle,
         route: ResolvedRoute,
         pinned: dict[str, UUID],
-        captured: dict[UUID, frozenset[str]],
+        run_id: UUID,
+        withdrawn: frozenset[str] = frozenset(),
     ) -> None:
         self.conn, self.blobs, self.bundle, self.route = conn, blobs, bundle, route
         self.vendor = load_vendor_authority(bundle)
         self.pairs: dict[str, tuple[str, str | None]] = {}
         self.verified_markdown: dict[tuple[str, str], bytes] = {}
         # One reading of the token index for the whole payload: records cluster
-        # on the same pages of the same sources. The captured blocks of the
-        # pinned live sources are what any node was handed.
+        # on the same pages of the same sources. Each node's citations anchor
+        # in the blocks that node was handed, not the run's whole capture (N130).
         self.evidence = PinnedEvidence(
             pinned,
-            {source: captured.get(source, frozenset()) for source in pinned.values()},
+            node_delivery(conn, blobs, bundle, run_id),
             TokenIndex(),
+            withdrawn,
         )
 
     def proven(
@@ -213,31 +221,6 @@ class _Reader:
             )
         self.verified_markdown[(node.route_node_id, artifact)] = verified.markdown
         return verified.markdown, verified.stored
-
-
-def freeze_canonical(
-    conn: StoreConnection,
-    blobs: BlobStore,
-    bundle: Bundle,
-    revision: Revision,
-    *,
-    actor_id: UUID,
-) -> str:
-    """Freeze the payload the store proves now, never a caller's bytes.
-
-    A pair moved since signing re-derives other bytes, so `freeze` refuses
-    `DELIVERABLE_MOVED_SINCE_SIGNING` (or the read refuses with its own code).
-    """
-    from caos.deliverable.filing import freeze
-
-    return freeze(
-        conn,
-        blobs,
-        bundle,
-        case_id=revision.case_id,
-        actor_id=actor_id,
-        revision_id=UUID(revision.revision_id.value),
-    )
 
 
 def verify_frozen(  # noqa: PLR0913 -- the revision and the bytes held for it

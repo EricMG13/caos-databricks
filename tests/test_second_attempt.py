@@ -2182,8 +2182,8 @@ def test_a_handoff_over_the_upstream_bound_is_refused_at_its_producer(
     assert _run(harness, _Flawed(answers, flaw=_padded_to(bound + 1))) is None
     assert [_module(prompt) for prompt in answers.prompts[:2]] == ["CP-0", "CP-0"]
     line = (
-        "host size check: your handoff is 98,305 bytes; the host's bound is"
-        " 98,304; shorten it (for example quote fewer or shorter evidence lines)"
+        "host size check: your handoff is 131,073 bytes; the host's bound is"
+        " 131,072; shorten it (for example quote fewer or shorter evidence lines)"
         " and keep every register"
     )
     assert line not in answers.prompts[0]
@@ -3616,8 +3616,41 @@ def test_t8_relay_places_every_id_it_can_in_the_same_line(
     wording of the vendor's message, ...) is relayed as the same line an
     ordinary id gets, never dropped (a line exists) and never leaking: the
     relay of any id the table keeps in one cell equals that of a neutral id."""
+    # A catalog module, an alias or a module the parser suppresses draws a
+    # different vendor fault, relayed as that fault with `row N` for the id
+    # (see the next test); only an unknown id gets `unknown`'s line. The
+    # parser looks the id up after `_plain_value` strips one wrapper.
+    navigation = cached_contract(BUNDLE).navigation
+    known = (
+        {m["module_id"] for m in CATALOG["modules"]}
+        | set(CATALOG["superseded_module_ids"])
+        | set(navigation.SUPPRESSED_MODULES)
+    )
+    assume(navigation._plain_value(module_id) not in known)
     baseline = _relayed(template, "ZZ-NOT-A-MODULE")
     assert baseline is not None
     got = _relayed(template, module_id)
-    assume(got != "NOT REFUSED")  # a real module id is not refused by `unknown`
+    assume(got != "NOT REFUSED")  # the parser accepts some ids; nothing to relay
     assert got == baseline, (template, module_id, got)
+
+
+def test_t8_relay_gives_a_real_module_id_its_own_fault_without_the_id() -> None:
+    """The counterexample `CP-0` to the property above: a module the catalog
+    knows is refused for another reason than `unknown`'s, and that fault is
+    relayed with `row 1` where the id was, never the id."""
+    assert _relayed("unknown", "CP-0") == (
+        "row 1 cannot appear as a downstream T8 recommendation"
+    )
+    assert _relayed("unknown", "CP-2B") == (
+        "row 1 is an alias for CP-2A; replace the T8 row with its current owner"
+        " and preserve qualifiers"
+    )
+
+
+@pytest.mark.parametrize("module_id", ["CP-X", "**CP-0**", "`CP-2B`"])
+def test_t8_relay_withholds_a_suppressed_or_wrapped_real_id(module_id: str) -> None:
+    """The ids the property above discards (`CP-X` is suppressed, a wrapped
+    real id is unwrapped before lookup) get their own fault, never the id."""
+    got = _relayed("unknown", module_id)
+    assert got != "NOT REFUSED"
+    assert module_id.strip("`*") not in str(got).replace("CP-2A", ""), got

@@ -434,7 +434,7 @@ def test_a_blocked_or_refused_attempt_never_reaches_a_consumer_prompt(
     that Markdown and its record's citations -- never either diagnostic body.
 
     Every attempt is started before any is billed: an answer billed and owed
-    a verdict holds its node against a new attempt (`ATTEMPT_UNSETTLED`), and
+    a verdict holds its node against a new attempt (`ATTEMPT_BILL_OWED`), and
     this harness, unlike a pass, replays none."""
     attempt, gate = _run(harness, "CP-0", CanonicalCompletions(harness.source_id))
     _accept(harness, attempt, gate)

@@ -152,7 +152,7 @@ Other typed codes arrive on a run, not at start: a call over its reservation par
 
 ### A run parked for over-reservation
 
-If a call's charge exceeds what the run reserved, the run parks `BUDGET_CHARGE_OVER_RESERVATION`. The park is terminal for that pin: a retry would reserve at the same price and overshoot the same way, so RETRY_RUN is refused (HTTP 500 for that code, N183). To continue:
+If a call's charge exceeds what the run reserved, the run parks `BUDGET_CHARGE_OVER_RESERVATION`. The park is terminal for that pin: a retry would reserve at the same price and overshoot the same way, so RETRY_RUN is refused (HTTP 409 for that code, D152 R10). To continue:
 1. Re-price: raise the model's per-token pin in `CAOS_MODEL_PRICE` (and the API's approved entry) to at least its listing and observed rate, and keep `CAOS_RUN_CEILING` above one worst-case call. Update the credit price too if GitHub's rate moved.
 2. Restart the worker so readiness re-checks the pins.
 3. Start a successor run of the same case (`supersedes_run_id` names the parked run). It reserves at the new price; the parked run stays as the record. How the Run section offers this is not exercised against a real seat (N185).
@@ -188,6 +188,6 @@ Nothing below has been measured; every rule in sections 4 and 7 rests on the SDK
     uv run python scripts/qualify.py qualification/ccl-fy2025-market-dislocation \
       --expect-identity copilot/<model>/none/65536 --ceiling <authorised amount>
     ```
-    (the identity's effort segment is the pinned effort, `none` when the name has none). Record per node the code, the charge and the largest prompt's tokens against the model's limit in `qualification/PROVIDER_RUNBOOK.md`.
+    (the identity's effort segment is the pinned effort, `none` when the name has none). Add `--docker-container <name> --min-free-bytes <floor>` (or `--free-space-probe '<command>'`) so a full disk refuses before the first call, and finish a stopped set in its own database with `--resume caos_qualify_<hex> --resume-token <hex>` (N150; the database is the `database` of the first output line, the token is the `resume token:` line the start printed on stderr; keep both with the run's record; `docs/rebuild/ENTERPRISE_HANDOFF.md` section 4.3). Record per node the code, the charge and the largest prompt's tokens against the model's limit in `qualification/PROVIDER_RUNBOOK.md`.
 
 If an external resource is missing (port 5432 blocked, Lakebase role absent, Copilot CLI policy off), add B13 to `docs/rebuild/blockers.md` with the exact command and error, and correct this runbook to the commands that actually ran.
