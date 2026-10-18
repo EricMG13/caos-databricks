@@ -217,7 +217,8 @@ def test_a_squatted_role_schema_is_refused_and_its_trigger_never_runs(
 def test_the_current_build_boots_again_over_its_own_tripwire(
     empty_database: str,
 ) -> None:
-    assert store.MIGRATIONS[-1][0] == TRIPWIRE
+    # 0053 (the attempt bill marks) is appended after the tripwire.
+    assert [name for name, _ in store.MIGRATIONS][-2] == TRIPWIRE
     with connect(empty_database) as conn:
         apply_schema(conn)
     with connect(empty_database) as conn:
