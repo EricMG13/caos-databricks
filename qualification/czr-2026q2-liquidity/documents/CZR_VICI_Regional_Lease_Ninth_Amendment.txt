@@ -1,0 +1,436 @@
+Exhibit 10.11
+NINTH AMENDMENT TO LEASE
+This NINTH AMENDMENT TO LEASE (this “Amendment”) is entered into as of November 1, 2021, by and among the entities listed on Schedule A attached hereto (collectively, and together with their respective successors and assigns, “Landlord”), the entities listed on Schedule B attached hereto (collectively, and together with their respective successors and assigns, “Tenant”) and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease (as defined below), Propco TRS LLC, a Delaware limited liability company (“Propco TRS”).
+RECITALS
+WHEREAS, Landlord, Tenant and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease, Propco TRS, are parties to that certain Lease (Non-CPLV), dated as of October 6, 2017, as amended by that certain First Amendment to Lease (Non-CPLV), dated as of December 22, 2017, as amended by that certain Second Amendment to Lease (Non-CPLV) and Ratification of SNDA, dated as of February 16, 2018, as amended by that certain Third Amendment to Lease (Non-CPLV), dated as of April 2, 2018, as amended by that certain Fourth Amendment to Lease (Non-CPLV), dated as of December 26, 2018, as amended by that certain Omnibus Amendment to Leases, dated as of June 1, 2020, as amended by that certain Fifth Amendment to Lease (Non-CPLV), dated as of July 20, 2020, as amended by that certain Sixth Amendment to Lease, dated as of September 30, 2020, as amended by that certain Amended and Restated Omnibus Amendment to Leases, dated as of October 27, 2020, as amended by that certain Seventh Amendment to Lease, dated as of November 18, 2020, and as amended by that certain Eighth Amendment to Lease, dated as of September 3, 2021 (collectively, as amended, the “Lease”), pursuant to which Landlord leases to Tenant, and Tenant leases from Landlord, certain real property as more particularly described in the Lease;
+WHEREAS, on June 30, 2021, Propco TRS conveyed to Arlington Turfway, LLC, an Alabama limited liability company, certain real property located in Florence, Kentucky that was (prior to such conveyance) subject to the Lease and a portion of the real property associated with the Turfway Park Facility (as defined below) (the “Turfway Park Parcel Transaction”), and the Turfway Park Parcel (as defined below) was severed from the Lease as of such date;
+WHEREAS, on the date hereof,
+(x) Harrah’s Bossier City LLC, Harrah’s Shreveport/Bossier City Investment Company, LLC (“Operator Parent”), Harrah’s Bossier City Investment Company, L.L.C. (“Operator”), Rubico Gaming, LLC (“Purchaser”) and Rubico Acquisition Corp (“Purchaser Parent” and together with Purchaser, collectively, “Rubico”) are closing a purchase and sale transaction under that certain Agreement of Sale, dated as of September 3, 2020, with respect to certain real property associated with the gaming and entertainment facility known as Harrah’s Bossier City (Louisiana Downs) located in Bossier City, Louisiana, which facility is (prior to the effectiveness of this Amendment) subject to the Lease, and
+(y) Operator Parent, Operator and Rubico are closing a purchase and sale transaction under that certain Equity Purchase Agreement, dated as of September 3, 2020, with respect to Operator Parent’s one hundred percent (100%) equity interest in Operator, which entity operates the facility described in the immediately preceding clause (x) (the transactions described in the preceding clauses (x) and (y) are referred to herein collectively as the “LAD Transaction”); and
+WHEREAS, in connection with the Turfway Park Parcel Transaction and the LAD Transaction, the parties hereto desire to amend the Lease as set forth herein.
+NOW THEREFORE, in consideration of the mutual covenants and agreements hereinafter set forth and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the parties hereto, intending to be legally bound hereby, agree as follows:
+|US-DOCS\121070511.8||
+1.Definitions.
+Except as otherwise defined herein, all capitalized terms used herein without definition shall have the meanings applicable to such terms, respectively, as set forth in the Lease.
+2.Amendments to the Lease for Turfway Park Parcel Transaction.
+Effective as of June 30, 2021 (the “Turfway Park Parcel Severance Date”):
+A.Termination of the Lease as to the Turfway Park Parcel.
+i.the Lease is hereby terminated with respect to the Turfway Park Parcel, the Turfway Park Parcel no longer constitutes Leased Property under the Lease nor a portion of the Turfway Park Facility, and neither Landlord nor Tenant has any further liabilities or obligations under the Lease, from and after the Turfway Park Parcel Severance Date, in respect of the Turfway Park Parcel (provided that any such liabilities or obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment); and
+ii.the Guaranty hereby automatically, and without further action by any party, ceases to apply with respect to any Obligations (as defined in the Guaranty) with respect to the Turfway Park Parcel to the extent arising from and after the Turfway Park Parcel Severance Date (provided that any such Obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment).
+The term “Turfway Park Facility” refers to the applicable Facility identified as Facility 19 on the list of the Facilities annexed as Exhibit A to the Lease (prior to giving effect to the replacement of said Exhibit A pursuant to Section 3.K.i. of this Amendment).
+The term “Turfway Park Parcel” refers to the Land set forth on Annex B hereto and any other Leased Property pertaining thereto.
+B.Rent.
+Landlord and Tenant hereby expressly acknowledge and agree that there shall be no reduction in the Rent under the Lease as a result of the removal of the Turfway Park Parcel from the Lease or otherwise as a result of the Turfway Park Parcel Transaction.
+C.Variable Rent.
+From and after the Turfway Park Parcel Severance Date, for purposes of any calculation of Variable Rent under the Lease, including any adjustments in Variable Rent based on increases or decreases in Net Revenue, such calculations of Net Revenue shall exclude Net Revenue attributable to the Turfway Park Parcel.
+D.Turfway Park Parcel Transaction.
+i.Each of Landlord and Tenant hereby acknowledge and agree that the removal of the Turfway Park Parcel from the Lease was made in connection with Landlord’s conveyance of the Turfway Park Parcel pursuant to Section 18.3 of the Lease.
+ii.The treatment of the Turfway Park Parcel Transaction hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under any applicable provision of the Lease.
+E.Revisions to Exhibits and Schedules to the Lease.
+The Exhibits and Schedules to the Lease are hereby amended as follows:
+i.Legal Description (Turfway Park Parcel).
+The legal descriptions with respect to the Leased Property set forth on Exhibit B annexed to the Lease are hereby amended such that the legal description with respect to the Leased Property
+2
+|US-DOCS\121070511.8||
+pertaining to the Turfway Park Parcel, as set forth on Annex B attached hereto, is hereby deleted from said Exhibit B.
+ii.Permitted Property Sales.
+The list of properties set forth on Schedule 7 annexed to the Lease is hereby amended such that the following property listed thereon is hereby deleted from said Schedule 7:
+3.Amendments to the Lease for LAD Transaction.
+A.Termination of the Lease as to the LAD Facility.
+Effective as of the date hereof:
+i.the Lease is hereby terminated with respect to the LAD Leased Property (as defined below), the LAD Leased Property no longer constitutes Leased Property under the Lease, and neither Landlord nor Tenant has any further liabilities or obligations under the Lease, from and after the date of this Amendment, in respect of the LAD Facility (as defined below) and the LAD Leased Property (provided that, subject to Sections 3.A.iii. and 3.A.iv., any such liabilities or obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment);
+ii.the Guaranty hereby automatically, and without further action by any party, ceases to apply with respect to any Obligations with respect to the LAD Facility or the LAD Leased Property to the extent arising from and after the date of this Amendment (provided that, subject to Sections 3.A.iii. and 3.A.iv., any such Obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment).
+The term “LAD Facility” refers to the applicable Facility identified as Facility 6 on the list of the Facilities annexed as Exhibit A to the Lease (prior to giving effect to the replacement of said Exhibit A pursuant to Section 3.K.i. of this Amendment).
+The term “LAD Leased Property” refers to the Land set forth on Annex A hereto and any other Leased Property pertaining to the LAD Facility;
+iii.(x) Operator hereby assigns to CEOC, LLC, and CEOC, LLC hereby assumes from Operator,
+(1) all of Operator’s rights, title and interest in respect of, or arising under, the Lease, whenever arising and (2) all of the Operator’s duties, obligations and liabilities in respect of, or arising under, the Lease, whenever arising (the matters set forth in this clause (2), collectively, the “Operator Liabilities”) and (y) Landlord hereby consents to the foregoing assignment and assumption (provided CEOC, LLC shall not further assign the Operator Liabilities
+3
+|US-DOCS\121070511.8||
+to any other Person, provided, the foregoing is not intended to and shall not restrict any transfers permitted under Section 22.2 of the Lease); and
+iv.effective immediately after giving effect to the assignment and assumption provided for in the immediately preceding Section 3.A.iii.:
+(x) Landlord hereby absolutely and unconditionally releases and forever discharges Operator, to the fullest extent permitted under law, from all Operator Liabilities and any and all claims, liabilities, demands, expenses and other obligations of any kind, at law, equity or otherwise, whether past, present or future, known or unknown, actual or contingent, or direct or indirect, arising out of or relating in any manner to the Operator Liabilities; and
+(y) Operator (on behalf of itself, but not on behalf of any other Tenant entity) hereby absolutely and unconditionally releases and forever discharges Landlord, to the fullest extent permitted under law, from all of Landlord’s duties, obligations and liabilities (if any) in respect of, or arising under, the Lease, whenever arising (collectively, the “Landlord Liabilities”) and any and all claims, liabilities, demands, expenses and other obligations of any kind, at law, equity or otherwise, whether past, present or future, known or unknown, actual or contingent, or direct or indirect, arising out of or relating in any manner to the Landlord Liabilities.
+Operator hereby represents, warrants and covenants to Landlord that it has taken all necessary action to authorize the release of Landlord as set forth in this Section 3.A.iv., and such release does not conflict with, or result in a breach of, any agreement or instrument by which Operator is bound.
+Landlord hereby represents, warrants and covenants to Operator that it has taken all necessary action to authorize the release of Operator as set forth in this Section 3.A.iv., and such release does not conflict with, or result in a breach of, any agreement or instrument by which Landlord is bound.
+B.Rent.
+Landlord and Tenant hereby expressly acknowledge and agree that there shall be no reduction in the Rent under the Lease as a result of the removal of the LAD Facility from the Lease or otherwise as a result of the LAD Transaction.
+C.Variable Rent.
+i.From and after the date hereof, for purposes of any calculation of Variable Rent under the Lease, including any adjustments in Variable Rent based on increases or decreases in Net Revenue, such calculations of Net Revenue shall exclude Net Revenue attributable to the LAD Facility.
+ii.Article II of the Lease is hereby amended such that the definition of “Base Net Revenue Amount” is hereby deleted and replaced with the following:
+“‘Base Net Revenue Amount’: An amount equal to the arithmetic average of the following: (i) Three Billion Ninety-Seven Million Seven Hundred Eighty Thousand Four Hundred Sixty-Seven and No/100 Dollars ($3,097,780,467.00), which amount Landlord and Tenant agree represents Net Revenue for the Fiscal Period immediately preceding the first (1st) Lease Year (i.e., the Fiscal Period ending September 30, 2017), (ii) Three Billion One Hundred Twelve Million Six Hundred Six Thousand One
+4
+|US-DOCS\121070511.8||
+Hundred Twenty-Seven and No/100 Dollars ($3,112,606,127.00), which amount Landlord and Tenant agree represents the Net Revenue for the Fiscal Period immediately preceding the end of the first (1st) Lease Year (i.e., the Fiscal Period ending September 30, 2018) and (iii) Three Billion Five Million Two Hundred Twenty-One Thousand Two Hundred Twenty-Nine and No/100 Dollars ($3,005,221,229.00), which amount Landlord and Tenant agree represents the Net Revenue for the Fiscal Period immediately preceding the end of the second (2nd) Lease Year (i.e., the Fiscal Period ending September 30, 2019).
+For the avoidance of doubt, the term “arithmetic average” as used in this definition refers to the quotient obtained by dividing (x) the sum of the amounts set forth in clauses (i), (ii) and (iii) by (y) three (3).”
+D.Annual Minimum Cap Ex Amount.
+Article II of the Lease is hereby amended such that the definition of “Annual Minimum Cap Ex Amount” is hereby revised and modified to replace the reference therein to “One Hundred Eight Million Six Hundred Thousand and No/100 Dollars ($108,600,000.00)” with a reference to “One Hundred Seven Million Five Hundred Thousand and No/100 Dollars ($107,500,000.00)”.
+E.Annual Minimum Per-Lease B&I Cap Ex Requirement.
+The Annual Minimum Per-Lease B&I Cap Ex Requirement shall be unchanged by this Amendment.
+Further, Landlord and Tenant hereby acknowledge, for the avoidance of doubt, that the Net Revenue attributable to the LAD Facility during the period the LAD Facility was included in the Lease (i.e., during the period from the Commencement Date until the date of this Amendment) shall be included for purposes of calculating the Capital Expenditures required under Section 10.5(a)(ii) of the Lease (i.e., the Annual Minimum Per-Lease B&I Cap Ex Requirement).
+F.Triennial Allocated Minimum Cap Ex Amount B Floor.
+Article II of the Lease is hereby amended such that the definition of “Triennial Allocated Minimum Cap Ex Amount B Floor” is hereby revised and modified to replace the reference therein to “Two Hundred Ninety Million and No/100 Dollars ($290,000,000.00)” with a reference to “Two Hundred Eighty-Six Million and No/100 Dollars ($286,000,000.00)”.
+G.Triennial Minimum Cap Ex Amount A. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount A” is hereby revised and modified to replace the reference therein to “Five Hundred Thirty-Seven Million Five Hundred Thousand and No/100 Dollars ($537,500,000.00)” with a reference to “Five Hundred Thirty-One Million Nine Hundred Thousand and No/100 Dollars ($531,900,000.00)”.
+H.Triennial Minimum Cap Ex Amount B. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount B” is hereby revised and modified to replace the reference therein to “Three Hundred Eighty-Four Million Three Hundred Thousand and No/100 Dollars ($384,300,000.00)” with a reference to “Three Hundred Eighty Million Three Hundred Thousand and No/100 Dollars ($380,300,000.00)”.
+I.Partial Periods.
+5
+|US-DOCS\121070511.8||
+i.Section 10.5(a)(v)(b) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Thirty-Seven Million Five Hundred Thousand and No/100 Dollars ($537,500,000.00)” with a reference to “Five Hundred Thirty-One Million Nine Hundred Thousand and No/100 Dollars ($531,900,000.00)” and (b) replace the reference therein to “One Hundred Seventy-Nine Million One Hundred Sixty-Six Thousand Six Hundred Sixty-Seven and No/100 Dollars ($179,166,667.00)” with a reference to “One Hundred Seventy-Seven Million Three Hundred Thousand and No/100 Dollars ($177,300,000.00)”,
+ii.Section 10.5(a)(v)(c) of the Lease is hereby amended to (a) replace the reference therein to “Three Hundred Eighty-Four Million Three Hundred Thousand and No/100 Dollars ($384,300,000.00)” with a reference to “Three Hundred Eighty Million Three Hundred Thousand and No/100 Dollars ($380,300,000.00)” and (b) replace the reference therein to “One Hundred Twenty-Eight Million One Hundred Thousand and No/100 Dollars ($128,100,000.00)” with a reference to “One Hundred Twenty-Six Million Seven Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($126,766,666.67)”, and
+iii.The second sentence of Section 10.5(a)(v) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Thirty-Seven Million Five Hundred Thousand and No/100 Dollars ($537,500,000.00)” with a reference to “Five Hundred Thirty-One Million Nine Hundred Thousand and No/100 Dollars ($531,900,000.00)”,
+(b) replace the reference therein to “One Hundred Seventy-Nine Million One Hundred Sixty-Six Thousand Six Hundred Sixty-Seven and No/100 Dollars ($179,166,667.00)” with a reference to “One Hundred Seventy-Seven Million Three Hundred Thousand and No/100 Dollars ($177,300,000.00)”,
+(c) replace the reference therein to “Three Hundred Eighty-Four Million Three Hundred Thousand and No/100 Dollars ($384,300,000.00)” with a reference to “Three Hundred Eighty Million Three Hundred Thousand and No/100 Dollars ($380,300,000.00)” and (d) replace the reference therein to “One Hundred Twenty-Eight Million One Hundred Thousand and No/100 Dollars ($128,100,000.00)” with a reference to “One Hundred Twenty-Six Million Seven Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($126,766,666.67)”.
+J.Section 22.2(ix) Transfer.
+i.Landlord and Tenant hereby acknowledge and agree that the LAD Transaction shall be deemed to be, and treated as, a transfer and sale of the entire Leased Property with respect to a Facility pursuant to Section 22.2(ix) of the Lease.
+ii.All of the applicable requirements and conditions set forth in Section 22.2(ix) of the Lease with respect to such transfer and sale are deemed satisfied or waived by the execution of this Amendment and the consummation of the closing of the LAD Transaction.
+iii.The 2018 Facility EBITDAR of Tenant for the LAD Facility is as set forth on Schedule C annexed hereto.
+6
+|US-DOCS\121070511.8||
+iv.The amounts of the 2018 EBITDAR Pool and 2018 EBITDAR Pool Before Fifth Amendment shall not be reduced as a result of the LAD Facility no longer being a Facility under the Lease, and the removal of the LAD Facility from the Lease shall not constitute a L1 Transfer or a L2 Transfer under the Lease.
+Schedule 11 to the Lease (setting forth the 2018 Facility EBITDAR of Tenant and Joliet Tenant) shall not be modified as a result of the LAD Transaction.
+v.The words, number and symbols “two and seventy-three hundredths percent (2.73%)” contained in Section 22.2(ix) of the Lease are hereby deleted and replaced with the following: “two and thirty-nine hundredths percent (2.39%)”.
+vi.For purposes of subsequent calculations of the L1/L2 EBITDAR to Rent Ratio under the Lease, the EBITDAR of Tenant in respect of the LAD Facility shall be disregarded.
+vii.The treatment of the LAD Transaction hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under Section 22.2(ix) of the Lease or otherwise.
+K.Revisions to Exhibits and Schedules to the Lease.
+The Exhibits and Schedules to the Lease are hereby amended as follows:
+i.Facilities.
+Exhibit A annexed to the Lease (setting forth the list of Facilities under the Lease) is hereby replaced with the replacement Exhibit A that is annexed hereto as Schedule D.
+ii.Legal Description (LAD Leased Property).
+The legal descriptions with respect to the Leased Property set forth on Exhibit B annexed to the Lease are hereby amended such that the legal description with respect to the Leased Property pertaining to the LAD Facility as set forth on Annex A attached hereto is hereby deleted from said Exhibit B.
+iii.Property Specific IP.
+The list of Property Specific IP set forth on Exhibit H annexed to the Lease is hereby amended such that the following items of Property Specific IP listed thereon are hereby deleted from said Exhibit H:
+7
+|US-DOCS\121070511.8||
+Mark | Jurisdiction | Brand | Specific / Enterprise | Property | App. No. | App. Date | Reg. No. | Reg. Date | Status
+Pepper Rose (Design) | Louisiana | Harrah’s | Specific | Harrah’s Louisiana Downs | NA | 12/17/2001 | 57-2528 | 12/17/2001 | Registered
+“Louisiana Downs” | Louisiana | Harrah’s / Louisiana Downs | Specific | Harrah’s Louisiana Downs | NA | 4/19/1993 | 51-0725 | 4/19/1993 | Registered
+Horse Cents (Block) | Louisiana | Harrah’s / Louisiana Downs | Specific | Harrah’s Louisiana Downs | NA | 12/4/2003 | 58-0417 | 12/4/2003 | Registered
+Super Derby | Louisiana | Harrah’s / Louisiana Downs | Specific | Harrah’s Louisiana Downs | NA | 4/19/1993 | 51-0724 | 4/19/1993 | Registered
+Louisiana Downs (Block) | United States of America | Harrah’s / Louisiana Downs | Specific | Harrah’s Louisiana Downs | 78/197284 | 12/23/2002 | 2874317 | 8/17/2004 | Registered
+Louisiana Downs Racing Horses (Design) | United States of America | Harrah’s / Louisiana Downs | Specific | Harrah’s Louisiana Downs | 78/199756 | 1/3/2003 | 2791383 | 12/9/2003 | Registered
+Super Derby (Block) | United States of America | Harrah’s / Louisiana Downs | Specific | Harrah’s Louisiana Downs | 78/199798 | 1/3/2003 | 2788933 | 12/2/2003 | Registered
+Domain Name | Brand | Reg. Date | Registry Expiry Date
+ladowns.com | Louisiana Downs | 1995-07-24 | 2021-07-23
+louisianadown.com | Louisiana Downs | 2003-01-28 | 2022-01-28
+iv.Description of Title Policies.
+The list of Title Policies set forth on Exhibit J annexed to the Lease is hereby amended such that the reference thereon to the
+8
+|US-DOCS\121070511.8||
+Title Policy relating solely to the LAD Facility is hereby deleted from said Exhibit J.
+v.Managed Facilities IP Trademarks.
+The list of Managed Facilities IP set forth on Exhibit P annexed to the Lease is hereby amended such that “Harrah’s Bossier City (Louisiana Downs)” is hereby deleted from said Exhibit P.
+vi.Landlord Entities.
+The list of entities comprising Landlord set forth on Schedule A annexed to the Lease is hereby amended such that, from and after the date hereof, Harrah’s Bossier City LLC shall be deleted from said Schedule A and Harrah’s Bossier City LLC shall no longer be a Landlord under the Lease.
+vii.Tenant Entities.
+The list of entities comprising Tenant set forth on Schedule B annexed to the Lease is hereby amended such that, from and after the date hereof, Harrah’s Bossier City Investment Company, L.L.C. shall be deleted from said Schedule B and Harrah’s Bossier City Investment Company, L.L.C. shall no longer be a Tenant under the Lease.
+viii.Gaming Licenses.
+The list of Gaming Licenses set forth on Schedule 1 annexed to the Lease is hereby amended such that the Gaming Licenses bearing Unique IDs 463 and 21-29849, in each case, relating to the LAD Facility are hereby deleted from said Schedule 1.
+ix.Maximum Fixed Rent Term.
+The schedule setting forth the Maximum Fixed Rent Term with respect to each Facility set forth on Schedule 3 annexed to the Lease is hereby amended such that the reference to “Harrah’s Bossier City (Louisiana Downs)” thereon is hereby deleted from said Schedule 3.
+x.Specified Subleases.
+The list of Specified Subleases set forth on Schedule 4 annexed to the Lease is hereby amended such that the Specified Sublease bearing Contract ID No. 9388 is hereby deleted from said Schedule 4.
+4.No Other Modification or Amendment to the Lease.
+The Lease shall remain in full force and effect except as expressly amended or modified by this Amendment.
+From and after the date of this Amendment, all references in the Lease to the “Lease” shall be deemed to refer to the Lease as amended by this Amendment.
+For the avoidance of doubt, the Lease shall continue in full force and effect with respect to the balance of (x) the Facilities (other than (i) the portion of the Turfway Park Facility located upon the Turfway Park Parcel as of the Turfway Park Parcel Severance Date in accordance with Section 2.A. of this Amendment and (ii) the LAD Facility as of the date hereof in accordance with Section 3.A. of this Amendment) and (y) the Leased Property (other than (i) the Turfway Park Parcel as of the Turfway Park Parcel Severance Date in accordance with Section 2.A. of this Amendment and (ii) the LAD Leased Property as of the date hereof in accordance with Section 3.A. of this Amendment).
+5.Governing Law; Jurisdiction.
+This Amendment shall be construed according to and governed by the laws of the jurisdiction(s) specified by the Lease without regard to its or their conflicts of law principles.
+The parties hereto hereby irrevocably submit to the jurisdiction of any court of competent jurisdiction located in such applicable jurisdiction in connection with any proceeding arising out of or relating to this Amendment.
+9
+|US-DOCS\121070511.8||
+6.Counterparts.
+This Amendment may be executed by one or more of the parties hereto on any number of separate counterparts, and all of such counterparts taken together shall be deemed to constitute one and the same instrument.
+Facsimile and/or .pdf signatures shall be deemed to be originals for all purposes.
+7.Effectiveness.
+This Amendment shall be effective, as of the date hereof, only upon execution and delivery by each of the parties hereto.
+8.Miscellaneous.
+If any provision of this Amendment is adjudicated to be invalid, illegal or unenforceable, in whole or in part, it will be deemed omitted to that extent and all other provisions of this Amendment will remain in full force and effect.
+Neither this Amendment nor any provision hereof may be changed, modified, waived, discharged or terminated orally, but only by an instrument in writing signed by the party against whom enforcement of such change, modification, waiver, discharge or termination is sought.
+The paragraph headings and captions contained in this Amendment are for convenience of reference only and in no event define, describe or limit the scope or intent of this Amendment or any of the provisions or terms hereof.
+This Amendment shall be binding upon and inure to the benefit of the parties and their respective heirs, legal representatives, successors and permitted assigns.
+[Signature Page Follows]
+10
+|US-DOCS\121070511.8||
+IN WITNESS WHEREOF, the parties hereto have caused this Amendment to be duly executed by their duly authorized representatives, all as of the date hereof.
+LANDLORD:
+HORSESHOE COUNCIL BLUFFS LLC
+HARRAH’S COUNCIL BLUFFS LLC
+HARRAH’S METROPOLIS LLC
+NEW HORSESHOE HAMMOND LLC
+NEW HARRAH’S NORTH KANSAS CITY LLC
+GRAND BILOXI LLC
+HORSESHOE TUNICA LLC
+NEW TUNICA ROADHOUSE LLC
+CAESARS ATLANTIC CITY LLC
+BALLY’S ATLANTIC CITY LLC
+HARRAH’S LAKE TAHOE LLC
+HARVEY’S LAKE TAHOE LLC
+HARRAH’S RENO LLC
+VEGAS DEVELOPMENT LLC
+VEGAS OPERATING PROPERTY LLC
+MISCELLANEOUS LAND LLC
+PROPCO GULFPORT LLC
+PHILADELPHIA PROPCO LLC
+HARRAH’S ATLANTIC CITY LLC
+NEW LAUGHLIN OWNER LLC
+HARRAH’S NEW ORLEANS LLC
+each, a Delaware limited liability company
+By:
+Name: David Kieske
+Title: Treasurer
+HORSESHOE BOSSIER CITY PROP LLC
+HARRAH’S BOSSIER CITY LLC
+each, a Louisiana limited liability company
+By:
+Name: David Kieske
+Title: Treasurer
+[Signatures Continue on Following Pages]
+[Signature Page to Ninth Amendment to Regional Lease]1
+TENANT:
+CEOC, LLC, a Delaware limited liability company,
+HBR REALTY COMPANY LLC, a Nevada limited liability company,
+HARVEYS IOWA MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+SOUTHERN ILLINOIS RIVERBOAT/CASINO CRUISES LLC, an Illinois limited liability company,
+HORSESHOE HAMMOND, LLC, an Indiana limited liability company,
+HARRAH’S BOSSIER CITY INVESTMENT COMPANY, L.L.C., a Louisiana limited liability company,
+HARRAH’S NORTH KANSAS CITY LLC, a Missouri limited liability company,
+GRAND CASINOS OF BILOXI, LLC, a Minnesota limited liability company,
+ROBINSON PROPERTY GROUP LLC, a Mississippi limited liability company,
+TUNICA ROADHOUSE LLC, a Delaware limited liability company,
+CAESARS NEW JERSEY LLC, a New Jersey limited liability company,
+HARVEYS TAHOE MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+CASINO COMPUTER PROGRAMMING, INC., an Indiana corporation,
+HARVEYS BR MANAGEMENT COMPANY, INC., a Nevada corporation,
+HARRAH’S LAUGHLIN, LLC, a Nevada limited liability company,
+JAZZ CASINO COMPANY, L.L.C., a Louisiana limited liability company
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Ninth Amendment to Regional Lease]1
+HORSESHOE ENTERTAINMENT,
+a Louisiana limited partnership
+By: New Gaming Capital Partnership,
+a Nevada limited partnership,
+its general partner
+By: Horseshoe GP, LLC,
+a Nevada limited liability company,
+its general partner
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+BOARDWALK REGENCY LLC,
+a New Jersey limited liability company
+By: Caesars New Jersey LLC,
+a New Jersey limited liability company,
+its sole member
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HOLE IN THE WALL, LLC,
+a Nevada limited liability company
+By: CEOC, LLC,
+a Delaware limited liability company,
+its sole member
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Ninth Amendment to Regional Lease]1
+CHESTER DOWNS AND MARINA, LLC,
+a Pennsylvania limited liability company
+By: Harrah’s Chester Downs Investment Company, LLC,
+its sole member
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARRAH’S ATLANTIC CITY OPERATING COMPANY, LLC,
+a New Jersey limited liability company
+By: Caesars Resort Collection, LLC,
+a Delaware limited liability company,
+its sole member
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Ninth Amendment to Regional Lease]1
+Acknowledged and agreed, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease:
+PROPCO TRS LLC,
+a Delaware limited liability company
+By:
+Name: David Kieske
+Title: Treasurer
+[Signature Page to Ninth Amendment to Regional Lease]1
+ACKNOWLEDGMENT AND AGREEMENT OF GUARANTOR
+The undersigned (“Guarantor”) hereby:
+(a) acknowledges receipt of the Ninth Amendment to Lease (the “Amendment”; capitalized terms used herein without definition having the meanings set forth in the Amendment), dated as of November 1, 2021, by and among the entities listed on Schedule A attached thereto, as Landlord, and the entities listed on Schedule B attached thereto, as Tenant, and the other parties party thereto;
+(b) consents to the terms and execution thereof;
+(c) ratifies and reaffirms Guarantor’s obligations to Landlord pursuant to the terms of that certain Guaranty of Lease, dated as of July 20, 2020 (the “Guaranty”), by and between Guarantor and Landlord, and agrees that, except as expressly set forth in Section 2.A.ii and Section 3.A.ii of the Amendment, nothing in the Amendment (including, without limitation, the assignment, assumption and release described in Sections 3.A.iii and 3.A.iv of the Amendment) in any way impairs or lessens the Guarantor’s obligations under the Guaranty; and
+(d) acknowledges and agrees that the Guaranty is in full force and effect and is valid, binding and enforceable in accordance with its terms.
+IN WITNESS WHEREOF, the undersigned has caused this Acknowledgment and Agreement of Guarantor to be duly executed as of November 1, 2021.
+[Acknowledgment and Agreement of Guarantor]1
+|US-DOCS\121070511.8||
+CAESARS ENTERTAINMENT, INC.
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Acknowledgment and Agreement of Guarantor]1
+Schedule A
+LANDLORD ENTITIES
+Horseshoe Council Bluffs LLC
+Harrah’s Council Bluffs LLC
+Harrah’s Metropolis LLC
+New Horseshoe Hammond LLC
+Horseshoe Bossier City Prop LLC
+Harrah’s Bossier City LLC
+New Harrah’s North Kansas City LLC
+Grand Biloxi LLC
+Horseshoe Tunica LLC
+New Tunica Roadhouse LLC
+Caesars Atlantic City LLC
+Bally’s Atlantic City LLC
+Harrah’s Lake Tahoe LLC
+Harvey’s Lake Tahoe LLC
+Harrah’s Reno LLC
+Vegas Development LLC
+Vegas Operating Property LLC
+Miscellaneous Land LLC
+Propco Gulfport LLC
+Philadelphia Propco LLC
+Harrah’s Atlantic City LLC
+New Laughlin Owner LLC
+Harrah’s New Orleans LLC
+Schedule A
+|US-DOCS\121070511.8||
+Schedule B
+TENANT ENTITIES
+CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+HBR Realty Company LLC
+Harveys Iowa Management Company LLC
+Southern Illinois Riverboat/Casino Cruises LLC
+Horseshoe Hammond, LLC
+Horseshoe Entertainment
+Harrah’s Bossier City Investment Company, LLC
+Harrah’s North Kansas City LLC
+Grand Casinos of Biloxi, LLC
+Robinson Property Group LLC
+Tunica Roadhouse LLC
+Boardwalk Regency LLC
+Caesars New Jersey LLC
+Harveys Tahoe Management Company LLC
+Casino Computer Programming, Inc.
+Harveys BR Management Company, Inc.
+Hole in the Wall, LLC
+Chester Downs and Marina, LLC
+Harrah’s Atlantic City Operating Company, LLC
+Harrah’s Laughlin, LLC
+Jazz Casino Company, L.L.C.
+Schedule B
+|US-DOCS\121070511.8||
+Schedule C
+2018 FACILITY EBITDAR
+Facility | 2018 Facility EBITDAR (loss)
+Harrah’s Bossier City (Louisiana Downs) | $2,439,678
+Schedule C
+|US-DOCS\121070511.8||
+Schedule D
+NEW EXHIBIT A
+[attached]
+Schedule D
+|US-DOCS\121070511.8||
+EXHIBIT A
+FACILITIES
+No. | Property | State | Fee Owner | Operating Entity
+1. | Horseshoe Council Bluffs | Iowa | Horseshoe Council Bluffs LLC | HBR Realty Company LLC Harveys BR Management Company, Inc.
+2. | Harrah’s Council Bluffs | Iowa | Harrah's Council Bluffs LLC | Harveys Iowa Management Company LLC CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+3. | Harrah’s Metropolis | Illinois | Harrah's Metropolis LLC | Southern Illinois Riverboat/Casino Cruises LLC
+4. | Horseshoe Hammond | Indiana | New Horseshoe Hammond LLC | Horseshoe Hammond, LLC
+5. | Horseshoe Bossier City | Louisiana | Horseshoe Bossier City Prop LLC | Horseshoe Entertainment
+6. | Harrah’s North Kansas City | Missouri | New Harrah's North Kansas City LLC | Harrah’s North Kansas City LLC
+7. | Harrah’s Gulf Coast (formerly known as Grand Biloxi Casino Hotel) and Biloxi Land | Mississippi | Grand Biloxi LLC | Grand Casinos of Biloxi, LLC Casino Computer Programming, Inc.
+8. | Horseshoe Tunica | Mississippi and Arkansas | Horseshoe Tunica LLC | Robinson Property Group LLC
+9. | Tunica Roadhouse | Mississippi | New Tunica Roadhouse LLC | Tunica Roadhouse LLC
+|US-DOCS\121070511.8||
+10. | Caesars Atlantic City (includes Wild Wild West and Block 488 Parcel) | New Jersey | Caesars Atlantic City LLC Bally's Atlantic City LLC | Boardwalk Regency LLC Caesars New Jersey LLC
+11. | Harrah’s Lake Tahoe | Nevada | Harrah's Lake Tahoe LLC | Harveys Tahoe Management Company LLC CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+12. | Harvey’s Lake Tahoe | Nevada and California | Harvey's Lake Tahoe LLC | Harveys Tahoe Management Company LLC
+13. | Reno Billboard Parcel | Nevada | Harrah's Reno LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+14. | Las Vegas Land Assemblage Properties | Nevada | Vegas Development LLC | Hole in the Wall, LLC CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+15. | Harrah’s Airplane Hangar | Nevada | Vegas Operating Property LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+16. | Land Leftover from Harrah’s Gulfport | Mississippi | Propco Gulfport LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+|US-DOCS\121070511.8||
+17. | Vacant Land in Splendora, TX | Texas | Miscellaneous Land LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+18. | Vacant Land at Turfway Park | Kentucky | Miscellaneous Land LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+19. | Harrah’s Philadelphia | Pennsylvania | Philadelphia Propco LLC | Chester Downs and Marina, LLC
+20. | Harrah’s Atlantic City | New Jersey | Harrah’s Atlantic City LLC | Harrah’s Atlantic City Operating Company, LLC
+21. | Harrah’s Laughlin | Nevada | New Laughlin Owner LLC | Harrah’s Laughlin, LLC
+22. | Harrah’s New Orleans | Louisiana | Harrah’s New Orleans LLC | Jazz Casino Company, L.L.C.
+|US-DOCS\121070511.8||
+Annex A
+LAD Leased Property
+TRACT 1: (APN: 132366 & 103349)
+A tract of land located in Section 17, Township 18 North, Range 12 West, Bossier Parish, Louisiana being more particularly described as follows:
+From the common corner of Section 16, 17, 20 and 21 run North 0 degrees 30 minutes 45 seconds East along the line common to Section 16 and 17, a distance of 353.32 feet to the point of intersection with the North right-of-way line of Interstate 20 and being the point of beginning of the tract herein described; said point being in a curve to the left; thence traversing said North right-of-way line of Interstate 20 and Interstate 220, run Southwesterly along said curve to the left a distance of 314.50 feet; run thence South 85 degrees 15 minutes 03 seconds West a distance of 1,050.43 feet; run thence South 79 degrees 42 minutes 56 seconds West a distance of 768.32 feet; run thence North 74 degrees 04 minutes 50 seconds West, a distance of 940.76 feet; run thence North 57 degrees 02 minutes 52 seconds West a distance of 469.84 feet; run thence North 42 degrees 10 minutes 16 seconds West a distance of 438.63 feet; run thence North 17 degrees 58 minutes 00 seconds West a distance of 1,430.52 feet to the point of intersection with the South right-of-way line of U.S. Highway No. 80; run thence North 47 degrees 16 minutes 27 seconds East, along said South right-of-way line of U.S. Highway 80, a distance of 1,098.28 feet; run thence North 52 degrees 59 minutes 27 seconds East a distance of 502.49 feet; run thence North 47 degrees 16 minutes 26 seconds East, a distance of 200 feet; run thence North 41 degrees 33 minutes 26 seconds East, a distance of 502.49 feet; run thence North 47 degrees 16 minutes 27 seconds East, a distance of 188.77 feet; run thence South 89 degrees 44 minutes 13 seconds East, a distance of 2,358.28 feet to the point of intersection with the East line of Section 17; run thence South 0 degrees 30 minutes 45 seconds West, along said East line of Section 17 a distance of 3,632.31 feet to the Point of Beginning.
+LESS AND EXCEPT: (PART OF MOBILE HOME PARK)
+A tract of land located in Section 17, Township 18 North, Range 12 West, Bossier Parish, Louisiana, from the corner common to Sections 16, 17, 20 and 21, run North 00 degrees 31 minutes 49 seconds East, along the line common to Sections 16 and 17, 2927.98 feet to the point of beginning of the tract herein to be described; thence North 27 degrees 15 minutes 19 seconds West 165.78 feet to a point; thence North 34 degrees 13 minutes 09 seconds West, 140.00 feet to a point; thence North 42 degrees 43 minutes 09 seconds West, 310.00 feet to a point; thence North 50 degrees 43 minutes 09 seconds West, 320.00 feet to a point; thence North 20 degrees 43 minutes 09 seconds West, 170.00 feet to a point; thence North 43 degrees 39 minutes 18 seconds West, 300.35 feet to a point; thence South 89 degrees 41 minutes 17 seconds East, 890.00 feet to intersect the East line of said Section 17; thence South 00 degrees 31 minutes 49 seconds West, along said East line of Section 17, 1065.00 feet to the Point of Beginning.
+ALSO LESS AND EXCEPT: (SPRINGHILL)
+A tract of land located in Section 17, Township 18 North, Range 12 West, Bossier City, Bossier Parish, Louisiana, being more fully described as follows:
+Beginning at the common corner of Sections 16, 17, 20 and 21, Township 18 North, Range 12 West, Bossier Parish, Louisiana; run thence along the east line of said Section 17 North 00°30’45” East a distance of 3,985.63 feet; thence leaving said east line run North 89°44’13” West a distance of 2,358.28 feet to a point on the southerly right of way line of U.S. Highway 80; run thence along said southerly right of way line the following courses and distances; South 47°16’27” West a distance of 188.77 feet; South 41°33’26” West a distance of 502.49 feet; South 47°16’26” West a distance of 200.00 feet and South 52°59’27” West a distance of 164.19 feet to the Point of Beginning of tract herein described; thence leaving said southerly right of way line run South 42°43’33” East a distance of 641.10 feet to the point of curvature of curve to the right (said curve having a radius of 257.17 feet and a chord bearing South 37°58’07” West a distance of 71.64 feet); run thence along said curve an arc distance of 71.87 feet; run thence South 47°07’26” West a distance of 98.50 feet; run thence South 33°24’12” West a distance of
+Annex A-1
+|US-DOCS\121070511.8||
+89.47 feet; run thence North 42°42’05” West a distance of 699.99 feet to a point on the southerly right of way line of U.S. Highway 80; run thence along said southerly right of way line North 52°59’27” East a distance of 257.03 feet to the Point of Beginning.
+The foregoing property is identified as Lot 1, Springhill Suites by Marriott Project Site, a subdivision of Bossier City, Bossier Parish, Louisiana, as per plat thereof recorded on November 21, 2006 in the Conveyance Records of Bossier Parish, Louisiana, in Book 1364, page 66 under Registry No. 882654.
+ALSO LESS AND EXCEPT: (NTP PROPERTIESS, LLC/COMFORT SUITES INN)
+Two tracts of land located in Section 17, Township 18 North, Range 12 West, Bossier Parish, Louisiana, being more particularly described as Lot 1 and Lot 2 as shown on Plat titled Panache Subdivision Unit No. 2 filed December 22, 2009 in Book 1364, Page 513, Instrument No. 983301 in the Conveyance Records of Bossier Parish, Louisiana.
+ALSO LESS AND EXCEPT: (HOLIDAY INN)
+A tract of land located in Section 17, Township 18 North, Range 12 West, Bossier Parish, Louisiana, being more particularly described as Lot 1 as shown on Plat titled Holiday Inn Express at Louisiana Downs filed March 10, 2011 in Book 1364, Page 678, Instrument No. 1015135 in the Conveyance Records of Bossier Parish, Louisiana.
+ALSO LESS AND EXCEPT: (SIFUENTES & HOME FEDERAL)
+Two tracts of land located in Section 17, Township 18 North, Range 12 West, Bossier Parish, Louisiana being more particularly described as Lots 1 and 2 as shown on Plat titled Louisiana Downs Commercial Subdivision filed April 11, 2013 in Book 1601, Page 115, Instrument No. 1070410 in the Conveyance Records of Bossier Parish, Louisiana.
+TRACT II (APN: 132368 - UNDEVELOPED BAYOU)
+A tract of land lying West of the West top bank of Red Chute Bayou and East of the West line of Section 16, Township 18 North, Range 12 West, Bossier Parish, Louisiana.
+Said tract more fully described as follows:
+From the Southwest corner of Section 16, Township 18 North, Range 12 West, Bossier Parish, Louisiana, run North 0 degrees 32 minutes 10 seconds East along the West line of said Section 16, a distance of 2,072.75 feet to the Point of Beginning.
+Thence run South 89 degrees 43 minutes East a distance of 166.0 feet to a point on the West Top Bank of Red Chute Bayou, thence run Southwesterly along the West Top Bank of Red Chute Bayou to the point of intersection of the West Top Bank of Red Chute Bayou with the West line of Section 16, thence run North 0 degrees 32 minutes 10 seconds East along the West line of Section 16, to the point of beginning.
+TRACTS I AND II ALSO DESCRIBED AS:
+As per survey by Blew & Associates, P.A. dated January 4, 2016, last revised March 3, 2016, under Job No. 15-1341:
+A TRACT OF LAND LOCATED IN SECTION 17, TOWNSHIP 18 NORTH, RANGE 12 WEST, BOSSIER PARISH, LOUISIANA BEING MORE PARTICULARLY DESCRIBED AS FOLLOWS:
+FROM THE COMMON CORNER OF SECTION 16, 17,20 AND 21 RUN N00°29'58"E ALONG THE LINE COMMON TO SECTION 16 AND 17, A DISTANCE OF 353.32 TO THE POINT OF INTERSECTION WITH THE NORTH RIGHT OF WAY LINE OF INTERSTATE 20 AND BEING THE POINT OF BEGINNING OF THE TRACT HEREIN DESCRIBED;
+Annex A-2
+|US-DOCS\121070511.8||
+SAID POINT BEING IN A NON TANGENT CURVE TO THE LEFT, WITH A RADIUS OF 2877.85', AN ARC LENGTH OF 315.93°, AND A CHORD BEARING AND DISTANCE OF S86°46'32"W 315.77, THENCE CONTINUING ALONG THE RIGHT OF WAY LINE OF INTERSTATE 20 AND INTERSTATE 220 FOR THE FOLLOWING 6 COURSES; THENCE S85°14'16"W 1050.43, THENCE S79°42'09"W 768.32', THENCE N74°0537"W 940.76', THENCE N57°00'53"W 470.79', THENCE N42°06'09"W 438.60, THENCE N17°59'19"W 1429.05' TO THE POINT OF INTERSECTION WITH THE SOUTH RIGHT OF WAY OF U.S. HWY. 80, THENCE ALONG SOUTH RIGHT OF WAY OF U.S. HWY. 80 N47°13'00"E 112.07, THENCE LEAVING SAID RIGHT OF WAY S42°34'33"E 346.03, THENCE S42°34'34"E 345.97, THENCE N46°50'59"E 297.27', THENCE N42°32'26"W 345.97', THENCE N42°32'26"W 174.21', THENCE S47°14'49"W 50.86', THENCE N78°15'10"W 112.82', THENCE N42°34'34"W 78.01' TO THE SOUTH RIGHT OF WAY OF U.S. HWY. 80, THENCE ALONG SAID RIGHT OF WAY N47°13'00"E 265.41', THENCE N47°20'06"E 126.69',THENCE LEAVING SAID RIGHT OF WAY S42°32'36"E 77.80', THENCE S06°46'03"E 112.60', THENCE S47°27'24"W 53.90', THENCE S42°31'39"E 207.90', THENCE N47°27'51"E 75.95', THENCE S42°32'09"E 314.06', THENCE N47°27'51"E 389.73', THENCE ALONG A CURVE TO THE LEFT, WITH A RADIUS OF 30.00', AN ARC LENGTH OF 26.28', AND A CHORD BEARING AND DISTANCE OF N22°21'46"E 25.45', THENCE N42°40'58"W 303.26',THENCE N42°41'42"W 378.92' TO THE SOUTH RIGHT OF WAY OF U.S. HWY, 80, THENCE ALONG SAID RIGHT OF WAY N47°56'33"E 46.09, THENCE N52°58'40"E 81.26', THENCE LEAVING SAID RIGHT OF WAY S42°43'45"E 699.65', THENCE N33°17'56"E 89.25', THENCE N47°21'33"E 98.56', THENCE ALONG A CURVE TO THE LEFT, WITH A RADIUS OF 258.28', AN ARC LENGTH OF 72.03', AND A CHORD BEARING AND DISTANCE OF N37°36'41"E 71.80', THENCE N42°44'47"W 640.65' TO THE SOUTH RIGHT OF WAY OF U.S. HWY. 80, THENCE ALONG SAID RIGHT OF WAY THE FOLLOWING 4 COURSES: N52°58'40"E 164.19', THENCE N47°15'39"E 200.00', THENCE N41°32'39"E 502.49', THENCE N46°44'05"E 188.36', THENCE LEAVING SAID RIGHT OF WAY S89°39'43"E 1469.77°, THENCE S43°42'40"E 300.59', THENCE S20°43'56"E 170.00', THENCE S50°43'56"E 320.00', THENCE S42°43'56"E 310.00', THENCE S34°13'56"E, 140.00', THENCE S27°16'06"E 165.78', THENCE S00°29'58"W 847.88', THENCE S89°45'12 E 166.00', THENCE Sl4°36'08"W 681.27', THENCE S00°29'58"W 1059.43' TO THE POINT OF BEGINNING.
+CONTAINING 277.90 ACRES MORE OR LESS.
+TRACT III:
+Together with the benefit of the bus and pedestrian access rights granted pursuant to the Reciprocal Easement and Covenant Agreement by and between Harrah's Bossier City Investment Company, LLC and LAD Hotel Partners, LLC recorded February 13, 2007 in Book 1396, page 823 under Registry No. 889806 of the Conveyance Records of Bossier Parish, Louisiana.
+TRACT IV:
+Together with the benefit of the right to access the electric box granted to Harrah's Bossier City Investment Company, LLC pursuant to the Declaration of Restrictive Covenants and Easement Agreement by and between Harrah's Bossier City Investment Company, LLC and Sunrise Hospitality IV, LLC dated March 31, 2011, recorded April 1, 2011 in Book 1573, page 234 under Registry No. 1016578 of the Conveyance Records of Bossier Parish, Louisiana.
+TRACT V:
+Together with the benefit of the electrical and irrigation facilities rights granted pursuant to Agreement of Servitude (Facilities) by and between Harrah's Bossier City Investment Company, L.L.C. and Home Federal Bank dated and recorded December 9, 2013 under Instrument No. 1087383 of the Conveyance Records of Bossier Parish, Louisiana.
+TRACT VI:
+Together with the benefit of the electrical and irrigation facilities rights granted pursuant to Agreement of Servitude (Facilities) by and between Harrah's Bossier City Investment Company, L.L.C. and Sifuentes
+Annex A-3
+|US-DOCS\121070511.8||
+Properties, LLC dated and recorded December 9, 2013 under Instrument No. 1087372 of the Conveyance Records of Bossier Parish, Louisiana.
+Annex A-4
+|US-DOCS\121070511.8||
+Annex B
+Turfway Park Parcel
+PARCEL ONE:
+Group Number: 2027
+PIDN: 072-00-00-008.01
+A parcel of land lying on the northwesterly side of Houston Road and adjacent to the northeast side of St. Luke West Hospital 21 acre site in Florence, Boone County, Kentucky and being more particularly described as follows:
+BEGINNING at a point in the northwesterly right-of-way line of Houston Road, said point also being the most northeasterly corner of a 21 acre parcel previously conveyed to St. Luke West Hospital by Turfway Park Racing Association, Inc. and running thence N 42-33-22 W, along the northeasterly side of St. Luke West Hospital 21 acre site, a distance of 89.60 feet, to a point, thence northwestwardly, along a curve toward the west, a chord bearing of N 52-28-27 W, a chord distance of 210.69 feet, an arc distance of 211.75 feet, to a point, thence N 67-13-53 W, a distance of 174.05 feet, to a point, thence southwestwardly, along a curve toward the south, a chord bearing of S 88-40-49 W, a chord distance of 273.90 feet, an arc distance of 276.16 feet, to a point, thence N 32-33-39 E, a distance of 754.71 feet, to a point, thence N 50-25-31 E, a distance of 660 feet, to a point, thence S 39-03-20 E, along the southwesterly side of Marydale, a distance of 245.36 feet, to a point, thence S 38-23-09 E, a distance of 454.64 feet, to a point, thence S 40-06-35 E, a distance of 87.12 feet, to a point in the northwesterly right-of-way line of Houston Road, thence S 46-45-40 W, along the northwesterly right-of-way line of Houston Road, a distance of 451.89 feet, to a point, thence continuing along the aforementioned right-of-way line as follows:
+N 42-33-22 W - 15.39 feet;
+S 47-26-38 W - 25 feet;
+S 42-33-22 E - 15.68 feet;
+S 46-45-30 W - 362.03 feet;
+S 47-26-38 W - 182.95 feet, to the place of beginning, and containing 20.52 acres more or less.
+BEING THE SAME LAND DESCRIBED AS FOLLOWS:
+A parcel of land lying on the northwesterly side of Houston Road and adjacent to the northeast side of St. Luke West Hospital 21 acre site in Florence, Boone County, Kentucky and being more particularly described as follows:
+BEGINNING at a point in the northwesterly right-of-way line of Houston Road, said point also being the most northeasterly corner of a 21 acre parcel previously conveyed to St. Luke West Hospital by Turfway Park Racing Association, Inc. and running thence:
+N 42-33-22 W, along the northeasterly side of St. Luke West Hospital 21 acres site, a distance of 89.60 feet, to a point, thence N 52-28-27 W, a chord distance of 210.69 feet, an arc distance of 211.75 feet, to a point, thence N 67-13-53 W, a distance of 174.05 feet, to a point, thence southwestwardly, along a curve toward the south, a chord bearing of S 88-40-49 W, a chord distance of 273.90 feet, an arc distance of 276.16 feet, to a point, thence N 32-24-59 E, a distance of 754.71 feet, to a point, thence N 50-36-52 E, a distance of 659.55 feet, to a point, thence S 38-58-58 E, along the southwesterly side of Marydale, a distance of 245.36 feet, to a point, thence S 38-26-53 E, a distance of 454.64 feet, to a point, thence S 40-40-40 E, a distance of 86.75 feet, to a point in the northwesterly right-of-way line of Houston Road,
+Annex B-1
+|US-DOCS\121070511.8||
+thence S 45-45-40 W, along the northwesterly right-of-way line of Houston Road, a distance of 451.89 feet, to a point, thence continuing along the aforementioned right-of-way line as follows:
+N 42-33-22 W - 15.39 feet,
+S 47-26-38 W - 25 feet,
+S 42-33-22 E - 15.68 feet,
+S 46-45-40 W - 362.03 feet,
+S 47-26-38 W - 182.95 feet, to the place of beginning, and containing 20.52 acres more or less
+Annex B-2
+|US-DOCS\121070511.8||

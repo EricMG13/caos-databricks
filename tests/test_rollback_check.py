@@ -108,7 +108,8 @@ def test_code_from_before_the_schema_move_is_never_a_rollback(repo: Path) -> Non
     release = _commit(repo, _store(), "DL-1")
     assert rollback_check.rollback_problems(older, release, repo) == [
         f"{older} reads the public schema, not caos_store: it would start on an "
-        "empty store beside the release's (F219, DL-1)"
+        "empty store beside the release's unless it boots as the role that "
+        "applied 0052, whose tripwire it refuses (F219, DL-1, N81)"
     ]
 
 
