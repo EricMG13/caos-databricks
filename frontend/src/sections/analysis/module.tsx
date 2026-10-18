@@ -932,7 +932,7 @@ export function Depth({
               Audit
               {issues ? (
                 <span className="count">
-                  <span className="glyph warn" aria-hidden="true" /> {issues}
+                  <span className="glyph restricted" aria-hidden="true" /> {issues}
                 </span>
               ) : null}
             </TabsTrigger>
