@@ -2182,8 +2182,8 @@ def test_a_handoff_over_the_upstream_bound_is_refused_at_its_producer(
     assert _run(harness, _Flawed(answers, flaw=_padded_to(bound + 1))) is None
     assert [_module(prompt) for prompt in answers.prompts[:2]] == ["CP-0", "CP-0"]
     line = (
-        "host size check: your handoff is 98,305 bytes; the host's bound is"
-        " 98,304; shorten it (for example quote fewer or shorter evidence lines)"
+        "host size check: your handoff is 131,073 bytes; the host's bound is"
+        " 131,072; shorten it (for example quote fewer or shorter evidence lines)"
         " and keep every register"
     )
     assert line not in answers.prompts[0]

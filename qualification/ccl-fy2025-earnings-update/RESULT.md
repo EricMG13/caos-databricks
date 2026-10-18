@@ -2,7 +2,7 @@
 
 This set is prepared offline for `FULL_CREDIT_32 / EARNINGS_UPDATE`; it does
 not record or claim qualification. Its qualification-set digest is
-`36aafade247e6c98811e23be6a5c9ccb6bd17c975b77075b6a7d58a62012be61`.
+`ffbd83e75e1ad65bbfb1b8662ff973f094e8f6990f13e21d67052235c7f3bea7`.
 
 ## Corpus and key provenance
 
@@ -29,3 +29,24 @@ The owner must confirm the FY2024 comparatives and calculated deltas, and give
 fresh authorization naming the provider, model, endpoint, reasoning level,
 spend ceiling, and run window before any live qualification. No provider run,
 snapshot, evidence record, signed verdict, or qualification exists.
+
+## Owner ruling R29, 16 October 2026 (N54) -- the set is keyed to the gate's verdict
+
+The analysis date is 2026-09-19, nine months after the FY2025 year end, with no
+FY2026 10-Q in the pack, so CP-0 holds CP-1, CP-1B and CP-2 CONDITIONAL (D1).
+The owner ruled the set is keyed to that verdict. Following
+`ccl-fy2025-portfolio` (`expects_blocked`, `docs/DECISIONS.md` §99):
+
+- Removed: `expects_ready`, all five citation keys, the CP-5 `decision_scope`
+  projection key and the ten `T4.12` register keys. Each asks something of a
+  handoff that a refused CP-1, CP-1B or CP-2 never produces, and CP-5 sits
+  behind them. The figures in "Corpus and key provenance" stay true of the
+  source; they are no longer keyed.
+- Added: `expects_blocked: ["CP-1", "CP-1B", "CP-2"]`, met when CP-0's T8 verdict
+  for each is `BLOCKED` or `CONDITIONAL`; a met key waives the run-COMPLETE
+  requirement only for a run that ended BLOCKED.
+- Previous set digest:
+  `36aafade247e6c98811e23be6a5c9ccb6bd17c975b77075b6a7d58a62012be61`; the new
+  digest is the one stated above.
+
+No document byte moves. Offline edit; no provider call, run, or snapshot.

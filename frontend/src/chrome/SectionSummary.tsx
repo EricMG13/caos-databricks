@@ -84,6 +84,7 @@ export function SectionSummary({
   ribbon,
   compact = false,
   review,
+  partialNotes = null,
 }: {
   verdict: Verdict;
   brief: Brief;
@@ -93,6 +94,10 @@ export function SectionSummary({
   compact?: boolean;
   /** The module to review first; `failed` when QA blocked or failed it. */
   review?: { code: string; name: string; note: string | null; failed: boolean; to: string };
+  /** What a partial document could not read. A full summary carries it in the
+      brief's Evidence cell; a compact one keeps the brief closed, so it is
+      said here, on the page (N113). */
+  partialNotes?: string | null;
 }) {
   const cells = CELLS.filter((cell) => brief[cell.key]);
   const states = STATE_CELLS.filter(({ key }) => ribbon[key] !== null);
@@ -148,6 +153,14 @@ export function SectionSummary({
                   {label} <span className="text-foreground">{ribbon[key]}</span>
                 </span>
               ))}
+            </p>
+          ) : null}
+          {compact && partialNotes ? (
+            <p
+              className="w-full text-sm font-normal tracking-normal text-muted-foreground"
+              data-summary-notes
+            >
+              {partialNotes}
             </p>
           ) : null}
           {compact && review ? (

@@ -24,6 +24,7 @@ from caos.evidence import ingest, read
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import resolve_route
 from caos.methodology.bundle import Bundle
+from caos.methodology.invocation import _evidence_order
 from caos.refusals import Refusal
 from caos.store import StoreConnection
 from caos.store.members import Standing, grant
@@ -31,7 +32,7 @@ from caos.store.outcomes import execution_reads
 from caos.store.routes import pin_route
 from caos.store.run_inputs import load_run_input, pin_run_input
 from caos.store.runs import create_case, start_run
-from caos.store.source_sets import snapshot_source_set
+from caos.store.source_sets import load_source_set, snapshot_source_set
 
 __all__ = ["prepared"]
 
@@ -374,3 +375,26 @@ def test_the_same_pack_lays_out_alike_in_every_run(
         )
     assert layouts[0] == layouts[1]
     assert len(layouts[0]) == 4
+
+
+def test_the_prompt_order_of_sources_is_the_evidence_query_order(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N228(3): `_evidence_order`, which lists CP-0's source-preparation
+    members, repeats the ORDER BY of `read_run_blocks` in Python; on a real
+    server the two agree for ids drawn against the filename order."""
+    conn, _ = case
+    ids = [UUID(int=3), UUID(int=2), UUID(int=1)]
+    run, members = _pinned_pack(conn, tmp_path, ids, monkeypatch)
+    in_query = list(
+        dict.fromkeys(source for source, *_ in read.read_run_blocks(conn, run_id=run))
+    )
+    [pinned] = conn.execute(
+        "SELECT case_id, source_version FROM run_inputs WHERE run_id = %s", (run,)
+    ).fetchall()
+    snapshot = load_source_set(conn, pinned[0], pinned[1])
+    assert snapshot is not None
+    assert {m.source_id for m in snapshot.members} == set(members)
+    assert [
+        m.source_id for m in sorted(snapshot.members, key=_evidence_order)
+    ] == in_query
