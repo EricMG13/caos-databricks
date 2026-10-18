@@ -15,6 +15,7 @@ import { ReaderParts } from "@/sections/analysis/module";
 import { AnalysisSection, PROSE_SHOWN, sourceRegister } from "@/sections/analysis/AnalysisSection";
 import { conclusionOf, handoffSeverity } from "@/sections/analysis/tone";
 import { parseAnalysisDocument } from "@/wire/v1";
+import { blockedAnalysis, blockedResponse } from "../../demo-fixtures";
 import type { AnalysisDocument, HandoffView } from "@/wire/v1";
 
 const load = (path: string): unknown =>
@@ -455,6 +456,118 @@ describe("Analysis", () => {
     expect(panel.querySelector("[data-register-rest]")).toBeNull();
   });
 
+  test("a reference in a register's title is no control inside the index button (N113)", () => {
+    const [first, target] = [complete.body.handoffs[0]!, complete.body.handoffs[1]!];
+    const indexed = {
+      ...first,
+      model_analysis: [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        `#### T4.14 — Period register [${target.module_id} T2] [C1]`,
+        "| period_id | Revenue |",
+        "| --- | --- |",
+        "| FY1 | 1 |",
+      ].join("\n"),
+    };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [indexed, target] } }}
+        tab={indexed.route_node_id}
+      />,
+    );
+    const button = container.querySelector<HTMLElement>("[data-register-open]")!;
+    expect(button).toHaveTextContent(`[${target.module_id} T2]`);
+    // Nothing interactive inside the button: a link or a chip in it is a
+    // control nested in a control (WCAG 4.1.2), and unreachable by name.
+    expect(button.querySelectorAll("a, button, [role='button'], [tabindex]")).toHaveLength(0);
+  });
+
+  test("Show all N rows keeps focus in the register it revealed (N113, 2.4.3)", () => {
+    const rows = Array.from({ length: 10 }, (_, index) => `| FY${index} | ${index} |`);
+    const indexed = {
+      ...complete.body.handoffs[0]!,
+      model_analysis: [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### T4.14 — Period register",
+        "| period_id | Revenue |",
+        "| --- | --- |",
+        ...rows,
+      ].join("\n"),
+    };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [indexed] } }}
+        tab={indexed.route_node_id}
+      />,
+    );
+    const open = container.querySelector<HTMLElement>("[data-register-open]")!;
+    fireEvent.click(open);
+    const more = container.querySelector<HTMLElement>("[data-register-rest]")!;
+    more.focus();
+    expect(document.activeElement).toBe(more);
+    fireEvent.click(more);
+    expect(container.querySelector("[data-register-rest]")).toBeNull();
+    // The button that was pressed is gone: focus lands on the register itself,
+    // named for what it now holds, not on <body>.
+    const panel = container.querySelector<HTMLElement>(
+      `#${CSS.escape(open.getAttribute("aria-controls")!)}`,
+    )!;
+    expect(document.activeElement).toBe(panel);
+    expect(panel).toHaveAttribute("role", "region");
+    expect(panel).toHaveAccessibleName(/T4\.14.*all 10 rows/);
+  });
+
+  test("a wide register clamps its long text cells to two lines, whole for assistive tech, open on focus or click", () => {
+    const heads = Array.from({ length: 10 }, (_, index) => `col_${index}`);
+    const long = "A long covenant definition that runs well past two lines of a narrow column.";
+    const wide = {
+      ...complete.body.handoffs[0]!,
+      model_analysis: [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### T9.1 — Wide register",
+        `| ${heads.join(" | ")} |`,
+        `| ${heads.map(() => "---").join(" | ")} |`,
+        `| ${[long, ...heads.slice(1).map((_, index) => `s${index}`)].join(" | ")} |`,
+        "#### T9.2 — Narrow register",
+        "| a | b |",
+        "| --- | --- |",
+        `| ${long} | x |`,
+      ].join("\n"),
+    };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [wide] } }}
+        tab={wide.route_node_id}
+      />,
+    );
+    const panel = container.querySelector('[data-depth-panel="appendix"]')!;
+    const [first, second] = [...panel.querySelectorAll<HTMLElement>("[data-register-open]")];
+    fireEvent.click(first!);
+    const cell = panel.querySelector<HTMLElement>("td[data-clamp]")!;
+    // Only the long cell is a stop; its full text stays in the document.
+    expect(panel.querySelectorAll("td[data-clamp]")).toHaveLength(1);
+    expect(cell).toHaveAttribute("tabindex", "0");
+    expect(cell).toHaveTextContent(long);
+    expect(cell).toHaveAttribute("data-clamp", "closed");
+    fireEvent.focus(cell);
+    expect(cell).toHaveAttribute("data-clamp", "open");
+    fireEvent.blur(cell);
+    expect(cell).toHaveAttribute("data-clamp", "closed");
+    fireEvent.click(cell);
+    expect(cell).toHaveAttribute("data-clamp", "open");
+    // A register of fewer columns keeps its cells whole.
+    fireEvent.click(second!);
+    expect(panel.querySelector("td[data-clamp]")).toBeNull();
+  });
+
   test("the opening leads, its drivers are key points, the contrary view sits beside it", () => {
     const [cp1b, target] = [complete.body.handoffs[0]!, complete.body.handoffs[1]!];
     const opening = {
@@ -644,6 +757,41 @@ describe("Analysis", () => {
     );
   });
 
+  test("test_header_tag_draws_failed_and_blocked_as_critical (D71)", () => {
+    const base = complete.body.handoffs.find((h) => h.module_id === "CP-1C")!;
+    for (const qa of ["FAILED", "BLOCKED"]) {
+      const failed: AnalysisDocument = {
+        ...complete,
+        body: {
+          ...complete.body,
+          handoffs: complete.body.handoffs.map((h) => (h === base ? { ...h, qa_status: qa } : h)),
+        },
+      };
+      const { container, unmount } = mountAt(failed, "CP-1C");
+      const tag = container.querySelector("[data-qa-status]")!;
+      expect(tag).toHaveTextContent(qa);
+      expect(tag).toHaveClass("crit");
+      expect(tag).not.toHaveClass("warn");
+      unmount();
+    }
+    // A caveat is not a warning: a restricted module stays off both.
+    const { container } = mountAt(
+      {
+        ...complete,
+        body: {
+          ...complete.body,
+          handoffs: complete.body.handoffs.map((h) =>
+            h === base ? { ...h, qa_status: "RESTRICTED", validation_warnings: [] } : h,
+          ),
+        },
+      },
+      "CP-1C",
+    );
+    const caveat = container.querySelector("[data-qa-status]")!;
+    expect(caveat).not.toHaveClass("crit");
+    expect(caveat).not.toHaveClass("warn");
+  });
+
   test("qa status, committee status, decision scope and confidence are all shown", () => {
     const { container } = mountAt(complete, "CP-1C");
     const cp1c = complete.body.handoffs.find((h) => h.module_id === "CP-1C")!;
@@ -770,6 +918,31 @@ describe("Analysis", () => {
     }
   });
 
+  test("test_blocked_quotes_show_under_the_node_that_ended_the_run", () => {
+    // N141: the a11y matrix scans `?fixture=blocked`, which the demo server
+    // derives from these two files; the same document must render the quotes.
+    const read = (path: string) => readFileSync(`fixtures/${path}`, "utf8");
+    const blocked = parseAnalysisDocument(
+      JSON.parse(
+        blockedAnalysis(read("states/analysis.partial.json"), read("states/run.blocked.json")),
+      ),
+    );
+    const [answered] = partial.body.pending;
+    expect(blocked.body.blocked_by?.module_id).toBe(answered!.module_id);
+    const { container } = mount(blocked);
+    const row = container.querySelector('[data-pending-node][data-blocking="yes"]')!;
+    expect(row.querySelector('[data-blocked-quotes="recorded"]')).not.toBeNull();
+    expect(row.querySelectorAll("[data-blocked-quote]")).toHaveLength(2);
+  });
+
+  test("the blocked demo fixture 404s where run.blocked.json is missing, as every fixture does", () => {
+    const raw = readFileSync("fixtures/states/analysis.partial.json", "utf8");
+    expect(blockedResponse(raw, null)).toEqual([404, "{}"]);
+    expect(blockedResponse(raw, readFileSync("fixtures/states/run.blocked.json", "utf8"))[0]).toBe(
+      200,
+    );
+  });
+
   test("a run still working names no blocking node", () => {
     const { container } = mount(partial);
     const rows = [...container.querySelectorAll("[data-pending-node]")];
@@ -818,5 +991,61 @@ describe("Analysis", () => {
     const { container } = mount(empty);
     expect(container.querySelectorAll("[data-handoff]")).toHaveLength(0);
     expect(container).toHaveTextContent("No handoff has been accepted on this run yet.");
+  });
+});
+
+describe("Analysis residue (N221)", () => {
+  const withText = (model_analysis: string) => ({
+    ...complete.body.handoffs[0]!,
+    model_analysis,
+  });
+  const mountText = (model_analysis: string) => {
+    const handoff = withText(model_analysis);
+    return mountAt(
+      { ...complete, body: { ...complete.body, handoffs: [handoff] } },
+      handoff.module_id,
+    );
+  };
+
+  test("a model-text Restricted status word wears the ring, not the warning (D71)", () => {
+    const { container } = mountText(
+      [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### B2 — Status",
+        "| Check | Status |",
+        "| --- | --- |",
+        "| Leverage | Restricted |",
+        "| Liquidity | Stale |",
+      ].join("\n"),
+    );
+    openTab(container, "appendix");
+    fireEvent.click(container.querySelector("[data-register-open]")!);
+    const words = [...container.querySelectorAll("[data-status-word]")];
+    const restricted = words.find((word) => word.textContent === "Restricted")!;
+    expect(restricted.classList.contains("warn")).toBe(false);
+    expect(restricted.querySelector(".glyph")).toHaveClass("restricted");
+    const stale = words.find((word) => word.textContent === "Stale")!;
+    expect(stale.querySelector(".glyph")).toHaveClass("warn");
+  });
+
+  test("the Audit tab's issue count is drawn as the ring, not a warning (D71)", () => {
+    const { container } = mountText(
+      [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### B9 — Conflicts & gaps register",
+        "| Gap ID | Gap description |",
+        "| --- | --- |",
+        "| G1 | Missing FY25 notes |",
+      ].join("\n"),
+    );
+    const glyph = container.querySelector('[data-depth-tab="audit"] .count .glyph')!;
+    expect(glyph).toHaveClass("restricted");
+    expect(glyph).not.toHaveClass("warn");
   });
 });

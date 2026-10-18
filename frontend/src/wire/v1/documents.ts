@@ -29,7 +29,12 @@ const RUN_STATUSES = ["RUNNING", "COMPLETE", "FAILED", "BLOCKED", "CANCELLED"] a
 
 const GlobalRole = enumOf(["READER", "ANALYST", "ADMIN"]);
 const Standing = enumOf(["READER", "WRITER", "APPROVER", "ADMIN"]);
-const SectionNote = enumOf(["LIST_TRUNCATED", "ROUTE_NOT_PINNED", "HANDOFFS_PENDING"]);
+const SectionNote = enumOf([
+  "LIST_TRUNCATED",
+  "ROUTE_NOT_PINNED",
+  "HANDOFFS_PENDING",
+  "HEAD_UNPROVEN",
+]);
 const NodeState = enumOf(["COMPLETE", "RUNNABLE", "RESTRICTED", "BLOCKED"]);
 const EdgeType = enumOf(["REQUIRED", "CONDITIONAL", "QA_GATE", "OPTIONAL", "ADVISORY"]);
 const Gate = enumOf(["SOURCE_SET", "RESEARCH_PLAN"]);
@@ -85,7 +90,7 @@ function sectionDocument<B extends ReturnType<typeof object>>(body: B) {
     observed_at: datetime,
     observed_empty: bool,
     status: enumOf(["complete", "partial"]),
-    notes: array(SectionNote, 3),
+    notes: array(SectionNote, 4),
   });
 }
 
@@ -106,6 +111,7 @@ const RefusalCode = enumOf([
   "ATTEMPT_NOT_FOUND",
   "ATTEMPT_LIMIT_REACHED",
   "ATTEMPT_UNSETTLED",
+  "ATTEMPT_BILL_OWED",
   "CALL_OUTCOME_INVALID",
   "CALL_OUTCOME_CONFLICT",
   "CALL_OUTCOME_LEGACY",
@@ -351,12 +357,14 @@ const RouteChoice = object({
 // a run started on it is pinned to (F468). `configured` marks the model a
 // create naming none gets. Rates are the server's exact decimal strings.
 const perToken = string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" });
+const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
 const ModelChoice = object({
   model: short,
   input_per_token: perToken,
   output_per_token: perToken,
   as_of: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
   configured: bool,
+  qualification: QualificationState,
 });
 // The node whose validated Blocked verdict ended the run, as the transition
 // recorded it (§68). Nullable on `RunView`: a run the frontier emptied is
@@ -864,10 +872,9 @@ const PageDocument = object({
   body: PageBody,
   observed_at: datetime,
   status: enumOf(["complete", "partial"]),
-  notes: array(SectionNote, 3),
+  notes: array(SectionNote, 4),
 });
 
-const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
 const QualificationRead = object({
   evidence_sha256: hash,
   state: QualificationState,

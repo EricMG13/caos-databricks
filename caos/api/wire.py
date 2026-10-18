@@ -195,6 +195,7 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.ATTEMPT_UNSETTLED: (
         "Nothing; the node is tried again once its last attempt settles."
     ),
+    _C.ATTEMPT_BILL_OWED: "Nothing; the next pass settles the bill that landed.",
     _C.STREAM_LIMIT_REACHED: "Close a tail already open, or retry shortly.",
     _C.CALL_OUTCOME_INVALID: "Record a well-formed call outcome.",
     _C.CALL_OUTCOME_CONFLICT: "Nothing; a different outcome is already recorded.",
@@ -293,7 +294,10 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.SOURCE_TOO_LARGE: "Supply a smaller document or pack.",
     _C.SOURCE_EXTRACTION_TIMEOUT: "Supply a simpler document.",
     _C.SOURCE_IDENTITY_INVALID: "Readmit the document.",
-    _C.EVIDENCE_NOT_AVAILABLE: "Pin a live source for the evidence.",
+    _C.EVIDENCE_NOT_AVAILABLE: (
+        "Pin a live source for the evidence; for a completed run, start a "
+        "successor run that pins one."
+    ),
     _C.EVIDENCE_PACKING_MISMATCH: (
         "An operator must re-admit the source under this build."
     ),
@@ -366,6 +370,7 @@ class SectionNote(StrEnum):
     LIST_TRUNCATED = "LIST_TRUNCATED"
     ROUTE_NOT_PINNED = "ROUTE_NOT_PINNED"
     HANDOFFS_PENDING = "HANDOFFS_PENDING"
+    HEAD_UNPROVEN = "HEAD_UNPROVEN"
 
 
 class Subject(BaseModel):
@@ -626,7 +631,9 @@ class ModelChoice(BaseModel):
     """A model the deployment approves for a new run (`CAOS_MODEL_CHOICES`),
     at the dated price a run started on it is pinned to (F468). `configured`
     marks the deployment's own model, the one a `CreateRun` naming none gets.
-    Rates are per token, in plain notation (invariant 7)."""
+    `qualification` is QUALIFIED when a verdict bound to the model is current
+    and UNQUALIFIED otherwise (N117): a label, never a gate. Rates are per
+    token, in plain notation (invariant 7)."""
 
     model_config = _CLOSED
 
@@ -635,6 +642,7 @@ class ModelChoice(BaseModel):
     output_per_token: DecimalText
     as_of: Annotated[str, Field(max_length=10, pattern=r"^\d{4}-\d{2}-\d{2}$")]
     configured: StrictBool
+    qualification: QualificationState
 
 
 class BlockedByView(BaseModel):

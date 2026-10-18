@@ -14,8 +14,6 @@ from caos.deliverable.revisions import prove_revision, renderable
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
-from caos.store.audit import GovernedAction, governed_write
-from caos.store.members import Standing
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,23 +52,6 @@ def _revision(
     return UUID(str(row[0])), str(row[1]), UUID(str(row[2]))
 
 
-def sign_opinion(
-    conn: StoreConnection, *, case_id: UUID, actor_id: UUID, revision_id: UUID
-) -> None:
-    """Sign the stored digest; a frozen revision takes no further signature."""
-    payload = {"revision_id": str(revision_id)}
-    action = GovernedAction(
-        case_id, actor_id, "OPINION_SIGNED", Standing.APPROVER, payload
-    )
-
-    def write(unit: StoreConnection) -> None:
-        payload["payload_sha256"] = sign_opinion_in(
-            unit, case_id=case_id, actor_id=actor_id, revision_id=revision_id
-        )
-
-    governed_write(conn, action, write)
-
-
 def sign_opinion_in(
     conn: StoreConnection, *, case_id: UUID, actor_id: UUID, revision_id: UUID
 ) -> str:
@@ -99,35 +80,6 @@ def sign_opinion_in(
     if not signed:
         raise Refusal(RefusalCode.DELIVERABLE_ALREADY_SIGNED)
     return digest
-
-
-def freeze(  # noqa: PLR0913 -- exact revision and authority for its re-proof
-    conn: StoreConnection,
-    blobs: BlobStore,
-    bundle: Bundle,
-    *,
-    case_id: UUID,
-    actor_id: UUID,
-    revision_id: UUID,
-) -> str:
-    """Re-prove under the write lock, then freeze exactly the signed stored bytes."""
-    payload = {"revision_id": str(revision_id)}
-    action = GovernedAction(
-        case_id, actor_id, "DELIVERABLE_FROZEN", Standing.APPROVER, payload
-    )
-
-    def write(unit: StoreConnection) -> None:
-        payload["payload_sha256"] = freeze_in(
-            unit,
-            blobs,
-            bundle,
-            case_id=case_id,
-            actor_id=actor_id,
-            revision_id=revision_id,
-        )
-
-    governed_write(conn, action, write)
-    return payload["payload_sha256"]
 
 
 def freeze_in(  # noqa: PLR0913 -- exact revision and authority for its re-proof
@@ -170,35 +122,6 @@ def freeze_in(  # noqa: PLR0913 -- exact revision and authority for its re-proof
         (str(revision_id), case_id, digest, actor_id),
     )
     return digest
-
-
-def file_deliverable(
-    conn: StoreConnection,
-    blobs: BlobStore,
-    *,
-    case_id: UUID,
-    actor_id: UUID,
-    revision_id: UUID,
-) -> Receipt:
-    """File once, independently of every signer and the freezer, naming this event."""
-    payload = {"revision_id": str(revision_id)}
-    action = GovernedAction(
-        case_id, actor_id, "DELIVERABLE_FILED", Standing.APPROVER, payload
-    )
-    receipts: list[Receipt] = []
-
-    def write(unit: StoreConnection) -> None:
-        receipt = file_deliverable_in(
-            unit, case_id=case_id, actor_id=actor_id, revision_id=revision_id
-        )
-        payload.update(filing_payload(receipt))
-        receipts.append(receipt)
-
-    def persist(unit: StoreConnection, event: str) -> None:
-        receipts[0] = persist_receipt(unit, blobs, receipts[0], event)
-
-    governed_write(conn, action, write, after_event=persist)
-    return receipts[0]
 
 
 def renderer_sha256() -> str:

@@ -22,6 +22,7 @@ from uuid import uuid4
 
 import pytest
 from canonical_fixtures import BUNDLE, CATALOG, fields_from_prompt
+from governed_deliverable import freeze_canonical, save_revision, sign_opinion
 from lite_relative_value_fixtures import (
     LITE_LIMITATION,
     MODULES,
@@ -41,15 +42,9 @@ from test_lite_route_e2e_positive import _revision
 from test_relative_value_route import harness
 
 from caos.boundary_text import BoundaryText
-from caos.deliverable.canonical import (
-    canonical_payload,
-    freeze_canonical,
-    payload_bytes,
-    verify_frozen,
-)
-from caos.deliverable.filing import sign_opinion
+from caos.deliverable.canonical import canonical_payload, payload_bytes, verify_frozen
 from caos.deliverable.render import render
-from caos.deliverable.revisions import read_revision, save_revision
+from caos.deliverable.revisions import read_revision
 from caos.graph.route import ResolvedRoute, resolve_route
 from caos.methodology.handoff import ADAPTER_ROUTES
 from caos.provider import MAX_REQUEST_BYTES

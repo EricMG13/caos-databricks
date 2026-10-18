@@ -1623,12 +1623,17 @@ def test_migration_deadlock_refuses_and_releases_its_partial_locks(
 ) -> None:
     conn, _, _, _, _ = known_prefix
     # Writer owns the child table; migration will own sources before waiting for it.
-    conn.execute("SET deadlock_timeout = '5s'; UPDATE source_tokens SET text = text")
+    # Postgres's detector runs once, in whichever side has waited its
+    # `deadlock_timeout` first, and aborts that side. The migration must be
+    # that side, so its timeout is a real wait with a margin (N197): 1 s
+    # against the milliseconds the writer needs to arrive once the migration
+    # is seen blocked (10x or more), and the writer's 30 s is far past it.
+    conn.execute("SET deadlock_timeout = '30s'; UPDATE source_tokens SET text = text")
     with (
         connect(empty_database) as migration,
         ThreadPoolExecutor(max_workers=1) as pool,
     ):
-        migration.execute("SET deadlock_timeout = '100ms'")
+        migration.execute("SET deadlock_timeout = '1s'")
         migration.commit()
 
         def upgrade() -> None:
@@ -1646,7 +1651,7 @@ def test_migration_deadlock_refuses_and_releases_its_partial_locks(
             conn.execute("UPDATE sources SET filename = filename")
         finally:
             conn.rollback()
-        future.result(timeout=6)
+        future.result(timeout=30)
         migration.execute("SET lock_timeout = '1s'")
         apply_schema(migration)
     assert conn.execute("SELECT max(version) FROM store_migrations").fetchone() == (

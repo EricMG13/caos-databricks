@@ -232,7 +232,14 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     WorkView: frozenset({"state", "stop_code", "cancel_requested"}),
     RouteChoice: frozenset({"profile_id", "selection_id", "accepts_model_extension"}),
     wire.ModelChoice: frozenset(
-        {"model", "input_per_token", "output_per_token", "as_of", "configured"}
+        {
+            "model",
+            "input_per_token",
+            "output_per_token",
+            "as_of",
+            "configured",
+            "qualification",
+        }
     ),
     DirectoryDocument: ENVELOPE,
     UploadDocument: ENVELOPE,
@@ -683,6 +690,7 @@ def test_the_v1_wire_key_sets_are_pinned() -> None:
         SectionNote.LIST_TRUNCATED,
         SectionNote.ROUTE_NOT_PINNED,
         SectionNote.HANDOFFS_PENDING,
+        SectionNote.HEAD_UNPROVEN,
     }
     # R24-12: MONEY (an `_amount`), MULTIPLE (the leverage/coverage family) and
     # RATIO (the one margin) are every dimension a projected value carries.
