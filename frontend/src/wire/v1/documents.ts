@@ -485,6 +485,7 @@ const TableView = object({
 // each header cell, null where it binds none.
 const RegisterView = object({
   register_id: string({ max: SHORT, pattern: "^[A-Za-z0-9_.]+$" }),
+  unavailable_reason: nullable(enumOf(["TABLES_MALFORMED", "TABLES_TOO_LARGE"])),
   columns: array(text, 32),
   declared: array(nullable(text), 32),
   rows: array(array(CellView, 32), 2000),

@@ -29,7 +29,7 @@ from caos.boundary_text import BoundaryText
 from caos.evidence.citations import TokenIndex
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import Bundle
-from caos.methodology.executor import captured_blocks
+from caos.methodology.canonical import node_delivery
 from caos.methodology.verification import (
     CREDIT_SCREEN_SELECTION,
     AcceptedRow,
@@ -112,8 +112,7 @@ def canonical_payload(
             raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
         found = pinned_sources(conn, run_id)
         pinned = found.live
-        captured = captured_blocks(conn, run_id)
-        reader = _Reader(conn, blobs, bundle, route, pinned, captured, found.withdrawn)
+        reader = _Reader(conn, blobs, bundle, route, pinned, run_id, found.withdrawn)
         # One reading of the accepted pairs for every record's lineage.
         reader.pairs = {
             node: (artifact, None if record is None else str(record))
@@ -168,7 +167,7 @@ class _Reader:
         bundle: Bundle,
         route: ResolvedRoute,
         pinned: dict[str, UUID],
-        captured: dict[UUID, frozenset[str]],
+        run_id: UUID,
         withdrawn: frozenset[str] = frozenset(),
     ) -> None:
         self.conn, self.blobs, self.bundle, self.route = conn, blobs, bundle, route
@@ -176,11 +175,11 @@ class _Reader:
         self.pairs: dict[str, tuple[str, str | None]] = {}
         self.verified_markdown: dict[tuple[str, str], bytes] = {}
         # One reading of the token index for the whole payload: records cluster
-        # on the same pages of the same sources. The captured blocks of the
-        # pinned live sources are what any node was handed.
+        # on the same pages of the same sources. Each node's citations anchor
+        # in the blocks that node was handed, not the run's whole capture (N130).
         self.evidence = PinnedEvidence(
             pinned,
-            {source: captured.get(source, frozenset()) for source in pinned.values()},
+            node_delivery(conn, blobs, bundle, run_id),
             TokenIndex(),
             withdrawn,
         )

@@ -35,6 +35,7 @@ import psycopg
 
 from caos import methodology
 from caos.blobs import BlobStore
+from caos.boundary_text import BoundaryText
 from caos.copilot import NANO_PER_CREDIT
 from caos.evidence.citations import (
     EXCERPT,
@@ -137,6 +138,7 @@ from caos.methodology.verification import (
     CREDIT_SCREEN_SELECTION,
     OWNER_KEYS,
     AcceptedRow,
+    NodeDelivery,
     OwnerGap,
     Step,
     VendorAuthority,
@@ -179,7 +181,7 @@ from caos.store.outcomes import (
 )
 from caos.store.run_inputs import load_run_input
 from caos.store.runs import attempt_ordinal
-from caos.store.source_sets import SourceSet, load_source_set
+from caos.store.source_sets import SourceSet, SourceSetMember, load_source_set
 from caos.store.work import require_resendable
 
 if TYPE_CHECKING:
@@ -820,25 +822,39 @@ def _selected(
     the host's CP-CF, a row whose source-files cell is empty -- costs no extra
     round trip. (The vendor's parser reads the legacy header's column too.)
     """
-    if assignment.module_id == GATE_MODULE:
+    return _selection(
+        bundle,
+        assignment.module_id,
+        upstream,
+        delivered,
+        lambda: _pinned_source_set(conn, assignment.run_id).members,
+    )
+
+
+def _selection(
+    bundle: Bundle,
+    module_id: str,
+    upstream: Sequence[tuple[UpstreamRef, bytes]],
+    delivered: list[Delivery],
+    members: Callable[[], tuple[SourceSetMember, ...]],
+) -> tuple[list[Delivery], Selection]:
+    """`_selected` with the pinned members read through `members`, which is
+    called only when the node's cell has items to map."""
+    if module_id == GATE_MODULE:
         # §98: the whole pin, a source past the gate bound as its page map.
         shown, maps = gate_view(delivered)
         basis = Basis.PAGE_MAP if maps else Basis.WHOLE_NO_DEMAND
         return shown, Selection(basis, None, page_maps=maps)
     gate = next(data for ref, data in upstream if ref.module_id == GATE_MODULE)
     cell = demand_cells(_contract(bundle).navigation, catalog(bundle), gate).get(
-        assignment.module_id
+        module_id
     )
     if cell is None or not demand_items(cell):
         return delivered, Selection(Basis.WHOLE_NO_DEMAND, None)
     last_pages: dict[UUID, int] = {}
     for item in delivered:
         last_pages[item.source_id] = max(item.page, last_pages.get(item.source_id, 0))
-    selection = select_sources(
-        _pinned_source_set(conn, assignment.run_id).members,
-        cell,
-        last_pages=last_pages,
-    )
+    selection = select_sources(members(), cell, last_pages=last_pages)
     if selection.whole:
         return delivered, selection
     return [d for d in delivered if selection.delivers(d.source_id, d.page)], selection
@@ -1779,6 +1795,97 @@ def _covered(
     if taken is None or not bills_at(provider, taken.price):
         return False
     return priced_request(taken.price, size) <= taken.amount
+
+
+def node_delivery(
+    conn: StoreConnection,
+    blobs: BlobStore,
+    bundle: Bundle,
+    run_id: UUID,
+) -> NodeDelivery:
+    """The blocks each node of `run_id` was handed, rebuilt for a reader that
+    re-anchors a stored record (N130, D94).
+
+    `_selection` over the run's pin and the node's accepted upstream (§95, the
+    gate's own answer), the selection the live call and `replay_billed` made:
+    pure over pinned inputs, so a reader sees the node's delivery and not the
+    run's whole capture. It is not re-fitted to the model's request ceiling
+    (D116), which only narrows it and which the live check already judged. The
+    pin is read once per reader, without the liveness count a live call makes:
+    a withdrawn source is judged per citation by the reader (`pinned_live_sources`),
+    so withdrawing one nothing cites refuses nothing here.
+    """
+    pin: list[Delivery] = []
+    pinned: list[tuple[SourceSetMember, ...]] = []
+
+    def members() -> tuple[SourceSetMember, ...]:
+        if not pinned:
+            pinned.append(_pinned_members(conn, run_id))
+        return pinned[0]
+
+    def delivery(node: RouteNode, identity: HostIdentity) -> dict[UUID, frozenset[str]]:
+        if not pin:
+            pin.extend(_pinned_deliveries(conn, run_id))
+        shown, _ = _selection(
+            bundle,
+            node.module_id,
+            upstream_markdown(blobs, identity.upstream),
+            pin,
+            members,
+        )
+        return _by_source(shown)
+
+    return delivery
+
+
+def _pinned_members(conn: StoreConnection, run_id: UUID) -> tuple[SourceSetMember, ...]:
+    """The members of the run's pinned source-set version in one statement:
+    what `select_sources` reads. `_pinned_source_set` also re-verifies the pin
+    and the set's fingerprint, which the live call has done; a reader that
+    selects for every node of a run reads the members once, as the delivery's
+    own `read_run_blocks` is joined to the pin."""
+    rows = conn.execute(_PINNED_MEMBERS, (run_id,)).fetchall()
+    if not rows:
+        raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+    return tuple(SourceSetMember(*row) for row in rows)
+
+
+def _pinned_deliveries(conn: StoreConnection, run_id: UUID) -> list[Delivery]:
+    """Every block the run's pin captured, in the pack's own order, as
+    `_delivered` hands them but without its liveness count (`read_run_blocks`
+    refuses a short delivery): what a re-anchoring reader selects from. Empty
+    pin is `RUN_INPUT_INVALID`."""
+    rows = conn.execute(_PINNED_DELIVERIES, (run_id,)).fetchall()
+    if not rows:
+        raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+    return [
+        Delivery(
+            UUID(str(source)),
+            str(block),
+            int(page),
+            BoundaryText.of(text),
+            str(hidden or ""),
+        )
+        for source, block, page, text, hidden in rows
+    ]
+
+
+_PINNED_DELIVERIES = (
+    "SELECT b.source_id, b.block_id, b.page, b.text, b.hidden"
+    " FROM run_inputs i JOIN source_set_members m"
+    " ON (m.case_id, m.version) = (i.case_id, i.source_version)"
+    " JOIN source_blocks b ON b.source_id = m.source_id"
+    ' WHERE i.run_id = %s ORDER BY m.filename COLLATE "C", m.document_sha256,'
+    " m.source_id, b.block_id"
+)
+
+_PINNED_MEMBERS = (
+    "SELECT m.source_id, m.document_sha256, m.filename, m.admitted_at,"
+    " m.extractor_identity, m.output_sha256, m.extraction_sha256"
+    " FROM run_inputs i JOIN source_set_members m"
+    " ON (m.case_id, m.version) = (i.case_id, i.source_version)"
+    " WHERE i.run_id = %s ORDER BY m.source_id"
+)
 
 
 def _by_source(delivered: Sequence[Delivery]) -> dict[UUID, frozenset[str]]:

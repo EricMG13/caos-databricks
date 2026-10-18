@@ -381,7 +381,9 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         }
     ),
     TableView: frozenset({"table_id", "columns", "rows"}),
-    RegisterView: frozenset({"register_id", "columns", "declared", "rows"}),
+    RegisterView: frozenset(
+        {"register_id", "unavailable_reason", "columns", "declared", "rows"}
+    ),
     CellView: frozenset({"text", "value"}),
     PendingNode: frozenset({"route_node_id", "module_id", "module_name", "state"}),
     AnalysisBody: frozenset(
@@ -885,6 +887,7 @@ def test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null() -> None:
             TableView.model_validate(bad)
     register = {
         "register_id": "T4C.4",
+        "unavailable_reason": None,
         "columns": ["Test", "Extra"],
         "declared": ["Test", None],
         "rows": [],
@@ -897,6 +900,21 @@ def test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null() -> None:
     ):
         with pytest.raises(ValidationError):
             RegisterView.model_validate(broken)
+    # N194: a refused register is named and carries no header, binding or row.
+    refused = {
+        **register,
+        "unavailable_reason": "TABLES_MALFORMED",
+        "columns": [],
+        "declared": [],
+    }
+    assert RegisterView.model_validate(refused).unavailable_reason == "TABLES_MALFORMED"
+    for cellful in (
+        {**refused, "columns": ["Test"]},
+        {**refused, "declared": ["Test"]},
+        {**refused, "rows": [[{"text": "x", "value": None}]]},
+    ):
+        with pytest.raises(ValidationError):
+            RegisterView.model_validate(cellful)
 
 
 def test_every_section_router_declares_its_store_budget() -> None:
