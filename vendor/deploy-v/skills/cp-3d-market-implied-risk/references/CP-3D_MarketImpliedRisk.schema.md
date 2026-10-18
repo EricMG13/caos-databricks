@@ -5,7 +5,7 @@
 | ID | Table | Required fields |
 |---|---|---|
 | T3E.1 | Instrument and market source register | security_id, issuer, currency, coupon, maturity/call, seniority, source, timestamp, quote_type, freshness |
-| T3E.2 | Market snapshot | security_id, bid/mid/ask or evaluated price, yield, spread/OAS/DM, duration, benchmark, observation ID |
+| T3E.2 | Market snapshot | security_id, bid/mid/ask or evaluated price, yield, spread, OAS, DM, duration, benchmark, observation ID |
 | T3E.3 | Issuer curve | security_id, maturity/call date, spread/yield, seniority, curve residual, explanation status |
 | T3E.4 | Peer/index context | comparator, alignment basis, spread/yield/price, period, difference, comparability limitation |
 | T3E.5 | Implied risk calculations | security_id, model, horizon, recovery, discount/benchmark, implied default/loss/break-even, formula ID, limitation |

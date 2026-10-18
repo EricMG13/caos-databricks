@@ -1146,11 +1146,13 @@ def _owner_lines(
     module, markdown = assignment.module_id, answer_markdown(body)
     if module not in {MODEL_MODULE, "CP-5"} or markdown is None:
         return []
+    # By module, as `_forecast_inputs` reads it: the later ref of a module wins.
+    upstream = {ref.module_id: data for ref, data in context.upstream}
     with suppress(Exception):  # an answer the validator cannot read says so itself
         gaps = owner_restriction_gaps(
             _contract(bundle),
             markdown,
-            [data for _ref, data in context.upstream],
+            list(upstream.values()),
             selection=(CREDIT_SCREEN_SELECTION if module == "CP-5" else None),
         )
         return owner_messages(module, gaps)
@@ -1169,19 +1171,24 @@ def owner_messages(module: str, gaps: Sequence[OwnerGap]) -> list[str]:
             f"host owner check: {module}'s qa_status must be Restricted while an"
             f" upstream owner's is; Restricted: {', '.join(restricted)}"
         )
-    packed = _packed_items(module, gaps)
+    packed, hidden = _packed_items(module, gaps)
     lines += [
         line
         for text, _n in packed[:MAX_OWNER_LINES]
         if (line := _bounded("host owner check", text))
     ]
-    if rest := sum(n for _text, n in packed[MAX_OWNER_LINES:]):
+    if rest := hidden + sum(n for _text, n in packed[MAX_OWNER_LINES:]):
         lines.append(f"host owner check: {rest} more missing items not shown")
     return lines
 
 
-def _packed_items(module: str, gaps: Sequence[OwnerGap]) -> list[tuple[str, int]]:
-    """(line text, items on it) for the dropped items, by front matter list."""
+def _packed_items(
+    module: str, gaps: Sequence[OwnerGap]
+) -> tuple[list[tuple[str, int]], int]:
+    """(line text, items on it) for the dropped items, by front matter list,
+    and how many items were left out because they cannot cross the boundary
+    (text no reader can see, a control character): each is bounded alone, so
+    one such item does not take the line it would have shared (N143)."""
     owners: dict[tuple[str, str], list[str]] = {}
     for gap in gaps:
         if gap.key != "qa_status":
@@ -1191,19 +1198,33 @@ def _packed_items(module: str, gaps: Sequence[OwnerGap]) -> list[tuple[str, int]
         " limitation_flags and validation_warnings exactly; "
     )
     packed: list[tuple[str, int]] = []
+    hidden = 0
     for key in OWNER_KEYS:
-        text, count = f"{head}missing from {key}: ", 0
-        for (listed, item), named in owners.items():
-            if listed != key:
-                continue
-            entry = f"«{item}» (from {', '.join(dict.fromkeys(named))})"
-            if count and len(text) + 2 + len(entry) > MAX_FEEDBACK_CHARS:
-                packed.append((text, count))
-                text, count = f"also missing from {key}: ", 0
-            text, count = text + (", " if count else "") + entry, count + 1
-        if count:
+        entries = [
+            f"«{item}» (from {', '.join(dict.fromkeys(named))})"
+            for (listed, item), named in owners.items()
+            if listed == key
+        ]
+        shown = [e for e in entries if _bounded("host owner check", e) is not None]
+        hidden += len(entries) - len(shown)
+        lines = _packed_key(f"{head}missing from {key}: ", key, shown)
+        head = "" if lines else head
+        packed += lines
+    return packed, hidden
+
+
+def _packed_key(first: str, key: str, entries: Sequence[str]) -> list[tuple[str, int]]:
+    """The `entries` of one front matter list packed into lines of at most
+    `MAX_FEEDBACK_CHARS`, the first opened by `first`."""
+    packed: list[tuple[str, int]] = []
+    text, count = first, 0
+    for entry in entries:
+        if count and len(text) + 2 + len(entry) > MAX_FEEDBACK_CHARS:
             packed.append((text, count))
-            head = ""
+            text, count = f"also missing from {key}: ", 0
+        text, count = text + (", " if count else "") + entry, count + 1
+    if count:
+        packed.append((text, count))
     return packed
 
 
