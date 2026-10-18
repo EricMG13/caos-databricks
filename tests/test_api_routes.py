@@ -821,6 +821,14 @@ def test_every_refusal_code_has_a_constant_clearance() -> None:
         assert "{" not in clears and "}" not in clears and "%" not in clears, code
 
 
+def test_evidence_not_available_names_the_successor_run_for_a_completed_run() -> None:
+    """N229 (3). A completed run's pinned source cannot be re-pinned; its way
+    forward is a successor run, and the clearance must say so."""
+    clears = CLEARS[RefusalCode.EVIDENCE_NOT_AVAILABLE]
+    assert "Pin a live source" in clears
+    assert "completed run" in clears and "successor run" in clears
+
+
 def test_the_handoff_clearances_name_the_right_fix() -> None:
     """G2-17. `HANDOFF_BLOCKED` names a stored module blocker a caller can act
     on directly; the other four are a stored handoff that failed to re-parse
@@ -1028,6 +1036,29 @@ def test_a_transient_fault_answers_503_and_names_when_to_retry(
         _refused("STORE_UNAVAILABLE"),
     )
     assert int(response.headers["retry-after"]) == RETRY_AFTER_SECONDS
+
+
+def test_a_charge_over_its_reservation_answers_409_like_a_refused_command(
+    client: TestClient, case: tuple[StoreConnection, UUID]
+) -> None:
+    """R10 (D152, N183): the status map gives `BUDGET_CHARGE_OVER_RESERVATION`
+    409, as a refused command elsewhere answers, where it gave 500 (so a
+    RETRY_RUN sent directly for a run parked with it answers 409; the Run
+    section already offers no such retry, F585). Read here through a store
+    that refuses the code. No retry-after: waiting does not clear it."""
+    _conn, case_id = case
+    app.dependency_overrides[store_connection] = _refusing(
+        RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    )
+
+    response = _section(client, case_id, None, uuid4())
+
+    assert (response.status_code, response.json()) == (
+        409,
+        _refused("BUDGET_CHARGE_OVER_RESERVATION"),
+    )
+    assert "retry-after" not in response.headers
+    assert _STATUS[RefusalCode.BUDGET_CHARGE_OVER_RESERVATION] == 409
 
 
 def _refusing(code: RefusalCode) -> Callable[[], StoreConnection]:

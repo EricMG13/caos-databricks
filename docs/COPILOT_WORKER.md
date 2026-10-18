@@ -152,7 +152,7 @@ Other typed codes arrive on a run, not at start: a call over its reservation par
 
 ### A run parked for over-reservation
 
-If a call's charge exceeds what the run reserved, the run parks `BUDGET_CHARGE_OVER_RESERVATION`. The park is terminal for that pin: a retry would reserve at the same price and overshoot the same way, so RETRY_RUN is refused (HTTP 500 for that code, N183). To continue:
+If a call's charge exceeds what the run reserved, the run parks `BUDGET_CHARGE_OVER_RESERVATION`. The park is terminal for that pin: a retry would reserve at the same price and overshoot the same way, so RETRY_RUN is refused (HTTP 409 for that code, D152 R10). To continue:
 1. Re-price: raise the model's per-token pin in `CAOS_MODEL_PRICE` (and the API's approved entry) to at least its listing and observed rate, and keep `CAOS_RUN_CEILING` above one worst-case call. Update the credit price too if GitHub's rate moved.
 2. Restart the worker so readiness re-checks the pins.
 3. Start a successor run of the same case (`supersedes_run_id` names the parked run). It reserves at the new price; the parked run stays as the record. How the Run section offers this is not exercised against a real seat (N185).

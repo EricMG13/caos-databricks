@@ -294,7 +294,10 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.SOURCE_TOO_LARGE: "Supply a smaller document or pack.",
     _C.SOURCE_EXTRACTION_TIMEOUT: "Supply a simpler document.",
     _C.SOURCE_IDENTITY_INVALID: "Readmit the document.",
-    _C.EVIDENCE_NOT_AVAILABLE: "Pin a live source for the evidence.",
+    _C.EVIDENCE_NOT_AVAILABLE: (
+        "Pin a live source for the evidence; for a completed run, start a "
+        "successor run that pins one."
+    ),
     _C.EVIDENCE_PACKING_MISMATCH: (
         "An operator must re-admit the source under this build."
     ),
