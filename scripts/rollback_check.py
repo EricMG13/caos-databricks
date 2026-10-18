@@ -5,7 +5,9 @@ A release's first boot applies its migrations to the store, and the store
 then refuses code whose migration list is any other (`apply_schema` answers
 `STORE_SCHEMA_DRIFT` for a history longer than the code's own, and the app
 does not start). Code from before DL-1 (F219) reads `public` rather than
-`caos_store`, so it starts on an empty store beside the real one. A redeploy
+`caos_store`, so it starts on an empty store beside the real one, except
+that migration 0052 (N81) makes it refuse the store when it boots as the role
+that migrated, and only then. A redeploy
 is therefore a rollback only when the older commit carries exactly the
 release's migrations, byte for byte and in order, reads the same schema,
 and reads and writes the same host records (`RECORD_CODEC_VERSION` in
@@ -149,7 +151,8 @@ def rollback_problems(
     if was.schema != now.schema:
         problems.append(
             f"{older} reads the {was.schema} schema, not {now.schema}: it would "
-            "start on an empty store beside the release's (F219, DL-1)"
+            "start on an empty store beside the release's unless it boots as the role "
+            "that applied 0052, whose tripwire it refuses (F219, DL-1, N81)"
         )
     names = [name for name, _ in was.migrations]
     added = [name for name, _ in now.migrations if name not in names]

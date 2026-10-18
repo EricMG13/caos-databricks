@@ -632,6 +632,7 @@ def _table_view(table: HandoffTable) -> TableView:
 def _register_view(register: HandoffRegister) -> RegisterView:
     return RegisterView(
         register_id=register.register_id,
+        unavailable_reason=register.unavailable_reason,
         columns=list(register.columns),
         declared=list(register.declared),
         rows=[
