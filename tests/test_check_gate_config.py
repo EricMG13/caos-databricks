@@ -9,6 +9,7 @@ from pathlib import Path
 
 import check_gate_config
 import pytest
+import tracked
 from tracked import tracked_files
 
 REPO = Path(__file__).resolve().parents[1]
@@ -843,6 +844,117 @@ def test_baseline_problems_measures_the_base_tree_fresh_not_its_own_json(
 
     assert "baseline: noqa rose to 2 (base branch 1)" in problems
     assert "baseline: noqa:E501 rose to 2 (base branch 1)" in problems
+
+
+def _not_python(_directory: str, names: list[str]) -> list[str]:
+    return [name for name in names if not name.endswith(".py")]
+
+
+def _narrowed_repo(root: Path, *, checker: bool = False) -> str:
+    """A repo whose second commit adds a suppression under `skipped/`; returns
+    the base revision. With `checker`, the base commit carries this repo's own
+    `scripts/`, so it has a checker and a `tracked` module of its own."""
+    root.mkdir()
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "test@example.invalid")
+    _git(root, "config", "user.name", "Gate test")
+    (root / "m.py").write_text("x = 1\n", encoding="utf-8")
+    _git(root, "add", "m.py")
+    if checker:
+        shutil.copytree(REPO / "scripts", root / "scripts", ignore=_not_python)
+        _git(root, "add", "scripts")
+    _git(root, "commit", "-qm", "base")
+    base_rev = _base_rev(root)
+    (root / "skipped").mkdir()
+    (root / "skipped" / "s.py").write_text(
+        f"x = 1  {_noqa('E501')}\n", encoding="utf-8"
+    )
+    _git(root, "add", "skipped/s.py")
+    _git(root, "commit", "-qm", "suppress where the lister does not look")
+    return base_rev
+
+
+def test_baseline_problems_refuses_a_tracked_path_the_current_tree_did_not_measure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N108: a change that narrows `tracked_python` to skip a directory and
+    adds a suppression there passed unseen, because both file lists came from
+    the narrowed function. The checker lists the tree itself and refuses a
+    tracked `.py` path the measure left out."""
+    root = tmp_path / "repo"
+    base_rev = _narrowed_repo(root)
+    real = tracked.tracked_python
+    monkeypatch.setattr(
+        "check_gate_config.tracked_python",
+        lambda repo: [p for p in real(repo) if "skipped" not in p.parts],
+    )
+    problems = check_gate_config.baseline_problems(base_rev, root)
+    assert "baseline: skipped/s.py is tracked but was not measured" in problems
+
+
+@pytest.mark.parametrize("how", ["vendor", "tracked_files"])
+def test_baseline_problems_refuses_when_tracked_py_itself_is_narrowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, how: str
+) -> None:
+    """N108, the PR that edits `scripts/tracked.py`: this commit's `VENDOR` or
+    `tracked_files` skips a directory for the measure and for every lister
+    this commit owns alike. The base revision's own `tracked` module still
+    names the file, so the checker refuses it."""
+    root = tmp_path / "repo"
+    base_rev = _narrowed_repo(root, checker=True)
+    if how == "vendor":
+        # An edited `tracked.py` is what `check_gate_config` imports from, so
+        # both modules' bindings change together.
+        monkeypatch.setattr("tracked.VENDOR", "skipped")
+        monkeypatch.setattr("check_gate_config.VENDOR", "skipped")
+    else:
+        real = tracked.tracked_files
+
+        def narrowed(repo: Path, *specs: str) -> list[str]:
+            return [n for n in real(repo, *specs) if not n.startswith("skipped/")]
+
+        monkeypatch.setattr("tracked.tracked_files", narrowed)
+        monkeypatch.setattr("check_gate_config.tracked_files", narrowed)
+    problems = check_gate_config.baseline_problems(base_rev, root)
+    assert "baseline: skipped/s.py is tracked but was not measured" in problems
+
+
+def test_baseline_problems_refuses_a_tracked_path_the_base_tree_did_not_measure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N108, base side: the narrowed `tracked_python_at` hides a base file."""
+    root = tmp_path / "repo"
+    base_rev = _narrowed_repo(root)
+    real = tracked.tracked_python_at
+    monkeypatch.setattr(
+        "check_gate_config.tracked_python_at",
+        lambda repo, rev: {k: v for k, v in real(repo, rev).items() if k != "m.py"},
+    )
+    problems = check_gate_config.baseline_problems(base_rev, root)
+    assert f"baseline: m.py is tracked at {base_rev} but was not measured" in problems
+
+
+def test_python_names_at_lists_every_python_path_but_vendor(tmp_path: Path) -> None:
+    """N108: the independent list is every `.py` the revision names."""
+    root = tmp_path / "repo"
+    base_rev = _narrowed_repo(root)
+    (root / "vendor").mkdir()
+    (root / "vendor" / "v.py").write_text("y = 1\n", encoding="utf-8")
+    (root / "notes.txt").write_text("n\n", encoding="utf-8")
+    _git(root, "add", "vendor/v.py", "notes.txt")
+    _git(root, "commit", "-qm", "vendored")
+    assert tracked.python_names_at(root, "HEAD") == {"m.py", "skipped/s.py"}
+    assert tracked.python_names_at(root, base_rev) == {"m.py"}
+    with pytest.raises(RuntimeError):
+        tracked.python_names_at(root, "not-a-real-revision")
+
+
+def test_baseline_problems_accepts_a_fully_measured_pair(tmp_path: Path) -> None:
+    """N108: the listing check is silent when every path was measured."""
+    root = tmp_path / "repo"
+    base_rev = _narrowed_repo(root)
+    problems = check_gate_config.baseline_problems(base_rev, root)
+    assert not [p for p in problems if "not measured" in p]
 
 
 def test_baseline_problems_refuses_an_unresolvable_revision(tmp_path: Path) -> None:
