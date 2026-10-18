@@ -26,14 +26,18 @@ _C = RefusalCode
 # The refusals `prove_revision` raises that mean drift, not tamper: the saved
 # narrative no longer resolves, or the derivation moved since the freeze, so the
 # head cannot be filed and takes the superseding save `_fileable` lets through
-# (N77, N112). A blob that is missing or changed, a record mismatch or a store
-# fault is none of these.
+# (N77, N112). The two BoundaryText codes are drift too: `_span` and `_resolved`
+# raise them on a stored head only after a BoundaryText rule change (N235). A
+# blob that is missing or changed, a record mismatch or a store fault is none
+# of these.
 UNPROVEN_HEAD_CODES = frozenset(
     {
         RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING,
         RefusalCode.DELIVERABLE_PAYLOAD_INVALID,
         RefusalCode.NARRATIVE_REFERENCE_INVALID,
         RefusalCode.NARRATIVE_FIGURE_UNREFERENCED,
+        RefusalCode.BOUNDARY_TEXT_INVALID,
+        RefusalCode.BOUNDARY_TEXT_TOO_LONG,
     }
 )
 _A = ActionName
