@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 import pytest
 from canonical_fixtures import BUNDLE, CATALOG, fields_from_prompt
 from conftest import _url_for, priced
+from governed_deliverable import freeze_canonical, save_revision, sign_opinion
 from liquidity_route_fixtures import (
     MODULES,
     PACK,
@@ -31,9 +32,8 @@ from test_loop_charges import ESTIMATE
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.deliverable.canonical import freeze_canonical, payload_bytes, verify_frozen
-from caos.deliverable.filing import sign_opinion
-from caos.deliverable.revisions import read_revision, save_revision
+from caos.deliverable.canonical import payload_bytes, verify_frozen
+from caos.deliverable.revisions import read_revision
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, run_route

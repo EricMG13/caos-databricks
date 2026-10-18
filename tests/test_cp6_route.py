@@ -21,6 +21,7 @@ from cp6_route_fixtures import (
     PortfolioDecisionCompletions,
 )
 from fastapi.testclient import TestClient
+from governed_deliverable import freeze_canonical, save_revision, sign_opinion
 from test_api_routes import _section, _serve, _view
 from test_canonical_execution import _node
 from test_canonical_runtime import (
@@ -39,9 +40,8 @@ from caos.api import app as app_module
 from caos.api.app import app
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.deliverable.canonical import freeze_canonical, payload_bytes, verify_frozen
-from caos.deliverable.filing import sign_opinion
-from caos.deliverable.revisions import read_revision, save_revision
+from caos.deliverable.canonical import payload_bytes, verify_frozen
+from caos.deliverable.revisions import read_revision
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import EdgeType, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, run_route

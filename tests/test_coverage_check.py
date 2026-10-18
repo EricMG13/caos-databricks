@@ -246,6 +246,8 @@ C27 = UUID("c27bddbf-7ca1-4a83-82ec-dc47f5b2ff49")
 # The pages past 59 of `c27bddbf` holding a numbered heading in LCR7's run db
 # (`source_blocks`): SECTION 8.07 to 8.15 on page 60, ARTICLE IX and 8.16 to
 # 9.04 on 61, ... 9.23 to 9.27 on 66; page 67 is Exhibit B.
+INDENTURE = UUID("da3fdc2f-605a-4948-a40a-857d06366a3e")
+LCR6_INDENTURE = UUID("1e2db82b-68a8-4f20-8c47-ba9af15b49fa")
 LCR7_HEADED = {C27: frozenset(range(60, 67))}
 
 
@@ -255,25 +257,25 @@ def _every_page(pages: dict[UUID, int]) -> dict[UUID, frozenset[int]]:
 
 
 def test_lcr7s_stored_answer_is_held_to_the_credit_agreements_67_pages() -> None:
-    """The replay: one fault, the conformed credit agreement, 59 of 67. The
-    2032 indenture's "1-67" for its 60 pages is an over-claim, no fault."""
-    assert coverage_faults(LCR7_P5, LCR7_PAGES, LCR7_HEADED) == [
-        CoverageFault(C27, 59, 67)
-    ]
-    assert coverage_faults(LCR7_P5, LCR7_PAGES, _every_page(LCR7_PAGES)) == [
-        CoverageFault(C27, 59, 67)
-    ]
-    assert (UUID("da3fdc2f-605a-4948-a40a-857d06366a3e"), 67) in coverage_claims(
-        LCR7_P5
-    )
+    """The replay: the conformed credit agreement, 59 of 67, is the short
+    claim; the 2032 indenture's "1-67" for its 60 pages is an over-claim
+    (N165 (1), D152 R4), a fault of its own."""
+    expected = [CoverageFault(C27, 59, 67), CoverageFault(INDENTURE, 67, 60, over=True)]
+    assert coverage_faults(LCR7_P5, LCR7_PAGES, LCR7_HEADED) == expected
+    assert coverage_faults(LCR7_P5, LCR7_PAGES, _every_page(LCR7_PAGES)) == expected
+    assert (INDENTURE, 67) in coverage_claims(LCR7_P5)
 
 
-def test_lcr5s_and_lcr6s_accepted_answers_raise_no_fault() -> None:
-    """Every row of both is read (8 claims each), and none falls short, even
-    with every page headed."""
+def test_lcr5s_accepted_answer_raises_no_fault_and_lcr6s_only_its_over_claim() -> None:
+    """Every row of both is read (8 claims each). LCR5 falls short nowhere and
+    claims nothing past a source (even with every page headed); LCR6's "1-67"
+    for the 60-page indenture is its one fault (N165 (1))."""
     for p5, pages in ((LCR5_P5, LCR5_PAGES), (LCR6_P5, LCR6_PAGES)):
         assert len(coverage_claims(p5)) == len(pages) == 8
-        assert coverage_faults(p5, pages, _every_page(pages)) == []
+    assert coverage_faults(LCR5_P5, LCR5_PAGES, _every_page(LCR5_PAGES)) == []
+    assert coverage_faults(LCR6_P5, LCR6_PAGES, _every_page(LCR6_PAGES)) == [
+        CoverageFault(LCR6_INDENTURE, 67, 60, over=True)
+    ]
 
 
 def _p5(*cells: str, source: UUID = C27) -> str:
@@ -326,13 +328,15 @@ def test_only_a_wholly_delivered_source_short_of_its_last_page_is_a_fault() -> N
     other = uuid4()
     second = _p5("1\u20133", source=other).split("|---|---|\n")[1]
     claims = _p5("1\u201359 shown") + second
-    # Its last page, an over-claim, and a source the caller did not pass as
-    # whole (a page-mapped one): no fault.
+    # Its last page, and a source the caller did not pass as whole (a
+    # page-mapped one): no fault. A claim past the last page is one.
     headed = _every_page({C27: 67, other: 4})
     assert coverage_faults(claims, {C27: 59, other: 4}, headed) == [
         CoverageFault(other, 3, 4)
     ]
-    assert coverage_faults(claims, {C27: 58}, headed) == []
+    assert coverage_faults(claims, {C27: 58}, headed) == [
+        CoverageFault(C27, 59, 58, over=True)
+    ]
     assert coverage_faults(claims, {}, headed) == []
 
 
@@ -497,7 +501,73 @@ def test_an_unrelated_early_range_does_not_hide_the_fullest_claim() -> None:
     row = _p5("1-3", "Pages 1-67")
     assert coverage_claims(row) == [(C27, 3), (C27, 67)]
     assert coverage_faults(row, {C27: 67}, _every_page({C27: 67})) == []
+    # The largest, whatever the order the cells are written in.
+    reordered = _p5("Pages 1-67", "1-3")
+    assert coverage_faults(reordered, {C27: 67}, _every_page({C27: 67})) == []
     short = _p5("1-3", "Pages 1-58")
     assert coverage_faults(short, {C27: 67}, _every_page({C27: 67})) == [
         CoverageFault(C27, 58, 67)
     ]
+
+
+def test_lcr6s_1_67_for_a_60_page_whole_source_is_an_over_claim() -> None:
+    """N165 (1), D152 R4: a P5 range past the last delivered page of a WHOLE
+    source is a fault, headings or none; it states the delivered extent."""
+    faults = coverage_faults(LCR6_P5, LCR6_PAGES, {})
+    assert faults == [CoverageFault(LCR6_INDENTURE, 67, 60, over=True)]
+    name = "CZR_2032_Indenture.txt"
+    assert coverage_message(faults[0], name, (59, "SECTION 9.27. Notices.")) == (
+        f"P5 gives source {LCR6_INDENTURE} ({name}) pages 1-67, but the host"
+        " delivered it WHOLE, pages 1-60, so no page past 60 exists; correct"
+        " its P5 row and every finding, gap and T8 status drawn from the"
+        " longer extent"
+    )
+
+
+def test_a_message_without_a_name_or_a_heading_has_neither() -> None:
+    """The name's parentheses and the heading clause appear only when there
+    is a name or a heading to say."""
+    over = coverage_message(CoverageFault(C27, 67, 60, over=True), "", None)
+    assert over.startswith(f"P5 gives source {C27} pages 1-67, but")
+    short = coverage_message(CoverageFault(C27, 59, 67), "", None)
+    assert short == (
+        f"P5 gives source {C27} pages 1-59, but the host delivered it WHOLE,"
+        " pages 1-67; correct its P5 row and every finding, gap and T8 status"
+        " drawn from the shorter extent"
+    )
+
+
+def test_an_over_claim_is_judged_on_the_largest_claim_and_a_whole_source_only() -> None:
+    row = _p5("1-3", "Pages 1-61")
+    assert coverage_faults(row, {C27: 60}, {}) == [
+        CoverageFault(C27, 61, 60, over=True)
+    ]
+    # Exactly the last page, and a page-mapped source (not passed): no fault.
+    assert coverage_faults(_p5("Pages 1-60"), {C27: 60}, {}) == []
+    assert coverage_faults(row, {}, {}) == []
+
+
+def test_an_over_claim_refuses_the_gate_and_its_retry_is_told_the_extent(
+    paged: _Harness,
+) -> None:
+    """N165 (1), end to end: pages 1-4 of a three-page WHOLE source (no
+    heading needed) is refused `HANDOFF_MALFORMED`; the retry is told the
+    extent delivered, and the corrected answer is accepted."""
+    answers = CanonicalCompletions(paged.source_id)
+    flawed = _Flawed(answers, flaw=_short_of(paged.source_id, "Pages 1\u20134"))
+    assert _run(paged, flawed) is None
+    assert [_module(prompt) for prompt in answers.prompts] == [
+        "CP-0",
+        "CP-0",
+        "CP-L10",
+        "CP-5",
+    ]
+    line = (
+        f"host coverage check: P5 gives source {paged.source_id} ({PAGED})"
+        " pages 1-4, but the host delivered it WHOLE, pages 1-3, so no page"
+        " past 3 exists; correct its P5 row and every finding, gap and T8"
+        " status drawn from the longer extent"
+    )
+    assert line not in answers.prompts[0]
+    assert line in _checks(answers.prompts[1])
+    assert _cp0_ledger(paged) == (2, 2, ["HANDOFF_MALFORMED"], 1)
