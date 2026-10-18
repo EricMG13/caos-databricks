@@ -51,6 +51,7 @@ import {
   type StackFigure,
   type Wall,
   type WaterfallFigure,
+  APPENDIX_LISTS,
 } from "./figure-core";
 import { registerFigures } from "./register-figures";
 
@@ -783,7 +784,7 @@ export function figuresOf(handoff: HandoffView): Figure[] {
     ...figures.slice(0, MAX_FIGURES - 1),
     {
       ...oversized("more", figures[MAX_FIGURES - 1]!.table, `${rest} more figures`, 0),
-      summary: `${rest} more figures are not drawn. The Appendix tab lists every row.`,
+      summary: `${rest} more figures are not drawn.${APPENDIX_LISTS}`,
     },
   ];
 }
@@ -1062,19 +1063,27 @@ function Unread({ handoff }: { handoff: HandoffView }) {
   );
 }
 
-/** One figure in a grid: its chart, or past `MAX_MARKS` its title and summary. */
+const WRITTEN_SHOWS = " The As written tab shows the module's text.";
+
+/** One figure in a grid: its chart, or past `MAX_MARKS` its title and summary.
+    A stated figure points to the Appendix for its rows; a module whose text
+    has no appendix register points to the text itself (N113). */
 export function FigureCell({
   figure,
   onPick,
+  appendix = true,
 }: {
   figure: Figure;
   onPick: (pick: FigurePick, opener: HTMLElement) => void;
+  /** Whether the module's Appendix lists any register. */
+  appendix?: boolean;
 }) {
   return (
     <div className={`fig ${figure.kind}`} data-figure={figure.key}>
       {figure.oversized ? (
         <p className="note" data-figure-oversized>
-          <b>{figure.title}.</b> {figure.summary}
+          <b>{figure.title}.</b>{" "}
+          {appendix ? figure.summary : figure.summary.replace(APPENDIX_LISTS, WRITTEN_SHOWS)}
         </p>
       ) : (
         <Chart figure={figure} onPick={onPick} />
@@ -1087,8 +1096,11 @@ export function Figures({
   handoff,
   calculation,
   onPick,
+  appendix = true,
 }: {
   handoff: HandoffView;
+  /** Whether the module's Appendix lists any register. */
+  appendix?: boolean;
   /** What the host calculated for this module, said where its figures are. */
   calculation: ReactNode;
   onPick: (pick: FigurePick, opener: HTMLElement) => void;
@@ -1122,7 +1134,7 @@ export function Figures({
         <ProvenanceKeyed value={false}>
           <div className="figgrid">
             {figures.map((figure) => (
-              <FigureCell key={figure.key} figure={figure} onPick={onPick} />
+              <FigureCell key={figure.key} figure={figure} onPick={onPick} appendix={appendix} />
             ))}
           </div>
         </ProvenanceKeyed>

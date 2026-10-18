@@ -129,6 +129,6 @@ def test_fulcrum_and_recoveries_are_script_owned_and_source_derived() -> None:
     changed_rows = restructuring_rows(changed)
     assert "EUR 350m" in restructuring_pack(changed).decode()
     assert changed_result["cases"]["HIGH"]["residual_to_equity"] == 200.0
-    assert changed_rows["T4E.7"][5][4] == "25.0%"
+    assert changed_rows["T4E.7"][5][7] == "25.0%"
     assert changed_result != baseline
     assert PACK != restructuring_pack(changed)

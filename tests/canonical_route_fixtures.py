@@ -312,6 +312,8 @@ def _cp3d() -> dict[str, list[list[str]]]:
                 "not supplied in extract",
                 "350bp spread",
                 "not supplied in extract",
+                "not supplied in extract",
+                "not supplied in extract",
                 "Beta loan 320bp",
                 "issuer-pack p1 market table",
             ]

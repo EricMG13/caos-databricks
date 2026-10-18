@@ -68,7 +68,7 @@ def _bill(
 def _billed_pair(harness: _Harness) -> tuple[UUID, UUID]:
     """Two billed attempts at one node, both started before either was billed:
     once one is billed and owed a verdict, no attempt starts beside it
-    (`ATTEMPT_UNSETTLED`), so two calls billed at once is the only way two
+    (`ATTEMPT_BILL_OWED`), so two calls billed at once is the only way two
     bills meet at acceptance."""
     first, second = _started(harness), _started(harness)
     return _bill(harness, first), _bill(harness, second)
