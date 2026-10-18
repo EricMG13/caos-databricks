@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import UNANCHORED, CanonicalCompletions
-from conftest import login_role, priced
+from conftest import login_role, priced, reserve_at
 from lite_route_fixtures import RealisticLiteCompletions
 from test_runtime import (
     ESTIMATE,
@@ -150,6 +150,27 @@ def test_an_unsettled_run_goes_behind_the_queue_rather_than_ahead_of_it(
         worker._refused(conn, claimed, Refusal(RefusalCode.STORE_UNAVAILABLE))
     again = claim_run(conn, worker=CONFIG.worker, lease_seconds=LEASE_SECONDS)
     assert again is not None and again.run_id == second.run_id
+
+
+def test_a_run_refused_for_an_owed_bill_keeps_its_place_to_be_replayed_at_once(
+    case: tuple[StoreConnection, UUID],
+    route: ResolvedRoute,
+    bundle: Bundle,
+    blobs: BlobStore,
+) -> None:
+    """N116: `ATTEMPT_BILL_OWED` is a bill that landed as the pass started; the
+    next pass replays it, so the run is given back at its old place, not behind
+    the queue as a run waiting on another session's call is."""
+    first = queued_run(case, route, bundle, blobs)
+    queued_run(case, route, bundle, blobs)
+    conn = first.conn
+    lease = claim_run(conn, worker=CONFIG.worker, lease_seconds=LEASE_SECONDS)
+    assert lease is not None and lease.run_id == first.run_id
+    with pytest.raises(Refusal, match=r"^ATTEMPT_BILL_OWED$"):
+        worker._refused(conn, lease, Refusal(RefusalCode.ATTEMPT_BILL_OWED))
+    again = claim_run(conn, worker=CONFIG.worker, lease_seconds=LEASE_SECONDS)
+    assert again is not None and again.run_id == first.run_id
+    assert work_row(conn, first.run_id)[0] == "CLAIMED", "released, not parked"
 
 
 def test_worker_drives_an_enqueued_lite_run_to_complete_with_a_deterministic_provider(
@@ -467,6 +488,17 @@ def test_the_lease_outlives_the_provider_timeout() -> None:
     assert WorkerConfig(BoundaryText.of("w")).lease_seconds == LEASE_SECONDS
 
 
+def test_a_call_hold_is_two_of_the_leases_the_claim_was_made_with() -> None:
+    """N80: the hold follows `WorkerConfig.lease_seconds` through the lease the
+    claim returned; the module default sizes it only for a start made without
+    one."""
+    from caos.store.runs import CALL_HOLD_SECONDS, call_hold_seconds
+
+    assert call_hold_seconds(None) == CALL_HOLD_SECONDS
+    assert call_hold_seconds(Lease(uuid4(), 1, 3000)) == 6000
+    assert call_hold_seconds(Lease(uuid4(), 1, LEASE_SECONDS)) == CALL_HOLD_SECONDS
+
+
 def test_a_call_hold_outlives_the_lease_and_a_whole_call_past_it() -> None:
     """D117: `_UNSETTLED` keeps a node from a second worker for
     `CALL_HOLD_SECONDS` past the reservation while a live session may still
@@ -478,6 +510,20 @@ def test_a_call_hold_outlives_the_lease_and_a_whole_call_past_it() -> None:
 
     assert CALL_HOLD_SECONDS == 2 * LEASE_SECONDS == 1800
     assert CALL_HOLD_SECONDS - provider_module.TIMEOUT_SECONDS >= LEASE_SECONDS
+
+
+@pytest.mark.parametrize("lease_seconds", [1, 60, 180, LEASE_SECONDS, 86_400])
+def test_a_call_hold_never_expires_under_a_holder_whose_call_may_still_run(
+    lease_seconds: int,
+) -> None:
+    """D117 at every allowed lease, not the default alone: the hold outlasts
+    the call's deadline by at least one whole lease, so a live holder whose
+    call ran to the deadline and whose bill then waits is never overtaken."""
+    from caos.store.runs import call_hold_seconds
+
+    held = call_hold_seconds(Lease(uuid4(), 1, lease_seconds))
+    assert held - provider_module.TIMEOUT_SECONDS >= lease_seconds
+    assert held >= 2 * lease_seconds
 
 
 FORBIDDEN_MODULES = frozenset(
@@ -1827,7 +1873,13 @@ def test_a_bill_on_a_closed_connection_is_written_on_a_fresh_one(
     from caos.store.work import claim_run
 
     run = enqueued
-    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    paused: list[float] = []
+
+    def pause(seconds: float) -> None:
+        paused.append(seconds)
+        assert len(paused) < 20, "the bill must stop"
+
+    monkeypatch.setattr(canonical, "_pause", pause)
     node = run.route.nodes[0].route_node_id
     lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
     attempt = start_attempt(run.conn, run.run_id, node, lease=lease)
@@ -1845,6 +1897,316 @@ def test_a_bill_on_a_closed_connection_is_written_on_a_fresh_one(
     assert count(run.conn, "budget_ledger", run.run_id) == 1
     canonical.bill(run.conn, attempt, outcome)  # an exact replay is a no-op
     assert count(run.conn, "call_outcomes", run.run_id) == 1
+
+
+def _hold_is_taken(url: str, attempt: UUID) -> bool:
+    """Whether another session holds the attempt's `call_hold` right now."""
+    from caos.store.outcomes import CALL_HOLD_LOCK
+
+    with psycopg.connect(url, autocommit=True) as probe:
+        row = probe.execute(
+            "SELECT pg_try_advisory_lock(%s::integer, hashtext(%s))",
+            (CALL_HOLD_LOCK, str(attempt)),
+        ).fetchone()
+        if row == (True,):
+            probe.execute(
+                "SELECT pg_advisory_unlock(%s::integer, hashtext(%s))",
+                (CALL_HOLD_LOCK, str(attempt)),
+            )
+        return row == (False,)
+
+
+def test_a_bill_retried_on_a_fresh_connection_holds_its_attempt_as_it_writes(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: the hold went with the connection a fault closed, and the retry
+    waited a pause before a fresh one wrote the bill, with no hold in between.
+    The retry reconnects at once, takes the hold on the connection that
+    writes, and lets it go with the bill: the write is held, and a fault that
+    closed the session costs no pause. What is left is the one connect and
+    lock round trip between the loss and the new hold."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome, record_outcome
+    from caos.store.runs import start_attempt
+    from caos.store.work import claim_run
+
+    run = enqueued
+    pauses: list[float] = []
+    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    node = run.route.nodes[0].route_node_id
+    lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
+    attempt = start_attempt(run.conn, run.run_id, node, lease=lease)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    closed = connect(empty_database)
+    closed.close()
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+    real = record_outcome
+    held_while_written: list[bool] = []
+
+    def watched(
+        conn: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome
+    ) -> bool:
+        held_while_written.append(_hold_is_taken(empty_database, attempt_id))
+        return real(conn, attempt_id=attempt_id, outcome=outcome)
+
+    monkeypatch.setattr(canonical, "record_outcome", watched)
+    canonical.bill(closed, attempt, outcome)
+    assert held_while_written == [True]
+    assert pauses == [], "a closed session is replaced at once, not after a pause"
+    assert not _hold_is_taken(empty_database, attempt), "let go with the bill"
+    assert count(run.conn, "call_outcomes", run.run_id) == 1
+
+
+def test_a_bill_with_no_store_to_reconnect_to_still_pauses_between_its_tries(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: only a fault that took its session away is answered by an instant
+    reconnect; a reconnect that itself fails pauses like any other failed try,
+    so a store that is down is not asked `BILL_TRIES` times in a burst."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome
+
+    pauses: list[float] = []
+    events: list[str] = []
+
+    def paused(seconds: float) -> None:
+        pauses.append(seconds)
+        events.append("pause")
+
+    def asked_for_the_store() -> str:
+        events.append("connect")
+        assert len(events) < 30, "the bill must stop"
+        return real_store_url()
+
+    from caos.store.lakebase import store_url as real_store_url
+
+    monkeypatch.setattr(canonical, "_pause", paused)
+    monkeypatch.setattr(canonical, "store_url", asked_for_the_store, raising=True)
+    closed = connect(empty_database)
+    closed.close()
+    monkeypatch.delenv("CAOS_DATABASE_URL", raising=False)
+    for name in ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER"):
+        monkeypatch.delenv(name, raising=False)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        canonical.bill(closed, enqueued.run_id, outcome)
+    assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
+    assert events == ["connect", "pause"] * (canonical.BILL_TRIES - 1) + ["connect"]
+
+
+def test_a_bill_whose_write_closes_the_session_is_retried_held_and_unpaused(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: a write that fails and takes its connection with it (a failover)
+    is retried on a fresh, held connection without the pause that left the
+    attempt unheld for a second."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome, record_outcome
+    from caos.store.runs import start_attempt
+    from caos.store.work import claim_run
+
+    run = enqueued
+    pauses: list[float] = []
+    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    node = run.route.nodes[0].route_node_id
+    lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
+    attempt = start_attempt(run.conn, run.run_id, node, lease=lease)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    worker_conn = connect(empty_database)
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+    real = record_outcome
+    held: list[bool] = []
+
+    def cut_once(
+        conn: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome
+    ) -> bool:
+        if not held:
+            held.append(False)
+            conn.close()
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+        held.append(_hold_is_taken(empty_database, attempt_id))
+        return real(conn, attempt_id=attempt_id, outcome=outcome)
+
+    monkeypatch.setattr(canonical, "record_outcome", cut_once)
+    canonical.bill(worker_conn, attempt, outcome)
+    assert held == [False, True]
+    assert pauses == []
+    assert count(run.conn, "call_outcomes", run.run_id) == 1
+
+
+def test_a_bill_cut_again_on_its_fresh_connection_is_held_and_unpaused_again(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: the fresh connection can be cut too (a second failover); the retry
+    after it reconnects and holds again at once, as the first did."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome, record_outcome
+    from caos.store.runs import start_attempt
+    from caos.store.work import claim_run
+
+    run = enqueued
+    pauses: list[float] = []
+    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    node = run.route.nodes[0].route_node_id
+    lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
+    attempt = start_attempt(run.conn, run.run_id, node, lease=lease)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    worker_conn = connect(empty_database)
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+    seen: list[bool] = []
+
+    def cut_twice(
+        conn: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome
+    ) -> bool:
+        seen.append(_hold_is_taken(empty_database, attempt_id))
+        if len(seen) < 3:
+            conn.close()
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+        return record_outcome(conn, attempt_id=attempt_id, outcome=outcome)
+
+    monkeypatch.setattr(canonical, "record_outcome", cut_twice)
+    canonical.bill(worker_conn, attempt, outcome)
+    assert seen == [False, True, True]
+    assert pauses == []
+    assert count(run.conn, "call_outcomes", run.run_id) == 1
+
+
+def test_a_bill_cut_then_met_by_a_down_store_keeps_every_pause(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: the instant reconnect after a cut spends no try, so a store that
+    goes down behind the cut still gets `BILL_TRIES - 1` pauses, as on any
+    other path (the failover path: session cut, then the store is down)."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome
+
+    pauses: list[float] = []
+    writes: list[int] = []
+
+    def paused(seconds: float) -> None:
+        pauses.append(seconds)
+        assert len(pauses) < 20, "the bill must stop"
+
+    monkeypatch.setattr(canonical, "_pause", paused)
+    for name in ("CAOS_DATABASE_URL", "PGHOST", "PGPORT", "PGDATABASE", "PGUSER"):
+        monkeypatch.delenv(name, raising=False)
+
+    def cut(conn: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome) -> bool:
+        writes.append(1)
+        conn.close()
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(canonical, "record_outcome", cut)
+    worker_conn = connect(empty_database)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        canonical.bill(worker_conn, enqueued.run_id, outcome)
+    assert writes == [1]
+    assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
+
+
+def test_a_store_that_cuts_every_session_is_asked_a_bounded_number_of_times(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80: the reconnect after a cut costs no try, but it is bounded: a store
+    that cuts every fresh session gets `BILL_TRIES` instant reconnects and then
+    the ordinary `BILL_TRIES` tries, `BILL_TRIES - 1` pauses among them."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome
+
+    pauses: list[float] = []
+    writes: list[int] = []
+    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+
+    def cut(conn: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome) -> bool:
+        writes.append(1)
+        assert len(writes) < 30, "the bill must stop"
+        conn.close()
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(canonical, "record_outcome", cut)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        canonical.bill(connect(empty_database), enqueued.run_id, outcome)
+    assert len(writes) == 2 * canonical.BILL_TRIES
+    assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
+
+
+def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
+    enqueued: _Run, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N80, the window that is inherent: a store down for every try leaves the
+    call unbilled and, the hold having gone with its connection, free for the
+    next claim to start the node again. Nothing can be written to a store that
+    is down, so the bound is the retry's: `BILL_TRIES` writes, a
+    `BILL_PAUSE_SECONDS` between each, well inside the lease's liveness
+    budget, then `STORE_UNAVAILABLE` and no more; the exposure after it is one
+    more attempt, under a reservation of its own (invariant 8)."""
+    from decimal import Decimal
+
+    from caos.methodology import canonical
+    from caos.store import connect
+    from caos.store.outcomes import CallOutcome, call_hold
+    from caos.store.runs import start_attempt
+    from caos.store.work import claim_run
+
+    run = enqueued
+    pauses: list[float] = []
+    monkeypatch.setattr(canonical, "_pause", pauses.append)
+    node = run.route.nodes[0].route_node_id
+    lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
+    attempt = start_attempt(run.conn, run.run_id, node, lease=lease)
+    outcome = CallOutcome(Decimal("0.25"), "a-model/for-the-test", "generation")
+    reserve_at(run.conn, attempt, Decimal("0.25"), lease=lease)
+    run.conn.commit()
+    tries: list[int] = []
+
+    def store_down(*_args: object, **_kwargs: object) -> bool:
+        tries.append(1)
+        assert len(tries) < 20, "the bill must stop"
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(canonical, "record_outcome", store_down)
+    worker_conn = connect(empty_database)
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        canonical.bill(worker_conn, attempt, outcome)
+    assert len(tries) == canonical.BILL_TRIES
+    assert pauses == [canonical.BILL_PAUSE_SECONDS] * (canonical.BILL_TRIES - 1)
+    assert sum(pauses) <= 180 / 10, "a small share of the lease's 180 s budget"
+    worker_conn.close()
+    start_attempt(run.conn, run.run_id, node, lease=lease)
+    assert count(run.conn, "run_attempts", run.run_id) == 2, "one more"
+    second = run.conn.execute(
+        "SELECT attempt_id FROM run_attempts WHERE run_id = %s AND attempt_id <> %s",
+        (run.run_id, attempt),
+    ).fetchone()
+    run.conn.rollback()
+    assert second is not None
+    reserve_at(run.conn, second[0], Decimal("0.25"), lease=lease)
+    run.conn.commit()
+    with connect(empty_database) as holder, call_hold(holder, second[0]):
+        with pytest.raises(Refusal, match=r"^ATTEMPT_UNSETTLED$"):
+            start_attempt(run.conn, run.run_id, node, lease=lease)
+    assert count(run.conn, "run_attempts", run.run_id) == 2, "no more"
 
 
 # The worker's statement and lock bounds in the test below, and how long

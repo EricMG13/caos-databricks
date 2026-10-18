@@ -1,0 +1,225 @@
+Exhibit 10.12
+TENTH AMENDMENT TO LEASE
+This TENTH AMENDMENT TO LEASE (this “Amendment”) is entered into as of December [30], 2021, by and among the entities listed on Schedule A attached hereto (collectively, and together with their respective successors and assigns, “Landlord”), the entities listed on Schedule B attached hereto (collectively, and together with their respective successors and assigns, “Tenant”) and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease (as defined below), Propco TRS LLC, a Delaware limited liability company (“Propco TRS”).
+RECITALS
+WHEREAS, Landlord, Tenant and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease, Propco TRS, are parties to that certain Lease (Non-CPLV), dated as of October 6, 2017, as amended by that certain First Amendment to Lease (Non-CPLV), dated as of December 22, 2017, as amended by that certain Second Amendment to Lease (Non-CPLV) and Ratification of SNDA, dated as of February 16, 2018, as amended by that certain Third Amendment to Lease (Non-CPLV), dated as of April 2, 2018, as amended by that certain Fourth Amendment to Lease (Non-CPLV), dated as of December 26, 2018, as amended by that certain Omnibus Amendment to Leases, dated as of June 1, 2020, as amended by that certain Fifth Amendment to Lease (Non-CPLV), dated as of July 20, 2020, as amended by that certain Sixth Amendment to Lease, dated as of September 30, 2020, as amended by that certain Amended and Restated Omnibus Amendment to Leases, dated as of October 27, 2020, as amended by that certain Seventh Amendment to Lease, dated as of November 18, 2020, as amended by that certain Eighth Amendment to Lease, dated as of September 3, 2021 and as amended by that certain Ninth Amendment to Lease, dated as of November 1, 2021 (collectively, as amended, the “Lease”), pursuant to which Landlord leases to Tenant, and Tenant leases from Landlord, certain real property as more particularly described in the Lease;
+WHEREAS, on April 22, 2021, Caesars Atlantic City LLC, a Delaware limited liability company (one of the entities comprising Landlord) and Boardwalk Regency LLC, New Jersey limited liability company (one of the entities comprising Tenant) (collectively, “Sellers”), as sellers, and Atlanticare Health Services, Inc., a New Jersey non-profit corporation, as buyer (“Buyer”), entered into that certain Agreement of Sale (“Purchase Agreement”);
+WHEREAS, pursuant to the Purchase Agreement, Sellers have agreed to sell, and Buyer has agreed to buy, those certain tracts or parcels of land, together with all buildings and other improvements located thereon, shown on the tax maps of the City of Atlantic City as Block 157, Lots 16, 17, 18, 19, 20, 21.01 and 21.03, having an address of 1807-1811 Pacific Avenue, Atlantic City, New Jersey (the “Purchase Agreement Property”) and as of the date hereof, the closing of the sale of the Atlantic City Parcel (the “Atlantic City Parcel Transaction”) is occurring;
+WHEREAS, a portion of the Purchase Agreement Property described more particularly on Annex A attached hereto (the “Atlantic City Parcel”) comprises Leased Property and is subject to the Lease; and
+WHEREAS, in connection with the Atlantic City Parcel Transaction, the parties hereto desire to amend the Lease as set forth herein.
+NOW THEREFORE, in consideration of the mutual covenants and agreements hereinafter set forth and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the parties hereto, intending to be legally bound hereby, agree as follows:
+1.Definitions.
+Except as otherwise defined herein, all capitalized terms used herein without definition shall have the meanings applicable to such terms, respectively, as set forth in the Lease.
+2.Amendments to the Lease.
+A.Termination of the Lease as to the Atlantic City Parcel.
+Effective as of the date hereof (the “Atlantic City Parcel Severance Date”):
+i.the Lease is hereby terminated with respect to the Atlantic City Parcel, the Atlantic City Parcel no longer constitutes Leased Property under the Lease nor a portion of the Caesars Atlantic City Facility, and neither Landlord nor Tenant has any further liabilities or obligations under the Lease, from and after the Atlantic City Parcel Severance Date, in respect of the Atlantic City Parcel (provided that any such liabilities or obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment); and
+ii.the Guaranty hereby automatically, and without further action by any party, ceases to apply with respect to any Obligations (as defined in the Guaranty) with respect to the Atlantic City Parcel to the extent arising from and after the Atlantic City Parcel Severance Date (provided that any such Obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment).
+The term “Caesars Atlantic City Facility” refers to the applicable Facility identified as Facility 10 on the list of the Facilities annexed as Exhibit A to the Lease (after giving effect to the replacement of Exhibit A to the Lease pursuant to the Ninth Amendment).
+B.Rent.
+Landlord and Tenant hereby expressly acknowledge and agree that there shall be no reduction in the Rent under the Lease as a result of the removal of the Atlantic City Parcel from the Lease or otherwise as a result of the Atlantic City Parcel Transaction.
+C.Variable Rent.
+From and after the Atlantic City Parcel Severance Date, for purposes of any calculation of Variable Rent under the Lease, including any adjustments in Variable Rent based on increases or decreases in Net Revenue, such calculations of Net Revenue shall exclude Net Revenue attributable to the Atlantic City Parcel.
+D.Atlantic City Parcel Transaction.
+The treatment of the Atlantic City Parcel Transaction hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under any applicable provision of the Lease.
+E.Revisions to Exhibits and Schedules to the Lease.
+The Exhibits and Schedules to the Lease are hereby amended as follows:
+i.Legal Description (Atlantic City Parcel).
+The legal descriptions with respect to the Leased Property set forth on Exhibit B annexed to the Lease are hereby amended such that the legal description with respect to the Leased Property pertaining to the Atlantic City Parcel, as set forth on Annex A attached hereto, is hereby deleted from said Exhibit B.
+3.No Other Modification or Amendment to the Lease.
+The Lease shall remain in full force and effect except as expressly amended or modified by this Amendment.
+From and after the date of this Amendment, all references in the Lease to the “Lease” shall be deemed to refer to the Lease as amended by this Amendment.
+For the avoidance of doubt, the Lease shall continue in full force and effect with respect to the balance of the Leased Property (other than the
+2
+Atlantic City Parcel as of the Atlantic City Parcel Severance Date in accordance with Section 2.A.i of this Amendment).
+4.Governing Law; Jurisdiction.
+This Amendment shall be construed according to and governed by the laws of the jurisdiction(s) specified by the Lease without regard to its or their conflicts of law principles.
+The parties hereto hereby irrevocably submit to the jurisdiction of any court of competent jurisdiction located in such applicable jurisdiction in connection with any proceeding arising out of or relating to this Amendment.
+5.Counterparts.
+This Amendment may be executed by one or more of the parties hereto on any number of separate counterparts, and all of such counterparts taken together shall be deemed to constitute one and the same instrument.
+Facsimile and/or .pdf signatures shall be deemed to be originals for all purposes.
+6.Effectiveness.
+This Amendment shall be effective, as of the date hereof, only upon execution and delivery by each of the parties hereto.
+7.Miscellaneous.
+If any provision of this Amendment is adjudicated to be invalid, illegal or unenforceable, in whole or in part, it will be deemed omitted to that extent and all other provisions of this Amendment will remain in full force and effect.
+Neither this Amendment nor any provision hereof may be changed, modified, waived, discharged or terminated orally, but only by an instrument in writing signed by the party against whom enforcement of such change, modification, waiver, discharge or termination is sought.
+The paragraph headings and captions contained in this Amendment are for convenience of reference only and in no event define, describe or limit the scope or intent of this Amendment or any of the provisions or terms hereof.
+This Amendment shall be binding upon and inure to the benefit of the parties and their respective heirs, legal representatives, successors and permitted assigns.
+[Signature Page Follows]
+3
+IN WITNESS WHEREOF, the parties hereto have caused this Amendment to be duly executed by their duly authorized representatives, all as of the date hereof.
+LANDLORD:
+HORSESHOE COUNCIL BLUFFS LLC
+HARRAH’S COUNCIL BLUFFS LLC
+HARRAH’S METROPOLIS LLC
+NEW HORSESHOE HAMMOND LLC
+NEW HARRAH’S NORTH KANSAS CITY LLC
+GRAND BILOXI LLC
+HORSESHOE TUNICA LLC
+NEW TUNICA ROADHOUSE LLC
+CAESARS ATLANTIC CITY LLC
+BALLY’S ATLANTIC CITY LLC
+HARRAH’S LAKE TAHOE LLC
+HARVEY’S LAKE TAHOE LLC
+HARRAH’S RENO LLC
+VEGAS DEVELOPMENT LLC
+VEGAS OPERATING PROPERTY LLC
+MISCELLANEOUS LAND LLC
+PROPCO GULFPORT LLC
+PHILADELPHIA PROPCO LLC
+HARRAH’S ATLANTIC CITY LLC
+NEW LAUGHLIN OWNER LLC
+HARRAH’S NEW ORLEANS LLC
+each, a Delaware limited liability company
+By:
+Name: David Kieske
+Title: Treasurer
+HORSESHOE BOSSIER CITY PROP LLC,
+a Louisiana limited liability company
+By:
+Name: David Kieske
+Title: Treasurer
+[Signatures Continue on Following Pages]
+[Signature Page to Tenth Amendment to Regional Lease]1
+TENANT:
+CEOC, LLC, a Delaware limited liability company,
+HBR REALTY COMPANY LLC, a Nevada limited liability company,
+HARVEYS IOWA MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+SOUTHERN ILLINOIS RIVERBOAT/CASINO CRUISES LLC, an Illinois limited liability company,
+HORSESHOE HAMMOND, LLC, an Indiana limited liability company,
+HARRAH’S BOSSIER CITY INVESTMENT COMPANY, L.L.C., a Louisiana limited liability company,
+HARRAH’S NORTH KANSAS CITY LLC, a Missouri limited liability company,
+GRAND CASINOS OF BILOXI, LLC, a Minnesota limited liability company,
+ROBINSON PROPERTY GROUP LLC, a Mississippi limited liability company,
+TUNICA ROADHOUSE LLC, a Delaware limited liability company,
+CAESARS NEW JERSEY LLC, a New Jersey limited liability company,
+HARVEYS TAHOE MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+CASINO COMPUTER PROGRAMMING, INC., an Indiana corporation,
+HARVEYS BR MANAGEMENT COMPANY, INC., a Nevada corporation,
+HARRAH’S LAUGHLIN, LLC, a Nevada limited liability company,
+JAZZ CASINO COMPANY, L.L.C., a Louisiana limited liability company
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Tenth Amendment to Regional Lease]1
+HORSESHOE ENTERTAINMENT,
+a Louisiana limited partnership
+By: New Gaming Capital Partnership,
+a Nevada limited partnership,
+its general partner
+By: Horseshoe GP, LLC,
+a Nevada limited liability company,
+its general partner
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+BOARDWALK REGENCY LLC,
+a New Jersey limited liability company
+By: Caesars New Jersey LLC,
+a New Jersey limited liability company,
+its sole member
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HOLE IN THE WALL, LLC,
+a Nevada limited liability company
+By: CEOC, LLC,
+a Delaware limited liability company,
+its sole member
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Tenth Amendment to Regional Lease]1
+CHESTER DOWNS AND MARINA, LLC,
+a Pennsylvania limited liability company
+By: Harrah’s Chester Downs Investment Company, LLC,
+its sole member
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARRAH’S ATLANTIC CITY OPERATING COMPANY, LLC,
+a New Jersey limited liability company
+By: Caesars Resort Collection, LLC,
+a Delaware limited liability company,
+its sole member
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Tenth Amendment to Regional Lease]1
+Acknowledged and agreed, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease:
+PROPCO TRS LLC,
+a Delaware limited liability company
+By:
+Name: David Kieske
+Title: Treasurer
+[Signature Page to Tenth Amendment to Regional Lease]1
+ACKNOWLEDGMENT AND AGREEMENT OF GUARANTOR
+The undersigned (“Guarantor”) hereby:
+(a) acknowledges receipt of the Ninth Amendment to Lease (the “Amendment”; capitalized terms used herein without definition having the meanings set forth in the Amendment), dated as of November [ ], 2021, by and among the entities listed on Schedule A attached thereto, as Landlord, and the entities listed on Schedule B attached thereto, as Tenant, and the other parties party thereto;
+(b) consents to the terms and execution thereof;
+(c) ratifies and reaffirms Guarantor’s obligations to Landlord pursuant to the terms of that certain Guaranty of Lease, dated as of July 20, 2020 (the “Guaranty”), by and between Guarantor and Landlord, and agrees that, except as expressly set forth in Section 2.A.ii and Section 3.A.ii of the Amendment, nothing in the Amendment (including, without limitation, the assignment, assumption and release described in Sections 3.A.iii and 3.A.iv of the Amendment) in any way impairs or lessens the Guarantor’s obligations under the Guaranty; and
+(d) acknowledges and agrees that the Guaranty is in full force and effect and is valid, binding and enforceable in accordance with its terms.
+IN WITNESS WHEREOF, the undersigned has caused this Acknowledgment and Agreement of Guarantor to be duly executed as of November [ ], 2021.
+[Acknowledgment and Agreement of Guarantor]1
+CAESARS ENTERTAINMENT, INC.
+By:
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Acknowledgment and Agreement of Guarantor]1
+Schedule A
+LANDLORD ENTITIES
+Horseshoe Council Bluffs LLC
+Harrah’s Council Bluffs LLC
+Harrah’s Metropolis LLC
+New Horseshoe Hammond LLC
+Horseshoe Bossier City Prop LLC
+New Harrah’s North Kansas City LLC
+Grand Biloxi LLC
+Horseshoe Tunica LLC
+New Tunica Roadhouse LLC
+Caesars Atlantic City LLC
+Bally’s Atlantic City LLC
+Harrah’s Lake Tahoe LLC
+Harvey’s Lake Tahoe LLC
+Harrah’s Reno LLC
+Vegas Development LLC
+Vegas Operating Property LLC
+Miscellaneous Land LLC
+Propco Gulfport LLC
+Philadelphia Propco LLC
+Harrah’s Atlantic City LLC
+New Laughlin Owner LLC
+Harrah’s New Orleans LLC
+Schedule A
+|US-DOCS\121070511.7||
+Schedule B
+TENANT ENTITIES
+CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+HBR Realty Company LLC
+Harveys Iowa Management Company LLC
+Southern Illinois Riverboat/Casino Cruises LLC
+Horseshoe Hammond, LLC
+Horseshoe Entertainment
+Harrah’s Bossier City Investment Company, LLC
+Harrah’s North Kansas City LLC
+Grand Casinos of Biloxi, LLC
+Robinson Property Group LLC
+Tunica Roadhouse LLC
+Boardwalk Regency LLC
+Caesars New Jersey LLC
+Harveys Tahoe Management Company LLC
+Casino Computer Programming, Inc.
+Harveys BR Management Company, Inc.
+Hole in the Wall, LLC
+Chester Downs and Marina, LLC
+Harrah’s Atlantic City Operating Company, LLC
+Harrah’s Laughlin, LLC
+Jazz Casino Company, L.L.C.
+Schedule B
+|US-DOCS\121070511.7||
+Annex A
+Caesars Surface Parking
+BEING KNOWN AND DESIGNATED AS LOT 21.01 IN BLOCK 157 AS SHOWN ON A MAP ENTITLED "MINOR SUBDIVISION PLAN, BLOCK 157, LOT 21, CITY OF ATLANTIC CITY, ATLANTIC COUNTY, NJ" PREPARED BY ARTHUR W. PONZIO COMPANY AND ASSOCIATES, INC, DATED JUNE 27, 2013, LAST REVISED DECEMBER 12, 2013 AND FILED IN THE ATLANTIC COUNTY CLERK'S OFFICE ON MAY 29, 2014 AS MAP NO 2014030575.
+TOGETHER WITH DEED OF EASEMENT FOR PARKING AND ACCESS FROM CASINO REINVESTMENT DEVELOPMENT AUTHORITY TO BOARDWALK REGENCY CORPORATION, DATED DECEMBER 27, 2013, RECORDED JANUARY 7, 2014 AS INSTRUMENT NO 2014001024.
+FOR INFORMATION PURPOSES ONLY: KNOWN AS LOT 21.01 IN BLOCK 157 AS SHOWN ON THE ATLANTIC CITY TAX MAP.
+Annex A-1

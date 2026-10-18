@@ -106,6 +106,7 @@ const RefusalCode = enumOf([
   "ATTEMPT_NOT_FOUND",
   "ATTEMPT_LIMIT_REACHED",
   "ATTEMPT_UNSETTLED",
+  "ATTEMPT_BILL_OWED",
   "CALL_OUTCOME_INVALID",
   "CALL_OUTCOME_CONFLICT",
   "CALL_OUTCOME_LEGACY",
@@ -351,12 +352,14 @@ const RouteChoice = object({
 // a run started on it is pinned to (F468). `configured` marks the model a
 // create naming none gets. Rates are the server's exact decimal strings.
 const perToken = string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" });
+const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
 const ModelChoice = object({
   model: short,
   input_per_token: perToken,
   output_per_token: perToken,
   as_of: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
   configured: bool,
+  qualification: QualificationState,
 });
 // The node whose validated Blocked verdict ended the run, as the transition
 // recorded it (§68). Nullable on `RunView`: a run the frontier emptied is
@@ -484,6 +487,7 @@ const TableView = object({
 // each header cell, null where it binds none.
 const RegisterView = object({
   register_id: string({ max: SHORT, pattern: "^[A-Za-z0-9_.]+$" }),
+  unavailable_reason: nullable(enumOf(["TABLES_MALFORMED", "TABLES_TOO_LARGE"])),
   columns: array(text, 32),
   declared: array(nullable(text), 32),
   rows: array(array(CellView, 32), 2000),
@@ -866,7 +870,6 @@ const PageDocument = object({
   notes: array(SectionNote, 3),
 });
 
-const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
 const QualificationRead = object({
   evidence_sha256: hash,
   state: QualificationState,

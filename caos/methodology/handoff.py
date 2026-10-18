@@ -18,6 +18,7 @@ quote the document (invariant 2).
 from __future__ import annotations
 
 import json
+import logging
 import re
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
@@ -138,7 +139,7 @@ MAX_LINE_BYTES = 65_536
 # only ever shortens when read. The vendor's reader goes to `MAX_FILE_BYTES`,
 # where validation took 6-22 s on every read of an accepted handoff.
 MAX_HANDOFF_BYTES = MAX_RESPONSE_BYTES
-# The longest run of spaces or tabs any line of a handoff may carry.
+# The longest run of whitespace characters any line of a handoff may carry.
 #
 # The vendor's heading expressions are `^ {0,3}##(?!#)[ \t]+(.+?)[ \t]*$` and
 # its sibling, which backtrack quadratically on a heading padded with a long
@@ -251,11 +252,21 @@ class Projections:
 
 
 def _or_refuse[T](code: RefusalCode, call: Callable[[], T]) -> T:
+    """`call()`, or `code` for any failure inside it -- except a blob-store
+    outage, which stays `STORE_UNAVAILABLE` (N141): the operator message for a
+    record mismatch ("verify the stored record") is wrong for a store that is
+    briefly away. A blob that is missing (`BLOB_NOT_FOUND`) is a record fault
+    and maps to `code` like the rest."""
+    outage = False
     with suppress(Exception):  # any failure inside is this refusal
-        return call()
+        try:
+            return call()
+        except Refusal as refused:
+            outage = refused.code is RefusalCode.STORE_UNAVAILABLE
+            raise
     # Raised after the handler has closed, so `__context__` holds no vendor or
     # document text.
-    raise Refusal(code)
+    raise Refusal(RefusalCode.STORE_UNAVAILABLE if outage else code)
 
 
 def expected_filename(identity: HostIdentity) -> str:
@@ -417,6 +428,14 @@ def _broken_bound(text: str) -> str:
             "a line ends in a carriage return; canonical Markdown ends every line"
             " with a line feed alone"
         )
+    return _unreadable_bound(text, lenient=False)
+
+
+def _unreadable_bound(text: str, *, lenient: bool) -> str:
+    """`_broken_bound`'s bounds after the carriage return check. `lenient`
+    (the keep line, N218 5, R9) forgives a text only NFC changes: control
+    characters, runs and long lines still refuse, for the vendor's slow
+    expressions read any whitespace run, `\\x1f` included."""
     if INVISIBLE.intersection(text):
         return (
             "the Markdown carries a line separator (U+2028), paragraph separator"
@@ -429,27 +448,52 @@ def _broken_bound(text: str) -> str:
             "the Markdown carries a character no reader can see (a zero-width,"
             " tag, variation-selector or other invisible code point)"
         )
-    # One C-level substring search, whatever the document does. Tabs are read
-    # as spaces so that a run mixing the two is one run, and `str.replace`
-    # gives back the same object when there is no tab to replace.
-    spaced = text.replace("\t", " ")
-    if " " * (MAX_WHITESPACE_RUN + 1) in spaced:
-        return f"a line carries a run of more than {MAX_WHITESPACE_RUN} spaces or tabs"
-    if _heading_backtracks(text, spaced):
-        return (
-            f"a heading's title carries a run of more than {MAX_HEADING_RUN}"
-            " spaces, tabs or # characters"
-        )
-    if not _clean(text):
+    if bound := _run_bound(text):
+        return bound
+    if not _clean(unicodedata.normalize("NFC", text) if lenient else text):
         return _unclean_bound(text)
     lines = text.split("\n")
-    if any(len(line.encode()) > MAX_LINE_BYTES for line in lines):
-        return f"a line is longer than {MAX_LINE_BYTES} bytes"
+    if bound := _line_bound(lines):
+        return bound
     closing = (
         lines.index("---", 1) if lines[:1] == ["---"] and "---" in lines[1:] else 0
     )
     if len("\n".join(lines[: closing + 1]).encode()) > MAX_FRONTMATTER_BYTES:
         return f"the front matter is longer than {MAX_FRONTMATTER_BYTES} bytes"
+    return ""
+
+
+_SPACE_RUN = re.compile(r"[^\S\n]{2,}")
+
+
+def _run_bound(text: str) -> str:
+    """The whitespace-run or heading bound `text` breaks, named; `""` for
+    neither. A run is of any whitespace but a line feed (`str.isspace`: a
+    no-break or ideographic space, a `\\x1f`), which the vendor's `\\s`
+    expressions read as one."""
+    # One C-level substring search first, whatever the document does. Tabs are
+    # read as spaces so that a run mixing the two is one run, and `str.replace`
+    # gives back the same object when there is no tab to replace.
+    spaced = text.replace("\t", " ")
+    if " " * (MAX_WHITESPACE_RUN + 1) in spaced or any(
+        len(run.group()) > MAX_WHITESPACE_RUN for run in _SPACE_RUN.finditer(text)
+    ):
+        return (
+            f"a line carries a run of more than {MAX_WHITESPACE_RUN}"
+            " whitespace characters"
+        )
+    if _heading_backtracks(text, spaced):
+        return (
+            f"a heading's title carries a run of more than {MAX_HEADING_RUN}"
+            " spaces, tabs or # characters"
+        )
+    return ""
+
+
+def _line_bound(lines: Sequence[str]) -> str:
+    """The line-length bound the `lines` of a text break, named; `""` if none."""
+    if any(len(line.encode()) > MAX_LINE_BYTES for line in lines):
+        return f"a line is longer than {MAX_LINE_BYTES} bytes"
     return ""
 
 
@@ -999,19 +1043,6 @@ def _wire(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
     return encoded, text, tuple(_citation(c) for c in closed)
 
 
-def _shaped(body: str) -> tuple[bytes, int] | None:
-    """The Markdown of a body that is the transport, its citations' fields
-    aside (F651), and how many citations it lists: `_wire`'s, or None when the
-    body is not the transport."""
-    with suppress(Exception):  # not the transport: nothing to carry or read
-        try:
-            parsed = _wire(body)
-        except _FieldFaults as bad:
-            return bad.markdown, bad.count
-        return parsed[0], len(parsed[2])
-    return None
-
-
 def _repeats(citations: Sequence[Citation]) -> list[tuple[int, int]]:
     """(place, first place) for each citation equal to an earlier one, both
     1-based, in the list's order."""
@@ -1160,17 +1191,16 @@ def feedback_lines(
     cells, the register rows a cell short or long, then the vendor's own
     messages. An answer refused only for its citations' fields (F651) gets every
     Markdown check too, its citation checks waiting until its fields are fixed."""
-    parsed, reason = _transport_or_reason(body)
-    shaped = _shaped(body)
-    if shaped is None:
-        return (reason,)
-    markdown, count = shaped
+    read = _read(body)
+    if read.markdown is None:
+        return (read.reason,)
+    markdown, count = read.markdown, read.count
     text = markdown.decode("utf-8")
-    checked = _checked(contract, catalog, identity, markdown)
+    checked, raised = _checked(contract, catalog, identity, markdown)
     host = (
-        reason,  # a repeated citation, the citation fields at fault, or empty
+        read.reason,  # a repeated citation, the citation fields at fault, or empty
         _text_line(markdown),
-        _uncrossed_line(parsed[2]) if parsed is not None else None,
+        _uncrossed_line(read.parsed[2]) if read.parsed is not None else None,
         _dangling_line(text, count),
         _unmarked_line(text, count),
         *_front_matter_lines(contract, identity, getattr(checked, "fields", None)),
@@ -1179,10 +1209,18 @@ def feedback_lines(
         if identity.module_id == GATE_MODULE
         else None,
         *_width_lines(contract, identity.module_id, text, skill),
+        _VALIDATOR_RAISED if raised else None,
     )
     lines = [line for line in host if line]
     lines += _vendor_lines(contract, catalog, identity, (text, checked), skill)
     return tuple(lines)
+
+
+_VALIDATOR_RAISED = (
+    "host vendor check: the vendor's handoff validator raised on this answer, so"
+    " none of its own messages on it could be given; check the front matter,"
+    " its nesting depth in particular, first"
+)
 
 
 def _checked(
@@ -1190,15 +1228,21 @@ def _checked(
     catalog: Mapping[str, Any],
     identity: HostIdentity,
     markdown: bytes,
-) -> object:
-    """The vendor validator's result on an answer within the host's bounds,
-    or None: past a bound the validator never reads it (`validate_markdown`),
-    and a validator that raises is nothing to report."""
-    with suppress(Exception):
+) -> tuple[object, bool]:
+    """The vendor validator's result on an answer within the host's bounds, and
+    whether the validator raised: (None, False) past a bound or for an
+    identity the host cannot scope, where the validator never read the answer
+    (`validate_markdown`) and `_text_line` says why; (None, True) when it read
+    the answer and raised (N218), which `feedback_lines` tells the retry."""
+    raised = False
+    with suppress(Exception):  # a bound or identity refusal is not the validator
         text = _text(markdown)
         scope = _decision_scope(catalog, identity)
-        return contract.validate_handoff.validate_text(text, decision_scope=scope)
-    return None
+        raised = True  # from here a failure is the validator's
+        return contract.validate_handoff.validate_text(
+            text, decision_scope=scope
+        ), False
+    return None, raised
 
 
 def _text_line(markdown: bytes) -> str | None:
@@ -1337,7 +1381,9 @@ def readiness_set_line(
 ) -> str | None:
     """CP-0's T8 against the modules this route pins (`gate_expects`): the
     host's own readiness check, which refuses `HANDOFF_INCOMPLETE` and until
-    now told the second attempt nothing. Names module IDs only."""
+    now told the second attempt nothing. Names module IDs only. Reads the
+    Markdown of an answer refused only for its citations' fields too (F651),
+    like every other Markdown check."""
     markdown = answer_markdown(body)
     if markdown is None or not expects:
         return None
@@ -1419,16 +1465,16 @@ def _readable(body: str) -> str | None:
 
 
 def _held_registers(
-    contract: VendorContract, module_id: str, body: str, skill: bytes
+    contract: VendorContract, module_id: str, text: str | None, skill: bytes
 ) -> tuple[Sequence[str], list[str]] | None:
-    """The module's required registers in contract order, and those of them the vendor's
-    `find_registers` locates in the answer `body` carries; None when `body` is not the
-    transport (its citations' fields aside, F651), the module is CP-MODEL (no register
-    contract), no skill was given, or the contract or its locations cannot be read (a
-    missing profile, KeyError/ValueError). Unrelated locator failures still surface. A
-    body the host's text bound refuses (`_readable`) is not read: the vendor's
-    expressions are quadratic on text `_text` refuses."""
-    text = _readable(body)
+    """The module's required registers in contract order, and those of them the
+    vendor's `find_registers` locates in `text`, the Markdown of an answer already
+    read and bounded by the caller (`_readable`, or `_guarded`); None when `text`
+    is None (the body is not the transport, F651, or a bound refuses it: the
+    vendor's expressions are quadratic on text `_text` refuses), the module is
+    CP-MODEL (no register contract), no skill was given, or the contract or its
+    locations cannot be read (a missing profile, KeyError/ValueError). Unrelated
+    locator failures still surface."""
     if text is None or not skill or module_id == MODEL_MODULE:
         return None
     checker = contract.completeness_check
@@ -1445,6 +1491,18 @@ def _held_registers(
     return required, [register for register in required if register in found]
 
 
+def _guarded(body: str) -> str | None:
+    """The Markdown `body` carries as text when it is the transport (F651) and
+    breaks any bound but the carriage return and NFC ones (R9; the controller's
+    ruling after review): the vendor's slow expressions read a control run as
+    whitespace, so every other bound still guards them; else None."""
+    markdown = answer_markdown(body)
+    if markdown is None:
+        return None
+    text = markdown.decode("utf-8")
+    return None if _unreadable_bound(text, lenient=True) else text
+
+
 def kept_registers_line(
     contract: VendorContract, module_id: str, body: str, skill: bytes
 ) -> str | None:
@@ -1453,8 +1511,12 @@ def kept_registers_line(
     Missing profiles or unreadable register locations contribute no keep line;
     unrelated locator failures still surface. The line preserves the largest
     prefix fitting MAX_FEEDBACK_CHARS and counts the remaining held IDs.
+
+    The answer is read under the whitespace, heading and line-length bounds
+    alone (`_guarded`; N218 5, R9), so one refused only on the CR or non-NFC
+    text bound still gets the line.
     """
-    held = _held_registers(contract, module_id, body, skill)
+    held = _held_registers(contract, module_id, _guarded(body), skill)
     if held is None:
         return None
     required, kept = held
@@ -1493,9 +1555,9 @@ def _extent(
     code, counting only the canonical ones: a heading the vendor refuses is a
     fault the retry fixes by removing it, not content lost) the answer `body`
     holds; None for a count that cannot be read."""
-    held = _held_registers(contract, module_id, body, skill)
+    text = _readable(body)  # one parse and one bound per body
+    held = _held_registers(contract, module_id, text, skill)
     headings: int | None = None
-    text = _readable(body)
     vendor = contract.validate_handoff
     if text is not None:
         # No front matter the vendor parses, or one nested past its parser's
@@ -1597,14 +1659,25 @@ def _width_faults(
     another width than its header, in the answer's order."""
     checker = contract.completeness_check
     loaded = checker.load_contract(skill.decode("utf-8"), module_id)
-    found = checker.find_registers(
+    # The vendor's locator with its rows' own cell counts (fork r13): two tables
+    # that pad to the same rows -- one a cell short, one with a real empty cell
+    # -- differ only there (N143).
+    found = checker._locate_registers(
         text, loaded["registers"], loaded.get("retired_registers", ())
     )
     errors = contract.cp_tables.read_tables(text)[1]
     tables = _pipe_tables(contract, text)
     faults = []
-    for reg_id, (header, rows) in found.items():
-        table = next((t for t in tables if (t.header, t.rows) == (header, rows)), None)
+    for reg_id, (header, rows, widths) in found.items():
+        table = next(
+            (
+                t
+                for t in tables
+                if (t.header, t.rows, [len(row) for row in t.cells])
+                == (header, rows, widths)
+            ),
+            None,
+        )
         if table is None or _WIDTH_FAULT in str(errors.get(table.tag, "")):
             continue
         faults += [
@@ -1754,10 +1827,22 @@ def _quoted(cell: str) -> str | None:
     return None
 
 
-def _transport_or_reason(
-    body: str,
-) -> tuple[tuple[bytes, str, tuple[Citation, ...]] | None, str]:
-    """Parse the repair transport, or return the host's fixed reason (N50).
+@dataclass(frozen=True, slots=True)
+class _Read:
+    """One reading of a stored answer by `_wire` (N218): the transport when it
+    is whole, the host's fixed reason when it is not or repeats a citation,
+    and the Markdown and citation count of a transport whole in shape, its
+    citations' fields aside (F651); `markdown` is None for a body that is not
+    the transport."""
+
+    parsed: tuple[bytes, str, tuple[Citation, ...]] | None
+    reason: str
+    markdown: bytes | None
+    count: int
+
+
+def _read(body: str, *, diagnose: bool = True) -> _Read:
+    """Parse the repair transport once, or return the host's fixed reason (N50).
 
     Duplicate citations get repair feedback and a carried answer; strict
     acceptance still refuses them. No caught exception text is quoted.
@@ -1766,16 +1851,23 @@ def _transport_or_reason(
         try:
             parsed = _wire(body)
         except _FieldFaults as bad:
-            return None, _field_line(bad.faults)
-        return parsed, _repeated_line(_repeats(parsed[2]))
+            return _Read(None, _field_line(bad.faults), bad.markdown, bad.count)
+        return _Read(
+            parsed, _repeated_line(_repeats(parsed[2])), parsed[0], len(parsed[2])
+        )
+    return _Read(None, _not_transport(body) if diagnose else "", None, 0)
+
+
+def _not_transport(body: str) -> str:
+    """Why `body` is not the transport, in the JSON parser's fixed words."""
     try:
         json.loads(body)  # diagnostic only; _wire remains the strict parser
     except json.JSONDecodeError as bad:
         hint = _ESCAPES if bad.msg.startswith("Invalid control character") else ""
-        return None, _TRANSPORT_JSON.format(bad.msg) + hint
+        return _TRANSPORT_JSON.format(bad.msg) + hint
     except (RecursionError, ValueError):
         pass
-    return None, _TRANSPORT_SHAPE
+    return _TRANSPORT_SHAPE
 
 
 def _within_limit(shown: int, text_of: Callable[[int], str]) -> str | None:
@@ -2281,7 +2373,7 @@ def answer_citations(body: str) -> tuple[Citation, ...]:
     """The citations a stored answer asked for; none when it is not the
     transport, whose reason `retry_feedback` gives, or when its citations'
     fields are at fault: the citation checks wait until they are fixed (F651)."""
-    parsed, _reason = _transport_or_reason(body)
+    parsed = _read(body, diagnose=False).parsed
     return () if parsed is None else parsed[2]
 
 
@@ -2289,8 +2381,7 @@ def answer_markdown(body: str) -> bytes | None:
     """The Markdown of a stored answer that is the transport, its citations'
     fields aside (F651); None when it is not, whose reason `retry_feedback`
     gives."""
-    shaped = _shaped(body)
-    return None if shaped is None else shaped[0]
+    return _read(body, diagnose=False).markdown
 
 
 def _vendor_lines(
@@ -2382,8 +2473,96 @@ def _t8_messages(
     try:
         nav.parse_t8(text, nav.validate_catalog(catalog))
     except ValueError as refused:  # the vendor's NavigationError
-        return [("navigation", _vendor_said(refused))]
+        return [("navigation", _t8_without_values(contract, catalog, text, refused))]
     return []
+
+
+# The T8 parser's refusals that name no module id of the answer's: a dropped
+# row's fault is relayed whole only when it is one of these.
+_T8_ID_FREE = re.compile(
+    r"CP-0 must contain exactly one unfenced canonical T8 table; found \d+"
+    r"|CP-0 T8 separator row is invalid"
+    r"|CP-0 T8 row width does not match its header"
+    r"|CP-0 T8 sequence must be a positive integer"
+    r"|CP-0 T8 has no navigable recommendation rows"
+    r"|CP-0 T8 contains duplicate (?:sequences|modules)"
+)
+_T8_UNKNOWN_MODULE = "CP-0 recommends unknown or non-navigable module: "
+_T8_LEADING_ID = (": ", " is an alias for ", " cannot appear as a downstream T8")
+_T8_LOG = logging.getLogger(__name__)
+
+
+def _t8_without_values(
+    contract: VendorContract,
+    catalog: Mapping[str, Any],
+    text: str,
+    refused: ValueError,
+) -> str | None:
+    """The T8 parser's message with the answer's own values withheld (N73,
+    D152 R1; F292's rule). The module id a row's fault names becomes `row N`,
+    N the data row the parser refused (found by parsing the table a row at a
+    time), swapped out of the raw message where its template puts it, before
+    quoted values become `WITHHELD_VALUE`; the fault stays, so the second
+    attempt knows what to fix. A message that names an id and cannot be
+    placed is dropped, never relayed raw."""
+    raw = _vendor_said(refused)
+    if raw is None:
+        return None
+    if _T8_ID_FREE.fullmatch(raw):  # names no id: nothing to withhold
+        return raw
+    row = _t8_fault_row(contract, catalog, text, raw)
+    if row is None:
+        return None
+    nav = contract.navigation
+    cells = nav._table_cells(nav._unfenced_lines(text)[row[0]])
+    module_id = nav._plain_value(cells[1]) if len(cells) > 1 else ""
+    if not module_id:
+        return None
+    place = f"row {row[1]}"
+    if raw == _T8_UNKNOWN_MODULE + module_id:
+        placed = _T8_UNKNOWN_MODULE + place
+    elif any(raw.startswith(module_id + lead) for lead in _T8_LEADING_ID):
+        placed = place + raw[len(module_id) :]
+    else:
+        return None
+    return _without_values(placed)
+
+
+def _t8_fault_row(
+    contract: VendorContract, catalog: Mapping[str, Any], text: str, refusal: str
+) -> tuple[int, int] | None:
+    """The refused row of CP-0's T8 table as (its index among the unfenced
+    lines, its 1-based place among the data rows): the first row after which
+    the parser, given the table cut there, refuses with `refusal`, the full
+    table's own message (a cut can refuse for another reason, such as the
+    end-of-table duplicate checks). Nothing when the table cannot be located,
+    the parser refuses before any row, or the vendor's helpers fail (logged
+    by type only: no answer text)."""
+    nav = contract.navigation
+    try:
+        lines = nav._unfenced_lines(text)
+        head = next(
+            (
+                n
+                for n, line in enumerate(lines)
+                if nav._matching_header(nav._table_cells(line)) is not None
+            ),
+            None,
+        )
+        if head is None:  # no T8 table: a refusal of the answer, not of us
+            return None
+        checked = nav.validate_catalog(catalog)
+        for place, index in enumerate(range(head + 2, len(lines)), start=1):
+            if not nav._table_cells(lines[index]):
+                break
+            try:
+                nav.parse_t8("\n".join((*lines[: index + 1], "")), checked)
+            except ValueError as cut:
+                if _vendor_said(cut) == refusal:
+                    return index, place
+    except (AttributeError, TypeError, ValueError, IndexError) as failed:
+        _T8_LOG.warning("t8 fault row not located: %s", type(failed).__name__)
+    return None
 
 
 def _vendor_said(refused: ValueError) -> str | None:

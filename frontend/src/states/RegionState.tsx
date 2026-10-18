@@ -41,6 +41,11 @@ const REGION_PLAIN: Record<string, string> = {
 export const UNAVAILABLE_NEXT =
   "Either nothing is here or you hold no standing on it; a case's owner grants standing.";
 
+/** The same state when the page itself knows the cause: no case was chosen,
+    so no request was made and no standing was in question. */
+export const NO_CASE_TITLE = "No case is chosen.";
+export const NO_CASE_NEXT = "This section reads one case. Open a case from All cases.";
+
 export function regionSentence(refusal: Refusal): string {
   return REGION_PLAIN[refusal.code] ?? "This section could not be read.";
 }
@@ -96,8 +101,8 @@ export function RegionState<D>({
       return (
         <SurfaceState
           kind="unavailable"
-          title={UNAVAILABLE_WORDING}
-          detail={UNAVAILABLE_NEXT}
+          title={status.cause === "no-case" ? NO_CASE_TITLE : UNAVAILABLE_WORDING}
+          detail={status.cause === "no-case" ? NO_CASE_NEXT : UNAVAILABLE_NEXT}
           supporting={
             section === "directory" ? null : (
               <Link className={buttonVariants({ size: "sm" })} to={sectionPath("directory")}>
