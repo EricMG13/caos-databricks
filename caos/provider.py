@@ -97,7 +97,7 @@ CONTEXT_TOKENS: Mapping[str, int] = MappingProxyType(
         "openai/gpt-6-luna": 1_050_000,
         "openai/gpt-6-luna-pro": 1_050_000,
         "openai/gpt-6-sol": 1_050_000,
-        # OpenRouter model list, 2026-10-18 (F710).
+        # The test provider's model list, 2026-10-18 (F710).
         "openai/gpt-6.1-sol": 1_050_000,
     }
 )
