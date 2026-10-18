@@ -25,12 +25,22 @@ import {
   type Shape,
 } from "./parts";
 import { formatDecimal } from "@/charts";
+import { SeverityMark } from "@/chrome/SeverityMark";
 import { scopeOf, words } from "@/chrome/compose";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MarkdownBlocks, MdCell, MdHead, MdInline, MdTableView } from "@/ds/ModelMarkdown";
+import {
+  CitationMarkerLink,
+  MarkdownBlocks,
+  MdCell,
+  MdHead,
+  MdInline,
+  MdTableView,
+  ModuleRefLink,
+} from "@/ds/ModelMarkdown";
 import { plainHead, plainName, stamp } from "@/ds/format";
 import { FORMATTED_MAX, readMarkdown, type Block, type MdTable } from "@/ds/markdown";
+import type { Severity } from "@/wire";
 import type { HandoffView } from "@/wire/v1";
 
 /** Model prose beyond this many characters is shown on request: a handoff may
@@ -190,13 +200,17 @@ function DatedRows({ table }: { table: MdTable }) {
   );
 }
 
+/** A register of this many columns or more is wide (N95): its long text
+    cells are clamped to two lines. */
+const WIDE_REGISTER = 10;
+
 /** A register's table in the form its shape reads best in. */
 function RegisterBody({ table, shape, label }: { table: MdTable; shape: Shape; label: string }) {
   if (shape === "findings" || shape === "triggers" || shape === "debate") {
     return <ItemRows table={table} />;
   }
   if (shape === "timeline") return <DatedRows table={table} />;
-  return <MdTableView table={table} label={label} />;
+  return <MdTableView table={table} label={label} clamp={table.head.length >= WIDE_REGISTER} />;
 }
 
 function RegisterNotes({ register, label }: { register: Register; label: string }) {
@@ -235,9 +249,23 @@ function OpenRegister({ register, label, id }: { register: Register; label: stri
   const [all, setAll] = useState(false);
   const { table } = register;
   const cut = !all && table.rows.length > ROWS_FIRST;
+  // "Show all" unmounts with the press, and focus would drop to <body>
+  // (WCAG 2.4.3): it moves to the register, named for what it now holds.
+  const self = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (all) self.current?.focus({ preventScroll: true });
+  }, [all]);
   return (
     <div
+      ref={self}
       id={id}
+      {...(all
+        ? {
+            role: "region",
+            "aria-label": `${label}, all ${rowsSaid(table.rows.length)}`,
+            tabIndex: -1,
+          }
+        : {})}
       className="reg"
       data-register={register.id ?? register.title}
       data-shape={register.shape}
@@ -295,7 +323,14 @@ function RegisterIndex({
                 onClick={() => onOpen(shown ? null : key)}
               >
                 <span className="nm">
-                  <RegisterName register={register} />
+                  {/* A reference or a citation chip in a title is a control;
+                      none may sit inside this one (nested interactive, WCAG
+                      4.1.2), so here a bracket stays as the model wrote it. */}
+                  <ModuleRefLink value={null}>
+                    <CitationMarkerLink value={null}>
+                      <RegisterName register={register} />
+                    </CitationMarkerLink>
+                  </ModuleRefLink>
                 </span>
                 <span className="n">{rowsSaid(register.table.rows.length)}</span>
                 <span className="chev" aria-hidden="true" />
@@ -418,11 +453,23 @@ function KeyFigures({ figures }: { figures: readonly KeyFigure[] }) {
 
 interface Caveat {
   key: string;
+  /** How it draws (D71): a stated limitation is the ring, never a warning; a
+      validation warning, a QA state the bundle does not pass, and a withdrawn
+      source are what they say. */
+  severity: Severity;
   /** The identifier a limitation flag was served as; its words are `text`. */
   flag?: string;
   title: string;
   text: string;
   origin: string;
+}
+
+/** QA's own word as a caveat draws it: Restricted is the ring, Failed and
+    Blocked critical, any other word the bundle does not declare a warning. */
+function qaSeverity(status: string): Severity {
+  const qa = status.toUpperCase();
+  if (qa === "RESTRICTED") return "RESTRICTED";
+  return qa === "FAILED" || qa === "BLOCKED" ? "CRITICAL" : "WARNING";
 }
 
 function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): Caveat[] {
@@ -431,6 +478,7 @@ function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): 
   if (handoff.screening_only)
     out.push({
       key: "screening",
+      severity: "RESTRICTED",
       title: "Screening only.",
       text: screening,
       origin: host,
@@ -438,6 +486,7 @@ function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): 
   for (const [index, flag] of handoff.limitation_flags.entries()) {
     out.push({
       key: `limit-${index}`,
+      severity: "RESTRICTED",
       title: "Limitation.",
       text: plainName(flag),
       flag,
@@ -447,6 +496,7 @@ function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): 
   if (handoff.validation_warnings.length) {
     out.push({
       key: "warnings",
+      severity: "WARNING",
       title: "Validation warnings.",
       text: handoff.validation_warnings.map((warning) => plainHead(warning) ?? warning).join("; "),
       origin: host,
@@ -456,6 +506,7 @@ function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): 
     const count = handoff.unverified_facts.length;
     out.push({
       key: "unverified",
+      severity: "RESTRICTED",
       title: "Unverified citations.",
       text: `${count} of this module's citations ${count === 1 ? "was" : "were"} not located by the host; Audit lists ${count === 1 ? "it" : "them"} as the model's own quotes, labelled unverified, ${count === 1 ? "its claim" : "their claims"} Untraced.`,
       origin: host,
@@ -465,6 +516,7 @@ function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): 
     if (fact.withdrawn_at === null) continue;
     out.push({
       key: `withdrawn-${index}`,
+      severity: "WARNING",
       title: "Source withdrawn.",
       text: `${fact.filename} p.${fact.page}, withdrawn ${stamp(fact.withdrawn_at)}; the citation stays so the conclusion stays explicable.`,
       origin: host,
@@ -490,6 +542,7 @@ function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): 
     if (!count) continue;
     out.push({
       key: shape,
+      severity: "RESTRICTED",
       title: `${count} ${count === 1 ? one : many}.`,
       text: `In the Audit tab, under Gaps and conflicts.`,
       origin: `model-authored · ${[...new Set(tables.map(({ name }) => name))].join(", ")}`,
@@ -500,6 +553,7 @@ function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): 
   if (handoff.qa_status !== "Passed") {
     out.push({
       key: "qa",
+      severity: qaSeverity(handoff.qa_status),
       title: `QA ${handoff.qa_status}.`,
       text: "Read the module's limitations before relying on it.",
       origin: host,
@@ -523,7 +577,7 @@ function Caveats({ caveats }: { caveats: readonly Caveat[] }) {
             data-screening-only={caveat.key === "screening" || undefined}
             data-validation-warnings={caveat.key === "warnings" || undefined}
           >
-            <span className="glyph warn" aria-hidden="true" />
+            <SeverityMark severity={caveat.severity} decorative />
             <span>
               <b>{caveat.title}</b>{" "}
               {caveat.flag ? (
@@ -980,7 +1034,12 @@ export function Depth({
               </h3>
               <div className="figgrid">
                 {counts.map((figure) => (
-                  <FigureCell key={figure.key} figure={figure} onPick={onPick} />
+                  <FigureCell
+                    key={figure.key}
+                    figure={figure}
+                    onPick={onPick}
+                    appendix={appendix.length > 0}
+                  />
                 ))}
               </div>
               {picked}

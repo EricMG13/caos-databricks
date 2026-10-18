@@ -1,0 +1,570 @@
+Exhibit 10.7
+SEVENTH AMENDMENT TO LEASE
+This SEVENTH AMENDMENT TO LEASE (this “Amendment”) is entered into as of November 18, 2020, by and among the entities listed on Schedule A attached hereto (collectively, and together with their respective successors and assigns, “Landlord”), the entities listed on Schedule B attached hereto (collectively, and together with their respective successors and assigns, “Tenant”) and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease (as defined below), Propco TRS LLC, a Delaware limited liability company (“Propco TRS”).
+RECITALS
+WHEREAS, Landlord, Tenant and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease, Propco TRS, are parties to that certain Lease (Non-CPLV), dated as of October 6, 2017, as amended by that certain First Amendment to Lease (Non-CPLV), dated as of December 22, 2017, as amended by that certain Second Amendment to Lease (Non-CPLV) and Ratification of SNDA, dated as of February 16, 2018, as amended by that certain Third Amendment to Lease (Non-CPLV), dated as of April 2, 2018, as amended by that certain Fourth Amendment to Lease (Non-CPLV), dated as of December 26, 2018, as amended by that certain Omnibus Amendment to Leases, dated as of June 1, 2020, as amended by that certain Fifth Amendment to Lease (Non-CPLV), dated as of July 20, 2020, as amended by that certain Sixth Amendment to Lease, dated as of September 30, 2020, and to the extent amended by that certain Amended and Restated Omnibus Amendment to Leases, dated as of October 27, 2020 (collectively, as amended, the “Lease”), pursuant to which Landlord leases to Tenant, and Tenant leases from Landlord, certain real property as more particularly described in the Lease;
+WHEREAS, on the date hereof,
+(i) Bally’s Park Place LLC (“Operator”), as operator, Bally’s Atlantic City LLC, as seller, and Premier Entertainment AC, LLC (as successor by assignment to Twin River Management Group, Inc.) (“Purchaser”), as purchaser, are closing a purchase and sale transaction under that certain Agreement of Sale, dated as of April 24, 2020, with respect to certain real property and (ii) Operator and Purchaser are closing a purchase and sale transaction under that certain Asset Purchase Agreement, dated as of April 24, 2020, with respect to certain casino and related operations and assets, in each case under clauses (i) and (ii), associated with the gaming and entertainment facility known as Bally’s Atlantic City (the “Existing BAC Facility”), located in Atlantic City, New Jersey (the “Bally’s Transaction”), which Existing BAC Facility is (prior to the effectiveness of this Amendment) subject to the Lease; and
+WHEREAS, on the date hereof, the Landlord and Tenant have effectuated a subdivision of a portion of the real property associated with the Existing BAC Facility, such that the portion thereof commonly known as the Wild Wild West Casino, Sports Book and Bar as more specifically described on Annex B-1 attached hereto (the “Wild Wild West Parcel”) shall comprise a separate legal parcel; and
+WHEREAS, (i) the Wild Wild West Parcel, (ii) the parcel known as Block 488, Lot 23, as more specifically described on Annex B-2 attached hereto (the “Block 488 Parcel”), and (iii)
+the operations and related assets associated therewith (collectively, the “Retained Facility”) are not included in, and are not being sold to Purchaser in connection with, the Bally’s Transaction; and
+WHEREAS, in connection with the Bally’s Transaction, the parties hereto desire to amend the Lease as set forth herein.
+NOW THEREFORE, in consideration of the mutual covenants and agreements hereinafter set forth and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the parties hereto, intending to be legally bound hereby, agree as follows:
+1.Definitions.
+Except as otherwise defined herein, all capitalized terms used herein without definition shall have the meanings applicable to such terms, respectively, as set forth in the Lease.
+2.Amendments to the Lease.
+A.Termination of the Lease as to the Bally’s Facility.
+Effective as of the date hereof:
+a.the Lease is hereby terminated with respect to the Bally’s Leased Property (as defined below), the Bally’s Leased Property no longer constitutes Leased Property under the Lease, and neither Landlord nor Tenant has any further liabilities or obligations, from and after the date of this Amendment, in respect of the Bally’s Facility (as defined below) and the Bally’s Leased Property (provided that any such liabilities or obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment), and
+b.the Guaranty hereby automatically, and without further action by any party, ceases to apply with respect to any Obligations (as defined in the Guaranty) with respect to the Bally’s Facility or the Bally’s Leased Property to the extent arising from and after the date of this Amendment (provided that any such Obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment).
+c.For the avoidance of doubt, the Lease shall continue in full force and effect with respect to (i) the balance of (x) the Facilities (other than the Bally’s Facility) and (y) the Leased Property (other than the Bally’s Leased Property), and (ii) the Retained Facility and Retained Leased Property (as defined below).
+The term “Bally’s Facility” shall refer to the applicable Facility identified as Facility 13 on the list of the Facilities annexed as Exhibit A to the Lease (prior to giving effect to the replacement of said Exhibit A pursuant to Section 2.N.i. of this Amendment), other than the portion thereof pertaining to the Retained Facility.
+The term “Bally’s Leased Property” shall refer to the Leased Property set forth on Annex A hereto and any other Leased Property pertaining to the Bally’s Facility (excluding, for the avoidance of doubt, the Retained Leased Property).
+The term “Retained Facility” shall have the meaning given such term in the Recitals hereto.
+2
+The term “Retained Leased Property” shall refer to the Wild Wild West Parcel, the Block 488 Parcel and any other Leased Property pertaining to the Retained Facility.
+B.Wild Wild West.
+Boardwalk Regency LLC has obtained all Gaming Licenses necessary to continue the operations of the Wild Wild West Parcel under Boardwalk Regency LLC’s Gaming Licenses for the Facility known as Caesars Atlantic City, and all operations and related assets associated with the Retained Facility have been conveyed to Boardwalk Regency LLC.
+The Wild Wild West Parcel will be operated by Boardwalk Regency LLC as part of the Facility known as Caesars Atlantic City, which will include, but not be limited to, the Wild Wild West Parcel being operated under the Caesars Atlantic City Gaming License, provided, for the avoidance of doubt, the foregoing shall not require Caesars Atlantic City to constitute a Continuous Operation Facility.
+C.Rent.
+Landlord and Tenant hereby expressly acknowledge and agree that there shall be no reduction in the Rent under the Lease as a result of the removal of the Bally’s Facility from the Lease or otherwise as a result of the Bally’s Transaction.
+D.Variable Rent.
+1.From and after the date hereof, for purposes of any calculation of Variable Rent under the Lease, including any adjustments in Variable Rent based on increases or decreases in Net Revenue, such calculations of Net Revenue shall exclude Net Revenue attributable to the Bally’s Facility.
+2.Article II of the Lease is hereby amended such that the definition of “Base Net Revenue Amount” is hereby deleted and replaced with the following:
+“‘Base Net Revenue Amount’: An amount equal to the arithmetic average of the following: (i) Three Billion Three Hundred Ninety-One Million Five Hundred Fifty-Nine Thousand Twenty and No/100 Dollars ($3,391,559,020.00), which amount Landlord and Tenant agree represents Net Revenue for the Fiscal Period immediately preceding the first (1st) Lease Year (i.e., the Fiscal Period ending September 30, 2017), (ii) Three Billion Four Hundred One Million Three Hundred Ninety-Three Thousand Two Hundred Four and No/100 Dollars ($3,401,393,204.00), which amount Landlord and Tenant agree represents the Net Revenue for the Fiscal Period immediately preceding the end of the first (1st) Lease Year (i.e., the Fiscal Period ending September 30, 2018) and (iii) Three Billion Two Hundred Sixty-Four Million Four Hundred Thirty-Two Thousand Four Hundred Twenty and No/100 Dollars ($3,264,432,420.00), which amount Landlord and Tenant agree represents the Net Revenue for the Fiscal Period immediately preceding the end of the second (2nd) Lease Year (i.e., the Fiscal Period ending September 30, 2019). For the avoidance of doubt, the term “arithmetic average” as used in this definition refers to the quotient obtained by dividing (x) the sum of the amounts set forth in clauses (i), (ii) and (iii) by (y) three (3).”
+3
+E.Annual Minimum Cap Ex Amount.
+Article II of the Lease is hereby amended such that the definition of “Annual Minimum Cap Ex Amount” is hereby revised and modified to replace the reference therein to “One Hundred Nineteen Million Three Hundred Thousand and No/100 Dollars ($119,300,000.00)” with a reference to “One Hundred Fourteen Million Five Hundred Thousand and No/100 Dollars ($114,500,000.00)”.
+F.Annual Minimum Per-Lease B&I Cap Ex Requirement.
+The Annual Minimum Per-Lease B&I Cap Ex Requirement shall be unchanged by this Amendment.
+Further, Landlord and Tenant hereby acknowledge, for the avoidance of doubt, that the Net Revenue attributable to the Bally’s Facility during the period the Bally’s Facility was included in the Lease (i.e., during the period from the Commencement Date until the date of this Amendment) shall be included for purposes of calculating the Capital Expenditures required under Section 10.5(a)(ii) of the Lease (i.e., the Annual Minimum Per-Lease B&I Cap Ex Requirement).
+G.Triennial Allocated Minimum Cap Ex Amount B Floor.
+Article II of the Lease is hereby amended such that the definition of “Triennial Allocated Minimum Cap Ex Amount B Floor” is hereby revised and modified to replace the reference therein to “Three Hundred Twenty-Seven Million Eight Hundred Thousand and No/100 Dollars ($327,800,000.00)” with a reference to “Three Hundred Eleven Million and No/100 Dollars ($311,000,000.00)”.
+H.Triennial Minimum Cap Ex Amount A. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount A” is hereby revised and modified to replace the reference therein to “Five Hundred Ninety Million Three Hundred Thousand and No/100 Dollars ($590,300,000.00)” with a reference to “Five Hundred Sixty-Six Million Seven Hundred Thousand and No/100 Dollars ($566,700,000.00)”.
+I.Triennial Minimum Cap Ex Amount B. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount B” is hereby revised and modified to replace the reference therein to “Four Hundred Twenty-One Million Nine Hundred Thousand and No/100 Dollars ($421,900,000.00)” with a reference to “Four Hundred Five Million Two Hundred Thousand and No/100 Dollars ($405,200,000.00)”.
+J.Partial Periods.
+3.Section 10.5(a)(v)(b) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Ninety Million Three Hundred Thousand and No/100 Dollars ($590,300,000.00)” with a reference to “Five Hundred Sixty-Six Million Seven Hundred Thousand and No/100 Dollars ($566,700,000.00)” and (b) replace the reference therein to “One Hundred Ninety-Six Million Seven Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($196,766,666.67)” with a reference to “One Hundred Eighty-Eight Million Nine Hundred Thousand and No/100 Dollars ($188,900,000.00)”,
+4
+4.Section 10.5(a)(v)(c) of the Lease is hereby amended to (a) replace the reference therein to “Four Hundred Twenty-One Million Nine Hundred Thousand and No/100 Dollars ($421,900,000.00)” with a reference to “Four Hundred Five Million Two Hundred Thousand and No/100 Dollars ($405,200,000.00)” and (b) replace the reference therein to “One Hundred Forty Million Six Hundred Thirty-Three Thousand Three Hundred Thirty-Three and 33/100 Dollars ($140,633,333.33)” with a reference to “One Hundred Thirty-Five Million Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($135,066,666.67)”, and
+5.The second sentence of Section 10.5(a)(v) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Ninety Million Three Hundred Thousand and No/100 Dollars ($590,300,000.00)” with a reference to “Five Hundred Sixty-Six Million Seven Hundred Thousand and No/100 Dollars ($566,700,000.00)”,
+(b) replace the reference therein to “One Hundred Ninety-Six Million Seven Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($196,766,666.67)” with a reference to “One Hundred Eighty-Eight Million Nine Hundred Thousand and No/100 Dollars ($188,900,000.00)”,
+(c) replace the reference therein to “Four Hundred Twenty-One Million Nine Hundred Thousand and No/100 Dollars ($421,900,000.00)” with a reference to “Four Hundred Five Million Two Hundred Thousand and No/100 Dollars ($405,200,000.00)” and (d) replace the reference therein to “One Hundred Forty Million Six Hundred Thirty-Three Thousand Three Hundred Thirty-Three and 33/100 Dollars ($140,633,333.33)” with a reference to “One Hundred Thirty-Five Million Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($135,066,666.67)”.
+K.Section 22.2(ix) Transfer.
+6.Landlord and Tenant hereby acknowledge and agree that the Bally’s Transaction shall be deemed to be, and treated as, a transfer and sale of the entire Leased Property with respect to a Facility pursuant to Section 22.2(ix) of the Lease.
+7.All of the applicable requirements and conditions set forth in Section 22.2(ix) of the Lease with respect to such transfer and sale are deemed satisfied or waived by the execution of this Amendment and the consummation of the closing of the Bally’s Transaction.
+8.The 2018 Facility EBITDAR of Tenant for the Bally’s Facility is as set forth on Schedule C-2 annexed hereto.
+9.The amounts of the 2018 EBITDAR Pool and 2018 EBITDAR Pool Before Fifth Amendment shall not be reduced as a result of the Bally’s Facility no longer being a Facility under the Lease, and the removal of the Bally’s Facility from the Lease shall not constitute a L1 Transfer or a L2 Transfer under the Lease.
+5
+10.The words, number and symbols “four and six-tenths percent (4.6%)” contained in Section 22.2(ix) of the Lease are hereby deleted and replaced with the following: “two and seventy-three hundredths percent (2.73%)”.
+11.For purposes of subsequent calculations of the L1/L2 EBITDAR to Rent Ratio under the Lease, the EBITDAR of Tenant in respect of the Bally’s Facility shall be disregarded.
+12.The treatment of the Bally’s Transaction hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under Section 22.2(ix) of the Lease or otherwise.
+L.PACE Reports.
+Clause (C) of Section 23.1(b)(i) of the Lease is hereby amended by replacing “(but only for the SPE Tenants associated with the current Harrah’s Lake Tahoe, Harvey’s Lake Tahoe, Caesars Atlantic City and Bally’s Atlantic City and Schiff Parcel property locations as set forth in Exhibit A)” with “(but only for the SPE Tenants associated with the current Harrah’s Lake Tahoe, Harvey’s Lake Tahoe and Caesars Atlantic City property locations as set forth in Exhibit A)”.
+M.REA.
+Purchaser and Bally’s Atlantic City LLC (i.e., the Landlord entity which is the fee owner with respect to the Retained Facility) have, on or about the date hereof, entered into a certain Reciprocal Easement Agreement (the “REA”) affecting portions of the Retained Leased Property and portions of the real property formerly comprising the Bally’s Leased Property, which REA is intended hereafter to be recorded.
+Tenant has participated together with Landlord in the negotiation of, and hereby consents to, the REA.
+The REA shall be deemed to be a Property Document and a Permitted Exception Document in each case for all purposes under the Lease.
+N.Revisions to Exhibits and Schedules to the Lease.
+The Exhibits and Schedules to the Lease are hereby amended as follows:
+i.Facilities.
+Exhibit A annexed to the Lease (setting forth the list of Facilities under the Lease) is hereby replaced with the replacement Exhibit A that is annexed hereto as Schedule C-1.
+ii.Legal Description.
+The legal descriptions with respect to the Leased Property set forth on Exhibit B annexed to the Lease are hereby amended such that the legal description with respect to the Leased Property pertaining to the Existing BAC Facility as set forth on Annex A attached hereto is hereby deleted from said Exhibit B, and the legal descriptions for the Wild Wild West Parcel and the Block 488 Parcel as set forth on Annex B-1 and Annex B-2, respectively, shall be reinstated in said Exhibit B and included as part of the Leased Property pertaining to the Caesars Atlantic City Facility.
+iii.Property Specific IP.
+The list of Property Specific IP set forth on Exhibit H annexed to the Lease is hereby amended such that:
+6
+(a) the following items of Property Specific IP listed thereon are hereby deleted from said Exhibit H:
+Mark | Jurisdiction | Brand | Specific/ Enterprise | Property | App. No. | App. Date | Reg. No. | Reg. Date | Status
+Noodle Village (logo) | New Jersey | Bally’s | Specific | Bally’s Atlantic City | 22733 | 3/30/2007 | 22733 | 3/30/2007 | Registered
+Studio | New Jersey | Bally’s | Specific | Bally’s Atlantic City | 15289 | 7/14/1998 | 15289 | 7/14/1998 | Registered
+Gold Tooth Gerties | New Jersey | Bally’s | Specific | Bally’s Atlantic City | NA | 12/5/2000 | 20,499 | 12/5/2000 | Registered
+Mountain Bar (and Logo) | New Jersey | Bally’s | Specific | Bally’s Atlantic City | NA | 8/11/1997 | 14,809 | 8/11/1997 | Registered
+Buck Wild Arcade | United States of America | Bally’s | Specific | Bally’s Atlantic City | 87/663083 | 10/27/2017 | 5504950 | 6/26/2018 | Registered
+Boardwalk Cupcakes (logo) | United States of America | Bally’s | Specific | Bally’s Atlantic City | 86/422551 | 10/13/2014 | 4780684 | 7/28/2015 | Registered
+Coyote Kate's Slot Parlor | United States of America | Bally’s | Specific | Bally’s Atlantic City | 76/067657 | 6/9/2000 | 2523523 | 12/25/2001 | Registered
+Wild, Wild West Casino | United States of America | Bally’s | Specific | Bally’s Atlantic City | 75/106946 | 5/13/1996 | 2837537 | 5/4/2004 | Registered
+$10,000 Pyramid | New Jersey | Bally’s | Specific | Bally’s Atlantic City | NA | 2/26/1992 | 10,296 | 2/26/1992 | Registered
+(b) the following items of Property Specific IP are hereby added to said Exhibit H
+7
+Mark | Jurisdiction | Brand | Specific/ Enterprise | Property | App. No. | App. Date | Reg. No. | Reg. Date | Status
+Gold Tooth Gerties | New Jersey | Caesars | Specific | Caesars Atlantic City | NA | 12/5/2000 | 20,499 | 12/5/2000 | Registered
+Mountain Bar (and Logo) | New Jersey | Caesars | Specific | Caesars Atlantic City | NA | 8/11/1997 | 14,809 | 8/11/1997 | Registered
+Buck Wild Arcade | United States of America | Caesars | Specific | Caesars Atlantic City | 87/663083 | 10/27/2017 | 5504950 | 6/26/2018 | Registered
+Boardwalk Cupcakes (logo) | United States of America | Caesars | Specific | Caesars Atlantic City | 86/422551 | 10/13/2014 | 4780684 | 7/28/2015 | Registered
+Coyote Kate's Slot Parlor | United States of America | Caesars | Specific | Caesars Atlantic City | 76/067657 | 6/9/2000 | 2523523 | 12/25/2001 | Registered
+Wild, Wild West Casino | United States of America | Caesars | Specific | Caesars Atlantic City | 75/106946 | 5/13/1996 | 2837537 | 5/4/2004 | Registered
+$10,000 Pyramid | New Jersey | Caesars | Specific | Caesars Atlantic City | NA | 2/26/1992 | 10,296 | 2/26/1992 | Registered
+iv.Description of Title Policies.
+The list of Title Policies set forth on Exhibit J annexed to the Lease is hereby amended such that the reference thereon to the Title Policy relating solely to the Existing BAC Facility is hereby amended and shall be deemed to refer only to the portions of such Title Policy (including as to the exceptions listed on Schedule B thereto) that pertain to the Wild Wild West Parcel and the Block 488 Parcel.
+v.Brands.
+The list of Brands set forth on Exhibit M annexed to the Lease is hereby amended such that “Bally’s” is hereby deleted from said Exhibit M.
+vi.Managed Facilities IP Trademarks.
+The list of Managed Facilities IP set forth on Exhibit P annexed to the Lease is hereby amended such that “Bally’s Atlantic City” is hereby deleted from said Exhibit P.
+vii.Tenant Entities.
+The list of entities comprising Tenant set forth on Schedule B annexed to the Lease shall be amended such that Bally’s Park Place LLC shall be deleted from said Schedule B and Bally’s Park Place LLC shall no longer be a Tenant under the Lease.
+8
+viii.Gaming Licenses.
+The list of Gaming Licenses set forth on Schedule 1 annexed to the Lease is hereby amended such that (a) the Gaming Licenses bearing Unique IDs 294 and 446 relating to the Bally’s Facility are hereby deleted from said Schedule 1,
+(b) the Gaming License of Boardwalk Regency LLC bearing Unique ID 447 is amended as set forth below and (c) the following additional Gaming License of Boardwalk Regency LLC (not bearing a Unique ID) is hereby added to Schedule 1:
+Unique ID | Legal Entity Name | License Category | Type of License | Issuing Agency | State | Description of License
+Boardwalk Regency LLC | Gaming | Lottery License | State of NJ, Lottery Commission | New Jersey | Lottery Terminals for Caesars Atlantic City and Harrah’s Atlantic City
+447 | Boardwalk Regency LLC | Gaming | Casino License / Sports Wagering License | New Jersey Casino Control Commission | New Jersey | Caesars Atlantic City
+ix.Maximum Fixed Rent Term.
+The schedule setting forth the Maximum Fixed Rent Term with respect to each Facility set forth on Schedule 3 annexed to the Lease is hereby amended such that the reference to “Bally’s Atlantic City” thereon is deleted (it being understood, for the avoidance of doubt, that the reference to “Caesars Atlantic City” thereon shall be deemed to also include the Retained Facility).
+x.Specified Subleases.
+The list of Specified Subleases set forth on Schedule 4 annexed to the Lease is hereby amended such that (a) the Specified Subleases bearing Contract ID Nos. 8171, 8197, 8167, 14871, 8178, 8208, 8209, 8207 and 8215 and the six (6) additional Specified Subleases pertaining solely to the Bally’s Facility that do not have a Contract ID No. are hereby deleted from said Schedule 4 and (b) the following Sublease is hereby added to said Schedule 4:
+9
+Contract ID | Debtor(s) | Property Name | Name of Operation | Counterparty | Description | Contract Date | File Name
+N/A | Boardwalk Regency LLC | Caesars Atlantic City | Guy's Bar-B-Que Joint | GRF Enterprises, LLC | RESTAURANT LICENSE AGREEMENT | 12/22/2015 | BAC Guy Fieri BBQ Restaurant License Agreement Fully Executed.pdf
+xi.2018 Facility EBITDAR.
+Schedule 11 annexed to the Lease (setting forth the 2018 Facility EBITDAR) is hereby replaced with the replacement Schedule 11 that is annexed as Schedule C-2 hereto.
+O.Corrections to Leased Property Legal Descriptions.
+The legal descriptions with respect to the Leased Property set forth on Exhibit B annexed to the Lease are hereby amended such that the legal descriptions set forth on Annex C attached hereto are hereby deleted from said Exhibit B (the “Released Missouri Property”).
+The Released Missouri Property was released from the Lease prior to the date hereof.
+P.Correction to Schedule of Permitted Property Sales.
+The list of properties set forth on Schedule 7 annexed to the Lease is hereby amended such that the following properties listed thereon are hereby deleted from said Schedule 7:
+Property | Owning Entity | Area | Street (# if assigned) | City | County | State | Zip | Property ID or APN | Legal
+formerly Harrah’s St. Louis | Miscellaneous Land LLC | Riverport | 13971 Riverport Drive | Maryland Hts | St. Louis | Missouri | 63043 | 11P540071
+Harrah’s North Kansas City | New Harrah’s North Kansas City LLC | 7400 NE Birmingham Rd | Randolph | MO | 18-218-00-10-001.00 | Tract 2
+3.No Other Modification or Amendment to the Lease.
+The Lease shall remain in full force and effect except as expressly amended or modified by this Amendment.
+From and after the date of this Amendment, all references in the Lease to the “Lease” shall be deemed to refer to the Lease as amended by this Amendment.
+4.Governing Law; Jurisdiction.
+This Amendment shall be construed according to and governed by the laws of the jurisdiction(s) specified by the Lease without regard to its or their conflicts of law principles.
+The parties hereto hereby irrevocably submit to the jurisdiction of any court of competent jurisdiction located in such applicable jurisdiction in connection with any proceeding arising out of or relating to this Amendment.
+10
+5.Counterparts.
+This Amendment may be executed by one or more of the parties hereto on any number of separate counterparts, and all of such counterparts taken together shall be deemed to constitute one and the same instrument.
+Facsimile and/or .pdf signatures shall be deemed to be originals for all purposes.
+6.Effectiveness.
+This Amendment shall be effective, as of the date hereof, only upon execution and delivery by each of the parties hereto.
+7.Miscellaneous.
+If any provision of this Amendment is adjudicated to be invalid, illegal or unenforceable, in whole or in part, it will be deemed omitted to that extent and all other provisions of this Amendment will remain in full force and effect.
+Neither this Amendment nor any provision hereof may be changed, modified, waived, discharged or terminated orally, but only by an instrument in writing signed by the party against whom enforcement of such change, modification, waiver, discharge or termination is sought.
+The paragraph headings and captions contained in this Amendment are for convenience of reference only and in no event define, describe or limit the scope or intent of this Amendment or any of the provisions or terms hereof.
+This Amendment shall be binding upon and inure to the benefit of the parties and their respective heirs, legal representatives, successors and permitted assigns.
+[Signature Page Follows]
+11
+IN WITNESS WHEREOF, the parties hereto have caused this Amendment to be duly executed by their duly authorized representatives, all as of the date hereof.
+LANDLORD:
+HORSESHOE COUNCIL BLUFFS LLC
+HARRAH’S COUNCIL BLUFFS LLC
+HARRAH’S METROPOLIS LLC
+HORSESHOE SOUTHERN INDIANA LLC
+NEW HORSESHOE HAMMOND LLC
+NEW HARRAH’S NORTH KANSAS CITY LLC
+GRAND BILOXI LLC
+HORSESHOE TUNICA LLC
+NEW TUNICA ROADHOUSE LLC
+CAESARS ATLANTIC CITY LLC
+BALLY’S ATLANTIC CITY LLC
+HARRAH’S LAKE TAHOE LLC
+HARVEY’S LAKE TAHOE LLC
+HARRAH’S RENO LLC
+BLUEGRASS DOWNS PROPERTY OWNER LLC
+VEGAS DEVELOPMENT LLC
+VEGAS OPERATING PROPERTY LLC
+MISCELLANEOUS LAND LLC
+PROPCO GULFPORT LLC
+PHILADELPHIA PROPCO LLC
+HARRAH’S ATLANTIC CITY LLC
+NEW LAUGHLIN OWNER LLC
+HARRAH’S NEW ORLEANS LLC
+each, a Delaware limited liability company
+By: /s/ David Kieske
+Name: David Kieske
+Title: Treasurer
+HORSESHOE BOSSIER CITY PROP LLC
+HARRAH’S BOSSIER CITY LLC
+each, a Louisiana limited liability company
+By: /s/ David Kieske
+Name: David Kieske
+Title: Treasurer
+[Signatures Continue on Following Pages]
+[Signature Page to Seventh Amendment to Regional Lease]
+[Signature Page to Seventh Amendment to Regional Lease]
+TENANT:
+CEOC, LLC, a Delaware limited liability company,
+HBR REALTY COMPANY LLC, a Nevada limited liability company,
+HARVEYS IOWA MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+SOUTHERN ILLINOIS RIVERBOAT/CASINO CRUISES LLC, an Illinois limited liability company,
+CAESARS RIVERBOAT CASINO, LLC, an Indiana limited liability company,
+ROMAN HOLDING COMPANY OF INDIANA LLC, an Indiana limited liability company,
+HORSESHOE HAMMOND, LLC, an Indiana limited liability company,
+HARRAH’S BOSSIER CITY INVESTMENT COMPANY, L.L.C., a Louisiana limited liability company,
+HARRAH’S NORTH KANSAS CITY LLC, a Missouri limited liability company,
+GRAND CASINOS OF BILOXI, LLC, a Minnesota limited liability company,
+ROBINSON PROPERTY GROUP LLC, a Mississippi limited liability company,
+TUNICA ROADHOUSE LLC, a Delaware limited liability company,
+CAESARS NEW JERSEY LLC, a New Jersey limited liability company,
+HARVEYS TAHOE MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+PLAYERS BLUEGRASS DOWNS LLC, a Kentucky limited liability company,
+CASINO COMPUTER PROGRAMMING, INC., an Indiana corporation,
+HARVEYS BR MANAGEMENT COMPANY, INC., a Nevada corporation,
+HARRAH’S LAUGHLIN, LLC, a Nevada limited liability company,
+JAZZ CASINO COMPANY, L.L.C., a Louisiana limited liability company
+By: /s/ Edmund L. Quatmann Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Chief Legal Officer, Executive Vice President and Secretary
+HORSESHOE ENTERTAINMENT,
+[Signature Page to Seventh Amendment to Regional Lease]
+a Louisiana limited partnership
+By: New Gaming Capital Partnership,
+a Nevada limited partnership,
+its general partner
+By: Horseshoe GP, LLC,
+a Nevada limited liability company,
+its general partner
+By: /s/ Edmund L. Quatmann Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Chief Legal Officer, Executive Vice President and Secretary
+BOARDWALK REGENCY LLC,
+a New Jersey limited liability company
+By: Caesars New Jersey LLC,
+a New Jersey limited liability company,
+its sole member
+By: /s/ Edmund L. Quatmann Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Chief Legal Officer, Executive Vice President and Secretary
+BALLY’S PARK PLACE LLC,
+a New Jersey limited liability company
+By: CEOC, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Edmund L. Quatmann Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Chief Legal Officer, Executive Vice President and Secretary
+HOLE IN THE WALL, LLC,
+[Signature Page to Seventh Amendment to Regional Lease]
+a Nevada limited liability company
+By: CEOC, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Edmund L. Quatmann Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Chief Legal Officer, Executive Vice President and Secretary
+CHESTER DOWNS AND MARINA, LLC,
+a Pennsylvania limited liability company
+By: Harrah’s Chester Downs Investment Company, LLC,
+its sole member
+By: /s/ Edmund L. Quatmann Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Chief Legal Officer, Executive Vice President and Secretary
+HARRAH’S ATLANTIC CITY OPERATING COMPANY, LLC,
+a New Jersey limited liability company
+By: Caesars Resort Collection, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Edmund L. Quatmann Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Chief Legal Officer, Executive Vice President and Secretary
+[Signature Page to Seventh Amendment to Regional Lease]
+Acknowledged and agreed, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease:
+PROPCO TRS LLC,
+a Delaware limited liability company
+By: /s/ David Kieske
+Name: David Kieske
+Title: Treasurer
+[Signature Page to Seventh Amendment to Regional Lease]
+ACKNOWLEDGMENT AND AGREEMENT OF GUARANTOR
+The undersigned (“Guarantor”) hereby:
+(a) acknowledges receipt of the Seventh Amendment to Lease (the “Amendment”; capitalized terms used herein without definition having the meanings set forth in the Amendment), dated as of November 18, 2020, by and among the entities listed on Schedule A attached thereto, as Landlord, and the entities listed on Schedule B attached thereto, as Tenant and the other parties party thereto;
+(b) consents to the terms and execution thereof;
+(c) ratifies and reaffirms Guarantor’s obligations to Landlord pursuant to the terms of that certain Guaranty of Lease, dated as of July 20, 2020 (the “Guaranty”), by and between Guarantor and Landlord, and agrees that, except as expressly set forth in Section 2.A.ii. of the Amendment, nothing in the Amendment in any way impairs or lessens the Guarantor’s obligations under the Guaranty; and
+(d) acknowledges and agrees that the Guaranty is in full force and effect and is valid, binding and enforceable in accordance with its terms.
+IN WITNESS WHEREOF, the undersigned has caused this Acknowledgment and Agreement of Guarantor to be duly executed as of November 18, 2020.
+CAESARS ENTERTAINMENT, INC.
+By: /s/ Edmund L. Quatmann Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Chief Legal Officer, Executive Vice President and Secretary
+[Signature Page to Acknowledgment and Agreement of Guarantor]
+Schedule A
+LANDLORD ENTITIES
+Horseshoe Council Bluffs LLC
+Harrah’s Council Bluffs LLC
+Harrah’s Metropolis LLC
+Horseshoe Southern Indiana LLC
+New Horseshoe Hammond LLC
+Horseshoe Bossier City Prop LLC
+Harrah’s Bossier City LLC
+New Harrah’s North Kansas City LLC
+Grand Biloxi LLC
+Horseshoe Tunica LLC
+New Tunica Roadhouse LLC
+Caesars Atlantic City LLC
+Bally’s Atlantic City LLC
+Harrah’s Lake Tahoe LLC
+Harvey’s Lake Tahoe LLC
+Harrah’s Reno LLC
+Bluegrass Downs Property Owner LLC
+Vegas Development LLC
+Vegas Operating Property LLC
+Miscellaneous Land LLC
+Propco Gulfport LLC
+Philadelphia Propco LLC
+Harrah’s Atlantic City LLC
+New Laughlin Owner LLC
+Harrah’s New Orleans LLC
+Schedule A
+Schedule B
+TENANT ENTITIES
+CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+HBR Realty Company LLC
+Harveys Iowa Management Company LLC
+Southern Illinois Riverboat/Casino Cruises LLC
+Caesars Riverboat Casino LLC
+Roman Holding Company of Indiana LLC
+Horseshoe Hammond, LLC
+Horseshoe Entertainment
+Harrah’s Bossier City Investment Company, LLC
+Harrah’s North Kansas City LLC
+Grand Casinos of Biloxi, LLC
+Robinson Property Group LLC
+Tunica Roadhouse LLC
+Boardwalk Regency LLC
+Caesars New Jersey LLC
+Bally’s Park Place LLC
+Harveys Tahoe Management Company LLC
+Players Bluegrass Downs LLC
+Casino Computer Programming, Inc.
+Harveys BR Management Company, Inc.
+Hole in the Wall, LLC
+Chester Downs and Marina, LLC
+Harrah’s Atlantic City Operating Company, LLC
+Harrah’s Laughlin, LLC
+Jazz Casino Company, L.L.C.
+Schedule B
+Schedule C-1
+NEW EXHIBIT A
+[attached]
+Schedule C-1
+EXHIBIT A
+FACILITIES
+No. | Property | State | Fee Owner | Operating Entity
+1. | Horseshoe Council Bluffs | Iowa | Horseshoe Council Bluffs LLC | HBR Realty Company LLC Harveys BR Management Company, Inc.
+2. | Harrah’s Council Bluffs | Iowa | Harrah's Council Bluffs LLC | Harveys Iowa Management Company LLC CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+3. | Harrah’s Metropolis | Illinois | Harrah's Metropolis LLC | Southern Illinois Riverboat/Casino Cruises LLC
+4. | Horseshoe Southern Indiana (now known as Caesars Southern Indiana) | Indiana | Horseshoe Southern Indiana LLC | Caesars Riverboat Casino, LLC Roman Holding Company of Indiana LLC
+5. | Horseshoe Hammond | Indiana | New Horseshoe Hammond LLC | Horseshoe Hammond, LLC
+6. | Horseshoe Bossier City | Louisiana | Horseshoe Bossier City Prop LLC | Horseshoe Entertainment
+7. | Harrah’s Bossier City (Louisiana Downs) | Louisiana | Harrah's Bossier City LLC | Harrah's Bossier City Investment Company, L.L.C.
+8. | Harrah’s North Kansas City | Missouri | New Harrah's North Kansas City LLC | Harrah’s North Kansas City LLC
+Schedule C-1
+9. | Harrah’s Gulf Coast (formerly known as Grand Biloxi Casino Hotel) and Biloxi Land | Mississippi | Grand Biloxi LLC | Grand Casinos of Biloxi, LLC Casino Computer Programming, Inc.
+10. | Horseshoe Tunica | Mississippi and Arkansas | Horseshoe Tunica LLC | Robinson Property Group LLC
+11. | Tunica Roadhouse | Mississippi | New Tunica Roadhouse LLC | Tunica Roadhouse LLC
+12. | Caesars Atlantic City (includes Wild Wild West and Block 488 Parcel) | New Jersey | Caesars Atlantic City LLC Bally's Atlantic City LLC | Boardwalk Regency LLC Caesars New Jersey LLC
+13. | Harrah’s Lake Tahoe | Nevada | Harrah's Lake Tahoe LLC | Harveys Tahoe Management Company LLC CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+14. | Harvey’s Lake Tahoe | Nevada and California | Harvey's Lake Tahoe LLC | Harveys Tahoe Management Company LLC
+15. | Reno Billboard Parcel | Nevada | Harrah's Reno LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+16. | Bluegrass Downs | Kentucky | Bluegrass Downs Property Owner LLC | Players Bluegrass Downs LLC
+Schedule C-1
+17. | Las Vegas Land Assemblage Properties | Nevada | Vegas Development LLC | Hole in the Wall, LLC CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+18. | Harrah’s Airplane Hangar | Nevada | Vegas Operating Property LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+20. | Land Leftover from Harrah’s Gulfport | Mississippi | Propco Gulfport LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+21. | Vacant Land in Splendora, TX | Texas | Miscellaneous Land LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+22. | Vacant Land at Turfway Park | Kentucky | Miscellaneous Land LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+23. | Harrah’s Philadelphia | Pennsylvania | Philadelphia Propco LLC | Chester Downs and Marina, LLC
+Schedule C-1
+24. | Harrah’s Atlantic City | New Jersey | Harrah’s Atlantic City LLC | Harrah’s Atlantic City Operating Company, LLC
+25. | Harrah’s Laughlin | Nevada | New Laughlin Owner LLC | Harrah’s Laughlin, LLC
+26. | Harrah’s New Orleans | Louisiana | Harrah’s New Orleans LLC | Jazz Casino Company, L.L.C.
+Schedule C-1
+Schedule C-2
+NEW SCHEDULE 11
+[attached]
+Schedule C-2
+Annex A
+Bally’s Leased Property
+Bally’s Park Place Hotel
+ALL THAT CERTAIN LOT, TRACT, OR PARCEL OF LAND AND PREMISES SITUATE, LYING, AND BEING IN THE CITY OF ATLANTIC CITY, COUNTY OF ATLANTIC, AND STATE OF NEW JERSEY, BOUNDED AND DESCRIBED AS FOLLOWS:
+BEGINNING AT THE INTERSECTION OF THE SOUTHERLY LINE OF POP LLOYD BOULEVARD (74.00' WIDE) AND THE EASTERLY LINE OF MICHIGAN AVENUE (50.00' WIDE) AND EXTENDING FROM SAID BEGINNING POINT; THENCE
+1. NORTH 62° 32' 00" EAST IN AND ALONG THE SOUTHERLY LINE OF POP LLOYD BOULEVARD A DISTANCE OF 402.35' TO A POINT; THENCE
+2. NORTH 27° 28' 00" WEST PARALLEL WITH MICHIGAN AVENUE A DISTANCE OF 84.00' TO THE NORTH LINE OF LOT 4 IN BLOCK 44; THENCE
+3. NORTH 62° 32' 00" EAST A DISTANCE OF 145.60' TO THE WEST LINE OF PARK PLACE (60.00' WIDE); THENCE
+4. SOUTH 27° 28' 00" EAST IN AND ALONG SAME A DISTANCE OF 615.31' TO A POINT IN THE CURVED INTERIOR LINE OF PARK; THENCE
+5. SOUTHWESTWARDLY IN AND ALONG SAME AND CURVING TO THE LEFT ALONG THE ARC OF A CIRCLE HAVING A RADIUS OF 1679.20' AN ARC DISTANCE OF 20.05' TO A POINT OF TANGENCY IN SAME; THENCE
+6. SOUTH 73° 42' 26.6" WEST STILL IN AND ALONG SAME A DISTANCE OF 538.51' TO THE EASTERLY LINE OF MICHIGAN AVENUE; THENCE
+7. NORTH 27° 28' 00" WEST IN AND ALONG SAME A DISTANCE OF 422.95' TO THE POINT AND PLACE OF BEGINNING.
+LESS AND EXCEPT THE FOLLOWING DESCRIBED PARCEL:
+BEGINNING AT A POINT IN THE EASTERLY LINE OF MICHIGAN AVENUE (950 FEET WIDE) DISTANT 715.20 FEET AS MEASURED ALONG THE EASTERLY LINE OF MICHIGAN AVENUE FROM THE SOUTHERLY LINE OF PACIFIC AVENUE (60 FEET WIDE) THENCE FROM SAID BEGINNING POINT;
+1. EASTERLY, PARALLEL WITH PACIFIC AVENUE, 59.50 FEET TO A POINT; THENCE
+Annex A
+2. SOUTHERLY, PARALLEL WITH MICHIGAN AVENUE, 33.00 FEET TO A DRILL HOLE; THENCE
+3. EASTERLY, PARALLEL WITH PACIFIC AVENUE, 76.85 FEET TO A NAIL; THENCE
+4. SOUTHERLY, PARALLEL WITH MICHIGAN AVENUE, 21.12 FEET TO A NAIL; THENCE
+5. EASTERLY, PARALLEL WITH PACIFIC AVENUE, 66.00 FEET TO A POINT WHICH IS DISTANT 150 FEET WESTERLY OF THE WESTERLY LINE OF OHIO AVENUE (50 FEET WIDE); THENCE
+6. SOUTHERLY, PARALLEL WITH MICHIGAN AVENUE, 1230.68 FEET TO THE EXTERIOR LINE IN THE ATLANTIC OCEAN ESTABLISHED BY THE RIPARIAN COMMISSIONERS OF NEW JERSEY; THENCE
+7. WESTERLY, PARALLEL WITH PACIFIC AVENUE, IN AND ALONG SAID EXTERIOR LINE, 202.35 FEET TO THE EASTERLY LINE OF MICHIGAN AVENUE IF SAME WERE EXTENDED SOUTHERLY; THENCE
+8. NORTHERLY, IN AND ALONG THE EASTERLY LINE OF MICHIGAN AVENUE, IF EXTENDED, 1284.80 FEET TO THE POINT AND PLACE OF BEGINNING
+Together with the beneficial easement rights as set forth in Access and Parking Agreement recorded in VOL 13723 CFN#201412082.
+Together with the beneficial easement rights as set forth in Easement Agreement Recorded in VOL 13724 CFN #2014012083.
+FOR INFORMATION PURPOSES ONLY: KNOWN AS LOTS 1 & 3 IN BLOCK 45 AND LOT 4 IN BLOCK 44 AS SHOWN ON THE ATLANTIC CITY TAX MAP
+Boardwalk Parcel
+ALL THAT CERTAIN TRACT, PARCEL AND LOT OF LAND LYING AND BEING SITUATE IN THE CITY OF ATLANTIC CITY, COUNTY OF ATLANTIC, STATE OF NEW JERSEY, BEING MORE PARTICULARLY DESCRIBED AS FOLLOWS:
+BEGINNING AT A POINT IN THE EASTERLY LINE OF MICHIGAN AVENUE (50 FEET WIDE) DISTANT 715.20 FEET AS MEASURED ALONG THE EASTERLY LINE OF MICHIGAN AVENUE FROM THE SOUTHERLY LINE OF PACIFIC AVENUE (60 FEET WIDE) THENCE FROM SAID BEGINNING POINT;
+1. NORTH 62 DEGREES 32 MINUTES 00 SECONDS EAST, PARALLEL WITH PACIFIC AVENUE, 59.50 FEET TO A POINT; THENCE
+Annex A
+2. SOUTH 27 DEGREES 28 MINUTES 00 SECONDS EAST, PARALLEL WITH MICHIGAN AVENUE, 33.00 FEET TO A POINT; THENCE
+3. NORTH 62 DEGREES 32 MINUTES 00 SECONDS EAST, PARALLEL WITH PACIFIC AVENUE, 76.85 FEET TO A POINT; THENCE
+4. SOUTH 27 DEGREES 28 MINUTES 00 SECONDS EAST, PARALLEL WITH MICHIGAN AVENUE, 21.12 FEET TO A POINT; THENCE
+5. NORTH 62 DEGREES 32 MINUTES 00 SECONDS EAST, PARALLEL WITH PACIFIC AVENUE, 66.00 FEET; THENCE
+6. SOUTH 27 DEGREES 28 MINUTES 00 SECONDS EAST, PARALLEL WITH MICHIGAN AVENUE, A DISTANCE OF 1230.68 FEET TO A POINT IN THE RIPARIAN COMMISSIONERS LINE 2000 FEET SOUTH OF PACIFIC AVENUE; THENCE
+7. SOUTH 62 DEGREES 32 MINUTES 00 SECONDS WEST IN AND ALONG SAME A DISTANCE OF 202.35 FEET TO A POINT IN THE EAST LINE OF MICHIGAN AVENUE IF EXTENDED; THENCE
+8. NORTH 27 DEGREES 28 MINUTES 00 SECONDS WEST, IN AND ALONG SAME A DISTANCE OF 1284.80 FEET TO THE POINT AND PLACE OF BEGINNING.
+Together with the beneficial easement rights as set forth in Access and Parking Agreement recorded in VOL 13723 CFN#201412082.
+Together with the beneficial easement rights as set forth in Easement Agreement Recorded in VOL 13724 CFN #2014012083.
+FOR INFORMATION PURPOSES ONLY: KNOWN AS LOTS 5 IN BLOCK 45 AS SHOWN ON THE ATLANTIC CITY TAX MAP.
+NOTE: Lands lying waterward of the Interior Line of the Public Park are assessed to the City of Atlantic City as Tax Lot 98 Block 1)
+Bally’s Park Place Garage
+ALL THAT CERTAIN LOT, TRACT, OR PARCEL OF LAND AND PREMISES SITUATE, LYING, AND BEING IN THE CITY OF ATLANTIC CITY, COUNTY OF ATLANTIC, AND STATE OF NEW JERSEY, BOUNDED AND DESCRIBED AS FOLLOWS:
+BEGINNING AT THE INTERSECTION OF THE SOUTHERLY LINE OF PACIFIC AVENUE (60.00' WIDE) AND THE EASTERLY LINE OF MICHIGAN AVENUE (50.00' WIDE) AND EXTENDING FROM SAID BEGINNING POINT; THENCE
+1. NORTH 62° 32' 00" EAST IN AND ALONG THE SOUTHERLY LINE OF PACIFIC AVENUE A DISTANCE OF 352.35' TO THE WESTERLY LINE OF OHIO AVENUE (50.00' WIDE); THENCE
+Annex A
+2. SOUTH 27° 28' 00" EAST IN AND ALONG SAME A DISTANCE OF 360.00' TO A POINT IN THE NORTHERLY LINE OF POP LLOYD BOULEVARD (74.00' WIDE); THENCE
+3. SOUTH 62° 32' 00" WEST PARALLEL IN AND ALONG SAME A DISTANCE OF 352.35' TO THE EASTERLY LINE OF MICHIGAN AVENUE; THENCE
+4. NORTH 27° 28' 00" WEST IN AND ALONG SAME A DISTANCE OF 360.00' TO THE POINT AND PLACE OF BEGINNING.
+Together with the beneficial easement rights as set forth in Access and Parking Agreement recorded in VOL 13723 CFN#201412082.
+Together with the beneficial easement rights as set forth in Easement Agreement Recorded in VOL 13724 CFN #2014012083.
+FOR INFORMATION PURPOSES ONLY: KNOWN AS LOT 1 IN BLOCK 43 AS SHOWN ON THE ATLANTIC CITY TAX MAP
+Wild West Casino
+ALL THAT CERTAIN LOT, TRACT, OR PARCEL OF LAND AND PREMISES SITUATE, LYING, AND BEING IN THE CITY OF ATLANTIC CITY, COUNTY OF ATLANTIC, AND STATE OF NEW JERSEY, BOUNDED AND DESCRIBED AS FOLLOWS:
+BEGINNING AT THE INTERSECTION OF THE SOUTHERLY LINE OF PACIFIC AVENUE (60.00' WIDE) AND THE EASTERLY LINE OF ARKANSAS AVENUE (50.00' WIDE) AND EXTENDING FROM SAID BEGINNING POINT; THENCE
+1. NORTH 62° 32' 00" EAST IN AND ALONG THE SOUTHERLY LINE OF PACIFIC AVENUE A DISTANCE OF 350.00' TO THE WESTERLY LINE OF MICHIGAN AVENUE (50.00' WIDE); THENCE
+2. SOUTH 27° 28' 00" EAST IN AND ALONG SAME A DISTANCE OF 847.08' TO A POINT IN THE INTERIOR LINE OF PARK; THENCE
+3. SOUTH 73° 42' 27" WEST IN AND ALONG SAME A DISTANCE OF 332.25' TO A POINT OF CURVATURE IN SAME; THENCE
+4. STILL IN AND ALONG SAME AND CURVING TO THE LEFT ALONG THE ARC OF A CIRCLE HAVING A RADIUS OF 1259.09' AN ARC DISTANCE OF 24.86' TO THE EASTERLY LINE OF ARKANSAS AVENUE; THENCE
+5. NORTH 27° 28' 00" WEST IN AND ALONG SAME A DISTANCE OF 105.00' TO THE SOUTHERLY LINE OF LOT 4.01 IN BLOCK 43; THENCE
+Annex A
+6. NORTH 62° 32' 00" EAST IN AND ALONG SAME, PARALLEL WITH PACIFIC AVENUE A DISTANCE OF 200.00' TO A POINT; THENCE
+7. NORTH 27° 28' 00" WEST PARALLEL WITH ARKANSAS AVENUE A DISTANCE OF 173.19' TO A POINT; THENCE
+8. SOUTH 62° 32' 00" WEST PARALLEL WITH PACIFIC AVENUE A DISTANCE OF 12.50' TO A POINT; THENCE
+9. NORTH 27° 28' 00" WEST PARALLEL WITH ARKANSAS AVENUE A DISTANCE OF 50.00' TO A POINT; THENCE
+10. SOUTH 62° 32' 00" WEST PARALLEL WITH PACIFIC AVENUE A DISTANCE OF 187.50' TO THE WESTERLY LINE OF ARKANSAS AVENUE; THENCE
+11. NORTH 27° 28' 00" WEST IN AND ALONG SAME A DISTANCE OF 450.00' TO THE POINT AND PLACE OF BEGINNING.
+Together with the beneficial easement rights as set forth in Declaration of Cross Easements recorded in Deed Book 6619, page 86.
+FOR INFORMATION PURPOSES ONLY: KNOWN AS LOT 1 IN BLOCK 42 AS SHOWN ON THE ATLANTIC CITY TAX MAP.
+Hummock Avenue Parcel
+ALL THAT CERTAIN LOT, TRACT, OR PARCEL OF LAND AND PREMISES SITUATE, LYING, AND BEING IN THE CITY OF ATLANTIC CITY, COUNTY OF ATLANTIC, AND STATE OF NEW JERSEY, BOUNDED AND DESCRIBED AS FOLLOWS:
+BEGINNING AT THE SOUTH LINE OF HUMMOCK AVENUE (50.00' WIDE) A DISTANCE OF 252.76' SOUTHWEST OF OHIO AVENUE (50.00' WIDE) AND EXTENDING; THENCE
+1. NORTH 62° 32' 00" EAST IN AND ALONG THE SOUTHERLY LINE OF HUMMOCK AVENUE A DISTANCE OF 69.76' TO A POINT; THENCE
+2. SOUTH 27° 28' 00" EAST PARALLEL WITH OHIO AVENUE AND AT RIGHT ANGLES TO HUMMOCK AVENUE A DISTANCE OF 121.00' TO A POINT; THENCE
+3. SOUTH 62° 32' 00" WEST PARALLEL WITH HUMMOCK AVENUE A DISTANCE OF 3.53' TO A POINT DISTANT 152.00' NORTHEAST OF BACHARACH BOULEVARD; THENCE
+4. NORTH 76° 40' 59" WEST PARALLEL WITH BACHARACH BOULEVARD A DISTANCE OF 15.44 TO A POINT; THENCE
+Annex A
+5. SOUTH 13° 19' 00" WEST AT RIGHT ANGLES TO BACHARACH BOULEVARD A DISTANCE OF 76.00' TO A POINT; THENCE
+6. NORTH 76° 40' 59" WEST PARALLEL WITH BACHARACH BOULEVARD A DISTANCE OF 10.00' TO A POINT; THENCE
+7. NORTH 13° 19' 00" EAST AT RIGHT ANGLES TO BACHARACH BOULEVARD A DISTANCE OF 76.00' TO A POINT; THENCE
+8. NORTH 76° 40' 59" WEST PARALLEL WITH BACHARACH BOULEVARD A DISTANCE OF 103.50' TO A POINT; THENCE
+9. NORTH 12° 59' 55" EAST A DISTANCE OF 48.57' TO THE SOUTHERLY LINE OF HUMMOCK AVENUE AND THE POINT AND PLACE OF BEGINNING.
+SUBJECT TO AND TOGETHER WITH THE RIGHT OF INGRESS AND EGRESS WITH OTHERS OVER THE FOLLOWING DESCRIBED RIGHT OF WAY:
+BEGINNING AT A POINT IN THE NORTHEAST LINE OF BACHARACH BLVD. (70 FEET WIDE) DISTANT 570.5 FEET SOUTHEAST OF ARKANSAS AVENUE (60 FEET WIDE) AND EXTENDING THENCE:
+1. NORTHEASTWARDLY AT RIGHT ANGLES TO BACHARACH BLVD. 152 FEET; THENCE
+2. SOUTHEASTWARDLY PARALLEL WITH BACHARACH BLVD. 20 FEET; THENCE
+3. SOUTHWESTWARDLY AT RIGHT ANGLES TO BACHARACH BLVD 152 FEET TO THE NORTHEAST LINE OF BACHARACH BLVD.; THENCE
+4. NORTHWESTWARDLY IN AND ALONG BACHARACH BLVD 20 FEET TO THE POINT AND PLACE OF BEGINNING.
+FOR INFORMATION PURPOSES ONLY: BEING KNOWN AS LOTS 20, 21 & 22 IN BLOCK 488 OF THE ATLANTIC CITY TAX MAP
+Air Rights Over Michigan Avenue
+TRACT I:
+BEGINNING AT A POINT IN THE WESTERLY LINE OF MICHIGAN AVENUE (50.00 WIDE), SAID POINT BEING DISTANT 239.00 FEET SOUTH OF THE SOUTHERLY LINE OF PACIFIC AVENUE (60.00 FEET WIDE), AND EXTENDING; THENCE
+Annex A
+1. NORTH 62 DEGREES 32 MINUTES 00 SECONDS EAST, PARALLEL WITH PACIFIC AVENUE AND CROSSING MICHIGAN AVENUE, A DISTANCE OF 50.00 FEET TO THE EASTERLY LINE OF MICHIGAN AVENUE; THENCE
+2. SOUTH 27 DEGREES 28 MINUTES 00 SECONDS EAST IN AND ALONG THE EASTERLY LINE OF MICHIGAN AVENUE A DISTANCE OF 50.00 FEET; THENCE
+3. SOUTH 62 DEGREES 32 MINUTES 00 SECONDS WEST, PARALLEL WITH PACIFIC AVENUE AND CROSSING MICHIGAN AVENUE A DISTANCE OF 50.00 FEET TO THE WESTERLY LINE OF MICHIGAN AVENUE; THENCE
+4. NORTH 27 DEGREES 28 MINUTES 00 SECONDS WEST IN AND ALONG THE WESTERLY LINE OF MICHIGAN AVENUE, A DISTANCE OF 50.00 FEET TO THE POINT AND PLACE OF BEGINNING.
+BEING AN AREA ABOVE THE HORIZONTAL PLACE OF MICHIGAN AVENUE BETWEEN ELEVATION 46.00 FEET AND ELEVATION 46.00 FEET 6 INCHES SAID ELEVATIONS IN REFERENCE TO U.S.C. AND G.S. DATUM
+(ELEVATION 0.00 =MEAN SEA LEVEL)
+FOR INFORMATION ONLY: BEING KNOWN AS KNOWN AS LOT 6 IN BLOCK 42 OF THE ATLANTIC CITY TAX MAP
+TRACT II
+BEGINNING AT A POINT IN THE WESTERLY LINE OF MICHIGAN AVENUE (50.00 WIDE) SAID POINT BEING DISTANT 503.17 FEET SOUTH OF THE SOUTHERLY LINE OF PACIFIC AVENUE (60.00 FEET WIDE) AND EXTENDING FROM SAID BEGINNING POINT; THENCE
+1. SOUTH 27 DEGREES 28 MINUTES EAST IN AND ALONG THE EASTERLY LINE OF MICHIGAN AVENUE, A DISTANCE OF 27.16 FEET; THENCE
+2. SOUTH 39 DEGREES 32 MINUTES 00 SECONDS WEST, CROSSING MICHIGAN AVENUE A DISTANCE OF 54.32 FEET TO THE WESTERLY LINE OF MICHIGAN AVENUE; THENCE
+3. NORTH 27 DEGREES 28 MINUTES WEST IN AND ALONG THE WESTERLY LINE OF MICHIGAN AVENUE, A DISTANCE OF 27.16 FEET; THENCE
+4. NORTH 39 DEGREES 32 MINUTES 00 SECONDS EAST, CROSSING MICHIGAN AVENUE A DISTANCE OF 54.32 FEET TO THE EASTERLY LINE OF MICHIGAN AVENUE; THE POINT AND PLACE OF BEGINNING.
+Annex A
+THE BOTTOM OF THE PROPOSED AIR RIGHTS WILL BE AT AN ELEVATION OF 20.00 N.G.V.D. DATUM (MEAN SEA LEVEL= 0.00) AND THE TOP OF THE AIR RIGHTS WILL BE AT ELEVATION 46.00
+FOR INFORMATION ONLY: BEING KNOWN AS KNOWN AS LOT 7 IN BLOCK 42 OF THE ATLANTIC CITY TAX MAP
+Air Rights Over Ohio Avenue
+METES AND BOUNDS DESCRIPTION for proposed air rights above Ohio Avenue required in conjunction with the Baily's - Claridge Connection Project, situate in the City of Atlantic City, County of Atlantic and State of New Jersey being bounded and described as follows:
+BEGINNING at a point in the easterly line of Ohio Avenue (50' wide), South 27 degrees, 28 minutes, 00 seconds East 350.00' from the southerly line of Pacific Avenue (60' wide), and extending from said beginning point; thence
+1. South 27 degrees 28 minutes 00 seconds East in and along the easterly line of Ohio Avenue 10.00’ to the northerly line of Pop Lloyd Boulevard (74’ wide); thence
+2. South 62 degrees 32 minutes 00 seconds West in and along same, parallel with Pacific Avenue 50.00’ to the westerly line of Ohio Avenue; thence
+3. North 27 degrees 28 minutes 00 seconds West in and along same, 10.00’ to a point; thence
+4. North 62 degrees 32 minutes 00 seconds East, parallel with Pacific Avenue 50.00 feet to the point and place of BEGINNING.
+The above described air rights are located a minimum of 14.00’ above the existing grade elevation of Ohio Avenue.
+FOR INFORMATION ONLY: BEING KNOWN AS KNOWN AS LOT 4.02 IN BLOCK 44 OF THE ATLANTIC CITY TAX MAP
+AIR RIGHTS OVER POP LLOYD BOULEVARD AS SET FORTH IN CITY OF ATLANTIC ORDINANCE NO. 77 OF 1978 AND IN DEED BOOK 3442, PAGE 250.
+FOR INFORMATION ONLY: BEING KNOWN AS KNOWN AS LOT 13 IN BLOCK 43 OF THE ATLANTIC CITY TAX MAP
+BEING ALSO KNOWN AS (REPORTED FOR INFORMATIONAL PURPOSES ONLY):
+Block 42, Lot 1 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Annex A
+Block 42, Lot 6 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Block 42, Lot 7 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Block 43, Lot 1 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Block 43, Lot 13 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Block 44, Lot 4 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Block 44, Lot 4.02 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Block 45, Lot 1 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Block 45, Lot 3 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Block 45, Lot 5 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Block 488, Lot 23 on the official tax map of the CITY OF ATLANTIC CITY, County of Atlantic, State of New Jersey
+Annex A
+Annex B-1
+Wild Wild West Parcel
+ALL that certain lot, tract, or parcel of land and premises situate, lying, and being in the City of Atlantic City, County of Atlantic, and State of New Jersey, bounded and described as follows:
+BEGINNING at the intersection of the southeast line of Pacific Avenue (60.00’ wide) and the northeast line of Arkansas Avenue (50.00’ wide) and extending from said beginning point; thence
+(1)North 62° 32’ 00” East in and along the southeast line of Pacific Avenue a distance of 154.00’ to a point in a proposed subdivision line as shown on the below mentioned plan; thence
+(2)South 27° 28’ 00” East in and said line and parallel with Arkansas Avenue a distance of 288.00’ to a point in a second proposed subdivision line as shown on the below mentioned plan; thence
+(3)North 62° 32’ 00” East in and along said line and parallel with of Pacific Avenue a distance of 196.00’ to a point in the southwest line of Michigan Avenue (50.00’ wide); thence
+(4)South 27° 28’ 00” East in and said line a distance of 559.08’ to a point in the interior line of public park, also being the northwest line of the Boardwalk R.O.W. (60.00’ wide); thence
+(5)South 73° 42’ 27” West in and along said line a distance of 332.25’ to a point of curvature in same; thence
+(6)Southwesterly still along said line and curving to the left along the arc of a circle having a radius of 1259.09’ an arc distance of 24.47’ to the intersection of the aforesaid northeast line of Arkansas Avenue; thence
+(7)North 27° 28’ 00” West in and along said line a distance of 105.00’ to a point in the division line of lot 4.01; thence
+(8)North 62° 32’ 00” East in and along said line and parallel with of Pacific Avenue a distance of 200.00’ to a common property corner of lot 4.01; thence
+(9)North 27° 28’ 00” West still in and along said division line and parallel with Arkansas a distance of 173.19’ to another common property corner of lot 4.01; thence
+(10)South 62° 32’ 00” West still in and along said division line and parallel with Pacific Avenue a distance of 12.50’ to another common property corner of lot 4.01; thence
+Annex B-1
+(11)North 27° 28’ 00” West still in and along said division line and parallel with Arkansas a distance of 50.00’ to another common property corner
+(12)South 62° 32’ 00” West still in and along said division line and parallel with Pacific Avenue a distance of 187.50’ to a point in the aforesaid northeast line of Arkansas Avenue; thence
+(13)North 27° 28’ 00” West l in and along said line a distance of 450.00’ to the point and place of BEGINNING.
+BEING known as a portion of lot 1, also being depicted as lot 1.05 in block 42 in the City of Atlantic City as shown on the below mentioned plan
+CONTAINING an area of 183,920.08 square feet
+THIS legal description was prepared by Daniel J. Ponzio Sr. NJPLS and is composed in accordance with a minor subdivision plan prepared by Arthur W. Ponzio Co. & Associates, Inc. dated 5/5/20 Project #35167
+TOGETHER with the easements appurtenant to such land set forth in that certain Reciprocal Easement Agreement dated as of November 18, 2020, by and between Premier Entertainment AC, LLC and Bally’s Atlantic City LLC and recorded in the Office of the County Clerk of Atlantic County, New Jersey substantially concurrently with the execution of this Amendment.
+Annex B-1
+Annex B-2
+Block 488 Parcel
+ALL THAT CERTAIN LOT, TRACT, OR PARCEL OF LAND AND PREMISES SITUATE, LYING, AND BEING IN THE CITY OF ATLANTIC CITY, COUNTY OF ATLANTIC, AND STATE OF NEW JERSEY, BOUNDED AND DESCRIBED AS FOLLOWS:
+BEGINNING AT THE SOUTH LINE OF HUMMOCK AVENUE (50.00' WIDE) A DISTANCE OF 252.76' SOUTHWEST OF OHIO AVENUE (50.00' WIDE) AND EXTENDING; THENCE
+1. NORTH 62° 32' 00" EAST IN AND ALONG THE SOUTHERLY LINE OF HUMMOCK AVENUE A DISTANCE OF 69.76' TO A POINT; THENCE
+2. SOUTH 27° 28' 00" EAST PARALLEL WITH OHIO AVENUE AND AT RIGHT ANGLES TO HUMMOCK AVENUE A DISTANCE OF 121.00' TO A POINT; THENCE
+3. SOUTH 62° 32' 00" WEST PARALLEL WITH HUMMOCK AVENUE A DISTANCE OF 3.53' TO A POINT DISTANT 152.00' NORTHEAST OF BACHARACH BOULEVARD; THENCE
+4. NORTH 76° 40' 59" WEST PARALLEL WITH BACHARACH BOULEVARD A DISTANCE OF 15.44 TO A POINT; THENCE
+5. SOUTH 13° 19' 00" WEST AT RIGHT ANGLES TO BACHARACH BOULEVARD A DISTANCE OF 76.00' TO A POINT; THENCE
+6. NORTH 76° 40' 59" WEST PARALLEL WITH BACHARACH BOULEVARD A DISTANCE OF 10.00' TO A POINT; THENCE
+7. NORTH 13° 19' 00" EAST AT RIGHT ANGLES TO BACHARACH BOULEVARD A DISTANCE OF 76.00' TO A POINT; THENCE
+8. NORTH 76° 40' 59" WEST PARALLEL WITH BACHARACH BOULEVARD A DISTANCE OF 103.50' TO A POINT; THENCE
+9. NORTH 12° 59' 55" EAST A DISTANCE OF 48.57' TO THE SOUTHERLY LINE OF HUMMOCK AVENUE AND THE POINT AND PLACE OF BEGINNING.
+SUBJECT TO AND TOGETHER WITH THE RIGHT OF INGRESS AND EGRESS WITH OTHERS OVER THE FOLLOWING DESCRIBED RIGHT OF WAY:
+BEGINNING AT A POINT IN THE NORTHEAST LINE OF BACHARACH BLVD. (70 FEET WIDE) DISTANT 570.5 FEET SOUTHEAST OF ARKANSAS AVENUE (60 FEET WIDE) AND EXTENDING THENCE:
+Annex B-2
+1. NORTHEASTWARDLY AT RIGHT ANGLES TO BACHARACH BLVD. 152 FEET; THENCE
+2. SOUTHEASTWARDLY PARALLEL WITH BACHARACH BLVD. 20 FEET; THENCE
+3. SOUTHWESTWARDLY AT RIGHT ANGLES TO BACHARACH BLVD 152 FEET TO THE NORTHEAST LINE OF BACHARACH BLVD.; THENCE
+4. NORTHWESTWARDLY IN AND ALONG BACHARACH BLVD 20 FEET TO THE POINT AND PLACE OF BEGINNING.
+FOR INFORMATION PURPOSES ONLY: BEING KNOWN AS LOT 23 IN BLOCK 488 OF THE ATLANTIC CITY TAX MAP.
+Annex B-2
+Annex C
+Released Missouri Property
+Vacant Land in Missouri
+PARCEL NO. 1: A parcel of ground being all of Lot 1 of the "Resubdivision Plat of Riverport Tract 7", a subdivision recorded as Daily No. 1065, on June 23, 1994, in Plat Book 327, pages 89 through 92, St. Louis County Recorder’s Office, said parcel being more particularly described as follows: Beginning at the most Southern corner of Lot 1, of said “Resubdivision Plat of Riverport Tract 7”, said corner being in the Northeastern line of a Levee Easement recorded in Book 8351, page 1184, St. Louis County Recorder’s Office; thence North 23 degrees 10 minutes 00 seconds West 1291.20 feet along the Southwestern line of said Lot 1, and along the Northeastern line of said Levee Easement, to an angle point therein; thence North 25 degrees 30 minutes 00 seconds East 250.00 feet along the Northwestern line of said Lot 1, being also the Southeastern line of said Levee Easement, to the most Southwestern corner of a Drainage and Storm Water Easement recorded in Book 8351 page 1187, St. Louis County Recorder’s Office; thence in a generally Northeastwardly direction, along the southeastern line of said Drainage and Storm Water Easement and along the Northwestern line of said Lot 1, the following courses and distances: North 50 degrees 03 minutes 29 seconds East 262.30 feet, North 28 degrees 16 minutes 56 seconds East 222.78 feet to a point of curve; thence Northeastwardly 246.83 feet along a curve to the right having a radius of 230.00 feet, the chord of which bears North 59 degrees 01 minute 32 seconds East 235.15 feet, to a point of tangency, in the Southern line of said Drainage and Storm Water Easement, and the Northern line of said Lot 1; thence North 89 degrees 46 minutes 09 seconds East 464.11 feet along the Southern line of said Drainage and Storm Water Easement, and the Northern line of said Lot 1, to the Northeastern corner of said Lot 1; thence South 23 degrees 10 minutes 00 seconds East 1521.93 feet along the Northeastern line of said Lot 1, being also the Southwestern line of Lot 2 of said “Resubdivision Plat of Riverport Tract 7”, to the most Eastern corner of said Lot 1; thence South 66 degrees 50 minutes 00 seconds West 1273.47 feet along the Southeastern line of said Lot 1, to its most Southern corner and the point of beginning.
+PARCEL NO. 2: Non-Exclusive easements to use all private roadways as set forth in the First Revised and Restated Riverport Project Trust Indenture recorded in Book 8191 page 380, as amended by instruments recorded in Book 8465 page 1068, Book 9013 page 1955, Book 10263 page 1872, Book 10694 page 1881, and Book 11104 page 991, Book 11304 page 1396, Book 11890 page 2353 and Book 15124 page 654 St. Louis County Records.
+PARCEL NO. 3: Non-Exclusive easements, according to Infrastructure Easement Agreement recorded on July 22, 1994, in Book 10263 page 1910, St. Louis County Records.
+PARCEL NO. 4: Easements (Levee Easement), according to instrument recorded on July 22, 1994, in Book 10263 page 1895 St. Louis County Records.
+PARCEL NO. 5: Non-exclusive, perpetual, irrevocable appurtenant easement for vehicle and pedestrian access, ingress and egress as set forth in Book 10263 page 1926 and as amended in the Amended and Restated Roadway Easement Agreement recorded in Book 10694 page 1908.
+Harrah’s North Kansas - CEOC
+TRACT 2:
+Annex C
+All of Lots 1 through 33, both inclusive, and part of Lots 34 through 44, both inclusive, "PLAN OF RANDOLPH SUBDIVISION OF EXHIBITS "B", "C", "E" AND "F"; Part of Lot 6, Block 38; Part of Lots 1 through 5, and All of Lot 6, Block 39, "PLAN OF RANDOLPH", both being subdivisions in Randolph, Clay County, Missouri, together with vacated Third Street, vacated Locust Street, and the vacated alleys lying therein, all being more particularly described as follows:
+Beginning at the Northeast corner of said Lot 1, "PLAN OF RANDOLPH SUBDIVISION OF EXHIBITS "B", "C", "E", AND "F", said corner being the intersection of the Southerly Right of Way line of the Norfolk & Southern Railroad (formerly Wabash Railroad) and the West Right of Way line of Liberty Street, as both are now established; thence South 0 degrees 44 minutes 54 seconds West along the West Right of Way line of said Liberty Street, a distance of 500.92 feet to the Southeast corner of said Lot 6, Block 39, "PLAN OF RANDOLPH"; thence South 80 degrees 48 minutes 37 seconds West, along the South line of said Lot 6 and the South line of Lot 5 of said Block 39, a distance of 119.97 feet to a point on the Northerly Right of Way line of the Birmingham Drainage District as established by Condemnation Case No. 7087 filed in the Circuit Court of Clay County; thence North 74 degrees 47 minutes 13 seconds West, along said Northerly Right of Way line, a distance of 495.29 feet; thence Northerly continuing along said Northerly Right of Way line of the Birmingham Drainage District, along a curve to the left, having an initial tangent bearing of North 72 degrees 34 minutes 03 seconds West, a radius of 672.93 feet, and a central angle of 1 degree 25 minutes 20 seconds an arc distance of 16.70 feet to a point on the East Right of Way line of Interstate Highway Route No. 435, as condemned by the State of Missouri in Case No. 33895 in the Circuit Court of Clay County, Missouri, as set forth in the Report of Commissioners filed for record December 30, 1966 under Document No. C-7308 in Book 917 at Page 600; thence North 2 degrees 17 minutes 24 seconds East, along said East Right of Way line, a distance of 286.87 feet to a point on the aforesaid Southerly Right of Way line of the Norfolk & Southern Railroad (formerly the Wabash Railroad); thence North 80 degrees 48 minutes 37 seconds East along said Southerly Right of Way line, a distance of 615.36 feet to the Point of Beginning.
+Annex C

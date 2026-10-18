@@ -1016,7 +1016,14 @@ def test_analysis_serves_the_registers_each_modules_profile_declares(
     assert register["declared"] == expected
     [row] = register["rows"]
     assert [cell["text"] for cell in row][:3] == ["Net leverage", "maintenance", "4.0x"]
-    assert set(register) == {"register_id", "columns", "declared", "rows"}
+    assert set(register) == {
+        "register_id",
+        "unavailable_reason",
+        "columns",
+        "declared",
+        "rows",
+    }
+    assert register["unavailable_reason"] is None
     assert (
         served["CP-CF"]["registers"],
         served["CP-CF"]["registers_unavailable_reason"],

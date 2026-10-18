@@ -379,7 +379,7 @@ def test_render_refuses_a_frozen_revision_committee_refuses(
     response = client.get(_render_path(lite, revision), headers=_as(lite.approver))
     lite.conn.rollback()
 
-    assert committee[0] != 200
+    assert committee == (409, "EVIDENCE_NOT_AVAILABLE")  # CF-019, was 500
     assert report == committee
     assert (response.status_code, response.json()["code"]) == committee
     assert not any(html.escape(quote) in response.text for quote in quotes)

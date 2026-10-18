@@ -26,6 +26,58 @@ def _name_the_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(lakebase.LAKEBASE_INSTANCE, raising=False)
 
 
+class _FakeClock:
+    """The clock `caos.store.lakebase` reads (N197): its module-level `time`,
+    replaced for one test by something that moves only when the test says so.
+    Its waits on threads (`join(MINT_SECONDS)`) are not the clock's and stay
+    real."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import time
+        from types import SimpleNamespace
+
+        self.now = time.monotonic()
+        monkeypatch.setattr(lakebase, "time", SimpleNamespace(monotonic=self.monotonic))
+
+    def monotonic(self) -> float:
+        return self.now
+
+
+class _CountedLock:
+    """`lakebase._MINTING` that says how many callers are waiting on it: a
+    caller counts only once it has found the lock taken, so "reached" is
+    "blocked there" and not "about to try" (N232)."""
+
+    def __init__(self) -> None:
+        import threading
+
+        self._lock = threading.Lock()
+        self.reached = threading.Condition()
+        self.attempts = 0
+
+    def acquire(self, blocking: bool = True) -> bool:
+        if self._lock.acquire(False):
+            return True
+        if blocking:
+            with self.reached:
+                self.attempts += 1
+                self.reached.notify_all()
+        return self._lock.acquire(blocking)
+
+    def release(self) -> None:
+        self._lock.release()
+
+    def wait_for(self, waiting: int) -> None:
+        with self.reached:
+            assert self.reached.wait_for(lambda: self.attempts == waiting, 10)
+
+    @classmethod
+    def installed(cls, monkeypatch: pytest.MonkeyPatch) -> _CountedLock:
+        counted = cls()
+        monkeypatch.setattr(lakebase, "_MINTING", counted)
+        return counted
+
+
 def test_store_url_prefers_the_explicit_url_then_the_injected_pg_names(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -268,11 +320,13 @@ def test_minting_is_single_flight_bounded_and_falls_back_to_a_live_token(
     _name_the_endpoint(monkeypatch)
     lakebase.invalidate_credential()
     calls: list[str] = []
-    gate = threading.Event()
+    contended = _CountedLock.installed(monkeypatch)
 
     def slow_mint() -> tuple[str, float]:
         calls.append("mint")
-        gate.wait(5)
+        # Ordered on the lock, not a sleep (N197): the mint is held open
+        # until the other three callers are blocked on the single-flight lock.
+        contended.wait_for(3)
         return "fresh", float("inf")
 
     monkeypatch.setattr(lakebase, "_mint", slow_mint)
@@ -282,8 +336,6 @@ def test_minting_is_single_flight_bounded_and_falls_back_to_a_live_token(
     ]
     for thread in threads:
         thread.start()
-    time.sleep(0.2)
-    gate.set()
     for thread in threads:
         thread.join(5)
     assert calls == ["mint"], "four cold callers made one round trip"
@@ -347,6 +399,7 @@ def test_an_abandoned_mint_does_not_start_a_second_helper(
 
     _name_the_endpoint(monkeypatch)
     lakebase.invalidate_credential()
+    clock = _FakeClock(monkeypatch)
     monkeypatch.setattr(lakebase, "MINT_SECONDS", 0.2)
     monkeypatch.setattr(lakebase, "FAILURE_SECONDS", 0.1)
     hang = threading.Event()
@@ -372,7 +425,7 @@ def test_an_abandoned_mint_does_not_start_a_second_helper(
     # Past FAILURE_SECONDS, the old fast-fail cache alone would allow a new
     # mint attempt; a storm of callers here must still be capped by the
     # still-alive helper, not each spawn -- or each wait behind -- a new one.
-    time.sleep(0.3)
+    clock.now += 0.3
     answers: list[str] = []
     lock = threading.Lock()
 
@@ -565,33 +618,36 @@ def test_a_short_lived_credential_is_refreshed_by_its_stated_expiry(
     out past that; and a mint that failed after another path dropped the
     token handed the dropped token back."""
     import threading
-    import time
 
     lakebase.invalidate_credential()
     _name_the_endpoint(monkeypatch)
+    clock = _FakeClock(monkeypatch)
     minted: list[int] = []
 
     def short_lived() -> tuple[str, float]:
         minted.append(1)
-        return f"short-{len(minted)}", time.monotonic() + 0.2
+        return f"short-{len(minted)}", clock.now + 0.2
 
     monkeypatch.setattr(lakebase, "_mint", short_lived)
     assert lakebase._credential() == "short-1"
     held = lakebase._CACHED
     assert held is not None and held.refresh_at <= held.expires_at
-    time.sleep(0.3)
+    clock.now += 0.3
     assert lakebase._credential() == "short-2", "never handed out past its expiry"
 
     # A mint that fails after the token was reported refused re-reads the
-    # cache and refuses; it does not hand the dropped token back.
+    # cache and refuses; it does not hand the dropped token back. The mint
+    # fails only once the token has been reported refused (an event, not a
+    # sleep, orders the two).
     started = threading.Event()
+    reported = threading.Event()
 
     def slow_failure() -> tuple[str, float]:
         started.set()
-        time.sleep(0.3)
+        assert reported.wait(5)
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
 
-    now = time.monotonic()
+    now = clock.now
     monkeypatch.setattr(
         lakebase, "_CACHED", lakebase._Credential("refused", now - 1, now + 3600)
     )
@@ -609,6 +665,7 @@ def test_a_short_lived_credential_is_refreshed_by_its_stated_expiry(
     minter.start()
     assert started.wait(5)
     lakebase.invalidate_credential()  # another path's connect was refused
+    reported.set()
     minter.join(5)
     assert outcome == ["STORE_UNAVAILABLE"]
 

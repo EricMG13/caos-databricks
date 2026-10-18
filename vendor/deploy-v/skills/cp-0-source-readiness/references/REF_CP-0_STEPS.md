@@ -48,7 +48,7 @@ Apply every matching profile to hybrid sources. Each parse job declares `LAYOUT_
 
 ## Lender and financing presentations
 
-A unique lender/financing deck defaults to `PARSE_FULL`, `HYBRID` and `LAYOUT_TEXT`. Add `SLIDE_CHART` and `TABLE_FIRST` whenever the slide inventory detects charts or tables. Inspect every slide and accessible speaker note.
+A unique lender/financing deck's parse job declares `HYBRID` and `LAYOUT_TEXT`; its delivery is the host preparation record's, `WHOLE` or `PAGE_MAP`. Add `SLIDE_CHART` and `TABLE_FIRST` whenever the slide inventory detects charts or tables. Inspect every slide and accessible speaker note.
 
 Retain business model, strategy, competitive position, performance drivers, industry outlook, credit thesis, transaction rationale, risks/mitigants, downside/sensitivities, projection assumptions, synergies/adjustments/deleveraging, liquidity/refinancing/capital allocation and financing terms. Each present topic requires a locator and attribution (`MANAGEMENT`, `SPONSOR`, `ISSUER` or `OTHER`). Management and sponsor claims are `SUPPORTING_ONLY`; they never override filings or executed legal documents.
 

@@ -7,6 +7,7 @@ evidence digest it wants to display; this route never chooses a nearby verdict.
 
 from __future__ import annotations
 
+from datetime import datetime
 from re import fullmatch
 from uuid import UUID
 
@@ -23,6 +24,7 @@ from caos.qualification.store import (
 )
 from caos.qualification.verdict import Verdict
 from caos.refusals import Refusal, RefusalCode
+from caos.store import StoreConnection
 
 # Database time and exact evidence lookup, then the current-verdict lookup,
 # the two store facts `assert_store_agrees` compares it with (DQ-3), and the
@@ -50,21 +52,36 @@ def read_qualification(
     evidence = evidence_at(conn, evidence_sha256=evidence_sha256)
     if evidence is None:
         return _read(evidence_sha256, QualificationState.UNQUALIFIED)
-    try:
-        verdict = current_verdict(conn, evidence=evidence, now=now)
-    except Refusal as refusal:
-        if refusal.code not in {
-            RefusalCode.VERDICT_INCOMPLETE,
-            RefusalCode.VERDICT_EXPIRED,
-        }:
-            if refusal.code is RefusalCode.VERDICT_BINDING_INVALID:
-                return _read(evidence_sha256, QualificationState.UNAVAILABLE)
-            raise
-        return _read(evidence_sha256, QualificationState.UNQUALIFIED, evidence)
+    state, verdict = verdict_state(conn, evidence, now)
+    if verdict is None:
+        return _read(evidence_sha256, state, evidence)
     reviewer_id = verdict_reviewer_id(conn, evidence_sha256=evidence_sha256)
     return _read(
         evidence_sha256, QualificationState.QUALIFIED, evidence, verdict, reviewer_id
     )
+
+
+def verdict_state(
+    conn: StoreConnection, evidence: Evidence, now: datetime
+) -> tuple[QualificationState, Verdict | None]:
+    """The state `current_verdict`, the single validator, gives this exact
+    evidence, and the verdict when it is current. An incomplete or expired one
+    is UNQUALIFIED, a binding that does not hold is UNAVAILABLE, and any other
+    refusal is the store's fault and is raised. Shared with the Run section's
+    model labels (N117), so the two read one rule."""
+    try:
+        return QualificationState.QUALIFIED, current_verdict(
+            conn, evidence=evidence, now=now
+        )
+    except Refusal as refusal:
+        if refusal.code is RefusalCode.VERDICT_BINDING_INVALID:
+            return QualificationState.UNAVAILABLE, None
+        if refusal.code in {
+            RefusalCode.VERDICT_INCOMPLETE,
+            RefusalCode.VERDICT_EXPIRED,
+        }:
+            return QualificationState.UNQUALIFIED, None
+        raise
 
 
 def _digest(value: str) -> None:

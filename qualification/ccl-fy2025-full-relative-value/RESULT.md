@@ -5,7 +5,9 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / RELATIVE_VALUE` from the CCL
 FY2025 10-K, two governing debt documents, the governed FINRA observation, and
 the RCL and NCLH FY2025 releases. Its qualification-set digest is
-`f4205e4e3606ef68aece138696ea630c7632d2e184a067edce13eebf88e22e79`.
+`f04a9d56567b7b60b88879392c04d1b8291494df3beadfcbee6f81812c397e55` (was
+`f4205e4e3606ef68aece138696ea630c7632d2e184a067edce13eebf88e22e79` before fork r17 split
+CP-1C T4.5's packed leverage column and the CCL key was re-keyed, N192).
 
 The keys bind CCL cash, debt, operating cash flow and revolver capacity, NCLH
 leverage, RCL earnings, and the `$99.34` CCL last trade. CP-3D and terminal CP-3
