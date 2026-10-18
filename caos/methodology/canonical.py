@@ -21,8 +21,8 @@ from __future__ import annotations
 import hashlib
 import sys
 import time
-from collections.abc import Callable, Collection, Mapping, Sequence
-from contextlib import suppress
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
@@ -490,34 +490,73 @@ def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
 
     `record_outcome` replays an exact outcome as a no-op, so a write whose
     commit landed but whose answer was lost is safe to repeat. A connection the
-    fault closed is replaced by a fresh one to the same store for the retry,
-    when this environment names one; a store that stays down still refuses
-    `STORE_UNAVAILABLE`, and the run is released as before. `BILL_TRIES`
-    writes a `BILL_PAUSE_SECONDS` apart sit well inside the lease the call
-    was made under.
+    fault closed is replaced at once by a fresh one to the same store, when
+    this environment names one, and the attempt is held again on it
+    (`call_hold`) for as long as it writes: the hold went with the old
+    session, and the replacement takes it before the write and lets it go
+    with the bill (N80). A store that stays down still refuses
+    `STORE_UNAVAILABLE`, and the run is released as before.
+
+    Two windows stay. The attempt is unheld from the loss of the old session
+    to the new hold's lock round trip (a connect with no connect timeout of
+    its own, then one statement; `idle_session_timeout` is off for these
+    sessions, so idleness never ends them). And once the tries are spent
+    (`BILL_TRIES` writes, `BILL_PAUSE_SECONDS` apart -- a few seconds, a small
+    share of the lease's liveness budget -- and up to `BILL_TRIES` more after
+    cuts, below), the bill is abandoned with no session left to hold the
+    attempt, so the next claim may start the node once more under a
+    reservation of its own (invariant 8); nothing can be written to a store
+    that is down, and a longer wait would hold the run's lease for it. The
+    second is inherent to a store that cannot be reached. The first is not
+    lengthened by a backend still holding the old hold: the replacement asks
+    for its hold without waiting for it (`wait=False`) and writes whether or
+    not it got it. That leaves the node unheld by this session, though, if
+    the try fails and the old backend then dies before the write commits:
+    no one holds it until the write lands. Both are bounded by tests.
+
+    A fault that took its session away is answered by the reconnect at once
+    and costs no try: a store that then stays down is paused for
+    `BILL_TRIES - 1` times, as on every other path. Such a cut-and-reconnect
+    is itself bounded (`BILL_TRIES` of them), so a store that cuts every
+    fresh session cannot loop the bill.
     """
-    for tries_left in range(BILL_TRIES - 1, -1, -1):
-        try:
-            _billed_once(conn, attempt_id, outcome)
-        except Refusal as refused:
-            if refused.code is not RefusalCode.STORE_UNAVAILABLE or not tries_left:
-                raise
-            _pause(BILL_PAUSE_SECONDS)
-            continue
-        return
+    pauses_left, free_cuts = BILL_TRIES - 1, BILL_TRIES
+    with ExitStack() as sessions:
+        target, connecting = conn, False
+        while True:
+            try:
+                if target.closed:
+                    connecting = True
+                    target = sessions.enter_context(_held_fresh(attempt_id))
+                    connecting = False
+                record_outcome(target, attempt_id=attempt_id, outcome=outcome)
+            except Refusal as refused:
+                if refused.code is not RefusalCode.STORE_UNAVAILABLE:
+                    raise
+                if not connecting and target.closed and free_cuts:
+                    # The session went with the fault: reconnect and hold at
+                    # once, not after a pause that leaves the attempt unheld.
+                    free_cuts -= 1
+                    continue
+                if not pauses_left:
+                    raise
+                pauses_left -= 1
+                _pause(BILL_PAUSE_SECONDS)
+                continue
+            return
 
 
-def _billed_once(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
-    if not conn.closed:
-        record_outcome(conn, attempt_id=attempt_id, outcome=outcome)
-        return
+@contextmanager
+def _held_fresh(attempt_id: UUID) -> Iterator[StoreConnection]:
+    """A fresh connection to the same store, holding the attempt (`call_hold`)
+    when the hold is free; it writes either way (N80)."""
     try:
         fresh = connect(store_url())
     except (psycopg.Error, Refusal):
         # No store to retry against: the fault that closed it stands.
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
-    with fresh:
-        record_outcome(fresh, attempt_id=attempt_id, outcome=outcome)
+    with fresh, call_hold(fresh, attempt_id, wait=False):
+        yield fresh
 
 
 def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only

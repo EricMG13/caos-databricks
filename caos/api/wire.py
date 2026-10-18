@@ -195,6 +195,7 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.ATTEMPT_UNSETTLED: (
         "Nothing; the node is tried again once its last attempt settles."
     ),
+    _C.ATTEMPT_BILL_OWED: "Nothing; the next pass settles the bill that landed.",
     _C.STREAM_LIMIT_REACHED: "Close a tail already open, or retry shortly.",
     _C.CALL_OUTCOME_INVALID: "Record a well-formed call outcome.",
     _C.CALL_OUTCOME_CONFLICT: "Nothing; a different outcome is already recorded.",
@@ -293,7 +294,10 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.SOURCE_TOO_LARGE: "Supply a smaller document or pack.",
     _C.SOURCE_EXTRACTION_TIMEOUT: "Supply a simpler document.",
     _C.SOURCE_IDENTITY_INVALID: "Readmit the document.",
-    _C.EVIDENCE_NOT_AVAILABLE: "Pin a live source for the evidence.",
+    _C.EVIDENCE_NOT_AVAILABLE: (
+        "Pin a live source for the evidence; for a completed run, start a "
+        "successor run that pins one."
+    ),
     _C.EVIDENCE_PACKING_MISMATCH: (
         "An operator must re-admit the source under this build."
     ),
