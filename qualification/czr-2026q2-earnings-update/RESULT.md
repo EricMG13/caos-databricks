@@ -25,7 +25,7 @@ map, and all are inside `MAX_REQUEST_BYTES`.
 
 ## Keys
 
-Keys authored from the documents; material figures pending owner confirmation.
+Keys authored from the documents; material figures stand as authored by the owner's ruling of 2026-10-17 (N126, F702).
 
 - CP-1: the 10-Q's net revenues, `2,993` / `2,907` million for the quarter and
   `5,863` / `5,701` million for the six months ended 30 June 2026 / 2025; and
