@@ -821,6 +821,14 @@ def test_every_refusal_code_has_a_constant_clearance() -> None:
         assert "{" not in clears and "}" not in clears and "%" not in clears, code
 
 
+def test_evidence_not_available_names_the_successor_run_for_a_completed_run() -> None:
+    """N229 (3). A completed run's pinned source cannot be re-pinned; its way
+    forward is a successor run, and the clearance must say so."""
+    clears = CLEARS[RefusalCode.EVIDENCE_NOT_AVAILABLE]
+    assert "Pin a live source" in clears
+    assert "completed run" in clears and "successor run" in clears
+
+
 def test_the_handoff_clearances_name_the_right_fix() -> None:
     """G2-17. `HANDOFF_BLOCKED` names a stored module blocker a caller can act
     on directly; the other four are a stored handoff that failed to re-parse
