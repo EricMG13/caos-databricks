@@ -27,7 +27,7 @@ from canonical_fixtures import (
     VENDORED,
     CanonicalCompletions,
 )
-from conftest import priced
+from conftest import priced, tamper
 from conftest import reserve_at as reserve
 from fake_chat import ScriptedChat, StatusError, fake_completions
 from run_terminals import fail_run
@@ -1871,56 +1871,428 @@ def test_a_reconnected_bill_lands_beside_a_live_holder_under_a_lock_timeout(
     assert billed == 1 and took < 3
 
 
-def test_n223_a_bill_that_lost_the_try_lock_leaves_its_node_unheld_while_it_waits(
+def _reclaim(url: str, run_id: UUID, node: str, lease: Lease) -> UUID | RefusalCode:
+    """What a second worker's `start_attempt` at the node comes to: the new
+    attempt, or the code it was refused."""
+    with connect(url) as conn:
+        try:
+            return start_attempt(conn, run_id, node, lease=lease)
+        except Refusal as refused:
+            return refused.code
+
+
+@dataclass(frozen=True)
+class _Window:
+    """The run, its case and the claimed node a window is driven on."""
+
+    url: str
+    run_id: UUID
+    case_id: UUID
+    node: str
+    lease: Lease
+
+
+def _n223_window(
+    window: _Window,
+    outcome: CallOutcome,
+    *,
+    reclaim_first: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    open_mark: bool = False,
+) -> tuple[UUID, UUID | RefusalCode]:
+    """N223's window, driven: a freeze holds the case row; the old backend
+    holds the node; a reclaim and a bill (on a closed connection, whose
+    try-lock fails beside the old backend) both queue on the case row, in the
+    order asked for; the old backend then dies and the freeze lets go.
+    `open_mark`: the old backend also sits on an uncommitted mark of its own
+    (cut between the INSERT and the COMMIT, F704).
+    Returns the attempt and what the reclaim came to."""
+    from caos.methodology import canonical
+
+    url, run_id, case_id, node, lease = (
+        window.url,
+        window.run_id,
+        window.case_id,
+        window.node,
+        window.lease,
+    )
+    with connect(url) as a:
+        attempt = start_attempt(a, run_id, node, lease=lease)
+        reserve(a, attempt, RESERVED, lease=lease)
+    zombie, closed, freeze = (connect(url) for _ in range(3))
+    closed.close()
+    if open_mark:
+        zombie.close()
+        zombie = _half_open_mark(url, attempt)
+    monkeypatch.setenv("CAOS_DATABASE_URL", url)
+    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    biller = Thread(target=canonical.bill, args=(closed, attempt, outcome), daemon=True)
+    reclaimed: list[UUID | RefusalCode] = []
+    reclaimer = Thread(
+        target=lambda: reclaimed.append(_reclaim(url, run_id, node, lease)),
+        daemon=True,
+    )
+    queue = (reclaimer, biller) if reclaim_first else (biller, reclaimer)
+    try:
+        if not open_mark:
+            old_hold = call_hold(zombie, attempt)  # kept: a dropped one lets go
+            old_hold.__enter__()
+        freeze.execute("SELECT 1 FROM cases WHERE case_id = %s FOR UPDATE", (case_id,))
+        for waiter in queue:
+            waiter.start()
+            time.sleep(1)
+            assert waiter.is_alive(), "each waits on the case row"
+        assert not _hold_is_free(url, attempt), "the old backend holds"
+        if open_mark:
+            with connect(url) as third:
+                marked = third.execute(
+                    "SELECT count(*) FROM attempt_bill_marks"
+                    " WHERE attempt_id = %s AND owed_until > now()",
+                    (attempt,),
+                ).fetchone()
+                third.rollback()
+            assert marked == (1,), "the bill's mark is committed beside the open one"
+        zombie.close()
+        deadline = time.monotonic() + 5  # the backend ends a moment after close
+        while not _hold_is_free(url, attempt) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert _hold_is_free(url, attempt), "the session lock is gone with it"
+        freeze.rollback()
+        biller.join(timeout=10)
+        reclaimer.join(timeout=10)
+        assert not biller.is_alive() and not reclaimer.is_alive()
+    finally:
+        zombie.close()
+        freeze.close()
+        biller.join(timeout=10)
+        reclaimer.join(timeout=10)
+    return attempt, reclaimed[0]
+
+
+def _unsettled_reservations(url: str, node: str) -> int:
+    """Reserved attempts at the node with no outcome: what a reclaim that paid
+    again beside a pending bill would make two of (invariant 8)."""
+    with connect(url) as conn:
+        row = conn.execute(
+            "SELECT count(*) FROM budget_reservations r"
+            " JOIN run_attempts t USING (attempt_id)"
+            " LEFT JOIN call_outcomes o USING (attempt_id)"
+            " WHERE t.route_node_id = %s AND o.attempt_id IS NULL",
+            (node,),
+        ).fetchone()
+        conn.rollback()
+    assert row is not None
+    return int(row[0])
+
+
+def test_n223_a_reclaim_ahead_of_a_bill_in_the_queue_is_refused_while_the_bill_is_owed(
     empty_database: str,
     prepared_run: tuple[UUID, UUID],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """N223, the window as it stands (recorded, not closed): the replacement
-    connection's try-lock fails beside the old backend, which then dies while a
-    freeze holds the case row. The bill waits on that row, unbounded by design
-    (`_UNBOUNDED_UNIT`, W1: a cancelled write leaves no row and the next claim
-    pays again), and nothing holds the node in the meantime. It lands once the
-    row is let go."""
-    from caos.methodology import canonical
-
+    """N223, closed: the bill lost its try-lock to the old backend, which died
+    while a freeze held the case row, and a reclaim queued *ahead* of the bill
+    gets the row first. The node is held by the store itself (the bill's mark,
+    `owe_bill`), so the reclaim refuses `ATTEMPT_UNSETTLED` and starts no
+    attempt, where it used to find the node unheld and pay it again. The bill
+    then lands once, and the ledger is the one row it always was."""
     case_id, run_id = prepared_run
     with connect(empty_database) as conn:
-        nodes = approved_nodes(conn, run_id, tmp_path)
+        node = approved_nodes(conn, run_id, tmp_path)["CP-0"]
+    lease = _claimed(empty_database, run_id)
+    _attempt, reclaim = _n223_window(
+        _Window(empty_database, run_id, case_id, node, lease),
+        _BILL,
+        reclaim_first=True,
+        monkeypatch=monkeypatch,
+    )
+    assert reclaim is RefusalCode.ATTEMPT_UNSETTLED
+    with connect(empty_database) as b:
+        assert _count(b, "call_outcomes", run_id) == 1
+        assert _count(b, "budget_ledger", run_id) == 1
+        assert _count(b, "run_attempts", run_id) == 1, "no second attempt was started"
+    assert _unsettled_reservations(empty_database, node) == 0
+
+
+@pytest.mark.parametrize("reclaim_first", [True, False])
+def test_n223_in_either_order_the_node_is_never_reserved_twice(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reclaim_first: bool,
+) -> None:
+    """Invariant 8 across the interleavings of the window: a reclaim ahead of
+    the bill is refused; one behind it starts once the bill has landed (an
+    unknown-charge outcome owes the node nothing), and its reservation is the
+    node's only open one -- never two beside a pending bill."""
+    case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        node = approved_nodes(conn, run_id, tmp_path)["CP-0"]
+    lease = _claimed(empty_database, run_id)
+    unknown = CallOutcome(None, MODEL, GENERATION, "d" * 64)
+    attempt, reclaim = _n223_window(
+        _Window(empty_database, run_id, case_id, node, lease),
+        unknown,
+        reclaim_first=reclaim_first,
+        monkeypatch=monkeypatch,
+    )
+    with connect(empty_database) as b:
+        assert _count(b, "call_outcomes", run_id) == 1
+        if reclaim_first:
+            assert reclaim is RefusalCode.ATTEMPT_UNSETTLED
+        else:
+            assert isinstance(reclaim, UUID) and reclaim != attempt
+            reserve(b, reclaim, RESERVED, lease=lease)
+        assert _count(b, "budget_reservations", run_id) == (1 if reclaim_first else 2)
+    assert _unsettled_reservations(empty_database, node) == (0 if reclaim_first else 1)
+
+
+def test_n223_the_mark_is_bounded_and_a_reclaim_follows_its_expiry_once(
+    empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
+) -> None:
+    """A bill abandoned after its tries leaves only the mark: it holds the
+    node for `BILL_OWED_SECONDS` at most (written as the store's own now plus
+    that span), and past it a reclaim starts, and a reclaim behind that one
+    is not held by it."""
+    from caos.store.outcomes import BILL_OWED_SECONDS, owe_bill
+
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        node = approved_nodes(conn, run_id, tmp_path)["CP-0"]
     lease = _claimed(empty_database, run_id)
     with connect(empty_database) as a:
-        attempt = start_attempt(a, run_id, nodes["CP-0"], lease=lease)
+        attempt = start_attempt(a, run_id, node, lease=lease)
         reserve(a, attempt, RESERVED, lease=lease)
-    zombie, closed, freeze = (connect(empty_database) for _ in range(3))
+        owe_bill(a, attempt)
+        row = a.execute(
+            "SELECT owed_until - now() FROM attempt_bill_marks WHERE attempt_id = %s",
+            (attempt,),
+        ).fetchone()
+        a.rollback()
+        assert row is not None
+        assert 0 < row[0].total_seconds() <= BILL_OWED_SECONDS
+        _refused(
+            RefusalCode.ATTEMPT_UNSETTLED,
+            partial(start_attempt, a, run_id, node, lease=lease),
+        )
+        # The store's own clock, moved: the mark is a bound, not a lock.
+        _lapse_marks(a)
+        fresh = start_attempt(a, run_id, node, lease=lease)
+        reserve(a, fresh, RESERVED, lease=lease)
+        assert fresh != attempt
+        assert _count(a, "budget_reservations", run_id) == 2
+        # ...and the lapsed mark holds nothing against the reclaim behind it:
+        # that one is refused only by the live call's reservation, not the mark.
+        with connect(empty_database) as holder, call_hold(holder, fresh):
+            _refused(
+                RefusalCode.ATTEMPT_UNSETTLED,
+                partial(start_attempt, a, run_id, node, lease=lease),
+            )
+        assert isinstance(start_attempt(a, run_id, node, lease=lease), UUID)
+
+
+def test_n223_a_mark_for_an_unknown_attempt_writes_nothing(
+    empty_database: str, prepared_run: tuple[UUID, UUID]
+) -> None:
+    """The mark belongs to an attempt that exists; a stray id leaves no row,
+    and the bill's own write then refuses it as it always did."""
+    from caos.store.outcomes import owe_bill
+
+    with connect(empty_database) as conn:
+        owe_bill(conn, uuid4())
+        row = conn.execute("SELECT count(*) FROM attempt_bill_marks").fetchone()
+        conn.rollback()
+    assert row == (0,)
+
+
+def _half_open_mark(url: str, attempt: UUID) -> StoreConnection:
+    """The old backend cut between `owe_bill`'s statement and its COMMIT: the
+    mark row is on the server, uncommitted, and the session still holds the
+    attempt (`call_hold`). Built with the real `owe_bill` and a commit that
+    never happens, so it follows whatever shape the mark has."""
+    from caos.store.outcomes import owe_bill
+
+    zombie = connect(url)
+    hold = call_hold(zombie, attempt)
+    hold.__enter__()
+    _KEPT_HOLDS.append(hold)  # a dropped hold lets go; this one dies with the backend
+    object.__setattr__(zombie, "commit", lambda: None)  # the COMMIT never arrives
+    owe_bill(zombie, attempt)
+    return zombie
+
+
+_KEPT_HOLDS: list[object] = []
+
+
+def _bill_in_a_thread(
+    attempt: UUID, outcome: CallOutcome, url: str, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Thread, list[object]]:
+    from caos.methodology import canonical
+
+    closed = connect(url)
     closed.close()
-    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+    monkeypatch.setenv("CAOS_DATABASE_URL", url)
     monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
-    biller = Thread(target=canonical.bill, args=(closed, attempt, _BILL), daemon=True)
+    result: list[object] = []
+
+    def run() -> None:
+        try:
+            canonical.bill(closed, attempt, outcome)
+            result.append("landed")
+        except Refusal as refused:
+            result.append(refused.code)
+
+    return Thread(target=run, daemon=True), result
+
+
+def _count_after(url: str, run_id: UUID, table: str) -> int:
+    with connect(url) as conn:
+        return _count(conn, table, run_id)
+
+
+def test_n223_a_bill_lands_beside_a_mark_a_cut_backend_left_uncommitted(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F704, I1 (the review's P1): the old backend was cut between the mark's
+    INSERT and its COMMIT and sits idle in transaction. The fresh bill's mark
+    must wait on nothing: under a DBA `lock_timeout` it used to queue on the
+    old row, raise STORE_UNAVAILABLE, and the outcome was never written (0
+    outcomes, a reclaim starting a second attempt). It now lands at once."""
+    import psycopg
+
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        node = approved_nodes(conn, run_id, tmp_path)["CP-0"]
+    lease = _claimed(empty_database, run_id)
+    with connect(empty_database) as a:
+        attempt = start_attempt(a, run_id, node, lease=lease)
+        reserve(a, attempt, RESERVED, lease=lease)
+    dbname = psycopg.conninfo.conninfo_to_dict(empty_database)["dbname"]
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute(f'ALTER DATABASE "{dbname}" SET lock_timeout = 300')
+    zombie = _half_open_mark(empty_database, attempt)
+    biller, result = _bill_in_a_thread(attempt, _BILL, empty_database, monkeypatch)
     try:
-        old_hold = call_hold(zombie, attempt)  # kept: a dropped one lets go
-        old_hold.__enter__()
-        freeze.execute("SELECT 1 FROM cases WHERE case_id = %s FOR UPDATE", (case_id,))
         biller.start()
-        time.sleep(1)
-        assert biller.is_alive(), "the bill waits on the case row"
-        assert not _hold_is_free(empty_database, attempt), "the old backend holds"
-        zombie.close()
-        deadline = time.monotonic() + 5  # the backend ends a moment after close
-        while (
-            not _hold_is_free(empty_database, attempt) and time.monotonic() < deadline
-        ):
-            time.sleep(0.05)
-        assert _hold_is_free(empty_database, attempt), "the window: no one holds it"
-        assert biller.is_alive(), "and the bill has still not landed"
-        freeze.rollback()
-        biller.join(timeout=10)
-        with connect(empty_database) as b:
-            assert _count(b, "call_outcomes", run_id) == 1
+        biller.join(timeout=8)
+        assert not biller.is_alive()
+        assert result == ["landed"], result
+        assert _count_after(empty_database, run_id, "call_outcomes") == 1
     finally:
         zombie.close()
-        freeze.close()
         biller.join(timeout=10)
+    assert _count_after(empty_database, run_id, "run_attempts") == 1
+
+
+def test_n223_a_reclaim_ahead_of_the_bill_is_refused_beside_a_cut_backends_open_mark(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F704, the review's P2b made deterministic: the old backend holds the
+    node and an uncommitted mark of its own; the bill's mark commits at once
+    beside it (nothing to wait on) while its outcome write queues behind the
+    freeze, a reclaim ahead of it in the queue; the old backend dies. The
+    node stays held by the bill's committed mark, so the reclaim is refused.
+    The mark's commit before the old backend dies is asserted from a third
+    session in `_n223_window`; that is what the first design (a mark that
+    waited on the dead backend's row) fails. The reclaim's refusal alone
+    passed on that design too."""
+    case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        node = approved_nodes(conn, run_id, tmp_path)["CP-0"]
+    lease = _claimed(empty_database, run_id)
+    _attempt, reclaim = _n223_window(
+        _Window(empty_database, run_id, case_id, node, lease),
+        _BILL,
+        reclaim_first=True,
+        monkeypatch=monkeypatch,
+        open_mark=True,
+    )
+    assert reclaim is RefusalCode.ATTEMPT_UNSETTLED
+    assert _count_after(empty_database, run_id, "call_outcomes") == 1
+    assert _count_after(empty_database, run_id, "run_attempts") == 1
+
+
+def test_n223_a_mark_that_cannot_be_written_does_not_stop_the_outcome(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """F704, item 3: the mark is a hold, never a gate. A fault writing it is
+    logged with a fixed line (no driver text) and the outcome is written."""
+    from caos.methodology import canonical
+
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        node = approved_nodes(conn, run_id, tmp_path)["CP-0"]
+    lease = _claimed(empty_database, run_id)
+    with connect(empty_database) as a:
+        attempt = start_attempt(a, run_id, node, lease=lease)
+        reserve(a, attempt, RESERVED, lease=lease)
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    monkeypatch.setattr(canonical, "owe_bill", refuse)
+    with (
+        connect(empty_database) as conn,
+        caplog.at_level("WARNING", canonical.__name__),
+    ):
+        canonical.bill(conn, attempt, _BILL)
+    assert [r.getMessage() for r in caplog.records] == [canonical.BILL_MARK_FAILED_NOTE]
+    assert _count_after(empty_database, run_id, "call_outcomes") == 1
+
+
+def test_n223_the_mark_outranks_the_reservation_age_expiry(
+    empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
+) -> None:
+    """F704, M2 (the review's P3b): a bill that marked and then died holds its
+    node for the mark's span even when the reservation is older than
+    `call_hold_seconds`; once the mark lapses a reclaim starts. Moving the
+    mark's `WHEN` below the age expiry in `_UNSETTLED` fails the first half."""
+    from caos.store.outcomes import owe_bill
+    from caos.store.runs import call_hold_seconds
+
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        node = approved_nodes(conn, run_id, tmp_path)["CP-0"]
+    lease = _claimed(empty_database, run_id)
+    with connect(empty_database) as a:
+        attempt = start_attempt(a, run_id, node, lease=lease)
+        reserve(a, attempt, RESERVED, lease=lease)
+        owe_bill(a, attempt)
+        tamper(
+            a,
+            "UPDATE budget_reservations"
+            " SET reserved_at = now() - make_interval(secs => %s)"
+            " WHERE attempt_id = %s",
+            (call_hold_seconds(lease) + 60, attempt),
+        )
+        a.commit()
+    assert (
+        _reclaim(empty_database, run_id, node, lease) is RefusalCode.ATTEMPT_UNSETTLED
+    )
+    with connect(empty_database) as a:
+        _lapse_marks(a)
+    assert isinstance(_reclaim(empty_database, run_id, node, lease), UUID)
+
+
+def _lapse_marks(conn: StoreConnection) -> None:
+    """Move every mark's expiry into the past on the store's own clock, the
+    way time would: marks are append-only, so this is a tamper, as a clock is."""
+    tamper(
+        conn, "UPDATE attempt_bill_marks SET owed_until = now() - interval '1 second'"
+    )
+    conn.commit()
 
 
 def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
@@ -2764,3 +3136,11 @@ def test_a_pin_queued_behind_a_waiting_save_is_granted_when_the_save_gives_up(
         other.commit()
         assert deck_for_run(other, run_id) is None
         other.rollback()
+
+
+def test_n223_the_mark_span_is_the_call_hold_span() -> None:
+    """One span, said once: a mark holds the node as long as a held call does
+    at the default lease (`outcomes` cannot import `runs`, so it is a literal)."""
+    from caos.store.outcomes import BILL_OWED_SECONDS
+
+    assert BILL_OWED_SECONDS == runs.CALL_HOLD_SECONDS

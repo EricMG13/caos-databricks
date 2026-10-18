@@ -86,13 +86,19 @@ def call_hold_seconds(lease: Lease | None) -> int:
 # charged answer owed a verdict -- exactly what `replay_billed` settles or
 # `unexplained_charge` parks, so the next pass acts on it -- or a reserved
 # attempt with no outcome whose call another session still holds
-# (`call_hold`), for at most `call_hold_seconds` past its reservation. The
+# (`call_hold`), for at most `call_hold_seconds` past its reservation -- or
+# whose bill is marked owed in the store (`owe_bill`, N223), which holds the
+# node whether or not the session lock is still there, until the mark's own
+# expiry. The session lock stays for the live holder, from the reservation to
+# the mark; the mark covers a bill that outlives that session. The
 # hold is tried on those alone; a try that takes it lets go at this unit's end.
 # The owed rows are read first (the order sits inside the barrier subquery), so
 # the outer `LIMIT 1` stops at an owed row before any hold is tried on another.
 _UNSETTLED = (
     "SELECT earlier.owed FROM (SELECT t.attempt_id, r.reserved_at,"
     "   o.attempt_id IS NOT NULL AS recorded,"
+    "   EXISTS (SELECT 1 FROM attempt_bill_marks m"
+    "     WHERE m.attempt_id = t.attempt_id AND m.owed_until > now()) AS marked,"
     "   l.attempt_id IS NOT NULL"
     "   AND (o.diagnostic_sha256 IS NULL"
     "     OR (o.model IS NOT NULL AND o.generation_id IS NOT NULL))"
@@ -107,8 +113,9 @@ _UNSETTLED = (
     " WHERE t.run_id = %(run)s AND t.route_node_id = %(node)s"
     " ORDER BY owed DESC OFFSET 0) earlier"
     " WHERE CASE WHEN earlier.owed THEN true"
-    "   WHEN earlier.recorded OR earlier.reserved_at IS NULL"
-    "     OR earlier.reserved_at <= now() - make_interval(secs => %(hold)s)"
+    "   WHEN earlier.recorded OR earlier.reserved_at IS NULL THEN false"
+    "   WHEN earlier.marked THEN true"
+    "   WHEN earlier.reserved_at <= now() - make_interval(secs => %(hold)s)"
     "   THEN false"
     "   ELSE NOT pg_try_advisory_xact_lock(%(lock)s::integer,"
     "     hashtext(earlier.attempt_id::text)) END"
