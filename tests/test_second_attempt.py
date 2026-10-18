@@ -40,7 +40,7 @@ from canonical_fixtures import (
     with_markers,
 )
 from conftest import approve_run, priced
-from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import HealthCheck, assume, example, given, settings
 from hypothesis import strategies as st
 from test_canonical_execution import _node, harness, route
 from test_execution_freshness import _Harness
@@ -3530,3 +3530,127 @@ def test_t8_relay_never_contains_the_answers_module_id(
     assume(refusals)  # an id that is a real module is not refused by `unknown`
     [(_, message)] = refusals
     assert message is None or module_id not in str(message), (template, message)
+
+
+def _relayed(template: str, module_id: str) -> object:
+    """The one relayed message for `module_id` in `template`'s row, or the
+    sentinel `"NOT REFUSED"` when the parser accepts the row."""
+    contract = cached_contract(BUNDLE)
+    headers, row = _id_rows(contract, template, module_id)
+    refusals = handoff._t8_messages(contract, catalog(BUNDLE), _t8_text(headers, [row]))
+    if not refusals:
+        return "NOT REFUSED"
+    [(_, message)] = refusals
+    return message
+
+
+@example(template="unknown", module_id="row 1")
+@example(template="wrapper", module_id="row 1")
+@example(template="legacy", module_id="row 1")
+@example(template="unknown", module_id="\\")
+@example(template="wrapper", module_id="\\")
+@example(template="legacy", module_id="\\")
+@example(template="unknown", module_id="*")
+@example(template="wrapper", module_id="*")
+@example(template="legacy", module_id="*")
+@example(template="unknown", module_id="`")
+@example(template="wrapper", module_id="`")
+@example(template="legacy", module_id="`")
+@example(template="unknown", module_id="a`b")
+@example(template="wrapper", module_id="a`b")
+@example(template="legacy", module_id="a`b")
+@example(template="unknown", module_id="**x**")
+@example(template="wrapper", module_id="**x**")
+@example(template="legacy", module_id="**x**")
+@example(template="unknown", module_id="CP-0 recommends")
+@example(template="wrapper", module_id="CP-0 recommends")
+@example(template="legacy", module_id="CP-0 recommends")
+@example(
+    template="unknown", module_id="CP-0 recommends unknown or non-navigable module: "
+)
+@example(
+    template="wrapper", module_id="CP-0 recommends unknown or non-navigable module: "
+)
+@example(
+    template="legacy", module_id="CP-0 recommends unknown or non-navigable module: "
+)
+@example(template="unknown", module_id="navigation: row 1")
+@example(template="wrapper", module_id="navigation: row 1")
+@example(template="legacy", module_id="navigation: row 1")
+@example(template="unknown", module_id=": command has malformed inline-code wrapper")
+@example(template="wrapper", module_id=": command has malformed inline-code wrapper")
+@example(template="legacy", module_id=": command has malformed inline-code wrapper")
+@example(template="unknown", module_id="x is an alias for y")
+@example(template="wrapper", module_id="x is an alias for y")
+@example(template="legacy", module_id="x is an alias for y")
+@example(
+    template="unknown", module_id="x cannot appear as a downstream T8 recommendation"
+)
+@example(
+    template="wrapper", module_id="x cannot appear as a downstream T8 recommendation"
+)
+@example(
+    template="legacy", module_id="x cannot appear as a downstream T8 recommendation"
+)
+@example(template="unknown", module_id="row")
+@example(template="wrapper", module_id="row")
+@example(template="legacy", module_id="row")
+@settings(max_examples=300, deadline=None)
+@given(
+    template=st.sampled_from(["unknown", "wrapper", "legacy"]),
+    module_id=st.text(
+        alphabet=st.characters(
+            blacklist_characters="|",
+            blacklist_categories=("C", "Z"),
+            max_codepoint=0x2FFF,
+        )
+        | st.just(" "),
+        min_size=1,
+        max_size=40,
+    ).filter(lambda text: text == text.strip()),
+)
+def test_t8_relay_places_every_id_it_can_in_the_same_line(
+    template: str, module_id: str
+) -> None:
+    """N230(1)(2): an id that the earlier property skips (backslash, asterisk,
+    wording of the vendor's message, ...) is relayed as the same line an
+    ordinary id gets, never dropped (a line exists) and never leaking: the
+    relay of any id the table keeps in one cell equals that of a neutral id."""
+    # A catalog module, an alias or a module the parser suppresses draws a
+    # different vendor fault, relayed as that fault with `row N` for the id
+    # (see the next test); only an unknown id gets `unknown`'s line. The
+    # parser looks the id up after `_plain_value` strips one wrapper.
+    navigation = cached_contract(BUNDLE).navigation
+    known = (
+        {m["module_id"] for m in CATALOG["modules"]}
+        | set(CATALOG["superseded_module_ids"])
+        | set(navigation.SUPPRESSED_MODULES)
+    )
+    assume(navigation._plain_value(module_id) not in known)
+    baseline = _relayed(template, "ZZ-NOT-A-MODULE")
+    assert baseline is not None
+    got = _relayed(template, module_id)
+    assume(got != "NOT REFUSED")  # the parser accepts some ids; nothing to relay
+    assert got == baseline, (template, module_id, got)
+
+
+def test_t8_relay_gives_a_real_module_id_its_own_fault_without_the_id() -> None:
+    """The counterexample `CP-0` to the property above: a module the catalog
+    knows is refused for another reason than `unknown`'s, and that fault is
+    relayed with `row 1` where the id was, never the id."""
+    assert _relayed("unknown", "CP-0") == (
+        "row 1 cannot appear as a downstream T8 recommendation"
+    )
+    assert _relayed("unknown", "CP-2B") == (
+        "row 1 is an alias for CP-2A; replace the T8 row with its current owner"
+        " and preserve qualifiers"
+    )
+
+
+@pytest.mark.parametrize("module_id", ["CP-X", "**CP-0**", "`CP-2B`"])
+def test_t8_relay_withholds_a_suppressed_or_wrapped_real_id(module_id: str) -> None:
+    """The ids the property above discards (`CP-X` is suppressed, a wrapped
+    real id is unwrapped before lookup) get their own fault, never the id."""
+    got = _relayed("unknown", module_id)
+    assert got != "NOT REFUSED"
+    assert module_id.strip("`*") not in str(got).replace("CP-2A", ""), got
