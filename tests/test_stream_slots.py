@@ -188,7 +188,9 @@ def test_a_closed_tail_gives_its_slot_back_without_the_garbage_collector(
     Served the way `caos.serve` serves it and with the collector off, so the
     test cannot pass by a collection happening to run: the slot comes back
     because the response ended, within the one poll the tail's thread may be
-    sleeping through.
+    sleeping through. The poll is shortened to 20 ms, so the 1 s bound is 50
+    polls and not the shipped two (N197): the bound is the test's patience,
+    and a slot that waited on the collector would take minutes either way.
     """
     from caos.api import app as app_module
 
@@ -198,6 +200,7 @@ def test_a_closed_tail_gives_its_slot_back_without_the_garbage_collector(
     conn.commit()
     monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
     monkeypatch.setenv(TRUST_SWITCH, TRUSTED)
+    monkeypatch.setattr(app_module, "POLL_INTERVAL", 0.02)
     path = f"/api/v1/cases/{case_id}/events"
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))

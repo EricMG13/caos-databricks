@@ -102,6 +102,9 @@ export const STATE_ROUTES = [
   sectionRoute("directory", "acts"),
   sectionRoute("upload", "acts"),
   sectionRoute("run", "acts"),
+  // N159: the run input's command form on a route that carries CP-2G (the
+  // acts route has none, so its form shows the objective alone).
+  sectionRoute("run", "command"),
   sectionRoute("report", "acts"),
   armedRoute("report", "SIGN_OPINION"),
   armedRoute("upload", "WITHDRAW_SOURCE"),
@@ -132,6 +135,10 @@ export const STATE_ROUTES = [
   // D107: a module's text with an anchored citation's marker chip (CP-0); the
   // unverified one's is CP-1B's above, the artifacts' Report's and Committee's.
   `${sectionRoute("analysis")}&tab=rn-cp-0`,
+  // N95: a wide register's clamped text cell, closed and then open on focus
+  // (`open` the appendix, `register` its first table, `clamp` the cell).
+  `${sectionRoute("analysis", "wide")}&tab=rn-cp-4&open=appendix&register=1`,
+  `${sectionRoute("analysis", "wide")}&tab=rn-cp-4&open=appendix&register=1&clamp=open`,
   "/analysis/",
   "/nothing/",
 ];

@@ -1,0 +1,278 @@
+Exhibit 10.2
+Execution Version
+THIRTEENTH AMENDMENT TO LEASE
+This THIRTEENTH AMENDMENT TO LEASE (this “Amendment”) is entered into as of June 27, 2025, by and among the entities listed on Schedule A attached hereto (collectively, and together with their respective successors and assigns, “Landlord”), the entities listed on Schedule B attached hereto (collectively, and together with their respective successors and assigns, “Tenant”) and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease (as defined below), Propco TRS LLC, a Delaware limited liability company (“Propco TRS”).
+RECITALS
+WHEREAS, Landlord, Tenant and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease, Propco TRS, are parties to that certain Lease (Non-CPLV), dated as of October 6, 2017, as amended by that certain First Amendment to Lease (Non-CPLV), dated as of December 22, 2017, as amended by that certain Second Amendment to Lease (Non-CPLV) and Ratification of SNDA, dated as of February 16, 2018, as amended by that certain Third Amendment to Lease (Non-CPLV), dated as of April 2, 2018, as amended by that certain Fourth Amendment to Lease (Non-CPLV), dated as of December 26, 2018, as amended by that certain Omnibus Amendment to Leases, dated as of June 1, 2020, as amended by that certain Fifth Amendment to Lease (Non-CPLV), dated as of July 20, 2020, as amended by that certain Sixth Amendment to Lease, dated as of September 30, 2020, as amended by that certain Amended and Restated Omnibus Amendment to Leases, dated as of October 27, 2020, as amended by that certain Seventh Amendment to Lease, dated as of November 18, 2020, as amended by that certain Eighth Amendment to Lease, dated as of September 3, 2021, as amended by that certain Ninth Amendment to Lease, dated as of November 1, 2021, as amended by that certain Tenth Amendment to Lease, dated as of December 30, 2021, as amended by that certain Eleventh Amendment to Lease, dated as of August 25, 2022, and as amended by that certain Twelfth Amendment to Lease, dated as of April 7, 2023 (collectively, as amended, the “Lease”), pursuant to which Landlord leases to Tenant, and Tenant leases from Landlord, certain real property as more particularly described in the Lease;
+WHEREAS, on the date hereof, Vegas Development LLC, a Delaware limited liability company, and the County of Clark, are closing a purchase and sale transaction under that certain Offer to Purchase, dated as of July 7, 2023, with respect to certain real property located in Las Vegas, Nevada, which is described on Annex A attached hereto (such real property, collectively, the “Harmon/Koval Property” and the purchase and sale of the Harmon/Koval Property, the “County Purchase”);
+WHEREAS,
+(a) the portion of the Harmon/Koval Property identified on Annex A attached hereto under the header “Cluster Parcel 4 Released Property” constitutes a portion of Cluster Parcel Number 4 described in Schedule 8 of the Lease,
+(b) the portion of the Harmon/Koval Property identified on Annex A attached hereto under the header “Cluster Parcel 5 Released Property” constitutes a portion of Cluster Parcel Number 5 described in Schedule 8 of the Lease and (c) the portion of the Harmon/Koval Property identified on Annex A attached hereto under the header “Cluster Parcel 6 Released Property” constitutes a portion of Cluster Parcel Number 6 described in Schedule 8 of the Lease; and
+US-DOCS\144314390.5
+WHEREAS, in connection with the County Purchase, the parties hereto desire to amend the Lease as set forth herein.
+NOW THEREFORE, in consideration of the mutual covenants and agreements hereinafter set forth and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the parties hereto, intending to be legally bound hereby, agree as follows:
+1. Definitions.
+Except as otherwise defined herein, all capitalized terms used herein without definition shall have the meanings applicable to such terms, respectively, as set forth in the Lease.
+2. Amendments to the Lease.
+Effective as of the date hereof:
+A. Termination of the Lease as to the Harmon/Koval Property.
+i. the Lease is hereby terminated with respect to the Harmon/Koval Property, the Harmon/Koval Property no longer constitutes Leased Property under the Lease nor a portion of the Las Vegas Land Assemblage nor a portion of the applicable Cluster Parcels nor a portion of the Las Vegas Land Assemblage Facility, and neither Landlord nor Tenant has any further liabilities or obligations under the Lease, from and after the date hereof, in respect of the Harmon/Koval Property (provided that any such liabilities or obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment); and
+ii. the Guaranty hereby automatically, and without further action by any party, ceases to apply with respect to any Obligations (as defined in the Guaranty) with respect to the Harmon/Koval Property to the extent arising from and after the date hereof (provided that any such Obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment).
+The term “Las Vegas Land Assemblage Facility” refers to the Facility identified as No. 14 on the list of the Facilities annexed as Exhibit A to the Lease.
+B. Rent.
+Landlord and Tenant hereby expressly acknowledge and agree that there shall be no reduction in the Rent under the Lease as a result of the removal of the Harmon/Koval Property from the Lease or otherwise as a result of the County Purchase.
+C. Variable Rent.
+From and after the date hereof, for purposes of any calculation of Variable Rent under the Lease, including any adjustments in Variable Rent based on increases or decreases in Net Revenue, such calculations of Net Revenue shall exclude Net Revenue attributable to the Harmon/Koval Property.
+D. County Purchase.
+i. Each of Landlord and Tenant hereby acknowledges and agrees that (i) such party consents to the sale of the Harmon/Koval Property, including the severance
+2
+US-DOCS\144314390.5
+of the Harmon/Koval Property from the Lease as of the date of this Amendment, and (ii) the removal of the Harmon/Koval Property from the Lease shall not constitute a L1/L2 Transfer nor a transfer and sale pursuant to Section 22.2(ix) of the Lease.
+ii. All of the applicable requirements and conditions set forth in Article XVIII or Article XXII of the Lease with respect to the County Purchase (if, and to the extent, applicable to the County Purchase) are deemed satisfied or waived.
+iii. The amounts of the 2018 EBITDAR Pool and 2018 EBITDAR Pool Before Fifth Amendment shall not be reduced as a result of the Harmon/Koval Property no longer constituting Leased Property under the Lease and, without limitation, Schedule 11 to the Lease (setting forth the 2018 Facility EBITDAR of Tenant and Joliet Tenant) shall not be modified as a result of the County Purchase.
+iv. The treatment of the County Purchase hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under any applicable provision of the Lease or otherwise.
+E. Revisions to Exhibits and Schedules to the Lease.
+The Exhibits and Schedules to the Lease are hereby amended as follows:
+i. Legal Description (Harmon/Koval Property).
+The legal descriptions with respect to the Leased Property set forth on Exhibit B and Exhibit F annexed to the Lease are hereby amended such that the legal description with respect to the Leased Property pertaining to the Harmon/Koval Property, as set forth on Annex A attached hereto, is hereby excluded from said Exhibit B and Exhibit F.
+ii. Cluster Parcels.
+The list of properties set forth as Cluster Parcel Numbers 4, 5 and 6 on Schedule 8 annexed to the Lease is hereby amended and restated such that Cluster Parcel Numbers 4, 5 and 6 on such Schedule 8 shall read as follows, and the subtotals of “APN Acreage” and “Total Cluster Acreage” set forth in the first table set forth on Schedule 8 annexed to the Lease shall be recalculated and updated to reflect such amendment and restatement:
+16221102006 | Vegas Development, LLC | 4.6 | 4 | 4.6
+16221202006 | Vegas Development, LLC | 3.0 | 5 | 4.5
+16221202003 | Vegas Development, LLC | 1.5
+16221202007 | Vegas Development, LLC | 6.8 | 6 | 6.8
+3. No Other Modification or Amendment to the Lease.
+The Lease shall remain in full force and effect except as expressly amended or modified by this Amendment.
+From and after the date of this Amendment, all references in the Lease to the “Lease” shall be deemed to
+3
+US-DOCS\144314390.5
+refer to the Lease as amended by this Amendment.
+For the avoidance of doubt, the Lease shall continue in full force and effect with respect to the balance of the Leased Property (other than the Harmon/Koval Property as of the date hereof in accordance with Section 2 of this Amendment).
+4. Governing Law; Jurisdiction.
+This Amendment shall be construed according to and governed by the laws of the jurisdiction(s) specified by the Lease without regard to its or their conflicts of law principles.
+The parties hereto hereby irrevocably submit to the jurisdiction of any court of competent jurisdiction located in such applicable jurisdiction in connection with any proceeding arising out of or relating to this Amendment.
+5. Counterparts.
+This Amendment may be executed by one or more of the parties hereto on any number of separate counterparts, and all of such counterparts taken together shall be deemed to constitute one and the same instrument.
+Facsimile and/or .pdf signatures shall be deemed to be originals for all purposes.
+6. Effectiveness.
+This Amendment shall be effective, as of the date hereof, only upon execution and delivery by each of the parties hereto.
+7. Miscellaneous.
+If any provision of this Amendment is adjudicated to be invalid, illegal or unenforceable, in whole or in part, it will be deemed omitted to that extent and all other provisions of this Amendment will remain in full force and effect.
+Neither this Amendment nor any provision hereof may be changed, modified, waived, discharged or terminated orally, but only by an instrument in writing signed by the party against whom enforcement of such change, modification, waiver, discharge or termination is sought.
+The paragraph headings and captions contained in this Amendment are for convenience of reference only and in no event define, describe or limit the scope or intent of this Amendment or any of the provisions or terms hereof.
+This Amendment shall be binding upon and inure to the benefit of the parties and their respective heirs, legal representatives, successors and permitted assigns.
+[Signature Page Follows]
+4
+US-DOCS\144314390.5
+IN WITNESS WHEREOF, the parties hereto have caused this Amendment to be duly executed by their duly authorized representatives, all as of the date hereof.
+LANDLORD:
+HORSESHOE COUNCIL BLUFFS LLC
+HARRAH’S COUNCIL BLUFFS LLC
+HARRAH’S METROPOLIS LLC
+NEW HORSESHOE HAMMOND LLC
+NEW HARRAH’S NORTH KANSAS CITY LLC
+GRAND BILOXI LLC
+HORSESHOE TUNICA LLC
+NEW TUNICA ROADHOUSE LLC
+CAESARS ATLANTIC CITY LLC
+WWW PROPCO LLC
+HARRAH’S LAKE TAHOE LLC
+HARVEY’S LAKE TAHOE LLC
+HARRAH’S RENO LLC
+VEGAS DEVELOPMENT LLC
+VEGAS OPERATING PROPERTY LLC
+MISCELLANEOUS LAND LLC
+PROPCO GULFPORT LLC
+PHILADELPHIA PROPCO LLC
+HARRAH’S ATLANTIC CITY LLC
+NEW LAUGHLIN OWNER LLC
+HARRAH’S NEW ORLEANS LLC
+each, a Delaware limited liability company
+By: /s/Samantha S. Gallagher
+Name: Samantha S. Gallagher
+Title: Secretary
+HORSESHOE BOSSIER CITY PROP LLC,
+a Louisiana limited liability company
+By: /s/Samantha S. Gallagher
+Name: Samantha S. Gallagher
+Title: Secretary
+[Signatures Continue on Following Pages]
+[Signature Page to Thirteenth Amendment to Regional Lease]
+TENANT:
+CEOC, LLC, a Delaware limited liability company,
+HBR REALTY COMPANY LLC, a Nevada limited liability company,
+HARVEYS IOWA MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+SOUTHERN ILLINOIS RIVERBOAT/CASINO CRUISES LLC, an Illinois limited liability company,
+HORSESHOE HAMMOND, LLC, an Indiana limited liability company,
+HARRAH’S NORTH KANSAS CITY LLC, a Missouri limited liability company,
+GRAND CASINOS OF BILOXI, LLC, a Minnesota limited liability company,
+ROBINSON PROPERTY GROUP LLC, a Mississippi limited liability company,
+TUNICA ROADHOUSE LLC, a Delaware limited liability company,
+CAESARS NEW JERSEY LLC, a New Jersey limited liability company,
+HARVEYS TAHOE MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+CASINO COMPUTER PROGRAMMING, INC., an Indiana corporation,
+HARVEYS BR MANAGEMENT COMPANY, INC., a Nevada corporation,
+HARRAH’S LAUGHLIN, LLC, a Nevada limited liability company,
+JAZZ CASINO COMPANY, L.L.C., a Louisiana limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Thirteenth Amendment to Regional Lease]
+HORSESHOE ENTERTAINMENT,
+a Louisiana limited partnership
+By: New Gaming Capital Partnership,
+a Nevada limited partnership,
+its general partner
+By: Horseshoe GP, LLC,
+a Nevada limited liability company,
+its general partner
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+BOARDWALK REGENCY LLC,
+a New Jersey limited liability company
+By: Caesars New Jersey LLC,
+a New Jersey limited liability company,
+its sole member
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HOLE IN THE WALL, LLC,
+a Nevada limited liability company
+By: CEOC, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Thirteenth Amendment to Regional Lease]
+CHESTER DOWNS AND MARINA, LLC,
+a Pennsylvania limited liability company
+By: Harrah’s Chester Downs Investment Company, LLC,
+its sole member
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARRAH’S ATLANTIC CITY OPERATING COMPANY, LLC,
+a New Jersey limited liability company
+By: Caesars Resort Collection, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Thirteenth Amendment to Regional Lease]
+Acknowledged and agreed, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease:
+PROPCO TRS LLC,
+a Delaware limited liability company
+By: /s/ Samantha S. Gallagher
+Name: Samantha S. Gallagher
+Title: Secretary
+[Signature Page to Thirteenth Amendment to Regional Lease]
+ACKNOWLEDGMENT AND AGREEMENT OF GUARANTOR
+The undersigned (“Guarantor”) hereby:
+(a) acknowledges receipt of the Thirteenth Amendment to Lease (the “Amendment”; capitalized terms used herein without definition having the meanings set forth in the Amendment), dated as of June 27, 2025, by and among the entities listed on Schedule A attached thereto, as Landlord, and the entities listed on Schedule B attached thereto, as Tenant, and the other parties party thereto;
+(b) consents to the terms and execution thereof;
+(c) ratifies and reaffirms Guarantor’s obligations to Landlord pursuant to the terms of that certain Guaranty of Lease, dated as of July 20, 2020 (the “Guaranty”), by and between Guarantor and Landlord, and agrees that, except as expressly set forth in Section 2.A.ii of the Amendment, nothing in the Amendment in any way impairs or lessens the Guarantor’s obligations under the Guaranty; and
+(d) acknowledges and agrees that the Guaranty is in full force and effect and is valid, binding and enforceable in accordance with its terms.
+IN WITNESS WHEREOF, the undersigned has caused this Acknowledgment and Agreement of Guarantor to be duly executed as of June 27, 2025.
+[Acknowledgment and Agreement of Guarantor]
+US-DOCS\144314390.5
+CAESARS ENTERTAINMENT, INC.
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+[Signature Page to Acknowledgment and Agreement of Guarantor]
+Schedule A
+LANDLORD ENTITIES
+Horseshoe Council Bluffs LLC
+Harrah’s Council Bluffs LLC
+Harrah’s Metropolis LLC
+New Horseshoe Hammond LLC
+Horseshoe Bossier City Prop LLC
+New Harrah’s North Kansas City LLC
+Grand Biloxi LLC
+Horseshoe Tunica LLC
+New Tunica Roadhouse LLC
+Caesars Atlantic City LLC
+WWW Propco LLC
+Harrah’s Lake Tahoe LLC
+Harvey’s Lake Tahoe LLC
+Harrah’s Reno LLC
+Vegas Development LLC
+Vegas Operating Property LLC
+Miscellaneous Land LLC
+Propco Gulfport LLC
+Philadelphia Propco LLC
+Harrah’s Atlantic City LLC
+New Laughlin Owner LLC
+Harrah’s New Orleans LLC
+Schedule A
+US-DOCS\144314390.5
+Schedule B
+TENANT ENTITIES
+CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+HBR Realty Company LLC
+Harveys Iowa Management Company LLC
+Southern Illinois Riverboat/Casino Cruises LLC
+Horseshoe Hammond, LLC
+Horseshoe Entertainment
+Harrah’s North Kansas City LLC
+Grand Casinos of Biloxi, LLC
+Robinson Property Group LLC
+Tunica Roadhouse LLC
+Boardwalk Regency LLC
+Caesars New Jersey LLC
+Harveys Tahoe Management Company LLC
+Casino Computer Programming, Inc.
+Harveys BR Management Company, Inc.
+Hole in the Wall, LLC
+Chester Downs and Marina, LLC
+Harrah’s Atlantic City Operating Company, LLC
+Harrah’s Laughlin, LLC
+Jazz Casino Company, L.L.C.
+Schedule B
+US-DOCS\144314390.5
+Annex A
+Cluster Parcel 4 Released Property
+(Relating to Parcel 13: APN 162-21-102-006)
+A PORTION OF PARCEL 2 AS SHOWN IN FILE 1, PAGE 35 OF PARCEL MAPS, ON FILE AT THE CLARK COUNTY, NEVADA RECORDER'S OFFICE LYING WITHIN THE NORTHWEST QUARTER (NW 1/4) OF SECTION 21, TOWNSHIP 21 SOUTH, RANGE 61 EAST, M.D.M., CLARK COUNTY, NEVADA DESCRIBED AS FOLLOWS:
+COMMENCING AT THE NORTHEAST CORNER OF THE NORTHWEST QUARTER (NW 1/4) OF SAID SECTION 21; THENCE ALONG THE EAST LINE THEREOF SOUTH 00°42'51" EAST, 1408.43 FEET; THENCE DEPARTING SAID EAST LINE SOUTH 89°17'08" WEST, 40.00 FEET TO THE WESTERLY RIGHT-OF-WAY LINE OF KOVAL LANE AS DESCRIBED IN THAT CERTAIN DOCUMENT RECORDED IN BOOK 507, AS INSTRUMENT NO. 408684 ON FILE AT SAID RECORDER'S OFFICE, ALSO BEING THE POINT OF BEGINNING; THENCE DEPARTING SAID WESTERLY RIGHT-OF-WAY LINE NORTH 88°24'19'' WEST, 3.00 FEET; THENCE NORTH 00°42'16" WEST, 79.69 FEET; THENCE NORTH 01°42'54" WEST, 105.41 FEET; THENCE NORTH 01°25'10"' WEST, 265.14 FEET; THENCE SOUTH 88°29'14" EAST, 8.09 FEET TO THE WESTERLY RIGHT-OFWAY LINE OF SAID KOVAL LANE; THENCE ALONG SAID RIGHT-OF-WAY LINE THE FOLLOWING TWO (2) COURSES: 1) SOUTH 00°42'51" EAST, 316.52 FEET; 2) SOUTH 00°42'52" EAST, 133.48 FEET TO THE POINT OF BEGINNING.
+CONTAINS 2,361 SQUARE FEET, MORE OR LESS.
+BASIS OF BEARINGS
+SOUTH 00°42'51 EAST, BEING THE BEARING OF THE EAST LINE OF THE NORTHEAST QUARTER (NE 1/4) OF THE NORTHWEST QUARTER (NW 1/4) OF SECTION 21, TOWNSHIP 21 SOUTH, RANGE 61 EAST, M.D.M., CLARK COUNTY, AS SHOWN IN FILE 201, PAGE 54 OF SURVEYS ON FILE AT THE CLARK COUNTY, NEVADA RECORDER'S OFFICE.
+END OF DESCRIPTION.
+Cluster Parcel 5 Released Property
+(Relating to Parcel 15: APN 162-21-202-003)
+A PORTION OF PARCEL 2 AS SHOWN IN FILE 1, PAGE 35 OF PARCEL MAPS, ON FILE AT THE CLARK COUNTY, NEVADA, RECORDER'S OFFICE, LYING WITHIN THE SOUTHEAST QUARTER (SE 1/4) OF THE NORTHWEST QUARTER (NW 1/4) OF SECTION 21, TOWNSHIP 21 SOUTH, RANGE 61 EAST, M.D.M., CLARK COUNTY, NEVADA, DESCRIBED AS FOLLOWS:
+Annex A
+US-DOCS\144314390.5
+COMMENCING AT SOUTHEAST CORNER OF THE NORTHWEST QUARTER (NW 1/4) OF SAID SECTION 21; THENCE ALONG THE EAST LINE THEREOF NORTH 00°42’52” WEST, 1142.46 FEET; THENCE DEPARTING SAID EAST LINE SOUTH 89°17'08” WEST, 40.00 FEET TO THE WESTERLY RIGHT-OF-WAY LINE OF KOVAL LANE AS DESCRIBED IN THAT CERTAIN DOCUMENT RECORDED IN BOOK 507, AS INSTRUMENT NO. 408684 ON FILE AT SAID RECORDER'S OFFICE, AND ALSO BEING THE POINT OF BEGINNING; THENCE ALONG SAID RIGHT OF-WAY LINE SOUTH 00°42’52” EAST, 425.00 FEET; THENCE DEPARTING SAID RIGHT-OF-WAY LINE NORTH 88°24'18” WEST, 3.00 FEET; THENCE NORTH 00°42'52” WEST, 425.00 FEET; THENCE SOUTH 88°24'18” EAST, 3.00 FEET TO THE POINT OF BEGINNING.
+CONTAINS 1,275 SQUARE FEET, MORE OR LESS.
+BASIS OF BEARINGS
+NORTH 00°42'52" WEST, BEING THE BEARING OF THE EAST LINE OF THE SOUTHEAST QUARTER (SE 1/4) OF THE NORTHWEST QUARTER (NW 1/4) OF SECTION 21, TOWNSHIP 21 SOUTH, RANGE 61 EAST, M.D.M., CLARK COUNTY, AS SHOWN IN FILE 201, PAGE 54 OF SURVEYS ON FILE-AT THE CLARK COUNTY, NEVADA RECORDER'S OFFICE.
+END OF DESCRIPTION
+(Relating to Parcel 14: APN 162-21-202-006)
+A PORTION OF PARCEL 2 AS SHOWN IN FILE 1, PAGE 35 OF PARCEL MAPS, ON FILE AT THE CLARK COUNTY, NEVADA RECORDER'S OFFICE, LYING WITHIN THE SOUTHEAST QUARTER
+(SE 1/4) OF THE NORTHWEST QUARTER (NW 1/4) OF SECTION 21, TOWNSHIP 21 SOUTH, RANGE 61 EAST, M.D.M., DESCRIBED AS FOLLOWS:
+COMMENCING AT THE SOUTHEAST CORNER OF THE NORTHWEST QUARTER (NW 1/4) OF SAID SECTION 21; THENCE ALONG THE EAST LINE THEREOF NORTH 00°42'52" WEST, 717.46 FEET; THENCE DEPARTING SAID EAST LINE SOUTH 89°17'08” WEST, 40.00 FEET TO THE WESTERLY RIGHT-OF-WAY LINE OF KOVAL LANE AS DESCRIBED IN THAT CERTAIN DOCUMENT RECORDED IN BOOK 507, AS INSTRUMENT NO. 408684 ON FILE AT SAID RECORDER'S OFFICE, ALSO BEING THE POINT OF BEGINNING; THENCE ALONG SAID WESTERLY RIGHT-OF-WAY LINE SOUTH 00°42'52” EAST, 8.93 FEET; THENCE DEPARTING SAID WESTERLY RIGHT-OF-WAY LINE SOUTH 89°46'01" WEST, 3.00 FEET; THENCE NORTH 00°42'52" WEST, 9.03 FEET; THENCE SOUTH 88°24'18” EAST, 3.00 FEET TO THE POINT OF BEGINNING.
+CONTAINS 27 SQUARE FEET, MORE OR LESS.
+BASIS OF BEARINGS
+Annex A
+US-DOCS\144314390.5
+NORTH 00°42'52” WEST, BEING THE BEARING OF THE EAST LINE OF THE SOUTHEAST QUARTER (SE 1/4) OF THE NORTHWEST QUARTER (NW 1/4) OF SECTION 21, TOWNSHIP 21 SOUTH, RANGE 61 EAST, M.D.M., CLARK COUNTY, AS SHOWN IN FILE 201, PAGE 54 OF SURVEYS ON FILE AT THE CLARK COUNTY, NEVADA RECORDER'S OFFICE.
+END OF DESCRIPTION.
+Cluster Parcel 6 Released Property
+(Relating to Parcel 16: APN 162-21-202-007)
+A PORTION OF PARCEL 2 AS SHOWN IN FILE 1, PAGE 35 OF PARCEL MAPS, ON FILE AT THE CLARK COUNTY, NEVADA, RECORDER'S OFFICE, LYING WITHIN THE SOUTHEAST QUARTER
+(SE 1/4) OF THE NORTHWEST QUARTER (NW 1/4) OF SECTION 21, TOWNSHIP 21 SOUTH, RANGE 61 EAST, M.D.M., CLARK COUNTY, NEVADA, DESCRIBED AS FOLLOWS:
+COMMENCING AT THE SOUTHEAST CORNER OF SAID NORTHWEST QUARTER (NW 1/4) OF SECTION 21; THENCE ALONG THE EAST LINE THEREOF NORTH 00°42'52" WEST, 708.53 FEET; THENCE DEPARTING SAID EAST LINE SOUTH 89°17'08" WEST, 40.00 FEET TO THE WESTERLY RIGHT-OF-WAY LINE OF KOVAL LANE AS DEDICATED PER BOOK 507, INSTRUMENT NUMBER 0408684, RECORDED JANUARY 21, 1964, ON FILE AT SAID RECORDER'S OFFICE ALSO BEING THE POINT OF BEGINNING; THENCE ALONG SAID WESTERLY RIGHT-OF-WAY LINE, SOUTH 00°42'52" EAST, 648.02 FEET TO THE BEGINNING OF A CURVE, CONCAVE TO THE NORTHWEST, HAVING A RADIUS OF 20.00 FEET; THENCE SOUTHWESTERLY ALONG SAID CURVE AND THE RIGHT-OF-WAY LINE AS DEDICATED PER SAID PARCEL MAP, THROUGH A CENTRAL ANGLE OF 90°28'53", AN ARC LENGTH OF 31.58 FEET TO THE NORTHERLY RIGHTOF-WAY LINE OF HARMON AVENUE AS DEDICATED PER BOOK 399, AS INSTRUMENT NUMBER 321732, RECORDED NOVEMBER 14, 1962, ON FILE AT SAID RECORDER'S OFFICE; THENCE ALONG SAID NORTHERLY RIGHT-OF-WAY LINE SOUTH 89°46'01" WEST, 436.21 FEET; THENCE DEPARTING SAID NORTHERLY RIGHT-OF-WAY LINE AND ALONG THE WEST LINE OF SAID PARCEL 2, NORTH 00°32'08" WEST, 3.00 FEET; THENCE DEPARTING SAID WEST LINE, NORTH 87°59'06" EAST, 224.98 FEET; THENCE NORTH 89°46'01" EAST, 158.46 FEET TO THE BEGINNING OF A CURVE, CONCAVE TO THE NORTHWEST, HAVING A RADIUS OF 54.00 FEET; THENCE NORTHEASTERLY ALONG SAID CURVE, THROUGH A CENTRAL ANGLE OF 88°03'50", AN ARC LENGTH OF 83.00 FEET; THENCE NORTH 01°42'11" EAST, 369.18 FEET: THENCE NORTH 00°42'52" WEST, 237.03 FEET TO THE NORTH LINE OF PARCEL 16 AS DESCRIBED IN THAT "GRANT, BARGAIN AND SALE DEED", RECORDED OCTOBER 12, 2017, AS INSTRUMENT NUMBER 20171012-0001102, ON FILE AT SAID RECORDER'S OFFICE;
+Annex A
+US-DOCS\144314390.5
+THENCE ALONG SAID NORTH LINE, NORTH 89°46'01" EAST, 3.00 FEET TO THE POINT OF BEGINNING.
+CONTAINING 9,984 SQUARE FEET, MORE OR LESS.
+BASIS OF BEARINGS
+NORTH 00°42'52" WEST, BEING THE BEARING OF THE EAST LINE OF THE SOUTHEAST QUARTER (SE 1/4) OF THE NORTHWEST QUARTER (NW 1/4) OF SECTION 21, TOWNSHIP 21 SOUTH, RANGE 61 EAST, M.D.M., CLARK COUNTY, NEVADA, AS SHOWN IN FILE 201, PAGE 54 OF SURVEYS, ON FILE AT THE CLARK COUNTY, NEVADA, RECORDER'S OFFICE.
+END OF DESCRIPTION.
+Annex A
+US-DOCS\144314390.5

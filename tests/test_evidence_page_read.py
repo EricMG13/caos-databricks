@@ -564,37 +564,71 @@ def test_one_actor_cannot_hold_both_frame_children_slots(
     import threading
 
     first_entered, release = threading.Event(), threading.Event()
+    asked: list[bytes] = []
 
     def slow(data: bytes, page: int, **bounds: object) -> pdf_module.Frame:
-        first_entered.set()
-        release.wait(5)
+        asked.append(data)
+        if data == b"hog":
+            # Only the hog's reads are held; the other actor's answers at once
+            # (N197: it used to wait on this too, so the test always took the
+            # full `release.wait`).
+            first_entered.set()
+            release.wait(5)
         return (0.0, 0.0, 1.0, float(page))
 
     monkeypatch.setattr(pdf_module, "page_frame", slow)
     hog = uuid4()
     deadline = time.monotonic() + 30.0
 
+    # The hog's own share, watched: a read is counted only once it has found
+    # the share taken (a non-blocking try failed), so "the second read is
+    # waiting on its share" is an event and not a sleep (N232).
+    reached = threading.Condition()
+    attempts: list[UUID] = []
+    real_share = page_module._actor_slot
+
+    class _Watched:
+        def __init__(self, actor: UUID) -> None:
+            self.inner = real_share(actor)
+            self.actor = actor
+
+        def acquire(self, timeout: float | None = None) -> bool:
+            if self.inner.acquire(blocking=False):
+                return True
+            with reached:
+                attempts.append(self.actor)
+                reached.notify_all()
+            return self.inner.acquire(timeout=timeout)
+
+        def release(self) -> None:
+            self.inner.release()
+
+    monkeypatch.setattr(page_module, "_actor_slot", _Watched)
+
     def hog_read(page: int) -> None:
-        crop = page_module._Crop("h" * 64, b"", DEFAULT_LIMITS, deadline, hog)
+        crop = page_module._Crop("h" * 64, b"hog", DEFAULT_LIMITS, deadline, hog)
         page_module._page_crop(crop, page)
 
     # Two concurrent reads from the same actor: the first takes a global slot,
-    # and the second -- free before this fix to race for the other one -- is
-    # given time here to have done exactly that.
+    # and the second -- free before this fix to race for the other one -- has
+    # reached its share (and, with the fix, waits there) before the other
+    # actor reads.
     threads = [threading.Thread(target=hog_read, args=(page,)) for page in (1, 2)]
-    for thread in threads:
-        thread.start()
     try:
+        threads[0].start()
         assert first_entered.wait(5), "the hog's own read never started"
-        time.sleep(0.2)
+        threads[1].start()
+        with reached:
+            assert reached.wait_for(lambda: len(attempts) == 1, 5)
 
         other = uuid4()
         crop = page_module._Crop(
-            "o" * 64, b"", DEFAULT_LIMITS, time.monotonic() + 1.0, other
+            "o" * 64, b"other", DEFAULT_LIMITS, time.monotonic() + 1.0, other
         )
         answer = page_module._page_crop(crop, 1)
 
         assert answer == (0.0, 0.0, 1.0, 1.0), "a different actor was starved"
+        assert asked == [b"hog", b"other"], "the hog's second read never ran a child"
     finally:
         release.set()
         for thread in threads:
