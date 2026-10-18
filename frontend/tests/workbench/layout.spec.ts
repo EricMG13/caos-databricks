@@ -307,3 +307,42 @@ test("a banner above the module index leaves the view beside it, and each fact w
     expect(worn.every((signal) => signal.hue !== undefined)).toBe(true);
   }
 });
+
+for (const size of [
+  { width: 1440, height: 900 },
+  { width: 1024, height: 768 },
+  { width: 320, height: 640 },
+]) {
+  test(`no sticky bar can cover a focused control on Analysis at ${size.width}px (WCAG 2.4.11)`, async ({
+    page,
+  }) => {
+    // N113: the module index (past eight views) is sticky; focus must stay
+    // reachable. The sticky header is cleared by `scroll-padding-top`, and the
+    // sticky index sits in its own column (never over the view) or is static.
+    await page.setViewportSize(size);
+    await page.goto("/analysis/?case=00000000-0000-4000-8000-000000000001&tab=rn-cp-1");
+    await expect(page.locator("[data-depth-tab]").first()).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const panelEl = document.querySelector<HTMLElement>('[role="tabpanel"]')!;
+      const panel = panelEl.getBoundingClientRect();
+      const header = document.querySelector<HTMLElement>("header")!;
+      const bars = [...document.querySelectorAll<HTMLElement>("body *")]
+        .filter((el) => ["sticky", "fixed"].includes(getComputedStyle(el).position))
+        .filter((el) => el.getBoundingClientRect().width > 0 && !el.contains(panelEl));
+      const over = bars
+        .filter((el) => el !== header && !el.contains(header) && !header.contains(el))
+        .filter((el) => {
+          const box = el.getBoundingClientRect();
+          return box.left < panel.right - 0.5 && box.right > panel.left + 0.5;
+        })
+        .map((el) => el.getAttribute("data-slot") ?? el.tagName);
+      return {
+        padding: parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop),
+        header: header.getBoundingClientRect().height,
+        over,
+      };
+    });
+    expect(layout.padding).toBeGreaterThanOrEqual(layout.header);
+    expect(layout.over).toEqual([]);
+  });
+}

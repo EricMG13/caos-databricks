@@ -105,7 +105,7 @@ def _resolved(
         "CAOS_MODEL_ENDPOINT": ENDPOINT,
         "CAOS_MODEL_PRICE": PRICE,
         "CAOS_MODEL_CHOICES": f"{PRICE};",  # the price, then no other model
-        "CAOS_RUN_CEILING": "120.00",  # the bundle default (D29, D83)
+        "CAOS_RUN_CEILING": "165.00",  # the bundle default (D29, D83)
         "CAOS_GROUP_ADMIN": groups[0],
         "CAOS_GROUP_ANALYST": groups[1],
         **BINDINGS[kind],
@@ -121,7 +121,10 @@ def _resolved(
         "resources": resources,
         "permissions": permissions,
     }
-    return {"resources": {"apps": {"caos": app}}}
+    return {
+        "workspace": {"current_user": {"userName": "stub@example.com"}},
+        "resources": {"apps": {"caos": app}},
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,7 +284,7 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
         "bundle deploy",
         "bundle run caos",
     ]
-    assert all("--var run_ceiling=120.00" in line for line in seen)
+    assert all("--var run_ceiling=165.00" in line for line in seen)
     assert not any(" -p " in f" {line} " for line in seen), "no profile flag"
     _only_the_kind_s_own(kind, target, seen, evidence, stub)
     # The price travels whole in the environment (C1), never as a `--var`.
@@ -520,32 +523,46 @@ def test_e10_a_reopen_that_hangs_ends_with_the_wait_and_reads_the_run_last(
     socket gives up when E10's wait does, not `MODEL_CALL_SECONDS` later,
     and the run is still read once more, so a call answered meanwhile passes."""
     import socket
+    import types
 
     reads = iter([_RUNNING, _ACCEPTED])
     monkeypatch.setattr(
         enterprise_deploy, "_json_call", lambda *_a, **_k: (200, next(reads))
     )
-    monkeypatch.setattr(enterprise_deploy, "MODEL_CALL_SECONDS", 1.5)
-    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.1)
+    # The script's clock is a fake (N197): the wait is 20 s and the reconnect
+    # pause "takes" 19.8 of them, so 0.2 s is left. The pause costs nothing,
+    # and the one real wait left is the hung socket giving up on that 0.2 s.
+    now = [0.0]
+
+    def pause(seconds: float) -> None:
+        now[0] += seconds
+
+    monkeypatch.setattr(
+        enterprise_deploy,
+        "time",
+        types.SimpleNamespace(monotonic=lambda: now[0], sleep=pause),
+    )
+    monkeypatch.setattr(enterprise_deploy, "MODEL_CALL_SECONDS", 20.0)
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 19.8)
     with socket.socket() as hung:
         hung.bind(("127.0.0.1", 0))
         hung.listen(4)
         url = f"http://127.0.0.1:{hung.getsockname()[1]}"
         first: queue.Queue[bytes] = queue.Queue()
-        closer = threading.Timer(0.8, lambda: first.put(b""))
-        closer.start()
+        first.put(b"")  # the tail closed
+        given: list[float] = []
+
+        def reopen(after: str | None, left: float) -> _Reopened:
+            given.append(left)
+            return enterprise_deploy._tail(url, "/e", {}, after, left)
+
         started = time.monotonic()
-        verdict = enterprise_deploy._answered(
-            url,
-            "/r",
-            {},
-            first,
-            lambda after, left: enterprise_deploy._tail(url, "/e", {}, after, left),
-        )
+        verdict = enterprise_deploy._answered(url, "/r", {}, first, reopen)
         took = time.monotonic() - started
-    closer.join()
     assert verdict[0] == 0, verdict
-    assert took < 1.5 + 0.5, took
+    assert given == pytest.approx([0.2]), "the reopen is given the time left"
+    # The socket gave up on that 0.2 s and not on the whole 20 s wait.
+    assert took < 5, took
 
 
 def test_e10_resumes_after_the_last_complete_frame_only(
@@ -1134,4 +1151,53 @@ def test_a_reopened_tail_resumes_after_the_last_event_id() -> None:
     assert refused == (
         None,
         "status 302, content-type 'text/html': not an event stream",
+    )
+
+
+def test_e2_holds_user_and_service_principal_grants_to_the_deployer_manage() -> None:
+    """N112: the one user or service-principal grant E2 admits is the
+    deployer's CAN_MANAGE (W3); any other level, a second principal, or a
+    service principal's CAN_USE broadens who may open or manage the app."""
+    given = enterprise_deploy.given_values(
+        enterprise_deploy._parser().parse_args(
+            [
+                *("--stage", "record", "--evidence", "e", "--target", "prod"),
+                *("--lakebase-project", "p"),
+                *("--endpoint", ENDPOINT, "--price", PRICE),
+            ]
+        )
+    )
+    refusal = [
+        "resolved app permissions grant a user or service principal "
+        "other than the deployer's CAN_MANAGE"
+    ]
+
+    def problems(level: str | None, *extra: dict[str, str]) -> list[str]:
+        document = _resolved("caos")
+        listed = document["resources"]["apps"]["caos"]["permissions"]
+        if level is not None:
+            listed[-1]["level"] = level
+        listed.extend(extra)
+        return enterprise_deploy.resolution_problems(
+            document, target="prod", given=given
+        )
+
+    assert problems(None) == []
+    for extra in (
+        {"user_name": "other@example.com", "level": "CAN_MANAGE"},
+        {"service_principal_name": "sp-1", "level": "CAN_MANAGE"},
+        {"user_name": "other@example.com", "level": "CAN_USE"},
+        {"service_principal_name": "sp-1", "level": "CAN_USE"},
+    ):
+        assert problems(None, extra) == refusal
+    assert problems("CAN_USE") == refusal
+    # The one CAN_MANAGE must be the deployer's own, not another principal's.
+    document = _resolved("caos")
+    document["resources"]["apps"]["caos"]["permissions"][-1] = {
+        "user_name": "someone-else@example.com",
+        "level": "CAN_MANAGE",
+    }
+    assert (
+        enterprise_deploy.resolution_problems(document, target="prod", given=given)
+        == refusal
     )
