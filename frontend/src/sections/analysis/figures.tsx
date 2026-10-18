@@ -51,6 +51,7 @@ import {
   type StackFigure,
   type Wall,
   type WaterfallFigure,
+  APPENDIX_LISTS,
 } from "./figure-core";
 import { registerFigures } from "./register-figures";
 
@@ -783,7 +784,7 @@ export function figuresOf(handoff: HandoffView): Figure[] {
     ...figures.slice(0, MAX_FIGURES - 1),
     {
       ...oversized("more", figures[MAX_FIGURES - 1]!.table, `${rest} more figures`, 0),
-      summary: `${rest} more figures are not drawn. The Appendix tab lists every row.`,
+      summary: `${rest} more figures are not drawn.${APPENDIX_LISTS}`,
     },
   ];
 }
@@ -1034,37 +1035,55 @@ function ModelKey({ figures }: { figures: readonly Figure[] }) {
 function Unread({ handoff }: { handoff: HandoffView }) {
   const tables = handoff.tables_unavailable_reason;
   const registers = handoff.registers_unavailable_reason;
-  if (!tables && !registers) return null;
-  const what =
+  // A register refused alone (N194): its own figures are blank, the rest draw.
+  const refused = handoff.registers
+    .filter((register) => register.unavailable_reason)
+    .map((register) => `${register.register_id} (${register.unavailable_reason})`);
+  if (!tables && !registers && !refused.length) return null;
+  const unread =
     tables && registers
       ? `tables (${tables}) and registers (${registers}) could not be read`
       : tables
         ? `tables could not be read (${tables})`
-        : `registers could not be read (${registers})`;
+        : registers
+          ? `registers could not be read (${registers})`
+          : null;
+  const alone = refused.length ? `registers ${refused.join(", ")} could not be read` : null;
+  const what = [unread, alone].filter(Boolean).join("; ");
   return (
     <p
       className="note"
       data-tables-unavailable={tables ?? undefined}
       data-registers-unavailable={registers ?? undefined}
+      data-registers-refused={refused.length ? refused.join(" ") : undefined}
     >
-      This module&apos;s {what}, so no figure is drawn from them. Its prose below is unaffected.
+      This module&apos;s {what}, so no figure is drawn from them. Its{" "}
+      {refused.length ? "other registers and prose are" : "prose below is"} unaffected.
     </p>
   );
 }
 
-/** One figure in a grid: its chart, or past `MAX_MARKS` its title and summary. */
+const WRITTEN_SHOWS = " The As written tab shows the module's text.";
+
+/** One figure in a grid: its chart, or past `MAX_MARKS` its title and summary.
+    A stated figure points to the Appendix for its rows; a module whose text
+    has no appendix register points to the text itself (N113). */
 export function FigureCell({
   figure,
   onPick,
+  appendix = true,
 }: {
   figure: Figure;
   onPick: (pick: FigurePick, opener: HTMLElement) => void;
+  /** Whether the module's Appendix lists any register. */
+  appendix?: boolean;
 }) {
   return (
     <div className={`fig ${figure.kind}`} data-figure={figure.key}>
       {figure.oversized ? (
         <p className="note" data-figure-oversized>
-          <b>{figure.title}.</b> {figure.summary}
+          <b>{figure.title}.</b>{" "}
+          {appendix ? figure.summary : figure.summary.replace(APPENDIX_LISTS, WRITTEN_SHOWS)}
         </p>
       ) : (
         <Chart figure={figure} onPick={onPick} />
@@ -1077,8 +1096,11 @@ export function Figures({
   handoff,
   calculation,
   onPick,
+  appendix = true,
 }: {
   handoff: HandoffView;
+  /** Whether the module's Appendix lists any register. */
+  appendix?: boolean;
   /** What the host calculated for this module, said where its figures are. */
   calculation: ReactNode;
   onPick: (pick: FigurePick, opener: HTMLElement) => void;
@@ -1112,7 +1134,7 @@ export function Figures({
         <ProvenanceKeyed value={false}>
           <div className="figgrid">
             {figures.map((figure) => (
-              <FigureCell key={figure.key} figure={figure} onPick={onPick} />
+              <FigureCell key={figure.key} figure={figure} onPick={onPick} appendix={appendix} />
             ))}
           </div>
         </ProvenanceKeyed>

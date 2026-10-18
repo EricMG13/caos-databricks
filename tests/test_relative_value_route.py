@@ -113,14 +113,11 @@ def test_relative_value_route_completes_proves_and_freezes(harness: _Harness) ->
     from dataclasses import replace
     from uuid import uuid4
 
+    from governed_deliverable import freeze_canonical, save_revision, sign_opinion
+
     from caos.boundary_text import BoundaryText
-    from caos.deliverable.canonical import (
-        freeze_canonical,
-        payload_bytes,
-        verify_frozen,
-    )
-    from caos.deliverable.filing import sign_opinion
-    from caos.deliverable.revisions import read_revision, save_revision
+    from caos.deliverable.canonical import payload_bytes, verify_frozen
+    from caos.deliverable.revisions import read_revision
     from caos.store.members import Standing, grant
 
     answers = run_completed(harness)

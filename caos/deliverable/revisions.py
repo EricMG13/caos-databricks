@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
@@ -13,8 +13,6 @@ from caos.deliverable.render import RenderRefused, render
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
-from caos.store.audit import GovernedAction, governed_write
-from caos.store.members import Standing
 
 
 def _is_figure(character: str) -> bool:
@@ -131,37 +129,6 @@ def _derive(  # noqa: PLR0913 -- the proof inputs and host-minted identity
     payload["case_id"] = str(case_id)
     payload["narrative"] = _narrative(narrative, payload["artifacts"])
     return payload_bytes(payload)
-
-
-def save_revision(  # noqa: PLR0913 -- authority, owner and narrative boundary
-    conn: StoreConnection,
-    blobs: BlobStore,
-    bundle: Bundle,
-    *,
-    case_id: UUID,
-    run_id: UUID,
-    actor_id: UUID,
-    narrative: object,
-) -> UUID:
-    """Save only proven route bytes under the case lock; callers supply no digest."""
-    revision = uuid4()
-    audit: dict[str, Any] = {"revision_id": str(revision), "run_id": str(run_id)}
-    action = GovernedAction(case_id, actor_id, "REVISION_SAVED", Standing.WRITER, audit)
-
-    def write(unit: StoreConnection) -> None:
-        audit["payload_sha256"] = save_revision_in(
-            unit,
-            blobs,
-            bundle,
-            case_id=case_id,
-            run_id=run_id,
-            actor_id=actor_id,
-            narrative=narrative,
-            revision_id=revision,
-        )
-
-    governed_write(conn, action, write)
-    return revision
 
 
 def save_revision_in(  # noqa: PLR0913 -- authority, owner and narrative boundary

@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from governed_deliverable import file_deliverable
 from test_analysis_section import _as, client
 from test_deliverable_canonical import QUOTE, harness, lite, route
 from test_execution_freshness import _Harness
@@ -21,7 +22,7 @@ from caos.api.app import app, store_connection
 from caos.api.reads.reports import BLOB_BUDGET, IO_BUDGET
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.deliverable.filing import file_deliverable, receipt_bytes
+from caos.deliverable.filing import receipt_bytes
 from caos.refusals import Refusal, RefusalCode
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant, revoke

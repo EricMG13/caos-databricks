@@ -169,7 +169,12 @@ export function violations(path, text, banned) {
   const named = [[1, stem], ...identifiers(source)];
   const lines = [];
   for (const [line, name] of named) {
-    const normalised = normalise(name);
+    // Digits end a word as an underscore does (F361, N83): `chunk2` is `chunk`.
+    const normalised = trimUnderscores(
+      normalise(name)
+        .replace(/[0-9]+/g, "_")
+        .replace(/_+/g, "_"),
+    );
     const words = new Set(normalised.split("_"));
     for (const word of [...words]) if (word.endsWith("s")) words.add(word.slice(0, -1));
     for (const token of ENFORCED) {

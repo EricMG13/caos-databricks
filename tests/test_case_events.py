@@ -620,6 +620,9 @@ def test_a_consumed_terminal_marker_never_rereads_or_redelivers_the_run_tail(
         assert len(reads) == 1 and "max(seq)" in reads[0], "the heads alone"
 
 
+_POLL, _DEADLINE = 0.0625, 0.375
+
+
 def test_the_stream_closes_at_its_deadline(
     served: str, case: tuple[StoreConnection, UUID], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -631,7 +634,7 @@ def test_the_stream_closes_at_its_deadline(
     run_id = start_run(conn, case_id)
     start_attempt(conn, run_id, "CP-1")
     conn.commit()
-    _held(monkeypatch, deadline=0.3, poll=0.05)
+    _held(monkeypatch, deadline=_DEADLINE, poll=_POLL)
     polled: list[int] = []
     real = actions_after
 
@@ -643,13 +646,31 @@ def test_the_stream_closes_at_its_deadline(
 
     monkeypatch.setattr("caos.api.stream.actions_after", counted)
 
-    started = time.monotonic()
+    # Both are exact binary fractions (6 / 16 and 1 / 16), so six additions of
+    # the poll reach the deadline in float arithmetic whatever the platform
+    # (N232: six additions of 0.05 only happen to reach 0.3).
+    assert _POLL * 6 == _DEADLINE
+
+    # The stream's own clock, not the wall's (N197): a `sleep` that advances
+    # a fake `monotonic` by exactly what it was asked to wait, so the count of
+    # polls is the deadline over the poll and not a race with the scheduler.
+    now = [0.0]
+    slept: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+        now[0] += seconds
+
+    monkeypatch.setattr("caos.api.stream.monotonic", lambda: now[0])
+    monkeypatch.setattr("caos.api.stream.sleep", fake_sleep)
+
     frames = _frames_of(served, _path(case_id, run_id), _as(reader))
-    elapsed = time.monotonic() - started
 
     assert frames == [{"id": "0.1"}]
-    assert 0.3 <= elapsed < 3
-    assert 3 <= len(polled) <= 9
+    assert slept == [_POLL] * len(slept), "every wait is the poll interval"
+    assert now[0] >= _DEADLINE, "not closed before the deadline"
+    assert slept[:-1] and sum(slept[:-1]) < _DEADLINE, "closed at the first poll"
+    assert len(polled) == len(slept) + 1 == 7, "0.375 s at 0.0625 s: seven polls"
     assert SHIPPED == (300.0, 0.5), "five minutes, polled twice a second"
 
 

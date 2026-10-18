@@ -7,12 +7,13 @@ is the committed configuration's own shape changed any other way."""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 
 import check_gate_config
 import pytest
-from test_check_gate_config import _tree
+from test_check_gate_config import REPO, _tree
 from tracked import tracked_files
 
 CI = ".github/workflows/ci.yml"
@@ -260,13 +261,118 @@ def test_a_script_is_read_as_the_shell_runs_it() -> None:
     )
 
 
+def test_every_hook_repository_is_pinned_by_commit_with_its_tag_in_a_comment(
+    tmp_path: Path,
+) -> None:
+    """N114: a tag is movable; a commit is not. Each `rev:` is a 40-hex
+    commit and says which tag it is, and the gate holds the commit."""
+    text = (REPO / HOOKS).read_text(encoding="utf-8")
+    revs = re.findall(r"^    rev: (\S+)(?: +# (\S+))?$", text, re.MULTILINE)
+    assert len(revs) == 3
+    for rev, tag in revs:
+        assert re.fullmatch(r"[0-9a-f]{40}", rev), rev
+        assert re.fullmatch(r"v\d+\.\d+\.\d+", tag), (rev, tag)
+    assert check_gate_config.GITLEAKS_VERSION in [tag for _, tag in revs]
+    root = _tree(tmp_path)
+    assert check_gate_config._hook_problems(root) == []
+    config = root / HOOKS
+    tagged = re.sub(r"rev: [0-9a-f]{40} +# ", "rev: ", text)
+    config.write_text(tagged, encoding="utf-8")
+    problems = check_gate_config._hook_problems(root)
+    assert len(problems) == 3
+    assert all("is at 'v" in problem for problem in problems)
+
+
+@pytest.mark.parametrize(
+    ("name", "problems", "duplicate"),
+    [
+        (HOOKS, check_gate_config._hook_problems, "repos: []"),
+        (CI, check_gate_config._ci_problems, "jobs: {}"),
+        (
+            "databricks.yml",
+            lambda root: check_gate_config.bundle_auth_problems(
+                (root / "databricks.yml").read_text(encoding="utf-8")
+            ),
+            "bundle:\n  name: x",
+        ),
+        (
+            check_gate_config.GITLEAKS_CI_FILE,
+            check_gate_config._actions_file_pin_problems,
+            "name: x",
+        ),
+        (
+            check_gate_config.SECRETS_WEEKLY_FILE,
+            check_gate_config._actions_file_pin_problems,
+            "name: x",
+        ),
+    ],
+)
+def test_a_duplicate_key_in_a_configuration_is_refused_not_resolved_to_the_last(
+    tmp_path: Path,
+    name: str,
+    problems: Callable[[Path], list[str]],
+    duplicate: str,
+) -> None:
+    """N83: PyYAML keeps the last of a repeated key; the pre-commit config,
+    `ci.yml` and `databricks.yml` reads each refuse a repeated top-level key."""
+    root = _tree(tmp_path)
+    assert problems(root) == []
+    path = root / name
+    path.write_text(path.read_text(encoding="utf-8") + f"\n{duplicate}\n")
+    [refusal] = problems(root)
+    assert refusal.endswith(f"{name} is missing or not a mapping")
+
+
+def test_a_merge_key_is_refused_by_a_message_naming_it(tmp_path: Path) -> None:
+    """N227: PyYAML flattens `<<` before the key check, so a merge key read as
+    the generic "missing or not a mapping"; the refusal now names it."""
+    root = _tree(tmp_path)
+    merge = "\nbase: &base {a: 1}\nuses:\n  <<: *base\n"
+    assert check_gate_config._yaml_mapping("a: &b {c: 1}\nd:\n  <<: *b\n") is None
+    for name, problems in (
+        (HOOKS, check_gate_config._hook_problems),
+        (CI, check_gate_config._ci_problems),
+        (
+            check_gate_config.GITLEAKS_CI_FILE,
+            check_gate_config._actions_file_pin_problems,
+        ),
+    ):
+        path = root / name
+        original = path.read_text(encoding="utf-8")
+        path.write_text(original + merge, encoding="utf-8")
+        refusal = problems(root)[0]
+        assert "'<<' merge key" in refusal, refusal
+        path.write_text(original, encoding="utf-8")
+
+
+def test_a_repeated_key_is_refused_at_any_depth() -> None:
+    assert check_gate_config._yaml_mapping("a: 1\nb: {c: 1, c: 2}\n") is None
+    assert check_gate_config._yaml_mapping("a: 1\nb: {c: 1, d: 2}\n") == {
+        "a": 1,
+        "b": {"c": 1, "d": 2},
+    }
+
+
+def test_a_gitleaks_version_with_no_resolved_commit_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W3: a bumped version needs the commit its tag names."""
+    root = _tree(tmp_path)
+    assert check_gate_config._hook_problems(root) == []
+    monkeypatch.setattr(check_gate_config, "GITLEAKS_VERSION", "v8.99.0")
+    assert check_gate_config._hook_problems(root) == [
+        "pre-commit: GITLEAKS_VERSION v8.99.0 has no commit in GITLEAKS_COMMITS"
+    ]
+
+
 def test_both_gitleaks_scans_run_the_one_pinned_version(tmp_path: Path) -> None:
-    """W3: the hook's rev is the version the gitleaks workflow installs."""
+    """W3: the hook's rev is the commit of the version the gitleaks workflow
+    installs (its tag is the comment beside the rev, checked above)."""
     version = check_gate_config.GITLEAKS_VERSION
     hook_rev, _ = check_gate_config.PRE_COMMIT_REPOS[
         "https://github.com/gitleaks/gitleaks"
     ]
-    assert hook_rev == version
+    assert hook_rev == check_gate_config.GITLEAKS_COMMITS[version]
     root = _tree(tmp_path)
     assert check_gate_config._gitleaks_ci_problems(root) == []
     scan_file = root / check_gate_config.GITLEAKS_CI_FILE

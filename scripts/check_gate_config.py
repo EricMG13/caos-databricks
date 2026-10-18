@@ -27,13 +27,15 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib.util
+import io
 import json
 import re
 import shlex
 import sys
 import tempfile
+import tokenize
 import tomllib
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Hashable, Iterable, Iterator
 from hashlib import sha256
 from pathlib import Path
 from types import ModuleType
@@ -43,7 +45,15 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from tracked import blob_at, tracked_files, tracked_python, tracked_python_at
+from tracked import (
+    VENDOR,
+    _present,
+    blob_at,
+    python_names_at,
+    tracked_files,
+    tracked_python,
+    tracked_python_at,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 BASELINE = REPO / "tests" / "gate_baseline.json"
@@ -94,6 +104,8 @@ OVERRIDING = (
 # The one gitleaks both scans run (W3): the hook's rev and the version the
 # gitleaks.yml workflow installs (by release checksum) are this one version.
 GITLEAKS_VERSION = "v8.30.1"
+# Hook repositories are pinned by commit (N114): `ls-remote <repo> refs/tags/<tag>`.
+GITLEAKS_COMMITS = {"v8.30.1": "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"}
 GITLEAKS_CI_FILE = ".github/workflows/gitleaks.yml"
 SECRETS_WEEKLY_FILE = ".github/workflows/secrets-weekly.yml"
 # Each secret-scan workflow whole (C1): the sha256 of its parsed YAML, so a
@@ -120,15 +132,15 @@ REPO_KEYS = frozenset({"repo", "rev", "hooks"})
 # same name. `local` has no rev.
 PRE_COMMIT_REPOS: dict[str, tuple[str | None, tuple[str, ...]]] = {
     "https://github.com/astral-sh/ruff-pre-commit": (
-        "v0.14.0",
+        "f9351c924055bf6c7b4a4670237d3ce141e9f57c",  # v0.14.0
         ("ruff", "ruff-format"),
     ),
     "https://github.com/gitleaks/gitleaks": (
-        GITLEAKS_VERSION,
+        GITLEAKS_COMMITS.get(GITLEAKS_VERSION, ""),
         ("gitleaks", "gitleaks"),
     ),
     "https://github.com/pre-commit/pre-commit-hooks": (
-        "v5.0.0",
+        "cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b",  # v5.0.0
         (
             "check-added-large-files",
             "check-merge-conflict",
@@ -190,7 +202,23 @@ _LARGE_FILES_EXCLUDE = (
     r"qualification/czr-2026q2-full-credit-assessment/documents/"
     r"CZR_2024_Credit_Agreement_Incremental_Assumption_No3\.txt$|"
     r"qualification/czr-2026q2-full-credit-assessment/documents/"
-    r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$)"
+    r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
+    r"qualification/czr-2026q2-liquidity/documents/"
+    r"CZR_GLPI_Master_Lease_Third_Amended_and_Restated\.txt$|"
+    r"qualification/czr-2026q2-liquidity/documents/"
+    r"CZR_VICI_Las_Vegas_Lease_Conformed_Second_Amendment\.txt$|"
+    r"qualification/czr-2026q2-liquidity/documents/"
+    r"CZR_VICI_Regional_Lease_Conformed_Fifth_Amendment\.txt$|"
+    r"qualification/czr-2026q2-liquidity/documents/"
+    r"CZR_VICI_Joliet_Lease_Conformed_Second_Amendment\.txt$|"
+    r"qualification/czr-2026q2-full-credit-assessment/documents/"
+    r"CZR_GLPI_Master_Lease_Third_Amended_and_Restated\.txt$|"
+    r"qualification/czr-2026q2-full-credit-assessment/documents/"
+    r"CZR_VICI_Las_Vegas_Lease_Conformed_Second_Amendment\.txt$|"
+    r"qualification/czr-2026q2-full-credit-assessment/documents/"
+    r"CZR_VICI_Regional_Lease_Conformed_Fifth_Amendment\.txt$|"
+    r"qualification/czr-2026q2-full-credit-assessment/documents/"
+    r"CZR_VICI_Joliet_Lease_Conformed_Second_Amendment\.txt$)"
 )
 _VENDOR_QUAL_EXCLUDE = (
     r"^(vendor/|qualification/.*/documents/|\.claude/skills/|"
@@ -233,7 +261,7 @@ PRE_COMMIT_HOOK_BODY: dict[str, list[dict[str, object]]] = {
 # notice (N46): `collect_ignore`/`collect_ignore_glob` drop a file from
 # collection outright, and a collection hook can deselect items the same
 # way pytest_collection_modifyitems already does for `live_provider`. That
-# one use is legitimate and pinned below; anything else is refused.
+# one use is legitimate and pinned with its file; anything else is refused.
 COLLECTION_ASSIGNMENTS = frozenset({"collect_ignore", "collect_ignore_glob"})
 COLLECTION_HOOKS = frozenset(
     {
@@ -242,20 +270,29 @@ COLLECTION_HOOKS = frozenset(
         "pytest_collectstart",
     }
 )  # fmt: skip
-PYTEST_COLLECTION_MODIFYITEMS = (
-    "def pytest_collection_modifyitems(config: pytest.Config, "
-    "items: list[pytest.Item]) -> None:\n"
-    "    live = [item for item in items if item.get_closest_marker"
-    "('live_provider')]\n"
-    "    if not config.getoption('--live-provider'):\n"
-    "        items[:] = [item for item in items if item not in live]\n"
-    "        config.hook.pytest_deselected(items=live)\n"
-    "        return\n"
-    "    missing = [name for name in _LIVE_CONFIGURATION if not "
-    "os.environ.get(name)]\n"
-    "    if live and missing:\n"
-    "        raise pytest.UsageError('live provider tests require: ' + "
-    "', '.join(missing))"
+# `tests/conftest.py` is pinned whole (N109), as CI's parallel jobs are: its
+# hooks, the runtime guard that ends a session whose conftest or test
+# modules implement the hooks that run a test, and every statement that
+# could disarm them. Any edit to it fails the gate until this digest is
+# updated in the same change, where review sees it. The module its
+# `pytest_plugins` names is loaded as a plugin before the guard runs, so it
+# is read under the same rules as every other conftest-loaded module the pin
+# does not cover: no hook, no `pytest_plugins`, no `del`, no attribute or
+# item store, no dynamic route.
+PYTEST_PLUGINS_PIN = ("test_lite_deep_research_route",)
+CONFTEST_PIN = "664d99d52e80e8b13ac8a34be6c68f4dca51d409785540dd8692877766b404ba"
+# Names a conftest uses to install a hook without binding a `pytest_` name:
+# the module namespace, the plugin manager, frames and PEP 562 module
+# attributes, and the builtins that run or rebuild code, each as a name or
+# an attribute (`builtins.exec`; so `re.compile` is refused in a conftest).
+CONFTEST_DYNAMIC_NAMES = frozenset(
+    {
+        "globals", "setattr", "pluginmanager", "__dict__", "_getframe",
+        "f_globals", "__getattr__", "__dir__",
+    }
+)  # fmt: skip
+CONFTEST_DYNAMIC_BUILTINS = frozenset(
+    {"vars", "locals", "exec", "eval", "compile", "__import__"}
 )
 PARITY_PACKAGE = "server"  # the legacy snapshot the goldens describe
 PARITY_CASE_FLOOR = {
@@ -317,6 +354,8 @@ PYTEST_MODULES = {("pytest",): ("pytest",), ("_pytest", "outcomes"): ("pytest",)
 PYTEST_NAMES: dict[tuple[str, ...], str] = {
     ("pytest", "skip"): "skip",
     ("pytest", "importorskip"): "skip",
+    ("pytest", "Skipped"): "skip",
+    ("pytest", "XFailed"): "xfail",
     ("pytest", "mark", "skip"): "skip",
     ("pytest", "mark", "skipif"): "skip",
     ("pytest", "xfail"): "xfail",
@@ -482,6 +521,16 @@ def _overriding_problems(root: Path) -> list[str]:
     ]
 
 
+def _report_problems(root: Path) -> list[str]:
+    """A tracked report or deployment record (N110): `bandit.json`,
+    `coverage.xml`, the coverage shard files and `.databricks/**` are written
+    by a CI step and read by the floor check after it."""
+    return [
+        f"report: {name} is tracked; a floor check would judge it stale"
+        for name in sorted(tracked_files(root, *STALE_REPORTS))
+    ]
+
+
 def _python_problems(root: Path, project: dict[str, object]) -> list[str]:
     problems: list[str] = []
     if _table(project, "project").get("requires-python") != REQUIRES_PYTHON:
@@ -494,16 +543,65 @@ def _python_problems(root: Path, project: dict[str, object]) -> list[str]:
     return problems
 
 
+class _RepeatedKey(yaml.YAMLError):
+    """A mapping repeats a key."""
+
+
+class _MergeKey(yaml.YAMLError):
+    """A mapping uses a `<<` merge key."""
+
+
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """`SafeLoader` that refuses a mapping repeating a key (N83): PyYAML keeps
+    the last, so the line a reviewer reads first could say one thing and the
+    file mean another."""
+
+    def construct_mapping(
+        self, node: yaml.MappingNode, deep: bool = False
+    ) -> dict[object, object]:
+        seen: set[object] = set()
+        for key_node, _ in node.value:
+            if getattr(key_node, "tag", None) == "tag:yaml.org,2002:merge":
+                raise _MergeKey  # PyYAML flattens it before the key check (N227)
+            key = self.construct_object(key_node, deep=True)
+            if not isinstance(key, Hashable):
+                continue  # the parent loader refuses it as unhashable
+            if key in seen:
+                raise _RepeatedKey
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
 def _yaml_mapping(text: str | None) -> dict[object, object] | None:
     """`text` read as YAML, the way pre-commit and Actions read it, when it
-    is a mapping; None when it is missing, does not parse, or is not one."""
+    is a mapping; None when it is missing, does not parse, repeats a key, or
+    is not one."""
     if text is None:
         return None
     try:
-        loaded = yaml.safe_load(text)
+        loader = _UniqueKeyLoader(text)
+        try:
+            loaded = loader.get_single_data()
+        finally:
+            loader.dispose()
     except yaml.YAMLError:
         return None
     return loaded if isinstance(loaded, dict) else None
+
+
+def _not_a_mapping(text: str | None) -> str:
+    """Why `_yaml_mapping` gave nothing for `text`, for a refusal's tail."""
+    try:
+        loader = _UniqueKeyLoader(text or "")
+        try:
+            loader.get_single_data()
+        finally:
+            loader.dispose()
+    except _MergeKey:
+        return "uses a '<<' merge key, which is not read"
+    except yaml.YAMLError:
+        pass
+    return "is missing or not a mapping"
 
 
 def _map(value: object) -> dict[object, object]:
@@ -595,8 +693,17 @@ def _hook_problems(root: Path) -> list[str]:
     ids, and each hook's whole body as pinned."""
     config = _yaml_mapping(_read(root, ".pre-commit-config.yaml"))
     if config is None:
-        return ["pre-commit: .pre-commit-config.yaml is missing or not a mapping"]
-    problems = [
+        why = _not_a_mapping(_read(root, ".pre-commit-config.yaml"))
+        return [f"pre-commit: .pre-commit-config.yaml {why}"]
+    problems = (
+        []
+        if GITLEAKS_VERSION in GITLEAKS_COMMITS
+        else [
+            f"pre-commit: GITLEAKS_VERSION {GITLEAKS_VERSION} has no commit "
+            "in GITLEAKS_COMMITS"
+        ]
+    )
+    problems += [
         f"pre-commit: the config sets {key!r}; it may set only "
         f"{sorted(PRE_COMMIT_KEYS)}"
         for key in config
@@ -655,7 +762,8 @@ def _actions_file_pin_problems(root: Path) -> list[str]:
     for name, constant, pinned in pins:
         actual = actions_file_pin(_read(root, name))
         if actual is None:
-            problems.append(f"gitleaks: {name} is missing or not a mapping")
+            why = _not_a_mapping(_read(root, name))
+            problems.append(f"gitleaks: {name} {why}")
         elif actual != pinned:
             problems.append(
                 f"gitleaks: {name} is not as pinned (sha256 {actual}, pinned "
@@ -700,25 +808,114 @@ def _gitleaks_ci_problems(root: Path) -> list[str]:
 
 
 def _collection_hook_problems(root: Path) -> list[str]:
-    """Refuse a `conftest.py` that can drop a test with nothing to notice.
+    """Refuse a `conftest.py` that can drop or pass a test with nothing to
+    notice (N109).
 
-    `tests/conftest.py`'s own `pytest_collection_modifyitems` is legitimate
-    -- it is what makes `-m "not live_provider"` a floor rather than an
-    opt-out -- and is pinned to the body it is committed with; any other
-    `collect_ignore`, `collect_ignore_glob` or collection hook, there or in
-    a conftest.py anywhere else under `tests/`, is new and is refused.
+    `tests/conftest.py` is pinned whole by digest. Every other conftest.py
+    (at the root or anywhere under `tests/`) and the module the pinned
+    `pytest_plugins` names are read as their bytes decode, as the importer
+    reads them (a coding cookie other than utf-8 is refused by
+    `_encoding_problems`), and refused for a `pytest_*` binding,
+    `collect_ignore`, any `pytest_plugins`, a `del`, an attribute or item
+    store, a star import, or a name that rebuilds a namespace or runs code
+    (`CONFTEST_DYNAMIC_*`). This is not a proof. The pinned conftest ends a
+    session at run time when a conftest or test module implements a hook that
+    runs a test. Its limit: the gate reads only these files, and any code run
+    by a module it does not read -- a helper a conftest imports, a test
+    module, a fixture -- at import or at any later time (including
+    `config.pluginmanager.register` after both guard calls) can rewrite the
+    guard (`_EXIT`), register a hook, or rebind `request.node.runtest`.
+    Nothing here closes that; review of such code is the control.
     """
     problems: list[str] = []
-    for name in tracked_files(root, "tests/conftest.py", ":(glob)tests/**/conftest.py"):
-        path = root / name
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=name)
-        except (OSError, SyntaxError):
+    names = tracked_files(
+        root, "conftest.py", "tests/conftest.py", ":(glob)tests/**/conftest.py"
+    )
+    if "tests/conftest.py" in names:
+        names += [f"tests/{module}.py" for module in PYTEST_PLUGINS_PIN]
+    for name in dict.fromkeys(names):
+        if name == "tests/conftest.py":
+            problems += _pinned_conftest_problems(root)
+            continue
+        tree = _parsed(root, name)
+        if tree is None:
             problems.append(f"conftest: {name} could not be parsed")
             continue
-        for node in tree.body:
-            problems += _collection_node_problems(name, node)
+        problems += _conftest_tree_problems(name, tree)
     return problems
+
+
+def _pinned_conftest_problems(root: Path) -> list[str]:
+    try:
+        digest = sha256((root / "tests" / "conftest.py").read_bytes()).hexdigest()
+    except OSError:
+        return ["conftest: tests/conftest.py could not be read"]
+    if digest == CONFTEST_PIN:
+        return []
+    return [
+        f"conftest: tests/conftest.py changed (sha256 {digest}); review it, then "
+        "update CONFTEST_PIN in scripts/check_gate_config.py in the same change"
+    ]
+
+
+def _parsed(root: Path, name: str) -> ast.Module | None:
+    """The module as the importer reads it: from its bytes, so a PEP 263
+    coding cookie decodes the same code pytest would run. Bytes that do not
+    decode are a SyntaxError here, so None, never an uncaught decode error."""
+    try:
+        return ast.parse((root / name).read_bytes(), filename=name)
+    except (OSError, SyntaxError):
+        return None
+
+
+# What a text read with `encoding="utf-8"` and the importer agree on. Any
+# other PEP 263 cookie lets one file carry code (a hook) or a comment (a
+# `noqa`) that every gate reading it as utf-8 text cannot see.
+UTF8_ENCODINGS = frozenset({"utf-8", "utf-8-sig"})
+
+
+def _encoding_problems(root: Path) -> list[str]:
+    """Every tracked .py file declares utf-8 or nothing and decodes as it."""
+    problems: list[str] = []
+    for name in tracked_files(root, "*.py"):
+        problem = _file_encoding_problem(root / name)
+        if problem:
+            problems.append(f"encoding: {name} {problem}")
+    return problems
+
+
+def _file_encoding_problem(path: Path) -> str | None:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return "could not be read"
+    try:
+        encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
+    except SyntaxError:
+        return "declares an encoding Python cannot read"
+    if encoding not in UTF8_ENCODINGS:
+        return (
+            f"declares {encoding}; a coding cookie other than utf-8 hides code "
+            "from every gate that reads the file as text"
+        )
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "could not be read as utf-8"
+    return None
+
+
+def _conftest_tree_problems(name: str, tree: ast.Module) -> list[str]:
+    """One conftest-loaded module the pin does not cover: a conftest, or the
+    module the pinned `pytest_plugins` names."""
+    problems: list[str] = []
+    for statement in tree.body:
+        problems += _collection_node_problems(name, statement)
+        for node in ast.walk(statement):
+            problems += _hook_binding_problems(name, node)
+            problems += _dynamic_hook_problems(name, node)
+            problems += _store_problems(name, node)
+    return list(dict.fromkeys(problems))
 
 
 def _collection_node_problems(name: str, node: ast.stmt) -> list[str]:
@@ -731,18 +928,95 @@ def _collection_node_problems(name: str, node: ast.stmt) -> list[str]:
             if isinstance(target, ast.Name) and target.id in COLLECTION_ASSIGNMENTS
         ]
     if isinstance(node, ast.FunctionDef) and node.name in COLLECTION_HOOKS:
-        if name == "tests/conftest.py" and node.name == "pytest_collection_modifyitems":
-            if ast.unparse(node) != PYTEST_COLLECTION_MODIFYITEMS:
-                return [
-                    "conftest: tests/conftest.py's pytest_collection_modifyitems "
-                    "no longer matches what is committed"
-                ]
-            return []
+        return [_refused_hook(name, node.name)]
+    return []
+
+
+def _refused_hook(name: str, hook: str) -> str:
+    return (
+        f"conftest: {name} defines {hook}; it can change what pytest collects or runs"
+    )
+
+
+def _store_problems(name: str, node: ast.AST) -> list[str]:
+    """A `del`, or a store into an attribute or an item (plain, annotated or
+    augmented): each can swap or remove what a guard or a hook calls."""
+    if isinstance(node, ast.Delete):
+        return [f"conftest: {name} uses del; it can remove a hook or a guard"]
+    if isinstance(node, ast.Attribute | ast.Subscript) and not isinstance(
+        node.ctx, ast.Load
+    ):
         return [
-            f"conftest: {name} defines {node.name}; it can change what pytest "
-            "collects or runs"
+            f"conftest: {name} stores into an attribute or item; it can swap "
+            "what a hook or a guard calls"
         ]
     return []
+
+
+def _bound_names(node: ast.AST) -> list[str]:
+    """The names one statement or target binds that pytest could read as a
+    hook: a def, a class, an import alias or a stored name."""
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return [node.name]
+    if isinstance(node, ast.Import | ast.ImportFrom):
+        return [alias.asname or alias.name.split(".")[0] for alias in node.names]
+    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+        return [node.id]
+    return []
+
+
+def _hook_binding_problems(name: str, node: ast.AST) -> list[str]:
+    """A `pytest_*` binding, or any binding of `pytest_plugins`."""
+    return [
+        f"conftest: {name} sets pytest_plugins; it can load a module of hooks "
+        "the gate does not read"
+        if bound == "pytest_plugins"
+        else _refused_hook(name, bound)
+        for bound in _bound_names(node)
+        if bound.startswith("pytest_")
+    ]
+
+
+def _dynamic_use(node: ast.AST) -> str | None:
+    """The name by which one node can build or install a hook, or None."""
+    attributes = CONFTEST_DYNAMIC_NAMES | CONFTEST_DYNAMIC_BUILTINS
+    if isinstance(node, ast.Name) and node.id in attributes:
+        return node.id
+    if isinstance(node, ast.Attribute) and node.attr in attributes:
+        return node.attr
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        return node.name if node.name in CONFTEST_DYNAMIC_NAMES else None
+    if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names):
+        return "a star import"
+    if isinstance(node, ast.Call):
+        return _getattr_use(node, attributes)
+    return None
+
+
+def _getattr_use(call: ast.Call, attributes: frozenset[str]) -> str | None:
+    """A `getattr` whose name is computed, or names one of `attributes`."""
+    if not (
+        isinstance(call.func, ast.Name)
+        and call.func.id == "getattr"
+        and len(call.args) >= 2
+    ):
+        return None
+    wanted = call.args[1]
+    if not (isinstance(wanted, ast.Constant) and isinstance(wanted.value, str)):
+        return "getattr with a computed name"
+    return f"getattr of {wanted.value}" if wanted.value in attributes else None
+
+
+def _dynamic_hook_problems(name: str, node: ast.AST) -> list[str]:
+    """A hook can be installed with no `pytest_` binding: through the module
+    namespace, the plugin manager, a frame, a star import or code built at
+    run time, by name, by attribute (`builtins.exec`) or by `getattr`."""
+    used = _dynamic_use(node)
+    if used is None:
+        return []
+    return [
+        f"conftest: {name} uses {used}; it can register a hook the gate does not read"
+    ]
 
 
 def _parity_problems(root: Path) -> list[str]:
@@ -855,7 +1129,7 @@ def bundle_auth_problems(bundle: str | None) -> list[str]:
     bundle this names anything for, and the committed one must name none."""
     document = _yaml_mapping(bundle)
     if document is None:
-        return ["bundle: databricks.yml is missing or not a mapping"]
+        return [f"bundle: databricks.yml {_not_a_mapping(bundle)}"]
     problems = (
         ["bundle: the bundle includes other files; one file states it"]
         if "include" in document
@@ -1189,6 +1463,46 @@ CI_PARALLEL_JOBS = {
     "frontend": "f7bc9dc48458e68c4a41d3d9183ca9374b7c660147c1c9dc895662059382c4e2",
 }
 RUNS_ON = "ubuntu-latest"
+# The store a job's suites run against, exactly (N110): `services` was free,
+# so the image, its credentials or its health check could change under a
+# gate. Only these jobs carry it; every other job carries none.
+_POSTGRES_SERVICE: dict[str, object] = {
+    "postgres": {
+        "image": (
+            "postgres@sha256:"
+            "18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73"
+        ),
+        "env": dict.fromkeys(("POSTGRES_PASSWORD", "POSTGRES_DB"), "caos"),
+        "options": "--health-cmd pg_isready --health-interval 5s --health-retries 10",
+        "ports": ["5432:5432"],
+    }
+}
+CI_SERVICES: dict[str, dict[str, object]] = {
+    "test-shards": _POSTGRES_SERVICE,
+    "test": _POSTGRES_SERVICE,
+    "bundle": _POSTGRES_SERVICE,
+}
+# A report a gate judges and the text of the step that writes it (N110): a
+# line running `scan_floors.py` that names the report reads it, in whatever
+# order its arguments come (N226), and the step just ahead of it must be the
+# writer, or it judges whatever file is on disk -- a stale one a commit
+# force-added. A `--shipped` check reads its target's record, which the
+# target's deploy writes.
+CI_REPORTS = (
+    ("coverage.xml", "coverage xml -o coverage.xml"),
+    ("bandit.json", "-o bandit.json"),
+)
+SHIPPED_READ = re.compile(r"--shipped (\.databricks/bundle/([\w-]+)/deployment\.json)")
+# Reports and records a commit must not carry: each is written by a CI step
+# and judged by the next, so a tracked copy is a file a floor could read in
+# place of a fresh one.
+STALE_REPORTS = (
+    "bandit.json",
+    "coverage.xml",
+    ":(glob).coverage*",
+    ":(glob)coverage-shards/**",
+    ":(glob).databricks/**",
+)
 # A step's own keys: `if`, `continue-on-error`, `working-directory` and
 # `shell` each change whether, where or how its script runs.
 STEP_KEYS = frozenset({"name", "uses", "with", "run", "env"})
@@ -1318,6 +1632,42 @@ def _script_problems(job: str, run: str, given: dict[object, object]) -> list[st
     return problems
 
 
+def _services_problems(name: str, job: dict[object, object]) -> list[str]:
+    """A job's `services` exactly as `CI_SERVICES` gives them, or none."""
+    if job.get("services") == CI_SERVICES.get(name):
+        return []
+    return [f"ci: job {name}'s services are not as pinned"]
+
+
+def _report_reads(script: tuple[str, ...]) -> list[tuple[str, str]]:
+    """Each (report, writer text) a step's script reads."""
+    found = []
+    for line in script:
+        for report, writer in CI_REPORTS:
+            if "scan_floors.py" in line and report in line:
+                found.append((report, writer))
+        for match in SHIPPED_READ.finditer(line):
+            found.append((match.group(1), f"bundle deploy -t {match.group(2)} "))
+    return found
+
+
+def _order_problems(name: str, job: dict[object, object]) -> list[str]:
+    """Each report read follows, at the very next step, the step of the same
+    job that writes it (N226)."""
+    problems: list[str] = []
+    written: tuple[str, ...] = ()
+    for step in _seq(job.get("steps")):
+        run = _map(step).get("run")
+        script = script_lines(run) if isinstance(run, str) else ()
+        problems += [
+            f"ci: job {name} reads {report} before the step that writes it"
+            for report, writer in _report_reads(script)
+            if not any(writer in text for text in written)
+        ]
+        written = script
+    return problems
+
+
 def _parallel_job_problems(ci_file: dict[object, object]) -> list[str]:
     """Every parallel job's exact controls and gate placement remain pinned."""
     jobs = _map(ci_file.get("jobs"))
@@ -1346,12 +1696,13 @@ def _ci_problems(root: Path) -> list[str]:
     ci_text = _read(root, ".github/workflows/ci.yml")
     ci_file = _ci_file(ci_text)
     if ci_file is None:
-        return ["ci: .github/workflows/ci.yml is missing or not a mapping"]
+        return [f"ci: .github/workflows/ci.yml {_not_a_mapping(ci_text)}"]
     problems = _ci_top_problems(ci_file) + _parallel_job_problems(ci_file)
     present: set[tuple[str, ...]] = set()
     for name, job in _jobs(ci_file):
         if name not in CI_PARALLEL_JOBS:
             problems += _job_problems(name, job)
+        problems += _services_problems(name, job) + _order_problems(name, job)
         for step in _seq(job.get("steps")):
             problems += _step_problems(name, _map(step))
             run = _map(step).get("run")
@@ -1386,10 +1737,12 @@ def configuration_problems(root: Path = REPO) -> list[str]:
         + _python_problems(root, project)
         + _hook_problems(root)
         + _gitleaks_ci_problems(root)
+        + _encoding_problems(root)
         + _collection_hook_problems(root)
         + _parity_problems(root)
         + _bundle_problems(root)
         + _ci_problems(root)
+        + _report_problems(root)
     )
 
 
@@ -1419,15 +1772,25 @@ def _pytest_bindings(tree: ast.Module) -> dict[str, tuple[str, ...]]:
         if isinstance(node, ast.Import):
             bound.update(_imported(node))
         elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            module = tuple(node.module.split("."))
-            if module in PYTEST_MODULES:
-                bound.update(
-                    {
-                        alias.asname or alias.name: (*module, alias.name)
-                        for alias in node.names
-                    }
-                )
+            bound.update(_from_imported(node.module, node))
     return bound
+
+
+def _from_imported(dotted: str, node: ast.ImportFrom) -> dict[str, tuple[str, ...]]:
+    """What one `from <module> import ...` binds to pytest: the names of
+    `pytest` or `_pytest.outcomes`, and `outcomes` out of `_pytest`."""
+    module = tuple(dotted.split("."))
+    if module == ("_pytest",):
+        return {
+            alias.asname or alias.name: ("_pytest", alias.name)
+            for alias in node.names
+            if alias.name == "outcomes"
+        }
+    if module in PYTEST_MODULES:
+        return {
+            alias.asname or alias.name: (*module, alias.name) for alias in node.names
+        }
+    return {}
 
 
 def _imported(node: ast.Import) -> dict[str, tuple[str, ...]]:
@@ -1443,6 +1806,22 @@ def _imported(node: ast.Import) -> dict[str, tuple[str, ...]]:
     return bound
 
 
+def _imported_by_name(call: ast.Call) -> tuple[str, ...]:
+    """The pytest module a call such as `__import__("pytest")` or
+    `importlib.import_module("_pytest.outcomes")` loads, or `()`."""
+    function = call.func
+    name = function.id if isinstance(function, ast.Name) else ""
+    if isinstance(function, ast.Attribute):
+        name = function.attr
+    argument = call.args[0] if call.args else None
+    if name not in ("__import__", "import_module"):
+        return ()
+    if not (isinstance(argument, ast.Constant) and isinstance(argument.value, str)):
+        return ()
+    path = tuple(argument.value.split("."))
+    return path if path[0] in ("pytest", "_pytest") else ()
+
+
 def _resolved(node: ast.expr, bound: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
     """The pytest path a name or attribute chain resolves to, or `()`;
     `_pytest.outcomes.<name>` is `pytest.<name>`."""
@@ -1451,6 +1830,8 @@ def _resolved(node: ast.expr, bound: dict[str, tuple[str, ...]]) -> tuple[str, .
     elif isinstance(node, ast.Attribute):
         base = _resolved(node.value, bound)
         path = (*base, node.attr) if base else ()
+    elif isinstance(node, ast.Call):
+        path = _imported_by_name(node)
     else:
         return ()
     for prefix, module in PYTEST_MODULES.items():
@@ -1468,13 +1849,33 @@ def _pytest_counts(text: str) -> dict[str, int]:
         return {}
     bound = _pytest_bindings(tree)
     counts: dict[str, int] = {}
-    for node in ast.walk(tree) if bound else []:
-        if not isinstance(node, ast.Name | ast.Attribute):
-            continue
-        kind = PYTEST_NAMES.get(_resolved(node, bound))
+    for node in ast.walk(tree):
+        kind = _pytest_kind(node, bound)
         if kind is not None and not SUPPRESSIONS[kind].search(ast.unparse(node)):
             counts[kind] = counts.get(kind, 0) + 1
     return counts
+
+
+def _pytest_kind(node: ast.AST, bound: dict[str, tuple[str, ...]]) -> str | None:
+    """The suppression kind one node spells: a pytest name, or a `getattr`
+    of one (N109) -- a constant attribute resolves like the dotted form, and
+    a computed one cannot be read, so it counts as a skip."""
+    if isinstance(node, ast.Name | ast.Attribute):
+        return PYTEST_NAMES.get(_resolved(node, bound))
+    if not (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "getattr"
+        and len(node.args) >= 2
+    ):
+        return None
+    base = _resolved(node.args[0], bound)
+    attribute = node.args[1]
+    if not base:
+        return None
+    if isinstance(attribute, ast.Constant) and isinstance(attribute.value, str):
+        return PYTEST_NAMES.get((*base, attribute.value))
+    return "skip"
 
 
 def _measure_suppressions(texts: Iterable[str]) -> dict[str, int]:
@@ -1591,29 +1992,16 @@ Measure = Callable[[Iterable[str]], dict[str, int]]
 CHECKER = "scripts/check_gate_config.py"
 
 
-def base_measure(
-    rev: str, root: Path = REPO, texts: dict[str, str] | None = None
-) -> Measure | None:
-    """`rev`'s own measure of suppressions (W5): its checker, read through
-    git with the rest of its `scripts/` (so it imports its own `tracked`,
-    not this commit's) and loaded under a private name, supplies
-    `_measure_suppressions`, or, for a checker from before that existed
-    (84eb06d), its `SUPPRESSIONS` counted over each text. `texts` is
-    `rev`'s tracked Python when already read. None when `rev` has no
-    checker at all; an `ImportError` or `SyntaxError` when it has one that
-    will not load."""
-    texts = tracked_python_at(root, rev) if texts is None else texts
-    scripts = {
-        name.removeprefix("scripts/"): text
-        for name, text in texts.items()
-        if name.startswith("scripts/") and name.count("/") == 1
-    }
-    if CHECKER.removeprefix("scripts/") not in scripts:
+def _module_measure(module: ModuleType | None) -> Measure | None:
+    """A base revision's own measure of suppressions (W5): its checker, read
+    through git with the rest of its `scripts/` (so it imports its own
+    `tracked`, not this commit's) and loaded under a private name by
+    `_base_module`, supplies `_measure_suppressions`, or, for a checker from
+    before that existed (84eb06d), its `SUPPRESSIONS` counted over each text.
+    None when the revision has no checker at all (`module` None); a checker
+    that will not load raises `ImportError` or `SyntaxError` there."""
+    if module is None:
         return None
-    with tempfile.TemporaryDirectory() as scratch:
-        for name, text in scripts.items():
-            (Path(scratch) / name).write_text(text, encoding="utf-8")
-        module = _loaded_apart(Path(scratch), {name[:-3] for name in scripts})
     measure = getattr(module, "_measure_suppressions", None)
     if callable(measure):
         return cast(Measure, measure)
@@ -1622,6 +2010,32 @@ def base_measure(
         return lambda texts: _pattern_counts(patterns, texts)
     # A checker with neither is not one this gate can hold a tree to.
     raise ImportError(CHECKER)
+
+
+def _base_module(
+    rev: str, root: Path, texts: dict[str, str] | None = None
+) -> ModuleType | None:
+    """`rev`'s checker loaded apart with its own `scripts/` siblings, or None
+    when it has none. The siblings are read from `rev` by name -- every name
+    in `texts` and every `scripts/*.py` on disk -- not from this commit's
+    lister, which a change can narrow to hide `scripts/` itself (N108)."""
+    texts = tracked_python_at(root, rev) if texts is None else texts
+    names = {
+        name for name in texts if name.startswith("scripts/") and name.count("/") == 1
+    }
+    names |= {f"scripts/{path.name}" for path in (root / "scripts").glob("*.py")}
+    scripts = {
+        name.removeprefix("scripts/"): text
+        for name in sorted(names)
+        if (text := texts[name] if name in texts else blob_at(root, rev, name))
+        is not None
+    }
+    if CHECKER.removeprefix("scripts/") not in scripts:
+        return None
+    with tempfile.TemporaryDirectory() as scratch:
+        for name, text in scripts.items():
+            (Path(scratch) / name).write_text(text, encoding="utf-8")
+        return _loaded_apart(Path(scratch), {name[:-3] for name in scripts})
 
 
 def _loaded_apart(scratch: Path, names: set[str]) -> ModuleType:
@@ -1662,6 +2076,42 @@ def _pattern_counts(
     return counts
 
 
+def _unmeasured_problems(
+    against: str, root: Path, texts: dict[str, str], module: ModuleType | None
+) -> list[str]:
+    """N108: each tracked `.py` path that a lister names for a tree and the
+    measure of that tree left out. The lister is `against`'s own `tracked`
+    module (a change to this commit's `tracked.py` -- its `VENDOR`, its
+    `tracked_files` -- narrows the measure and anything beside it from the
+    same module, so only the base's can be trusted), run over this
+    repository for both trees. With no base checker to borrow one from, this
+    commit's `git ls-files` and `git ls-tree` stand in."""
+    lister_here = getattr(module, "tracked_python", None)
+    lister_there = getattr(module, "tracked_python_at", None)
+    if callable(lister_here) and callable(lister_there):
+        here = {path.relative_to(root).as_posix() for path in lister_here(root)}
+        there = set(lister_there(root, against))
+    else:
+        prefix = f"{VENDOR}/"
+        here = {
+            name
+            for name in tracked_files(root, "*.py")
+            if not name.startswith(prefix) and _present(root / name)
+        }
+        there = python_names_at(root, against)
+    measured_here = {path.relative_to(root).as_posix() for path in tracked_python(root)}
+    return [
+        *(
+            f"baseline: {name} is tracked but was not measured"
+            for name in sorted(here - measured_here)
+        ),
+        *(
+            f"baseline: {name} is tracked at {against} but was not measured"
+            for name in sorted(there - texts.keys())
+        ),
+    ]
+
+
 def baseline_problems(against: str, root: Path = REPO) -> list[str]:
     """Each budget that rose against `against`, a base branch's git revision
     (F58, FP-11, W5): both trees are measured fresh, rather than trusting two
@@ -1671,8 +2121,14 @@ def baseline_problems(against: str, root: Path = REPO) -> list[str]:
     lets no pattern this commit weakened hide the suppression it spends."""
     try:
         texts = tracked_python_at(root, against)
+        module = _base_module(against, root, texts)
+        unmeasured = _unmeasured_problems(against, root, texts, module)
     except RuntimeError as refusal:
         return [f"baseline: {refusal}"]
+    except (ImportError, SyntaxError):
+        return [f"baseline: {against}'s own checker could not be loaded"]
+    if unmeasured:
+        return unmeasured
     base = _counts_at(against, root, texts)
     now = suppression_counts(root)
     problems = [
@@ -1681,7 +2137,7 @@ def baseline_problems(against: str, root: Path = REPO) -> list[str]:
         if count > int(base.get(name, 0))
     ]
     try:
-        measure = base_measure(against, root, texts)
+        measure = _module_measure(module)
     except (ImportError, SyntaxError):
         return [*problems, f"baseline: {against}'s own checker could not be loaded"]
     if measure is None:
