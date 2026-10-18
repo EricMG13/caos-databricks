@@ -18,7 +18,7 @@ uv sync --locked --all-groups && docker compose up -d --wait
 npm --prefix frontend ci --ignore-scripts && npm --prefix frontend run build
 CAOS_TEST_POSTGRES_URL=postgresql://postgres:local-test-admin-only@127.0.0.1:55437/postgres CAOS_REQUIRE_POSTGRES=1 uv run pytest -n auto -m "not live_provider"
 uv run python -m caos.serve            # local API on 127.0.0.1:8000 (dev mode needs .env from .env.example)
-uv run python scripts/rollback_check.py <older>   # before any rollback: same migrations and schema, or roll forward (C1)
+uv run python scripts/rollback_check.py <older>   # before any rollback: same migrations, schema, record codec and writer versions, or roll forward (C1)
 ```
 
 ## Gates (all must exit 0; none may be loosened)

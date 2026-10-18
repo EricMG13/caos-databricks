@@ -547,6 +547,10 @@ class _RepeatedKey(yaml.YAMLError):
     """A mapping repeats a key."""
 
 
+class _MergeKey(yaml.YAMLError):
+    """A mapping uses a `<<` merge key."""
+
+
 class _UniqueKeyLoader(yaml.SafeLoader):
     """`SafeLoader` that refuses a mapping repeating a key (N83): PyYAML keeps
     the last, so the line a reviewer reads first could say one thing and the
@@ -557,6 +561,8 @@ class _UniqueKeyLoader(yaml.SafeLoader):
     ) -> dict[object, object]:
         seen: set[object] = set()
         for key_node, _ in node.value:
+            if getattr(key_node, "tag", None) == "tag:yaml.org,2002:merge":
+                raise _MergeKey  # PyYAML flattens it before the key check (N227)
             key = self.construct_object(key_node, deep=True)
             if not isinstance(key, Hashable):
                 continue  # the parent loader refuses it as unhashable
@@ -581,6 +587,21 @@ def _yaml_mapping(text: str | None) -> dict[object, object] | None:
     except yaml.YAMLError:
         return None
     return loaded if isinstance(loaded, dict) else None
+
+
+def _not_a_mapping(text: str | None) -> str:
+    """Why `_yaml_mapping` gave nothing for `text`, for a refusal's tail."""
+    try:
+        loader = _UniqueKeyLoader(text or "")
+        try:
+            loader.get_single_data()
+        finally:
+            loader.dispose()
+    except _MergeKey:
+        return "uses a '<<' merge key, which is not read"
+    except yaml.YAMLError:
+        pass
+    return "is missing or not a mapping"
 
 
 def _map(value: object) -> dict[object, object]:
@@ -672,7 +693,8 @@ def _hook_problems(root: Path) -> list[str]:
     ids, and each hook's whole body as pinned."""
     config = _yaml_mapping(_read(root, ".pre-commit-config.yaml"))
     if config is None:
-        return ["pre-commit: .pre-commit-config.yaml is missing or not a mapping"]
+        why = _not_a_mapping(_read(root, ".pre-commit-config.yaml"))
+        return [f"pre-commit: .pre-commit-config.yaml {why}"]
     problems = (
         []
         if GITLEAKS_VERSION in GITLEAKS_COMMITS
@@ -740,7 +762,8 @@ def _actions_file_pin_problems(root: Path) -> list[str]:
     for name, constant, pinned in pins:
         actual = actions_file_pin(_read(root, name))
         if actual is None:
-            problems.append(f"gitleaks: {name} is missing or not a mapping")
+            why = _not_a_mapping(_read(root, name))
+            problems.append(f"gitleaks: {name} {why}")
         elif actual != pinned:
             problems.append(
                 f"gitleaks: {name} is not as pinned (sha256 {actual}, pinned "
@@ -1106,7 +1129,7 @@ def bundle_auth_problems(bundle: str | None) -> list[str]:
     bundle this names anything for, and the committed one must name none."""
     document = _yaml_mapping(bundle)
     if document is None:
-        return ["bundle: databricks.yml is missing or not a mapping"]
+        return [f"bundle: databricks.yml {_not_a_mapping(bundle)}"]
     problems = (
         ["bundle: the bundle includes other files; one file states it"]
         if "include" in document
@@ -1459,14 +1482,15 @@ CI_SERVICES: dict[str, dict[str, object]] = {
     "test": _POSTGRES_SERVICE,
     "bundle": _POSTGRES_SERVICE,
 }
-# A step that reads a report a gate judges, the text it reads it by, and the
-# text of the step that writes it (N110): the reader must come after the
-# writer in the same job, or it judges whatever file is on disk -- a stale
-# one a commit force-added. A `--shipped` check reads its target's record,
-# which the target's deploy writes.
+# A report a gate judges and the text of the step that writes it (N110): a
+# line running `scan_floors.py` that names the report reads it, in whatever
+# order its arguments come (N226), and the step just ahead of it must be the
+# writer, or it judges whatever file is on disk -- a stale one a commit
+# force-added. A `--shipped` check reads its target's record, which the
+# target's deploy writes.
 CI_REPORTS = (
-    ("coverage.xml", "scan_floors.py coverage.xml", "coverage xml -o coverage.xml"),
-    ("bandit.json", "scan_floors.py bandit.json", "-o bandit.json"),
+    ("coverage.xml", "coverage xml -o coverage.xml"),
+    ("bandit.json", "-o bandit.json"),
 )
 SHIPPED_READ = re.compile(r"--shipped (\.databricks/bundle/([\w-]+)/deployment\.json)")
 # Reports and records a commit must not carry: each is written by a CI step
@@ -1619,8 +1643,8 @@ def _report_reads(script: tuple[str, ...]) -> list[tuple[str, str]]:
     """Each (report, writer text) a step's script reads."""
     found = []
     for line in script:
-        for report, reader, writer in CI_REPORTS:
-            if reader in line:
+        for report, writer in CI_REPORTS:
+            if "scan_floors.py" in line and report in line:
                 found.append((report, writer))
         for match in SHIPPED_READ.finditer(line):
             found.append((match.group(1), f"bundle deploy -t {match.group(2)} "))
@@ -1628,9 +1652,10 @@ def _report_reads(script: tuple[str, ...]) -> list[tuple[str, str]]:
 
 
 def _order_problems(name: str, job: dict[object, object]) -> list[str]:
-    """Each report read comes after a step of the same job that writes it."""
+    """Each report read follows, at the very next step, the step of the same
+    job that writes it (N226)."""
     problems: list[str] = []
-    written: list[str] = []
+    written: tuple[str, ...] = ()
     for step in _seq(job.get("steps")):
         run = _map(step).get("run")
         script = script_lines(run) if isinstance(run, str) else ()
@@ -1639,7 +1664,7 @@ def _order_problems(name: str, job: dict[object, object]) -> list[str]:
             for report, writer in _report_reads(script)
             if not any(writer in text for text in written)
         ]
-        written += script
+        written = script
     return problems
 
 
@@ -1671,7 +1696,7 @@ def _ci_problems(root: Path) -> list[str]:
     ci_text = _read(root, ".github/workflows/ci.yml")
     ci_file = _ci_file(ci_text)
     if ci_file is None:
-        return ["ci: .github/workflows/ci.yml is missing or not a mapping"]
+        return [f"ci: .github/workflows/ci.yml {_not_a_mapping(ci_text)}"]
     problems = _ci_top_problems(ci_file) + _parallel_job_problems(ci_file)
     present: set[tuple[str, ...]] = set()
     for name, job in _jobs(ci_file):
@@ -1967,22 +1992,14 @@ Measure = Callable[[Iterable[str]], dict[str, int]]
 CHECKER = "scripts/check_gate_config.py"
 
 
-def base_measure(
-    rev: str, root: Path = REPO, texts: dict[str, str] | None = None
-) -> Measure | None:
-    """`rev`'s own measure of suppressions (W5): its checker, read through
-    git with the rest of its `scripts/` (so it imports its own `tracked`,
-    not this commit's) and loaded under a private name, supplies
-    `_measure_suppressions`, or, for a checker from before that existed
-    (84eb06d), its `SUPPRESSIONS` counted over each text. `texts` is
-    `rev`'s tracked Python when already read. None when `rev` has no
-    checker at all; an `ImportError` or `SyntaxError` when it has one that
-    will not load."""
-    return _module_measure(_base_module(rev, root, texts))
-
-
 def _module_measure(module: ModuleType | None) -> Measure | None:
-    """`base_measure` over a base checker already loaded."""
+    """A base revision's own measure of suppressions (W5): its checker, read
+    through git with the rest of its `scripts/` (so it imports its own
+    `tracked`, not this commit's) and loaded under a private name by
+    `_base_module`, supplies `_measure_suppressions`, or, for a checker from
+    before that existed (84eb06d), its `SUPPRESSIONS` counted over each text.
+    None when the revision has no checker at all (`module` None); a checker
+    that will not load raises `ImportError` or `SyntaxError` there."""
     if module is None:
         return None
     measure = getattr(module, "_measure_suppressions", None)
