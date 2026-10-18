@@ -93,7 +93,7 @@ export const nameOf = (row: Row, ...columns: string[]) =>
     .join(" ") || `row ${placeOf(row)}, ${columns[0]} not stated`;
 
 /** A figure's unit as written: the currency signs it starts or ends with,
-    then the `x` or `%` it ends in: "$", "%", "€ x". */
+    then the `x`, `%` or `bp` it ends in: "$", "%", "€ x", "bp". */
 type Unit = string;
 
 /** A citation marker standing alone, as `ds/markdown` reads one in model text. */
@@ -116,7 +116,10 @@ const CURRENCY = /^[$€£¥₹]|[$€£¥₹]$/g;
 /** The unit a figure cell is written in, past its citation markers, a
     negative's brackets and digit-group spaces, as the host's reader strips
     them (caos/methodology/tables.py): a currency sign at either end, then
-    an `x` or `%`; none for a cell the host read no figure from. */
+    an `x`, a `%` or a `bp`/`bps` hugging its digit (`350bps`, `350 bp`: basis
+    points, as the host reads them); none for a cell the host read no figure
+    from, and none for a basis-point mark after an `x` or `%` (`5xbps`,
+    `10%bp`), which the host refuses. */
 function suffixOf(cell: Cell | undefined): Unit | undefined {
   if (cell?.value == null) return undefined;
   const written = unmarked(cell.text).trim();
@@ -124,15 +127,16 @@ function suffixOf(cell: Cell | undefined): Unit | undefined {
   const bare = inner.replace(/[\u00a0\u2009\u202f ]/g, "");
   const signs = unique(bare.match(CURRENCY) ?? []).join("");
   const core = bare.replace(CURRENCY, "");
-  const suffix = /[xX]$/.test(core) ? "x" : core.endsWith("%") ? "%" : "";
+  const points = /(?<=[0-9])bps?$/i.exec(core);
+  if (points && /[xX%]$/.test(core.slice(0, points.index))) return undefined;
+  const suffix = points ? "bp" : /[xX]$/.test(core) ? "x" : core.endsWith("%") ? "%" : "";
   return [signs, suffix].filter(Boolean).join(" ") || undefined;
 }
 
-/** A cell's `x` or `%` alone, its currency sign dropped: where a register
-    states a currency column, that column names the currency. */
+/** A cell's `x`, `%` or `bp` alone, its currency sign dropped: where a
+    register states a currency column, that column names the currency. */
 function suffixAlone(cell: Cell | undefined): Unit | undefined {
-  const unit = suffixOf(cell);
-  return unit && /[x%]$/.test(unit) ? unit.slice(-1) : undefined;
+  return suffixOf(cell)?.match(/(?:[x%]|bp)$/)?.[0];
 }
 
 /** A cell as a summary says it: its figure as served, else n/a and its text. */
@@ -179,10 +183,10 @@ interface Grouping<G extends string> {
 }
 
 // Each sign a unit is written with, and how a figure's key says it.
-const SIGNS = ["$", "€", "£", "¥", "₹", "x", "%"];
-const SIGN_KEYS = ["dollar", "euro", "pound", "yen", "rupee", "x", "percent"];
+const SIGNS = ["$", "€", "£", "¥", "₹", "x", "%", "bp"];
+const SIGN_KEYS = ["dollar", "euro", "pound", "yen", "rupee", "x", "percent", "bp"];
 const unitKey = (unit: Unit) =>
-  [...unit].flatMap((sign) => SIGN_KEYS[SIGNS.indexOf(sign)] ?? []).join("-");
+  (unit.match(/bp|./g) ?? []).flatMap((sign) => SIGN_KEYS[SIGNS.indexOf(sign)] ?? []).join("-");
 
 const BY_UNIT = {
   key: unitKey,
@@ -218,13 +222,22 @@ function inUnit(cell: Cell | undefined, at: Unit | undefined, unitOf = suffixOf)
   return datum(cell);
 }
 
-/** Rows grouped by their `Currency`, as written: one currency's amounts
-    never share an axis with another's. */
+/** A currency and its scale as written, joined: "USD m". A blank part is
+    left out; none at all is no unit. */
+const moneyOf = (currency: string, scale: string) =>
+  [currency, scale]
+    .map((part) => unmarked(part).trim())
+    .filter(Boolean)
+    .join(" ");
+
+/** Rows grouped by their `Currency` and `Scale` (fork r17, N192), as written:
+    one currency in two scales is two figures, and no amount of one is ever
+    summed with another's. */
 const BY_CURRENCY: Grouping<string> = {
-  of: (row) => [text(row, "Currency") || undefined],
-  key: (currency) => currency,
-  title: (currency) => currency,
-  unit: (currency) => currency,
+  of: (row) => [moneyOf(text(row, "Currency"), text(row, "Scale")) || undefined],
+  key: (money) => money.replace(/\s+/g, "-"),
+  title: (money) => money,
+  unit: (money) => money,
 };
 
 /** A register's rows split by `grouping`, in the order each group first
@@ -604,17 +617,42 @@ const LIQUIDITY_USES = [
 export function liquidityBridge(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2D", "T2E.5");
   if (!rows?.length) return [];
+  // The bridge is in the scale its opening total is written in (fork r17,
+  // N192); a step written in another is a gap, never added or subtracted.
+  const moneyIn = (row: Row) => unmarked(text(row, "Currency and Scale")).trim();
+  const opening = rows.find((row) =>
+    nameOf(row, "Bridge Item").toLowerCase().startsWith(LIQUIDITY_TOTALS[0]),
+  );
+  // The opening's scale where it states one, else the first row's that does.
+  const unit =
+    [opening, ...rows].map((row) => (row ? moneyIn(row) : "")).find(Boolean) || undefined;
+  // An opening total stating no scale draws no step: the deltas would stand
+  // on a base the register does not give, with an invented residual.
+  const unusable = opening !== undefined && unit !== undefined && !moneyIn(opening);
+  const amountOf = (row: Row): Cell | undefined => {
+    const cell = row["Amount"];
+    if (unusable && cell?.value != null) {
+      return { text: `opening total in no stated scale, not the bridge's ${unit}`, value: null };
+    }
+    if (unit === undefined || cell?.value == null || moneyIn(row) === unit) return cell;
+    const own = moneyIn(row) || "no currency and scale";
+    return {
+      text: `${cell.text} in ${own}, not the bridge's ${unit}`,
+      value: null,
+    };
+  };
   const steps = rows.map((row, index): WaterfallStep => {
     const label = nameOf(row, "Bridge Item");
     const item = label.toLowerCase();
     const base = { key: `${index}`, label, origin: "model" as const };
+    const amount = amountOf(row);
     if (LIQUIDITY_TOTALS.some((total) => item.startsWith(total))) {
-      return { ...base, kind: "total", ...datum(row["Amount"]) };
+      return { ...base, kind: "total", ...datum(amount) };
     }
     if (LIQUIDITY_USES.some((use) => item.startsWith(use))) {
-      return decrease(row["Amount"], { ...base, kind: "delta" }, "a use the method subtracts");
+      return decrease(amount, { ...base, kind: "delta" }, "a use the method subtracts");
     }
-    return { ...base, kind: "delta", ...datum(row["Amount"]) };
+    return { ...base, kind: "delta", ...datum(amount) };
   });
   const total = (which: string) =>
     steps.filter((step) => step.kind === "total" && step.label.toLowerCase().startsWith(which));
@@ -628,7 +666,12 @@ export function liquidityBridge(handoff: HandoffView): Figure[] {
   const summary = `${begin ?? "No beginning accessible liquidity stated"} to ${
     end ?? "no ending accessible liquidity stated"
   }, as served.`;
-  const head = { key: "liquidity-bridge", table: "T2E.5", title: "Liquidity bridge, 12 months" };
+  const head = {
+    key: "liquidity-bridge",
+    table: "T2E.5",
+    title: "Liquidity bridge, 12 months",
+    unit: unit || undefined,
+  };
   return [
     waterfallFigure({ ...head, summary }, steps, (key) => rows[Number(key)], [
       "Source / Calculation",
@@ -677,15 +720,24 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
   if (!rows?.length) return [];
   const fulcrums = registerRows(handoff, "CP-4C", "T4E.6") ?? [];
   const entries = rows.map((row, index) => ({ row, index }));
+  const moneyIn = (row: Row) => moneyOf("", text(row, "currency and scale"));
   const groups = [
-    ...groupBy(entries, ({ row }) => pair(text(row, "scenario"), text(row, "entity"))).values(),
+    ...groupBy(entries, ({ row }) =>
+      pair(pair(text(row, "scenario"), text(row, "entity")), moneyIn(row)),
+    ).values(),
   ];
-  const entities = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
+  const scenarios = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
+  const units = groupBy(groups, (group) =>
+    pair(text(group[0]!.row, "scenario"), text(group[0]!.row, "entity")),
+  );
   return groups.map((group, n) => {
     const [first, last] = [group[0]!.row, group.at(-1)!.row];
     const stating = group.map(({ row }) => row);
     const scenario = text(first, "scenario");
-    const entity = entities.get(scenario)!.length > 1 ? text(first, "entity") : "";
+    const entitiesOf = new Set(scenarios.get(scenario)!.map((g) => text(g[0]!.row, "entity")));
+    const entity = entitiesOf.size > 1 ? text(first, "entity") : "";
+    const money = moneyIn(first);
+    const unitNamed = units.get(pair(scenario, text(first, "entity")))!.length > 1 ? money : "";
     const fulcrum = fulcrumOf(fulcrums, scenario);
     const marked = fulcrum.named ? fulcrumClaim(group, fulcrum.named) : undefined;
     const steps: WaterfallStep[] = [
@@ -725,8 +777,9 @@ export function valueAllocation(handoff: HandoffView): Figure[] {
     const head = {
       key: `value-allocation-${n}`,
       table: "T4E.5",
-      title: titled("Value allocation", scenario, entity),
+      title: titled("Value allocation", scenario, entity, unitNamed),
       summary,
+      unit: money || undefined,
     };
     const rowOf = (key: string) =>
       key === "opening" ? first : key === "closing" ? last : rows[Number(key)];
@@ -872,7 +925,7 @@ export function rateMix(handoff: HandoffView): Figure[] {
   });
 }
 
-/** CP-3C's maturity wall (`T3D.2`): per currency, the amount falling due
+/** CP-3C's maturity wall (`T3D.2`): per currency and scale, the amount falling due
     each year, stacked by seniority, said as CP-1's maturity wall is. */
 export function refinancingWall(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-3C", "T3D.2");
@@ -1034,23 +1087,23 @@ export function basketCapacity(handoff: HandoffView): Figure[] {
   );
 }
 
-/** CP-4C's recovery by class (`T4E.7`): per scenario and currency, each
+/** CP-4C's recovery by class (`T4E.7`): per scenario, currency and scale, each
     class's allowed claim beside its total recovery, a cell written in `x` or
-    `%` drawn in its own unit's figure. The packed
-    `cash/debt/equity/warrant value` holds several figures the bundle's
-    reader cannot split (N192): a mark's source states it, nothing draws it.
-    CP-4C's `T4E.2` draws nothing for the same reason: its one amount column,
-    `principal/accrued/PIK`, packs three. */
+    `%` drawn in its own unit's figure. The four value columns (`cash value`,
+    `debt value`, `equity value`, `warrant value`, split by fork r17, N192)
+    are a mark's source: it states them, nothing draws them. CP-4C's `T4E.2`
+    draws nothing: its `principal`, `accrued` and `PIK` are no recovery. */
 export function recoveryByClass(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-4C", "T4E.7");
   if (!rows?.length) return [];
   const entries = rows.map((row, index) => ({ row, index }));
+  const moneyIn = (row: Row) => moneyOf(text(row, "currency"), text(row, "scale"));
   const groups = [
-    ...groupBy(entries, ({ row }) => pair(text(row, "scenario"), text(row, "currency"))).values(),
+    ...groupBy(entries, ({ row }) => pair(text(row, "scenario"), moneyIn(row))).values(),
   ];
   const currencies = groupBy(groups, (group) => text(group[0]!.row, "scenario"));
   return groups.flatMap((group, n) => {
-    const [scenario, currency] = [text(group[0]!.row, "scenario"), text(group[0]!.row, "currency")];
+    const [scenario, currency] = [text(group[0]!.row, "scenario"), moneyIn(group[0]!.row)];
     const named = currencies.get(scenario)!.length > 1 ? currency : "";
     const base = {
       key: `recovery-by-class-${n}`,
@@ -1065,7 +1118,7 @@ export function recoveryByClass(handoff: HandoffView): Figure[] {
         { key: "recovery", label: "total recovery", column: "total recovery" },
       ],
       noun: "Recovery",
-      source: ["timing", "cash/debt/equity/warrant value"],
+      source: ["timing", "cash value", "debt value", "equity value", "warrant value"],
     };
     const rows = group.map(({ row }) => row);
     return byUnitFigures(rows, base, spec, currency || undefined);
@@ -1081,7 +1134,7 @@ interface CaseLines {
   source: string;
 }
 
-/** A metric as a figure's key part: "gross/net leverage" is "gross-net-leverage". */
+/** A metric as a figure's key part: "FCF/debt" is "fcf-debt". */
 const slug = (metric: string) => metric.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
 /** The point the rows stating one category give a column: their cell, as
@@ -1108,10 +1161,15 @@ function restatement(group: readonly Row[], column: string): string | null {
 const times = (count: number) => (count === 2 ? "twice" : `${count} times`);
 
 /** Entries keyed by `keyOf`, each key once, in the order it first appears:
-    its first entry's place and every row stating it. */
-const keyed = (entries: readonly Entry[], keyOf: (row: Row) => string) =>
-  [...groupBy(entries, ({ row }) => keyOf(row))].map(([label, group]) => ({
-    label,
+    its label (`labelOf` its first row, else the key), its first entry's place
+    and every row stating it. */
+const keyed = (
+  entries: readonly Entry[],
+  keyOf: (row: Row) => string,
+  labelOf: (row: Row) => string = keyOf,
+) =>
+  [...groupBy(entries, ({ row }) => keyOf(row)).values()].map((group) => ({
+    label: labelOf(group[0]!.row),
     first: group[0]!.index,
     same: group.map(({ row }) => row),
   }));
@@ -1218,14 +1276,13 @@ export function forecastCases(handoff: HandoffView): Figure[] {
   });
 }
 
-/** CP-2G's credit path (`T2H.6`): leverage, coverage and FCF/debt, base
-    against downside. A leverage cell packing gross and net (`4.2x / 3.9x`)
-    is a gap carrying its text: the host reads no figure from it (N192). */
+/** CP-2G's credit path (`T2H.6`): gross leverage, net leverage (two columns
+    since fork r17, N192), coverage and FCF/debt, base against downside. */
 export function creditPath(handoff: HandoffView): Figure[] {
   return caseLines(handoff, {
     register: "T2H.6",
     key: "credit-path",
-    metrics: ["gross/net leverage", "coverage", "FCF/debt"],
+    metrics: ["gross leverage", "net leverage", "coverage", "FCF/debt"],
     source: "definition IDs",
   });
 }
@@ -1422,29 +1479,49 @@ export function riskMatrix(handoff: HandoffView): Figure[] {
   ];
 }
 
-/** A trigger's label, which is also its identity: "Leverage (Issuer,
-    downgrade)", its stated direction read trimmed and casefolded past its
-    citation markers, so an upgrade and a downgrade trigger on one metric
-    stay two triggers; its metric and rating type too. A blank rating type
-    or direction is left out; a blank metric is named by its row. */
+/** What a trigger row's column says, past its citation markers and trimmed. */
+const written = (row: Row, column: string) => unmarked(text(row, column)).trim();
+
+/** A trigger's label: "Leverage (Issuer, downgrade, Base, FY26)", its stated
+    direction read trimmed and casefolded past its citation markers, the case
+    as first written. A blank rating type, direction, case or period is left
+    out; a blank metric is named by its row. */
 function triggerLabel(row: Row): string {
   const metric = nameOf(row, "metric");
-  const direction = unmarked(text(row, "trigger direction")).trim().toLowerCase();
-  const parts = [unmarked(text(row, "rating type")).trim(), direction].filter(Boolean);
+  const parts = [
+    written(row, "rating type"),
+    written(row, "trigger direction").toLowerCase(),
+    written(row, "case"),
+    written(row, "period"),
+  ].filter(Boolean);
   return parts.length ? `${metric} (${parts.join(", ")})` : metric;
 }
 
+/** A trigger's identity: its metric, rating type, direction, case (casefolded
+    as `caseLines` reads one) and, since fork r17 (N192), the `period` its
+    `value` is read at, each in a tagged place, so an upgrade and a downgrade
+    trigger stay two, one tested in two cases is two bullets, not one stated
+    twice, and a blank case never meets a blank period. */
+const triggerIdentity = (row: Row): string =>
+  JSON.stringify([
+    ["metric", nameOf(row, "metric")],
+    ["rating type", written(row, "rating type")],
+    ["direction", written(row, "trigger direction").toLowerCase()],
+    ["case", written(row, "case").toUpperCase()],
+    ["period", written(row, "period")],
+  ]);
+
 /** CP-2H's quantitative triggers (`T2R.4`): a bullet figure per agency and
-    unit its threshold and case/period value are written in (one in another
-    unit a gap naming it), each trigger's case/period value against its threshold, the
-    headroom as served. A packed case/period value is a gap carrying its
-    text (N192). A trigger stated twice (one metric, rating type and
-    direction) is one row, each value a gap naming each text where they
-    differ, and the summary names it. */
+    unit its threshold and value are written in (one in another unit a gap
+    naming it), each trigger's value (read at its own `case` and `period`,
+    columns of their own since fork r17, N192) against its threshold, the
+    headroom as served. A trigger stated twice (one metric, rating type,
+    direction, case and period) is one row, each value a gap naming each
+    text where they differ, and the summary names it. */
 export function ratingTriggers(handoff: HandoffView): Figure[] {
   const rows = registerRows(handoff, "CP-2H", "T2R.4");
   if (!rows?.length) return [];
-  const values = ["threshold", "case/period value", "headroom"];
+  const values = ["threshold", "value", "headroom"];
   const agencies = [...groupBy(rows, (row) => text(row, "agency").trim())];
   return agencies.flatMap(([agency, group], n) => {
     const base = {
@@ -1454,14 +1531,14 @@ export function ratingTriggers(handoff: HandoffView): Figure[] {
     };
     // A bar and a rule a trigger.
     return perGroup(group, base, byCellUnits(values.slice(0, 2)), 2, (entries, head, at) => {
-      const tests = keyed(entries, triggerLabel);
+      const tests = keyed(entries, triggerIdentity, triggerLabel);
       const read = (cell: Cell | undefined) => inUnit(cell, at);
       const bullets = tests.map(({ label, first, same }): BulletRow => ({
         key: `${first}`,
         label,
         direction: directionOf(same[0]!, "trigger direction"),
         threshold: pointOf(same, "threshold", read),
-        current: pointOf(same, "case/period value", read),
+        current: pointOf(same, "value", read),
         headroom: pointOf(same, "headroom", datum),
         origin: "model",
       }));

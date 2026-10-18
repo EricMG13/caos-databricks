@@ -13,6 +13,7 @@ import {
   datum,
   groupBy,
   nearestOf,
+  APPENDIX_LISTS,
   oversized,
   pair,
   stackFigure,
@@ -634,9 +635,47 @@ test("past MAX_FIGURES a module's figures are stated, the last saying how many m
   const figures = figuresOf({ ...cp1, tables: [kpis] });
   expect(figures).toHaveLength(MAX_FIGURES);
   expect(figures.at(-1)).toMatchObject({ oversized: true, title: "3 more figures" });
+  expect(figures.at(-1)!.summary.endsWith(APPENDIX_LISTS)).toBe(true);
   expect(figures.at(-1)!.summary).toBe(
     "3 more figures are not drawn. The Appendix tab lists every row.",
   );
+});
+
+test("a stated figure points to the Appendix only when the Appendix lists rows (N113)", () => {
+  const rows = Array.from({ length: MAX_FIGURES + 2 }, (_, index) => [`K${index}`, "FY", "1"]);
+  const kpis = table("cp1.operating_kpi_schedule", ["kpi_id", "period_id", "value"], rows);
+  const stated = (model_analysis: string) => {
+    const handoff = { ...cp1, tables: [kpis], model_analysis };
+    const { container } = render(
+      <MemoryRouter>
+        <AnalysisSection
+          document={{ ...document, body: { ...document.body, handoffs: [handoff] } }}
+          tab={handoff.route_node_id}
+        />
+      </MemoryRouter>,
+    );
+    return container.querySelector("[data-figure-oversized]")!;
+  };
+  // Text the page does not format has no appendix: the sentence must not send
+  // the reader to an empty tab.
+  const unformatted = stated("## Analysis\n```\nnever closed");
+  expect(unformatted).toHaveTextContent("3 more figures are not drawn.");
+  expect(unformatted).not.toHaveTextContent("Appendix");
+  expect(unformatted).toHaveTextContent("The As written tab shows the module's text.");
+  // With an appendix register, the Appendix does list the rows.
+  const formatted = stated(
+    [
+      "## Analysis",
+      "### View",
+      "Prose.",
+      "### Analytical appendix — complete canonical registers",
+      "#### T4.14 — Period register",
+      "| period_id | Revenue |",
+      "| --- | --- |",
+      "| FY1 | 1 |",
+    ].join("\n"),
+  );
+  expect(formatted).toHaveTextContent("The Appendix tab lists every row.");
 });
 
 test("forecastDrivers: one figure a division, base against downside, in percent", () => {
@@ -1161,4 +1200,11 @@ test("a register stack's table twin heads its first column with what the categor
   const figure = container.querySelector<HTMLElement>("[data-figure='basket-capacity']")!;
   fireEvent.click(within(figure).getByRole("button", { name: "Table" }));
   expect(figure.querySelector("thead th:first-child")).toHaveTextContent("Basket / Test");
+});
+
+test("test_every_stated_figure_closes_on_the_sentence_the_view_swaps", () => {
+  // The Appendix swap replaces this one text; a summary written differently
+  // would keep pointing at an Appendix that lists nothing.
+  expect(oversized("k", "T", "T", 3).summary.endsWith(APPENDIX_LISTS)).toBe(true);
+  expect(APPENDIX_LISTS).toBe(" The Appendix tab lists every row.");
 });

@@ -222,6 +222,10 @@ export type Figure =
 export const MAX_MARKS = 2_000;
 export const MAX_FIGURES = 24;
 
+/** The sentence a stated figure closes on; the view swaps it where the module's
+    Appendix lists nothing, so every writer and the swap share this one text. */
+export const APPENDIX_LISTS = " The Appendix tab lists every row.";
+
 /** A figure stated, not drawn: past `MAX_MARKS` it would freeze the tab. The
     Figures view says its summary in place of a chart, so it has no rows. */
 export function oversized(key: string, table: string, title: string, marks: number): StackFigure {
@@ -230,7 +234,7 @@ export function oversized(key: string, table: string, title: string, marks: numb
     table,
     kind: "stack",
     title,
-    summary: `${marks} marks: too many to draw. The Appendix tab lists every row.`,
+    summary: `${marks} marks: too many to draw.${APPENDIX_LISTS}`,
     categories: [],
     series: [],
     sourceOf: () => null,

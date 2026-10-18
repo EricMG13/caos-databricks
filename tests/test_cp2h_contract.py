@@ -143,6 +143,6 @@ def test_trigger_headroom_is_script_owned_and_source_derived() -> None:
         0.8,
         -0.6,
     ]
-    assert [row[6] for row in changed_rows] == ["0.8x", "-0.6x"]
+    assert [row[8] for row in changed_rows] == ["0.8x", "-0.6x"]
     assert changed_result != baseline
     assert changed.base_leverage != FACTS.base_leverage

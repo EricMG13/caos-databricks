@@ -295,6 +295,7 @@ def test_a_marker_that_splits_a_figure_leaves_no_figure() -> None:
         ("12 [C1]%", "12%"),
         ("-[C1] x", "- x"),
         ("a -[C1]", "a -"),
+        ("-[C1] 45", "- 45"),  # decided: see the test below
     ],
 )
 def test_a_marker_that_splits_a_figure_across_a_space_or_a_sign_leaves_none(
@@ -313,6 +314,18 @@ def test_a_marker_that_splits_a_figure_across_a_space_or_a_sign_leaves_none(
         assert figure_value(CONTRACT, cell) is None
         with pytest.raises(ValueError):
             driver_value(unmarked(cell))
+
+
+def test_a_spaced_marker_after_a_sign_reads_as_the_signed_figure() -> None:
+    """Decided behaviour (N142): a space after the marker is prose spacing, so
+    `-[C1] 45` is `- 45`, which the figure reader normalises to -45 (as it
+    does a typed `- 45`), unlike `-[C1]45`, whose marker splits the figure."""
+    from caos.methodology.citation_markers import unmarked
+    from caos.methodology.tables import figure_value
+
+    assert unmarked("-[C1] 45") == "- 45"
+    assert figure_value(CONTRACT, "-[C1] 45") == figure_value(CONTRACT, "- 45") == "-45"
+    assert figure_value(CONTRACT, "-[C1]45") is None
 
 
 def test_qualified_rewrites_exactly_the_markers_the_body_reads() -> None:

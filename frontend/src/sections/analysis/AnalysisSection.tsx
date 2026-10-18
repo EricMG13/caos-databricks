@@ -28,9 +28,23 @@ import { QUOTE_LABEL } from "@/evidence/TracedLine";
 import { BlockedQuotes, NOT_LINKED, UnverifiedFacts } from "@/evidence/Unverified";
 import { clampExcerpt } from "@/evidence/compact";
 import { HandoffMarkers } from "@/evidence/Markers";
+import type { Severity } from "@/wire";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
 export { PROSE_SHOWN } from "./module";
+
+/** The class a module's QA tag draws by severity (D71). Failed and Blocked are
+    critical; a caveat is not a warning, so `restricted` is deliberately left
+    without a `.tag.restricted` rule and draws as the plain outlined `.tag`
+    (the same as SEVERITY_BADGE.RESTRICTED = "outline"). */
+const HEADER_TAG: Record<Severity, string> = {
+  SUCCESS: "ok",
+  RESTRICTED: "restricted",
+  CRITICAL: "crit",
+  WARNING: "warn",
+  RUNNING: "warn",
+  IDLE: "warn",
+};
 
 const SCREENING_NOTICE = "Screening only: a screen, not committee clearance.";
 
@@ -312,7 +326,7 @@ function ModuleView({
           <span className="code">{handoff.module_id}</span>
         )}
         <span className="right">
-          <span className={`tag ${severity === "SUCCESS" ? "ok" : "warn"}`} data-qa-status>
+          <span className={`tag ${HEADER_TAG[severity]}`} data-qa-status>
             {handoff.qa_status}
           </span>
         </span>
@@ -343,6 +357,7 @@ function ModuleView({
       <Figures
         handoff={handoff}
         calculation={<HostCalculation handoff={handoff} model={model} />}
+        appendix={(read?.placed ?? []).some(({ place }) => place === "appendix")}
         onPick={(next) => setPick({ at: "figures", pick: next })}
       />
       {pick?.at === "figures" ? <Picked pick={pick.pick} /> : null}
