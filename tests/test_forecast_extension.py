@@ -225,3 +225,18 @@ def test_forecast_extension_instruction_bytes_are_in_request_budget(
         price, request_size(provider, reduced)
     )
     assert provider.prompts == []
+
+
+def test_cp_cf_is_told_to_answer_blocked_when_no_request_can_bind() -> None:
+    """N209 run b5e081bc: CP-CF answered a null request, empty bindings and a
+    null forecast because no accepted upstream carried an assignment line.
+    The host's first-attempt text says to answer Blocked instead."""
+    authority = delivered_authority(BUNDLE, "CP-CF")
+    skill = dict(authority.files)["SKILL.md"].decode()
+    text = " ".join(skill.split())
+    assert (
+        "If no accepted upstream handoff carries the source-supplied JSON-pointer "
+        "assignment lines the request needs, so no request can bind, do not emit "
+        "a null request, empty bindings or a null forecast; answer "
+        "`qa_status: Blocked` and name the owners whose assignments are missing."
+    ) in text

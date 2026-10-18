@@ -16,9 +16,10 @@ and the module cannot run without, and state that source in the blocker; a
 module that can complete with the gap recorded is READY_WITH_LIMITATIONS, with
 the gap in its row.
 A source shown to you as a page map (evidence_delivery PAGE_MAP) is shown that
-way to you alone. A consumer whose `Source files to attach` names that file is
-handed it in full (or the pages the cell names), unless that consumer's own
-request cannot carry it, which the host then tells that consumer. Never rate a
+way to you alone. Name the pages each consumer needs in its `Source files to
+attach` cell (Step I rules 5 and 8), never the file alone; the consumer is
+handed those pages, unless its own request cannot carry them, which the host
+then tells that consumer. Never rate a
 consumer CONDITIONAL because you saw only a page map of a source it needs.
 A reference that the consumer's own SKILL.md says to name as a gap and continue
 past (for example CP-3's Sector RV workbook, an enterprise-environment

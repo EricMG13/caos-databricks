@@ -1,12 +1,12 @@
 {
   "authority": "DEPLOY_V_BASELINE",
-  "baseline_digest": "27306b791d5f42df54f8962ceeb35c3e09f8f6e4813ab419f443d8d03a3ca3ee",
+  "baseline_digest": "b7a42ada15d4e7331aa11564a559dbb02f65aa8e0db66d462a879e9e09befd07",
   "packages": {
     "cp-0-source-readiness": {
       "files": {
         "SKILL.md": {
-          "bytes": 36322,
-          "sha256": "b6588baed6d6c8d0a270960559623be3a8ab4e124089655e2cccb12380dbde46"
+          "bytes": 36465,
+          "sha256": "066eeb8ca5dd9407040c9106c6eb34c6b97b16dab2a30da62a91cfac1dbd0098"
         },
         "references/CP-0_SCHEMA_REFERENCE.md": {
           "bytes": 3335,
@@ -37,8 +37,8 @@
           "sha256": "866bea362bb05c80bc4d288b30da41119780ac35ffc7cb098fe3004a42f21f51"
         },
         "references/REF_CP-0_STEPS.md": {
-          "bytes": 21324,
-          "sha256": "c5c31ff713b46d831dcd7bc268e2f87a0fd0924420d5e2a692fc4215ab4bdb61"
+          "bytes": 21556,
+          "sha256": "40f3b1202a8f6b503f0645bdf7475161890cc661a25892993fee0fbac35a8186"
         },
         "references/REF_CP-PARSE_STEPS.md": {
           "bytes": 10056,
