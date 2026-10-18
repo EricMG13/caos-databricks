@@ -1227,7 +1227,7 @@ def test_cp0_rates_no_consumer_conditional_for_what_only_its_view_lacks() -> Non
     alone, and that a named-gap reference is a limitation, not a condition."""
     block = " ".join(prompt_block("cp0_final_check").split())
     assert "(evidence_delivery PAGE_MAP) is shown that way to you alone" in block
-    assert "handed it in full (or the pages the cell names)" in block
+    assert "the consumer is handed those pages" in block
     assert "which the host then tells that consumer" in block
     assert "Never rate a consumer CONDITIONAL because you saw only a page map" in block
     assert "to name as a gap and continue past" in block
