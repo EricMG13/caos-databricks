@@ -1,0 +1,507 @@
+Exhibit 10.4
+EIGHTH AMENDMENT TO LEASE
+This EIGHTH AMENDMENT TO LEASE (this “Amendment”) is entered into as of September 3, 2021, by and among the entities listed on Schedule A attached hereto (collectively, and together with their respective successors and assigns, “Landlord”), the entities listed on Schedule B attached hereto (collectively, and together with their respective successors and assigns, “Tenant”) and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease (as defined below), Propco TRS LLC, a Delaware limited liability company (“Propco TRS”).
+RECITALS
+WHEREAS, Landlord, Tenant and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease, Propco TRS, are parties to that certain Lease (Non-CPLV), dated as of October 6, 2017, as amended by that certain First Amendment to Lease (Non-CPLV), dated as of December 22, 2017, as amended by that certain Second Amendment to Lease (Non-CPLV) and Ratification of SNDA, dated as of February 16, 2018, as amended by that certain Third Amendment to Lease (Non-CPLV), dated as of April 2, 2018, as amended by that certain Fourth Amendment to Lease (Non-CPLV), dated as of December 26, 2018, as amended by that certain Omnibus Amendment to Leases, dated as of June 1, 2020, as amended by that certain Fifth Amendment to Lease (Non-CPLV), dated as of July 20, 2020, as amended by that certain Sixth Amendment to Lease, dated as of September 30, 2020, as amended by that certain Amended and Restated Omnibus Amendment to Leases, dated as of October 27, 2020, and as amended by that certain Seventh Amendment to Lease, dated as of November 18, 2020 (collectively, as amended, the “Lease”), pursuant to which Landlord leases to Tenant, and Tenant leases from Landlord, certain real property as more particularly described in the Lease;
+WHEREAS, on December 28, 2020, Bluegrass Downs Property Owner LLC conveyed to McCracken County, Kentucky certain real property interests associated with the former gaming and entertainment facility known as Bluegrass Downs located in Paducah, Kentucky, which facility was (prior to such conveyance) subject to the Lease (the “Bluegrass Downs Transaction”), and the Bluegrass Downs Leased Property (as defined below) was severed from the Lease as of such date;
+WHEREAS, on the date hereof, CEOC, LLC and Roman Holding Company of Indiana LLC, collectively as sellers (collectively, “Sellers”), and EBCI MezzCo LLC, as purchaser, are closing a purchase and sale transaction under that certain Equity Purchase Agreement, dated as of December 24, 2020, with respect to Sellers’ aggregate one hundred percent (100%) equity interest in Caesars Riverboat Casino, LLC (“Operator”), which entity operates the gaming and entertainment facility known as Caesars Southern Indiana (formerly known as Horseshoe Southern Indiana), located in Elizabeth, Indiana (and, together with Roman Holding Company of Indiana LLC, leases such facility pursuant to the terms of the Lease) (the “Southern Indiana Transaction”); and
+WHEREAS, in connection with the Southern Indiana Transaction, the Southern Indiana Leased Property (as defined below) will be severed from the Lease and Landlord will enter into a
+|US-DOCS\118511784.21||
+new lease with Operator in respect of the Southern Indiana Facility (as defined below) (the “New Lease”); and
+WHEREAS, in connection with the Bluegrass Downs Transaction and the Southern Indiana Transaction, the parties hereto desire to amend the Lease as set forth herein.
+NOW THEREFORE, in consideration of the mutual covenants and agreements hereinafter set forth and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the parties hereto, intending to be legally bound hereby, agree as follows:
+1.Definitions.
+Except as otherwise defined herein, all capitalized terms used herein without definition shall have the meanings applicable to such terms, respectively, as set forth in the Lease.
+2.Amendments to the Lease for Bluegrass Downs Transaction.
+Effective as of December 28, 2020 (the “Bluegrass Downs Severance Date”):
+A.Termination of the Lease as to the Bluegrass Downs Facility.
+i.the Lease is hereby terminated with respect to the Bluegrass Downs Leased Property, the Bluegrass Downs Leased Property no longer constitutes Leased Property under the Lease, and neither Landlord nor Tenant has any further liabilities or obligations under the Lease, from and after the Bluegrass Downs Severance Date, in respect of the Bluegrass Downs Facility (as defined below) and the Bluegrass Downs Leased Property (provided that any such liabilities or obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment); and
+ii.the Guaranty hereby automatically, and without further action by any party, ceases to apply with respect to any Obligations (as defined in the Guaranty) with respect to the Bluegrass Downs Facility or the Bluegrass Downs Leased Property to the extent arising from and after the Bluegrass Downs Severance Date (provided that any such Obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment).
+The term “Bluegrass Downs Facility” refers to the applicable Facility identified as Facility 16 on the list of the Facilities annexed as Exhibit A to the Lease (prior to giving effect to the replacement of said Exhibit A pursuant to Section 3.K.i. of this Amendment).
+The term “Bluegrass Downs Leased Property” refers to the Land set forth on Annex B hereto and any other Leased Property pertaining to the Bluegrass Downs Facility.
+B.Rent.
+Landlord and Tenant hereby expressly acknowledge and agree that there shall be no reduction in the Rent under the Lease as a result of the removal of the Bluegrass Downs Facility from the Lease or otherwise as a result of the Bluegrass Downs Transaction.
+2
+|US-DOCS\118511784.21||
+C.Variable Rent.
+From and after the Bluegrass Downs Severance Date, for purposes of any calculation of Variable Rent under the Lease, including any adjustments in Variable Rent based on increases or decreases in Net Revenue, such calculations of Net Revenue shall exclude Net Revenue attributable to the Bluegrass Downs Facility.
+D.Bluegrass Downs Transaction.
+i.Each of Landlord and Tenant hereby acknowledge and agree that (i) such party consented to the Bluegrass Downs Transaction, including the severance of the Bluegrass Downs Leased Property from the Lease as of the Bluegrass Downs Severance Date, and
+(ii) the removal of the Bluegrass Downs Facility from the Lease shall not constitute a L1/L2 Transfer nor a transfer and sale pursuant to Section 22.2(ix) of the Lease.
+ii.All of the applicable requirements and conditions set forth in Article XVIII or Article XXII of the Lease with respect to the Bluegrass Downs Transaction (if, and to the extent, applicable to the Bluegrass Downs Transaction) are deemed satisfied or waived.
+iii.The amounts of the 2018 EBITDAR Pool and 2018 EBITDAR Pool Before Fifth Amendment shall not be reduced as a result of the Bluegrass Downs Facility no longer being a Facility under the Lease, and, without limitation, Schedule 11 to the Lease (setting forth the 2018 Facility EBITDAR of Tenant and Joliet Tenant) shall not be modified as a result of the Bluegrass Downs Transaction.
+iv.The treatment of the Bluegrass Downs Transaction hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under any applicable provision of the Lease.
+E.Revisions to Exhibits and Schedules to the Lease.
+The Exhibits and Schedules to the Lease are hereby amended as follows:
+i.Facilities.
+Exhibit A annexed to the Lease (setting forth the list of Facilities under the Lease) is hereby amended such that the Bluegrass Downs Facility is hereby deleted from said Exhibit A. For the avoidance of doubt,
+(i) the amendment effectuated by this Section 2.E.i. shall be made with respect to Exhibit A annexed to the Lease prior to giving effect to the replacement of said Exhibit A pursuant to Section 3.K.i. of this Amendment and (ii) the replacement Exhibit A that is annexed hereto as Schedule C reflects the amendment effectuated by this Section 2.E.i.
+ii.Legal Description.
+The legal descriptions with respect to the Leased Property set forth on Exhibit B annexed to the Lease are hereby amended such that the legal description with respect to the Leased Property pertaining to the Bluegrass Downs Facility, as set forth on Annex B attached hereto, is hereby deleted from said Exhibit B.
+3
+|US-DOCS\118511784.21||
+iii.Ground Leased Property.
+The legal descriptions with respect to the Ground Leased Property set forth on Exhibit E annexed to the Lease are hereby amended such that the legal description with respect to the Ground Leased Property pertaining to the Bluegrass Downs Facility, as set forth on Annex C attached hereto, is hereby deleted from said Exhibit E.
+iv.Description of Title Policies.
+The list of Title Policies set forth on Exhibit J annexed to the Lease is hereby amended such that the reference thereon to the Title Policy relating solely to the Bluegrass Downs Facility is hereby deleted from said Exhibit J.
+v.Brands.
+The list of Brands set forth on Exhibit M annexed to the Lease is hereby amended such that “Bluegrass Downs” is hereby deleted from said Exhibit M.
+vi.Managed Facilities IP Trademarks.
+The list of Managed Facilities IP set forth on Exhibit P annexed to the Lease is hereby amended such that “Bluegrass Downs” is hereby deleted from said Exhibit P.
+vii.Landlord Entities.
+The list of entities comprising Landlord set forth on Schedule A annexed to the Lease shall be amended such that, from and after the Bluegrass Downs Severance Date, Bluegrass Downs Property Owner LLC shall be deleted from said Schedule A and Bluegrass Downs Property Owner LLC shall no longer be a Landlord under the Lease.
+viii.Tenant Entities.
+The list of entities comprising Tenant set forth on Schedule B annexed to the Lease shall be amended such that, from and after the Bluegrass Downs Severance Date, Players Bluegrass Downs LLC shall be deleted from said Schedule B and Players Bluegrass Downs LLC shall no longer be a Tenant under the Lease.
+ix.Ground Leases.
+The list of Ground Leases set forth on Schedule 2 annexed to the Lease is hereby amended such that the Ground Leases pertaining to the Bluegrass Downs Facility, as set forth on Annex D attached hereto, are hereby deleted from said Schedule 2.
+3.Amendments to the Lease for Southern Indiana Transaction.
+A.Termination of the Lease as to the Southern Indiana Facility.
+Effective as of the date hereof:
+i.the Lease is hereby terminated with respect to the Southern Indiana Leased Property, the Southern Indiana Leased Property no longer constitutes Leased Property under the Lease, and neither Landlord nor Tenant has any further liabilities or obligations under the Lease, from and after the date of this Amendment, in respect of the Southern Indiana Facility and the Southern Indiana Leased Property (provided that, subject to Sections 3.A.v and 3.A.vi, any such liabilities or obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment);
+4
+|US-DOCS\118511784.21||
+ii.the Guaranty hereby automatically, and without further action by any party, ceases to apply with respect to any Obligations with respect to the Southern Indiana Facility or the Southern Indiana Leased Property to the extent arising from and after the date of this Amendment (provided that, subject to Sections 3.A.v and 3.A.vi., any such Obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment);
+iii.Article II of the Lease is hereby amended by deleting the following words from the definition of “Continuous Operation Facilities” in their entirety: “Horseshoe Southern Indiana,”;
+iv.The term “Southern Indiana Facility” refers to the applicable Facility identified as Facility 4 on the list of the Facilities annexed as Exhibit A to the Lease (prior to giving effect to the replacement of said Exhibit A pursuant to Section 3.K.i. of this Amendment).
+The term “Southern Indiana Leased Property” refers to the Land set forth on Annex A hereto and any other Leased Property pertaining to the Southern Indiana Facility;
+v.(x) Operator hereby assigns to CEOC, LLC, and CEOC, LLC hereby assumes from Operator,
+(1) all of Operator’s rights, title and interest in respect of, or arising under, the Lease, whenever arising and (2) all of the Operator’s duties, obligations and liabilities in respect of, or arising under, the Lease, whenever arising (the matters set forth in this clause (2), collectively, the “Operator Liabilities”) and (y) Landlord hereby consents to the foregoing assignment and assumption (provided CEOC, LLC shall not further assign the Operator Liabilities to any other Person, provided, the foregoing is not intended to and shall not restrict any transfers permitted under Section 22.2 of the Lease); and
+vi.effective (1) immediately after giving effect to the assignment and assumption provided for in the immediately preceding Section 3.A.v. and (2) immediately prior to the effectiveness of the New Lease:
+(x) Landlord hereby absolutely and unconditionally releases and forever discharges Operator, to the fullest extent permitted under law, from all Operator Liabilities and any and all claims, liabilities, demands, expenses and other obligations of any kind, at law, equity or otherwise, whether past, present or future, known or unknown, actual or contingent, or direct or indirect, arising out of or relating in any manner to the Operator Liabilities; and
+(y) Operator (on behalf of itself, but not on behalf of any other Tenant entity) hereby absolutely and unconditionally releases and forever discharges Landlord, to the fullest extent permitted under law, from all of Landlord’s duties, obligations and liabilities (if any) in respect of, or arising under, the Lease, whenever arising (collectively, the “Landlord Liabilities”) and any and all claims, liabilities, demands, expenses and other obligations of any kind, at law, equity or otherwise, whether past, present or future, known or unknown, actual or contingent, or direct or indirect, arising out of or relating in any manner to the Landlord Liabilities.
+For the avoidance of doubt, the parties hereto acknowledge and agree that the releases contained in this Section 3.A.vi. are not intended to, and shall not, have any effect with respect to the rights and
+5
+|US-DOCS\118511784.21||
+obligations of Operator and Landlord under the New Lease.
+Operator hereby represents, warrants and covenants to Landlord that it has taken all necessary action to authorize the release of Landlord as set forth in this Section 3.A.vi., and such release does not conflict with, or result in a breach of, any agreement or instrument by which Operator is bound.
+Landlord hereby represents, warrants and covenants to Operator that it has taken all necessary action to authorize the release of Operator as set forth in this Section 3.A.vi., and such release does not conflict with, or result in a breach of, any agreement or instrument by which Landlord is bound.
+B.Rent.
+i.Article II of the Lease is hereby amended by adding the following three (3) definitions thereto:
+““Eighth Amendment Date”: September 3, 2021.”
+““Southern Indiana Property”: The portion of the Leased Property (as of the date that immediately precedes the Eighth Amendment Date) that pertained to the gaming and entertainment facility known as Caesars Southern Indiana (formerly known as Horseshoe Southern Indiana) located in Elizabeth, Indiana. As of the Eighth Amendment Date, the Southern Indiana Property no longer constitutes Leased Property under this Lease.”
+““Specified Eighth Amendment Date Rent Amount”: As defined in the definition of Rent.”
+ii.Article II of the Lease is hereby amended such that clause (a) of the definition of “Rent” is hereby deleted and replaced with the following:
+“(a) (i) For the first (1st) Lease Year, Rent shall be equal to Four Hundred Thirty-Three Million Three Hundred Thousand and No/100 Dollars ($433,300,000.00); (ii) for the second (2nd) Lease Year, Rent shall be equal to Four Hundred Sixty Million Seven Hundred Ninety-Nine Thousand Five Hundred and No/100 Dollars ($460,799,500.00) (provided, that for the second (2nd) Lease Year only, an incremental portion of the annual Rent due for such Lease Year equal to Twenty-One Million and No/100 Dollars ($21,000,000.00) relating to the Chester Property (which Twenty-One Million and No/100 Dollars ($21,000,000.00) is included in the Four Hundred Sixty Million Seven Hundred Ninety-Nine Thousand Five Hundred and No/100 Dollars ($460,799,500.00) amount in this clause (ii)) shall be prorated and payable only with respect to the period from and after the Fourth Amendment Date such that Tenant shall not be required to pay any portion of such incremental portion of the annual Rent relating to the Chester Property with respect to the portion of the second (2nd) Lease Year occurring prior to the Fourth Amendment Date); (iii) for the third (3rd) Lease Year, Rent shall be equal to Six Hundred Twenty-One Million Seven Hundred Eleven Thousand Four Hundred Ninety-Two and 52/100 Dollars ($621,711,492.52) (provided, that, for the third (3rd) Lease Year only, an
+6
+|US-DOCS\118511784.21||
+incremental portion of the annual Rent due for such Lease Year in an amount equal to One Hundred Fifty-Four Million and No/100 Dollars ($154,000,000.00) relating to the Fifth Amendment Additional Property (the “Fifth Amendment Date Rent Increase”) (which Fifth Amendment Date Rent Increase amount is included in the Six Hundred Twenty-One Million Seven Hundred Eleven Thousand Four Hundred Ninety-Two and 52/100 Dollars ($621,711,492.52) amount in this clause (iii)) shall be prorated and payable only with respect to the period from and after the Fifth Amendment Date such that Tenant shall not be required to pay any portion of the Fifth Amendment Date Rent Increase with respect to the portion of the third (3rd) Lease Year occurring prior to the Fifth Amendment Date);
+(iv) for the fourth (4th) Lease Year, Rent shall be equal to Five Hundred Ninety-Eight Million Five Hundred Thirty-Seven Thousand One Hundred Sixty-Five and No/100 Dollars ($598,537,165.00) (provided, that, for the fourth (4th) Lease Year only, an additional amount of annual Rent equal to Thirty-Two Million Five Hundred Thousand and No/100 Dollars ($32,500,000.00) relating to the Southern Indiana Property (which Thirty-Two Million Five Hundred Thousand and No/100 Dollars ($32,500,000.00) is not included in the Five Hundred Ninety-Eight Million Five Hundred Thirty-Seven Thousand One Hundred Sixty-Five and No/100 Dollars ($598,537,165.00) amount in this clause (iv)) shall be prorated and payable with respect to the period prior to the Eighth Amendment Date, such that Tenant shall be required to pay such additional amount of annual Rent relating to the Southern Indiana Property (the “Specified Eighth Amendment Date Rent Amount”) with respect to the portion of the fourth (4th) Lease Year occurring prior to (but not from and after) the Eighth Amendment Date); and
+(v) for the fifth (5th) through and including the seventh (7th) Lease Years, the Rent payable for each such Lease Year shall be adjusted as provided in the next succeeding sentence.
+On each Escalator Adjustment Date during the fifth (5th) through and including the seventh (7th) Lease Years, the Rent payable for each such Lease Year shall be adjusted to be equal to the Rent payable for the immediately preceding Lease Year (as in effect on the last day of such preceding Lease Year, and disregarding, for the avoidance of doubt, for purposes of the calculation under this sentence, the Specified Eighth Amendment Date Rent Amount), multiplied by the Escalator.
+For purposes of clarification, there shall be no Variable Rent (defined below) payable during the first seven (7) Lease Years.”
+iii.Section 3.1(b) is hereby amended by deleting the word “and” that immediately follows clause (v) thereof and adding the following immediately after clause (vi) thereof as subsection (vii):
+“, and (vii) on the Eighth Amendment Date, the amount of each remaining monthly installment of Rent in the Lease Year in which the Eighth Amendment Date occurs (i.e., each installment of Rent payable in such Lease Year after the Eighth Amendment Date, but not, for the avoidance of doubt, the installment of Rent payable in respect of the month in which the Eighth Amendment Date occurs) shall be recalculated to give effect to the changes to Rent effectuated by the amendments to this Lease on the Eighth Amendment Date. With respect to
+7
+|US-DOCS\118511784.21||
+the portion of the Specified Eighth Amendment Date Rent Amount prepaid by Tenant in respect of the month in which the Eighth Amendment Date occurs (if any), Tenant may seek a credit for such sum directly from the purchaser of the equity interests in the operator of the Southern Indiana Property.”
+C.Variable Rent.
+i.From and after the date hereof, for purposes of any calculation of Variable Rent under the Lease, including any adjustments in Variable Rent based on increases or decreases in Net Revenue, such calculations of Net Revenue shall exclude Net Revenue attributable to the Southern Indiana Facility.
+ii.Article II of the Lease is hereby amended such that the definition of “Base Net Revenue Amount” is hereby deleted and replaced with the following:
+“‘Base Net Revenue Amount’: An amount equal to the arithmetic average of the following: (i) Three Billion One Hundred Forty-One Million Eighty Thousand Nine Hundred Eighty-Four and No/100 Dollars ($3,141,080,984.00), which amount Landlord and Tenant agree represents Net Revenue for the Fiscal Period immediately preceding the first (1st) Lease Year (i.e., the Fiscal Period ending September 30, 2017), (ii) Three Billion One Hundred Fifty-Seven Million One Hundred Twenty-Four Thousand Nine Hundred and No/100 Dollars ($3,157,124,900.00), which amount Landlord and Tenant agree represents the Net Revenue for the Fiscal Period immediately preceding the end of the first (1st) Lease Year (i.e., the Fiscal Period ending September 30, 2018) and (iii) Three Billion Forty-Nine Million One Hundred Sixty-Five Thousand Seven Hundred Nine and No/100 Dollars ($3,049,165,709.00), which amount Landlord and Tenant agree represents the Net Revenue for the Fiscal Period immediately preceding the end of the second (2nd) Lease Year (i.e., the Fiscal Period ending September 30, 2019). For the avoidance of doubt, the term “arithmetic average” as used in this definition refers to the quotient obtained by dividing (x) the sum of the amounts set forth in clauses (i), (ii) and (iii) by (y) three (3).”
+D.Annual Minimum Cap Ex Amount.
+Article II of the Lease is hereby amended such that the definition of “Annual Minimum Cap Ex Amount” is hereby revised and modified to replace the reference therein to “One Hundred Fourteen Million Five Hundred Thousand and No/100 Dollars ($114,500,000.00)” with a reference to “One Hundred Eight Million Six Hundred Thousand and No/100 Dollars ($108,600,000.00)”.
+E.Annual Minimum Per-Lease B&I Cap Ex Requirement.
+Landlord and Tenant hereby acknowledge, for the avoidance of doubt, that the Net Revenue attributable to the Southern Indiana Facility for the 2020 Fiscal Year and the 2021 Fiscal Year shall not be included for purposes of calculating the Capital Expenditures required under Section 10.5(a)(ii) of the Lease.
+F.Triennial Allocated Minimum Cap Ex Amount B Floor.
+Article II of the Lease is hereby amended such that the definition of “Triennial Allocated Minimum Cap Ex Amount B Floor” is hereby revised and modified to replace the reference therein to “Three Hundred
+8
+|US-DOCS\118511784.21||
+Eleven Million and No/100 Dollars ($311,000,000.00)” with a reference to “Two Hundred Ninety Million and No/100 Dollars ($290,000,000.00)”.
+G.Triennial Minimum Cap Ex Amount A. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount A” is hereby revised and modified to replace the reference therein to “Five Hundred Sixty-Six Million Seven Hundred Thousand and No/100 Dollars ($566,700,000.00)” with a reference to “Five Hundred Thirty-Seven Million Five Hundred Thousand and No/100 Dollars ($537,500,000.00)”.
+H.Triennial Minimum Cap Ex Amount B. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount B” is hereby revised and modified to replace the reference therein to “Four Hundred Five Million Two Hundred Thousand and No/100 Dollars ($405,200,000.00)” with a reference to “Three Hundred Eighty-Four Million Three Hundred Thousand and No/100 Dollars ($384,300,000.00)”.
+I.Partial Periods.
+i.Section 10.5(a)(v)(b) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Sixty-Six Million Seven Hundred Thousand and No/100 Dollars ($566,700,000.00)” with a reference to “Five Hundred Thirty-Seven Million Five Hundred Thousand and No/100 Dollars ($537,500,00.00)” and (b) replace the reference therein to “One Hundred Eighty-Eight Million Nine Hundred Thousand and No/100 Dollars ($188,900,000.00)” with a reference to “One Hundred Seventy-Nine Million One Hundred Sixty-Six Thousand Six Hundred Sixty-Seven and No/100 Dollars ($179,166,667.00)”,
+ii.Section 10.5(a)(v)(c) of the Lease is hereby amended to (a) replace the reference therein to “Four Hundred Five Million Two Hundred Thousand and No/100 Dollars ($405,200,000.00)” with a reference to “Three Hundred Eighty-Four Million Three Hundred Thousand and No/100 Dollars ($384,300,000.00)” and (b) replace the reference therein to “One Hundred Thirty-Five Million Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($135,066,666.67)” with a reference to “One Hundred Twenty-Eight Million One Hundred Thousand and No/100 Dollars ($128,100,000.00)”, and
+iii.The second sentence of Section 10.5(a)(v) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Sixty-Six Million Seven Hundred Thousand and No/100 Dollars ($566,700,000.00)” with a reference to “Five Hundred Thirty-Seven Million Five Hundred Thousand and No/100 Dollars ($537,500,000.00)”,
+(b) replace the reference therein to “One Hundred Eighty-Eight Million Nine Hundred Thousand and No/100 Dollars ($188,900,000.00)” with a reference to “One Hundred Seventy-Nine Million One Hundred Sixty-Six Thousand Six Hundred Sixty-Seven and No/100 Dollars ($179,166,667.00)”,
+(c) replace the reference therein to “Four Hundred Five Million Two Hundred Thousand and No/100 Dollars ($405,200,000.00)” with a reference to “Three Hundred Eighty-Four Million Three Hundred Thousand and No/100 Dollars
+9
+|US-DOCS\118511784.21||
+($384,300,000.00)” and (d) replace the reference therein to “One Hundred Thirty-Five Million Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($135,066,666.67)” with a reference to “One Hundred Twenty-Eight Million One Hundred Thousand and No/100 Dollars ($128,100,000.00)”.
+J.Section 22.2(vii) Transfer.
+i.Landlord and Tenant hereby acknowledge and agree that the Southern Indiana Transaction shall be deemed to be, and treated as, a transfer and sale of the entire Leasehold Estate with respect to a Facility pursuant to Section 22.2(vii) of the Lease (including, without limitation, for purposes of any determinations under clause (6) thereof), irrespective of whether or not Section 22.2(vii) and Section 22.9 of the Lease are applicable to the Southern Indiana Transaction.
+For the avoidance of doubt, after giving effect to the Southern Indiana Transaction, the percentage of the 2018 EBITDAR Pool that remains available for application to any and all subsequent transfers pursuant to Section 22.2(vii) of the Lease shall not exceed 18.4% in the aggregate.
+ii.All of the applicable requirements and conditions set forth in Section 22.2(vii) and Section 22.9 of the Lease with respect to such transfer and sale (if, and to the extent, applicable to the Southern Indiana Transaction) are deemed satisfied or waived by the execution of this Amendment and the consummation of the closing of the Southern Indiana Transaction.
+iii.The amounts of the 2018 EBITDAR Pool and 2018 EBITDAR Pool Before Fifth Amendment shall not be reduced as a result of the Southern Indiana Facility no longer being a Facility under the Lease, and, without limitation, Schedule 11 to the Lease (setting forth the 2018 Facility EBITDAR of Tenant and Joliet Tenant) shall not be modified as a result of the Southern Indiana Transaction.
+iv.The treatment of the Southern Indiana Transaction hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under any applicable provision of the Lease.
+K.Revisions to Exhibits and Schedules to the Lease.
+The Exhibits and Schedules to the Lease are hereby amended as follows:
+i.Facilities.
+Exhibit A annexed to the Lease (setting forth the list of Facilities under the Lease) is hereby replaced with the replacement Exhibit A that is annexed hereto as Schedule C.
+ii.Legal Description (Southern Indiana).
+The legal descriptions with respect to the Leased Property set forth on Exhibit B annexed to the Lease are hereby amended such that the legal description with respect to the Leased Property pertaining to the Southern Indiana Facility as set forth on Annex A attached hereto is hereby deleted from said Exhibit B.
+10
+|US-DOCS\118511784.21||
+iii.Property Specific IP.
+The list of Property Specific IP set forth on Exhibit H annexed to the Lease is hereby amended such that:
+(a) the following items of Property Specific IP listed thereon are hereby deleted from said Exhibit H:
+Mark | Jurisdiction | Brand | Specific/ Enterprise | Property | App. No. | App. Date | Reg. No. | Reg. Date | Status
+Midwest Regional Poker Championships | Indiana | Horseshoe | Specific | Caesars Southern Indiana | N/A | 6/1/2016 | 2016-0311 | 6/1/2016 | Registered
+The Venue (logo) | Indiana | Horseshoe | Specific | Caesars Southern Indiana | 2009-0045 | 1/21/2009 | 2009-0045 | 1/21/2009 | Registered
+(b) the following item of Property Specific IP is hereby added to said Exhibit H:
+Mark | Jurisdiction | Brand | Specific/ Enterprise | Property | App. No. | App. Date | Reg. No. | Reg. Date | Status
+The Venue (logo) | Indiana | Horseshoe | Specific | Horseshoe Hammond | 2009-0045 | 1/21/2009 | 2009-0045 | 1/21/2009 | Registered
+iv.Description of Title Policies.
+The list of Title Policies set forth on Exhibit J annexed to the Lease is hereby amended such that the reference thereon to the Title Policy relating solely to the Southern Indiana Facility is hereby deleted from said Exhibit J.
+v.Managed Facilities IP Trademarks.
+The list of Managed Facilities IP set forth on Exhibit P annexed to the Lease is hereby amended such that “Caesars Southern Indiana” is hereby deleted from said Exhibit P.
+vi.Landlord Entities.
+The list of entities comprising Landlord set forth on Schedule A annexed to the Lease is hereby amended such that, from and after the date hereof, Horseshoe Southern Indiana LLC shall be deleted from said Schedule A and Horseshoe Southern Indiana LLC shall no longer be a Landlord under the Lease.
+vii.Tenant Entities.
+The list of entities comprising Tenant set forth on Schedule B annexed to the Lease is hereby amended such that, from and after the date hereof, Caesars Riverboat Casino, LLC and Roman Holding Company of Indiana LLC shall be deleted from said Schedule B and Caesars Riverboat Casino, LLC and Roman Holding Company of Indiana LLC shall no longer be Tenants under the Lease.
+11
+|US-DOCS\118511784.21||
+viii.Gaming Licenses.
+The list of Gaming Licenses set forth on Schedule 1 annexed to the Lease is hereby amended such that the Gaming Licenses bearing Unique IDs 458 and 121 relating to the Southern Indiana Facility are hereby deleted from said Schedule 1.
+ix.Maximum Fixed Rent Term.
+The schedule setting forth the Maximum Fixed Rent Term with respect to each Facility set forth on Schedule 3 annexed to the Lease is hereby amended such that the reference to “Horseshoe Southern Indiana” thereon is hereby deleted from said Schedule 3.
+x.Specified Subleases.
+The list of Specified Subleases set forth on Schedule 4 annexed to the Lease is hereby amended such that the Specified Subleases bearing Contract ID Nos. 8804, 14892, 8891, 8892, 14839, 14840, 15228, and 14893 are hereby deleted from said Schedule 4.
+xi.Property Specific Rent Allocation.
+The schedule setting forth the property-specific rent allocation with respect to the two (2) facilities set forth on Schedule 5-A annexed to the Lease is hereby amended such that the reference to “Horseshoe Southern Indiana: $3,221,235.00” thereon is deleted from said Schedule 5-A.
+4.No Other Modification or Amendment to the Lease.
+The Lease shall remain in full force and effect except as expressly amended or modified by this Amendment.
+From and after the date of this Amendment, all references in the Lease to the “Lease” shall be deemed to refer to the Lease as amended by this Amendment.
+For the avoidance of doubt, the Lease shall continue in full force and effect with respect to the balance of (x) the Facilities (other than (i) the Bluegrass Downs Facility as of the Bluegrass Downs Severance Date in accordance with Section 2.A. of this Amendment and (ii) the Southern Indiana Facility as of the date hereof in accordance with Section 3.A. of this Amendment) and (y) the Leased Property (other than (i) the Bluegrass Downs Leased Property as of the Bluegrass Downs Severance Date in accordance with Section 2.A. of this Amendment and (ii) the Southern Indiana Leased Property as of the date hereof in accordance with Section 3.A. of this Amendment).
+5.Governing Law; Jurisdiction.
+This Amendment shall be construed according to and governed by the laws of the jurisdiction(s) specified by the Lease without regard to its or their conflicts of law principles.
+The parties hereto hereby irrevocably submit to the jurisdiction of any court of competent jurisdiction located in such applicable jurisdiction in connection with any proceeding arising out of or relating to this Amendment.
+6.Counterparts.
+This Amendment may be executed by one or more of the parties hereto on any number of separate counterparts, and all of such counterparts taken together shall be deemed to constitute one and the same instrument.
+Facsimile and/or .pdf signatures shall be deemed to be originals for all purposes.
+7.Effectiveness.
+This Amendment shall be effective, as of the date hereof, only upon execution and delivery by each of the parties hereto.
+12
+|US-DOCS\118511784.21||
+8.Miscellaneous.
+If any provision of this Amendment is adjudicated to be invalid, illegal or unenforceable, in whole or in part, it will be deemed omitted to that extent and all other provisions of this Amendment will remain in full force and effect.
+Neither this Amendment nor any provision hereof may be changed, modified, waived, discharged or terminated orally, but only by an instrument in writing signed by the party against whom enforcement of such change, modification, waiver, discharge or termination is sought.
+The paragraph headings and captions contained in this Amendment are for convenience of reference only and in no event define, describe or limit the scope or intent of this Amendment or any of the provisions or terms hereof.
+This Amendment shall be binding upon and inure to the benefit of the parties and their respective heirs, legal representatives, successors and permitted assigns.
+[Signature Page Follows]
+13
+|US-DOCS\118511784.21||
+IN WITNESS WHEREOF, the parties hereto have caused this Amendment to be duly executed by their duly authorized representatives, all as of the date hereof.
+LANDLORD:
+HORSESHOE COUNCIL BLUFFS LLC
+HARRAH’S COUNCIL BLUFFS LLC
+HARRAH’S METROPOLIS LLC
+CAESARS SOUTHERN INDIANA PROPCO LLC (FORMERLY KNOWN AS HORSESHOE SOUTHERN INDIANA LLC)
+NEW HORSESHOE HAMMOND LLC
+NEW HARRAH’S NORTH KANSAS CITY LLC
+GRAND BILOXI LLC
+HORSESHOE TUNICA LLC
+NEW TUNICA ROADHOUSE LLC
+CAESARS ATLANTIC CITY LLC
+BALLY’S ATLANTIC CITY LLC
+HARRAH’S LAKE TAHOE LLC
+HARVEY’S LAKE TAHOE LLC
+HARRAH’S RENO LLC
+BLUEGRASS DOWNS PROPERTY OWNER LLC
+VEGAS DEVELOPMENT LLC
+VEGAS OPERATING PROPERTY LLC
+MISCELLANEOUS LAND LLC
+PROPCO GULFPORT LLC
+PHILADELPHIA PROPCO LLC
+HARRAH’S ATLANTIC CITY LLC
+NEW LAUGHLIN OWNER LLC
+HARRAH’S NEW ORLEANS LLC
+each, a Delaware limited liability company
+By:
+Name: David Kieske
+Title: Treasurer
+HORSESHOE BOSSIER CITY PROP LLC
+HARRAH’S BOSSIER CITY LLC
+each, a Louisiana limited liability company
+By:
+Name: David Kieske
+Title: Treasurer
+[Signatures Continue on Following Pages]
+[Signature Page to Eighth Amendment to Regional Lease]1
+|US-DOCS\118511784.21||
+TENANT:
+CEOC, LLC, a Delaware limited liability company,
+HBR REALTY COMPANY LLC, a Nevada limited liability company,
+HARVEYS IOWA MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+SOUTHERN ILLINOIS RIVERBOAT/CASINO CRUISES LLC, an Illinois limited liability company,
+CAESARS RIVERBOAT CASINO, LLC, an Indiana limited liability company,
+ROMAN HOLDING COMPANY OF INDIANA LLC, an Indiana limited liability company,
+HORSESHOE HAMMOND, LLC, an Indiana limited liability company,
+HARRAH’S BOSSIER CITY INVESTMENT COMPANY, L.L.C., a Louisiana limited liability company,
+HARRAH’S NORTH KANSAS CITY LLC, a Missouri limited liability company,
+GRAND CASINOS OF BILOXI, LLC, a Minnesota limited liability company,
+ROBINSON PROPERTY GROUP LLC, a Mississippi limited liability company,
+TUNICA ROADHOUSE LLC, a Delaware limited liability company,
+CAESARS NEW JERSEY LLC, a New Jersey limited liability company,
+HARVEYS TAHOE MANAGEMENT COMPANY LLC, a Nevada limited liability company,
+PLAYERS BLUEGRASS DOWNS LLC, a Kentucky limited liability company,
+CASINO COMPUTER PROGRAMMING, INC., an Indiana corporation,
+HARVEYS BR MANAGEMENT COMPANY, INC., a Nevada corporation,
+HARRAH’S LAUGHLIN, LLC, a Nevada limited liability company,
+JAZZ CASINO COMPANY, L.L.C., a Louisiana limited liability company
+By:
+Name:
+Title:
+[Signature Page to Eighth Amendment to Regional Lease]1
+|US-DOCS\118511784.21||
+HORSESHOE ENTERTAINMENT,
+a Louisiana limited partnership
+By: New Gaming Capital Partnership,
+a Nevada limited partnership,
+its general partner
+By: Horseshoe GP, LLC,
+a Nevada limited liability company,
+its general partner
+By:
+Name:
+Title:
+BOARDWALK REGENCY LLC,
+a New Jersey limited liability company
+By: Caesars New Jersey LLC,
+a New Jersey limited liability company,
+its sole member
+By:
+Name:
+Title:
+HOLE IN THE WALL, LLC,
+a Nevada limited liability company
+By: CEOC, LLC,
+a Delaware limited liability company,
+its sole member
+By:
+Name:
+Title:
+[Signature Page to Eighth Amendment to Regional Lease]1
+|US-DOCS\118511784.21||
+CHESTER DOWNS AND MARINA, LLC,
+a Pennsylvania limited liability company
+By: Harrah’s Chester Downs Investment Company, LLC,
+its sole member
+By:
+Name:
+Title:
+HARRAH’S ATLANTIC CITY OPERATING COMPANY, LLC,
+a New Jersey limited liability company
+By: Caesars Resort Collection, LLC,
+a Delaware limited liability company,
+its sole member
+By:
+Name:
+Title:
+[Signature Page to Eighth Amendment to Regional Lease]1
+|US-DOCS\118511784.21||
+Acknowledged and agreed, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease:
+PROPCO TRS LLC,
+a Delaware limited liability company
+By:
+Name: David Kieske
+Title: Treasurer
+[Signature Page to Eighth Amendment to Regional Lease]1
+|US-DOCS\118511784.21||
+ACKNOWLEDGMENT AND AGREEMENT OF GUARANTOR
+The undersigned (“Guarantor”) hereby:
+(a) acknowledges receipt of the Eighth Amendment to Lease (the “Amendment”; capitalized terms used herein without definition having the meanings set forth in the Amendment), dated as of September 3, 2021, by and among the entities listed on Schedule A attached thereto, as Landlord, and the entities listed on Schedule B attached thereto, as Tenant, and the other parties party thereto;
+(b) consents to the terms and execution thereof;
+(c) ratifies and reaffirms Guarantor’s obligations to Landlord pursuant to the terms of that certain Guaranty of Lease, dated as of July 20, 2020 (the “Guaranty”), by and between Guarantor and Landlord, and agrees that, except as expressly set forth in Section 2.A.ii. and Section 3.A.ii. of the Amendment, nothing in the Amendment in any way impairs or lessens the Guarantor’s obligations under the Guaranty; and
+(d) acknowledges and agrees that the Guaranty is in full force and effect and is valid, binding and enforceable in accordance with its terms.
+IN WITNESS WHEREOF, the undersigned has caused this Acknowledgment and Agreement of Guarantor to be duly executed as of September 3, 2021.
+|US-DOCS\118511784.21||
+||
+CAESARS ENTERTAINMENT, INC.
+By:
+Name:
+Title:
+[Signature Page to Acknowledgment and Agreement of Guarantor]
+|US-DOCS\118511784.21||
+Schedule A
+LANDLORD ENTITIES
+Horseshoe Council Bluffs LLC
+Harrah’s Council Bluffs LLC
+Harrah’s Metropolis LLC
+Caesars Southern Indiana Propco LLC (formerly known as Horseshoe Southern Indiana LLC)
+New Horseshoe Hammond LLC
+Horseshoe Bossier City Prop LLC
+Harrah’s Bossier City LLC
+New Harrah’s North Kansas City LLC
+Grand Biloxi LLC
+Horseshoe Tunica LLC
+New Tunica Roadhouse LLC
+Caesars Atlantic City LLC
+Bally’s Atlantic City LLC
+Harrah’s Lake Tahoe LLC
+Harvey’s Lake Tahoe LLC
+Harrah’s Reno LLC
+Bluegrass Downs Property Owner LLC
+Vegas Development LLC
+Vegas Operating Property LLC
+Miscellaneous Land LLC
+Propco Gulfport LLC
+Philadelphia Propco LLC
+Harrah’s Atlantic City LLC
+New Laughlin Owner LLC
+Harrah’s New Orleans LLC
+Schedule A
+|US-DOCS\118511784.21||
+Schedule B
+TENANT ENTITIES
+CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+HBR Realty Company LLC
+Harveys Iowa Management Company LLC
+Southern Illinois Riverboat/Casino Cruises LLC
+Caesars Riverboat Casino LLC
+Roman Holding Company of Indiana LLC
+Horseshoe Hammond, LLC
+Horseshoe Entertainment
+Harrah’s Bossier City Investment Company, LLC
+Harrah’s North Kansas City LLC
+Grand Casinos of Biloxi, LLC
+Robinson Property Group LLC
+Tunica Roadhouse LLC
+Boardwalk Regency LLC
+Caesars New Jersey LLC
+Harveys Tahoe Management Company LLC
+Players Bluegrass Downs LLC
+Casino Computer Programming, Inc.
+Harveys BR Management Company, Inc.
+Hole in the Wall, LLC
+Chester Downs and Marina, LLC
+Harrah’s Atlantic City Operating Company, LLC
+Harrah’s Laughlin, LLC
+Jazz Casino Company, L.L.C.
+Schedule B
+|US-DOCS\118511784.21||
+Schedule C
+[follows immediately]
+Schedule C
+|US-DOCS\118511784.21||
+EXHIBIT A
+FACILITIES
+No. | Property | State | Fee Owner | Operating Entity
+1. | Horseshoe Council Bluffs | Iowa | Horseshoe Council Bluffs LLC | HBR Realty Company LLC Harveys BR Management Company, Inc.
+2. | Harrah’s Council Bluffs | Iowa | Harrah's Council Bluffs LLC | Harveys Iowa Management Company LLC CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+3. | Harrah’s Metropolis | Illinois | Harrah's Metropolis LLC | Southern Illinois Riverboat/Casino Cruises LLC
+4. | Horseshoe Hammond | Indiana | New Horseshoe Hammond LLC | Horseshoe Hammond, LLC
+5. | Horseshoe Bossier City | Louisiana | Horseshoe Bossier City Prop LLC | Horseshoe Entertainment
+6. | Harrah’s Bossier City (Louisiana Downs) | Louisiana | Harrah's Bossier City LLC | Harrah's Bossier City Investment Company, L.L.C.
+7. | Harrah’s North Kansas City | Missouri | New Harrah's North Kansas City LLC | Harrah’s North Kansas City LLC
+8. | Harrah’s Gulf Coast (formerly known as Grand Biloxi Casino Hotel) and Biloxi Land | Mississippi | Grand Biloxi LLC | Grand Casinos of Biloxi, LLC Casino Computer Programming, Inc.
+Schedule C
+|US-DOCS\118511784.21||
+9. | Horseshoe Tunica | Mississippi and Arkansas | Horseshoe Tunica LLC | Robinson Property Group LLC
+10. | Tunica Roadhouse | Mississippi | New Tunica Roadhouse LLC | Tunica Roadhouse LLC
+11. | Caesars Atlantic City (includes Wild Wild West and Block 488 Parcel) | New Jersey | Caesars Atlantic City LLC Bally's Atlantic City LLC | Boardwalk Regency LLC Caesars New Jersey LLC
+12. | Harrah’s Lake Tahoe | Nevada | Harrah's Lake Tahoe LLC | Harveys Tahoe Management Company LLC CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+13. | Harvey’s Lake Tahoe | Nevada and California | Harvey's Lake Tahoe LLC | Harveys Tahoe Management Company LLC
+14. | Reno Billboard Parcel | Nevada | Harrah's Reno LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+15. | Las Vegas Land Assemblage Properties | Nevada | Vegas Development LLC | Hole in the Wall, LLC CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+16. | Harrah’s Airplane Hangar | Nevada | Vegas Operating Property LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+Schedule C
+|US-DOCS\118511784.21||
+17. | Land Leftover from Harrah’s Gulfport | Mississippi | Propco Gulfport LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+18. | Vacant Land in Splendora, TX | Texas | Miscellaneous Land LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+19. | Vacant Land at Turfway Park | Kentucky | Miscellaneous Land LLC | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+20. | Harrah’s Philadelphia | Pennsylvania | Philadelphia Propco LLC | Chester Downs and Marina, LLC
+21. | Harrah’s Atlantic City | New Jersey | Harrah’s Atlantic City LLC | Harrah’s Atlantic City Operating Company, LLC
+22. | Harrah’s Laughlin | Nevada | New Laughlin Owner LLC | Harrah’s Laughlin, LLC
+23. | Harrah’s New Orleans | Louisiana | Harrah’s New Orleans LLC | Jazz Casino Company, L.L.C.
+Schedule C
+|US-DOCS\118511784.21||
+Annex A
+Southern Indiana Leased Property
+PARCEL I:
+TRACT I:
+Part of Section 12, Township 4 South, Range 5 East, in Posey Township, in Harrison County, Indiana, more particularly described as follows: Commencing at a point on the bank of the Ohio River referred to as a stone corner to James Farnsley and Arthur J. Cunningham in the Townsend deed, said point also being the Southernmost corner of Lot #3 of the Farnsley Survey, as recorded in Deed Record “Z” page 148; thence with the Southern line of Lot #3 of said Farnsley Survey North 64 degrees 29 minutes 9 seconds West, 271.46 feet to a #4 reinforcing bar in the Northern right of way of State Road #111, THIS BEING THE POINT OF BEGINNING; thence continue with the Southern line of #3 North 64 degrees 29 minutes 9 seconds West, 141.04 feet, North 21 degrees 30 minutes 51 seconds East, 495.00 feet, North 11 degrees 29 minutes 9 seconds West, 657.19 feet, North 74 degrees 14 minutes 25 seconds West, 1444.07 feet to an iron pin; thence North 4 degrees 5 minutes 13 seconds West, 418.77 feet to an iron pin found; thence South 86 degrees 54 minutes 47 seconds West, 429.00 feet; thence North 84 degrees 40 minutes 23 seconds West, 891.00 feet; thence South 51 degrees 54 minutes 51 seconds West, 561.00 feet to an iron pin found in the Southern line of Tract #3 of the Farnsley Survey; thence along the Eastern line of Tract #6 of the Farnsley Survey continuing as follows: South 29 degrees 55 minutes 31 seconds West, 495.00 feet to an iron pin found, South 4 degrees 25 minutes 31 seconds West, 561.00 feet to an iron pin found; thence along the South line of Tract #6 South 89 degrees 34 minutes 29 seconds East, 555.60 feet to a point in the center of the Old Dug Road; thence along the center of the Old Dug Road as follows: North 2 degrees 3 minutes 54 seconds East, 161.56 feet, North 15 degrees 56 minutes 4 seconds East, 102.40 feet, North 73 degrees 13 minutes 24 seconds East, 139.57 feet, South 76 degrees 36 minutes 56 seconds East, 139.40 feet, North 80 degrees 16 minutes 44 seconds East, 135.03 feet, North 52 degrees 10 minutes 34 seconds East, 125.26 feet, North 39 degrees 22 minutes 34 seconds East, 53.31 feet, North 37 degrees 8 minutes 44 seconds East, 149.95 feet, North 66 degrees 10 minutes 4 seconds East, 98.95 feet, North 71 degrees 55 minutes 54 seconds East, 115.29 feet, North 44 degrees 54 minutes 04 seconds East, 223.85 feet, North 57 degrees 11 minutes 44 seconds East, 217.43 feet, South 89 degrees 31 minutes 46 seconds East, 91.00 feet, South 38 degrees 49 minutes 56 seconds East, 69.42 feet; thence leaving the center of said road South 16 degrees 47 minutes 36 seconds East, 196.85 feet to a #4 reinforcing bar; thence South 82 degrees 52 minutes 16 seconds West, 391.74 feet; thence South 17 degrees 15 minutes 54 seconds East, 600.00 feet; thence North 80 degrees 01 minutes 40 seconds East, 289.89 feet to an iron pin found on the top of the bluff; thence along the top of the bluff as follows: South 10 degrees 58 minutes 17 seconds East, 6.57 feet, South 26 degrees 36 minutes 3 seconds East, 52.67 feet, South 11 degrees 47 minutes 12 seconds West, 167.91 feet, South 10 degrees 59 minutes 28 seconds East, 86.18 feet,South 14 degrees 46 minutes 32 seconds West, 222.64 feet, South 3 degrees 39 minutes 48 seconds East, 117.73 feet, South 12 degrees 21 minutes 48 seconds East, 73.62 feet, South 16 degrees 51 minutes 48 seconds East, 78.03 feet, South 16 degrees 23 minutes 22 seconds West, 88.62 feet, South 8 degrees 14 minutes 52 seconds West, 74.71 feet; thence leaving the top of said bluff South 88 degrees 28 minutes 56 seconds East, 459.18 feet to a #4 reinforcing bar; thence North
+Annex A
+|US-DOCS\118511784.21||
+27 degrees 11 minutes 34 seconds East, 26.92 feet to a point in the Northern line of Bridge Street, in the Town of Bridgeport, as recorded in the Harrison County Courthouse; thence along the Northern right of way of Bridge Street, South 73 degrees 59 minutes 56 seconds East, 477.21 feet to a right of way marker in the Northern right of way of State Road #111; thence with said right of way as follows: North 63 degrees 2 minutes 1 second East, 460.09 feet, North 75 degrees 19 minutes 58 seconds East, 140.83 feet; thence along a curve concave Northwesterly whose radius is 502.96 feet and whose long chord bears North 57 degrees 18 minutes 17 seconds East, having a length of 100.41 feet, a distance of 100.58 feet to the point of beginning.
+ALSO:
+Part of Section 12, Township 4 South, Range 5 East, in Posey Township,in Harrison County, Indiana, more particularly described as follows: Commencing at a point on the bank of the Ohio River referred to as a stone corner of James Farnsley and Arthur J. Cunningham in the Townsend deed, said point also being the Southernmost corner of Lot #3 of the Farnsley Survey, as recorded in Deed Record Book “Z” page 148, THIS BEING THE POINT OF BEGINNING; thence along the Southern line of Lot 3 of said Farnsley tract North 64 degrees 29 minutes 9 seconds West, 87.64 feet to a #4 reinforcing bar in the Southern right of way of State Road #111; thence with said right of way as follows: Along a curve concave Northwesterly whose radius is 672.96 feet and whose long chord bears South 47 degrees 1 minute 20 seconds West, having a length of 54.93 feet, a distance of 54.95 feet to a #4 reinforcing bar; thence South 24 degrees 35 minutes 30 seconds West, 274.71 feet to a #4 reinforcing bar; thence along a curve concave Northwesterly whose radius is 226.00 feet and whose long chord bears South 38 degrees 7 minutes 12 seconds West, 105.73 feet, a distance of 106.72 feet to a #4 reinforcing bar; thence South 6 degrees 31 minutes 30 seconds West, 298.78 feet to a point at the edge of the Ohio River; thence North 27 degrees 51 minutes 54 seconds East, 712.09 feet to the point of beginning.
+TRACT II:
+Part of Section 12, Township 4 South, Range 5 East, in Posey Township, in Harrison County, Indiana AND Part of Section 7, Township 4 South, Range 6 East of the Second Principal Meridian, in Franklin Township, in Floyd County, Indiana, more particularly described as follows: Commencing at a stone corner to James Farnsley and Arthur J. Cunningham, which is also the Southernmost corner of Lot #3 of the Farnsley Survey, as recorded in Deed Record Book “Z” page 148, said point being recreated and being on the bank of the Ohio River, THIS BEING THE POINT OF BEGINNING, thence along the Southwestern line of Lot #3 of said Farnsley Tract North 64 degrees 29 minutes 9 seconds West, 87.64 feet to a #4 reinforcing bar placed in the Southern right of way of Indiana State Highway #111; thence along the right of way of said highway as follows: Along a curve concave Northwesterly whose radius is 672.96 feet and whose long chord bears North 34 degrees 10 minutes 30 seconds East, having a length of 245.46 feet, a distance of 246.84 feet to a #4 reinforcing bar; thence continuing along said right of way North 8 degrees 11 minutes 51 seconds West, 119.27 feet to a #4 reinforcing bar; thence North 65 degrees 10 minutes 25 seconds West, 70.00 feet to a #4 reinforcing bar; thence South 44 degrees 7 minutes 0 seconds West, 105.95 feet to a #4 reinforcing bar; thence along a curve concave Northwesterly whose radius is 502.96 feet and whose long chord bears South 37 degrees 37 minutes 17 seconds West, having a length of 242.57 feet, a distance of 244.99 feet to a #4
+Annex A
+|US-DOCS\118511784.21||
+reinforcing bar in the Southern line of Lot #3 of said Farnsley Tract; thence with said line North 64 degrees 29 minutes 9 seconds West, 141.04 feet; thence along the line of Lot #3 as follows: North 21 degrees 30 minutes 51 seconds East, 495.00 feet, North 11 degrees 29 minutes 9 seconds West, 657.19 feet, North 74 degrees 14 minutes 25 seconds West, 543.21 feet to an iron pin found marking the corner of property, recorded in Deed Record Book “C-9” page 128; thence leaving the Southern line of Lot #3 and along the property line of said tract as follows: North 18 degrees 26 minutes 36 seconds West, 112.26 feet to an iron pin found, North 57 degrees 5 minutes 56 seconds West, 194.06 feet to an iron pin found, North 47 degrees 22 minutes 31 seconds West, 157.28 feet to an iron pin found, North 35 degrees 54 minutes 56 seconds West, 172.63 feet to an iron pin found, North 65 degrees 25 minutes 11 seconds West, 134.39 feet to an iron pin found, North 79 degrees 11 minutes 31 seconds West, 166.74 feet to an iron pin found, North 59 degrees 5 minutes 30 seconds West, 227.74 feet to an iron pin found marking the Northwestern corner of said tract; thence said point being a corner of Lot #3 of said Farnsley Tract; thence continue along the perimeter of said Lot #3 of Farnsley Tract as follows: South 86 degrees 54 minutes 47 seconds West, 429.00 feet, North 84 degrees 40 minutes 23 seconds West, 891.00 feet, South 51 degrees 54 minutes 51 seconds West, 561.00 feet to an iron pin found, North 60 degrees 23 minutes 49 seconds West, 746.55 feet to an iron pin found; thence leaving the Southern line of Lot #3 of said Farnsley Tract North 13 degrees 9 minutes 43 seconds West, 135.00 feet to an iron pin found; thence South 50 degrees 42 minutes 35 seconds West, 282.00 feet to a iron pin found in the West line of the Northeast Quarter of the Northwest Quarter; thence with the West line of said Quarter, Quarter North 0 degrees 6 minutes 54 seconds East, 967.33 feet to an iron pin found at the Northwest corner of the Northeast Quarter of the Northwest Quarter of Section 12; thence with the North line of said Section, East, basis of bearings this description, 132.86 feet to a pin found as set in a legal survey completed April, 1979; thence continuing with said line East, 3027.53 feet to a stone found; thence South 57 degrees 1 minute 58 seconds East, 672.07 feet to a stone found; thence South 56 degrees 22 minutes 46 seconds East, 39.82 feet to an iron pin found; thence South 1 degree 8 minutes 40 seconds East, 281.84 feet to an iron pin found; thence South 74 degrees 0 minutes 16 seconds East, 724.42 feet to an iron pin found; thence South 66 degrees 32 minutes 11 seconds East, 922.90 feet to a point at the top of the bank of the Ohio River; thence with the bank of said river as follows: South 38 degrees 32 minutes 6 seconds West, 240.86 feet, South 33 degrees 40 minutes 44 seconds West, 208.82 feet, South 15 degrees 36 minutes 28 seconds West, 215.79 feet, South 27 degrees 58 minutes 14 seconds West, 188.90 feet, South 30 degrees 59 minutes 57 seconds West, 198.02 feet, South 29 degrees 30 minutes 53 seconds West, 229.26 feet, South 22 degrees 41 minutes 22 seconds West, 203.10 feet, South 24 degrees 17 minutes 17 seconds West, 194.43 feet, South 8 degrees 50 minutes 5 seconds West, 206.21 feet, South 27 degrees 15 minutes 27 seconds West, 205.43 feet to the point of beginning.
+EXCEPT that part conveyed to Hoosier Energy Rural Electric Cooperative in a deed recorded August 31, 1998 as Instrument No. 98056759 and more particularly described as follows: Being a part of Section 12, Township 4 South, Range 5 East, in Harrison County, Indiana, and being part of the property conveyed to RDI/Caesars Riverboat Casino, LLC, as described by deed, recorded in Deed Book “9-O” page 337, said part being more particularly described as follows: Commencing at the Northwest corner of the Northeast Quarter of the Northwest Quarter of Section 12, Township 4 South, Range 5 East of the Second Principal Meridian; thence South 00 degrees 06 minutes 54 seconds West, 967.33 feet, North 50 degrees 42 minutes 35 seconds East, 282.00 feet, South 13 degrees 09 minutes 43 seconds East, 135.00 feet, South 60 degrees 23
+Annex A
+|US-DOCS\118511784.21||
+minutes 49 seconds East, 756.44 feet, North 51 degrees 54 minutes 51 seconds East, 561.00 feet, South 84 degrees 40 minutes 23 seconds East, 891.00 feet; and thence crossing Stuckeys Road, North 86 degrees 54 minutes 47 seconds East, 429.00 feet to a four inch diameter steel pipe; thence North 38 degrees 51 minutes 17 seconds East, 285.15 feet to THE TRUE POINT OF BEGINNING of the tract being herein described; thence North 22 degrees 13 minutes 02 seconds East, 280.00 feet to a point; thence South 67 degrees 46 minutes 58 seconds East, 185.00 feet to a point; thence South 22 degrees 13 minutes 02 seconds West, 280.00 feet to a point; thence North 67 degrees 46 minutes 58 seconds West, 185.00 feet to the true point of beginning.
+TRACT III:
+Being a part of the Northeast Quarter of Fractional Section 12, Township 4 South, Range 5 East, in Posey Township, in Harrison County, Indiana, and being the same property conveyed to Melvin Earl Porter and Marilyn Sue Porter as described by deed, recorded in Deed Book “C-9” page 128, said property being more particularly described as follows: Commencing at the Northwest corner of the Northeast Quarter of the Northwest Quarter of Fractional Section 12, Township 4 South, Range 5 East of the Second Principal Meridian; thence the following courses: South 00 degrees 06 minutes 54 seconds West, 967.33 feet, North 50 degrees 42 minutes 35 seconds East, 282.00 feet, South 13 degrees 09 minutes 43 seconds East, 135.00 feet, South 60 degrees 23 minutes 49 seconds East, 756.55 feet, North 51 degrees 54 minutes 51 seconds East, 561.00 feet, South 84 degrees 40 minutes 23 seconds East, 891.00 feet, and North 86 degrees 54 minutes 47 seconds East, 429.00 feet to a found four-inch diameter steel pipe, BEING THE TRUE POINT OF BEGINNING of the tract being herein described; thence with the line between Porter and Caesar's (Deed Book “9-O” page 449), South 59 degrees 05 minutes 30 seconds East, 227.74 feet to a 5/8” diameter steel rebar; thence South 79 degrees 11 minutes 31 seconds East, 166.74 feet to a 5/8” diameter steel rebar; thence South 65 degrees 25 minutes 11 seconds East, 134.39 feet to a 5/8” diameter steel rebar; thence South 35 degrees 54 minutes 56 seconds East, 172.63 feet at a 5/8” diameter steel rebar; thence South 47 degrees 22 minutes 31 seconds East, 157.28 feet to a 5/8” diameter steel rebar; thence South 57 degrees 05 minutes 56 seconds East, 194.06 feet to a 5/8” diameter steel rebar; thence South 18 degrees 26 minutes 36 seconds East, 112.26 feet to a 5/8” diameter steel rebar in the line between Porter and Caesar's (Deed Book “9-N” page 458); thence with said line, North 74 degrees 14 minutes 25 seconds West, 900.36 feet to a nail in Stuckeys Road; thence with Stuckeys Road part of the way and beyond, North 04 degrees 05 minutes 13 seconds West, 418.77 feet to the point of beginning.
+(Being the same real estate as intended in Deed Record Book “R-9 page 320, in the Recorder's Office, in Harrison County, Indiana.)
+PARCEL II:
+Being a part of the Northwest Quarter of fractional Section 13, Township 4 South, Range 5 East, in Harrison County, Indiana and being part of the property conveyed to Lytle L. Smith as described by deed recorded in Deed Book 8-D, page 531, said part being more particularly described as follows:
+Commencing at the northwest corner of the northwest quarter of fractional Section 13; thence east with the north line of Section 13, 1125.00 feet to a point in Lotticks Corner Road; thence continuing East 380.99 feet to a point; thence departing the road and with the east line of Meytz
+Annex A
+|US-DOCS\118511784.21||
+(Deed Book 9-F, page 440), south 05 degrees 58 minutes 36 seconds West 723.72 feet to a found iron pipe; thence with the north line of Voogd (Deed Book 9-K, page 967), East 63.80 feet to the true point of beginning of the tract being herein described; thence North 34 degrees 30 minutes 38 seconds East 220.00 feet to a point; thence East 220.00 feet to a point in Doolittle Hill road; thence with Doolittle Hill road, South 34 degrees 30 minutes 38 seconds West 220.00 feet to a point; thence departing the road and with the north line of Voogd, West (passing a found iron pipe at 21.78 feet) 220.00 feet in all to the true point of beginning.
+Annex A
+|US-DOCS\118511784.21||
+Annex B
+Bluegrass Downs Leased Property
+TRACT 1:
+(Map Number 094-20-01-022)
+Beginning at a 1/2" rebar located S. 55° 05' 21" E., 93.65 feet from a 1" iron pipe marking the northeast corner of Stuart Nelson Park, said northeast corner of Stuart Nelson Park located approximately 343 feet west of the centerline of Metcalf Lane, if extended, and located approximately 2436 feet north of the north right-of-way line of Hinkleville Road (U.S. Highway 60); thence from said point of beginning and along the north line of Stuart Nelson Park, N. 55° 05' 21" W., 458.52 feet to a 1/2" rebar located at the southeast corner of J.E.D.D., as recorded in Deed Book 695, Page 849 in the McCracken County Court Clerk's Office; thence along the east line of said J.E.D.D., N. 15° 02' 24" E., 666.47 feet to a 1/2" rebar located on the south line of Illinois Central Railroad; thence along the south line of Illinois Central Railroad, N. 82° 27' 04" E., 561.21 feet to a 1/2" rebar located on the East line of H. G. Ullerich, as recorded in Deed Book 282, Page 113, aforesaid clerk's office; thence along said Ullerich's East line, S. 19° 49' 41" W., 1041.53 feet to the point of beginning.
+Being in all respects the same property conveyed to Players Bluegrass Downs, Inc., a Kentucky Corporation, by deed dated and recorded November 22, 1993, in Deed Book 801, Page 408, McCracken County Court Clerk's Office.
+TRACT 2:
+(Map Number 095-30-00-001)
+Commencing at a right-of-way monument located on the East side of Metcalf Lane, 46 feet left of centerline station 107+45.00 as shown on the Kentucky Department of Transportation plans for Hinkleville Road, Project No. S.P. 73-6172; thence along the North right-of-way line of Hinkleville Road, S. 87° 07' 11" E., 746.09 feet; thence along the West right-of-way line of Downs Drive, N. 1° 55' 08" E., 400.04 feet to a 1/2" rebar located at the northwest corner of Downs Drive and said rebar being the point of beginning of the property herein described; thence from said point of beginning and along the North line of N. S. Rhodes Property, as recorded in Deed Book 716, Page 626 in the McCracken County Court Clerk's Office, N. 87° 08' 26" W., 440.94 feet to a 1/2" rebar located on the East line of H. W. Roberts, Jr. Property, as recorded in Deed Book 540, Page 295, aforesaid clerk's office; thence along the East line of C. S. Pirtle, as recorded in Deed Book 429, Page 531 and Deed Book 667, Page 704, aforesaid clerk's office, Mary Sue Taylor, as recorded in Deed Book 783, Page 748, aforesaid clerk's office, and Barbara Riley, as recorded in Deed Book 530, Page 688, aforesaid clerk's office, N. 02° 27' 00" E., 719.12 feet to a 1/2" rebar; thence along the North Property line of said Barbara Riley, N. 87° 43' 24" W., 316.20 feet to a 1/2" rebar located at the Northeast corner of Metcalf Lane; thence N. 87° 37' 18" E., 5.00 feet from said northwest corner; thence along the west right-of-way line of Metcalf Lane, 25 feet from and parallel to the centerline thereof, S. 02° 22' 42" W., 92.00 feet to a 1/2" rebar located on the North Line of D. F. Crosthwaite, as recorded in Deed Book 471, Page 564, aforesaid clerk's office; thence along said Crosthwaite's North line, N. 87° 37’ 18” W.
+Annex B
+|US-DOCS\118511784.21||
+317.95 feet to a 1/2” rebar located at the northwest corner of said Crosthwaite; thence N. 02° 25' 25" E. 953.75 feet to a 1/2" rebar located at the southeast corner of Stuart Nelson Park; thence along the East line of Stuart Nelson Park, N. 02° 12' 35" E., 461.23 feet to a 1" iron pipe located at the Northeast corner of Stuart Nelson Park; thence S. 55° 05' 21" E., 93.65 feet to a 1/2" rebar; thence N. 19° 49' 41" E., 40.68 feet to a 1/2" rebar located at the Southwest corner of H. G. Ullerich, as recorded in Deed Book 282, Page 113, aforesaid clerk's office; thence along the South Line of H. G. Ullerich, as recorded in Deed Book 282, Pages 34 and 113, aforesaid clerk's office, Helen Gramse, as recorded in Deed Book 240, Page 508, aforesaid clerk's office, and William Baumer, as recorded in Deed Book 723, Page 557, aforesaid clerk's office, the following three calls: S. 59° 40' 47" E., 1655.72 feet to a 1/2" rebar; S. 63° 24' 13" E., 94.30 feet to a 1/2" rebar; S. 59° 03' 33" E., 1054.28 feet to a 1/2" rebar located on the West right-of-way line of the Floodwall, S. 24° 02' 34" W. 40.29 feet to a 1/2" rebar located on the North line of Gibraltar Management Co., Inc., as recorded in Deed Book 528, Page 298 and Deed Book 559, Page 81, aforesaid clerk's office; thence along said Gibraltor Management Co., Inc. Property, the following three calls: N. 59° 03' 33" W., 1057.60 feet to a nail in the race track, thence N. 63° 24' 13" W., 94.09 feet to a nail in the race track; thence S. 03° 20' 54" W., 1225.40 feet to a 1/2" rebar located at the Northeast corner of Wynn Sales and Service, Inc., as recorded in Deed Book 667, Page 786, aforesaid clerk's office; thence along the north line of said Wynn Sales and Service, Inc., N. 87° 08' 26" W., 335.75 feet to a 1/2" rebar located at the Northeast corner of Downs Drive; thence N. 87° 08' 26" W., 60.00 feet to the point of beginning.
+Less and except an off-conveyance to the City of Paducah (1.065 acres) by deed dated December 17, 2004, of record in Deed Book 1055, page 180, aforesaid clerk’s office.
+BEING in all respects the same property conveyed to Players Bluegrass Downs, Inc., a Kentucky Corporation, by deed dated and recorded November 22, 1993, in Deed Book 801, Page 411, McCracken County Court Clerk's Office.
+TRACT 3:
+(Map Number 095-10-00-014.01)
+Being Parcel B, containing 9.480 acres more or less, as shown on Waiver of Subdivision, Plat of Survey for Harrah's Entertainment recorded on January 11, 2000 in Plat Section L, Page 404, McCracken County Clerk’s Office, and being more particularly described as follows:
+Being a tract of land located North of U.S. Highway 60 or Park Avenue and West of Metcalf Lane in the City of Paducah, McCracken County, Kentucky, more particularly described as follows: Beginning at a steel rod, ½ inch in diameter by 30 inches line with a plastic cap stamped "KRLS 1842" (hereinafter referred to as a steel rod and cap) set at the Southeasterly corner of the herein described property, said steel rod and cap being located North 02° 25' 25" East, a distance of 714.83 feet from a mag nail set on the Northerly right of way line of U.S. Highway 60, with said mag nail being located North 87° 08' 15" West, a distance of 307.10 feet from a concrete right of way marker located at the intersection of said Northerly right of way line with the Westerly right of way line of Metcalf Lane; thence from said point of beginning proceed North 86° 34' 29" West along and with the Southerly line of the herein described parcel 328.86 feet to a rebar with a metal cap found at the Southwesterly corner of the subject site herein described;
+Annex B
+|US-DOCS\118511784.21||
+thence North 02° 31' 05" East, along and with the Westerly line of said site, 1,259.80 feet to a one inch diameter iron pipe found; the Northwesterly corner of the herein descried tract; thence South 86° 34' 19" East, a distance of 326.78 feet to a steel rod and cap set at the Northeasterly corner of the subject site; thence South 02° 25' 25" West, a distance of 1,259.82 feet to the point of beginning.
+Together with a non-exclusive 40 foot wide easement for ingress and egress set forth in Agreement by and among Inez Johnson, Wayne Simpson and Players Bluegrass Downs, Inc. dated December 16, 1999 recorded Deed Book 929, Page 367, and as shown on as shown on Waiver of Subdivision, Plat of Survey for Harrah's Entertainment recorded on January 11, 2000 in Plat Section L, Page 404, both in the McCracken County Clerk’s office
+Being the same property leased to by unrecorded lease dated May 22, 1987, by and between Inez Johnson and Coy Stacey and Bobby Dextor, the Original Lessees, and subsequently assigned to Bluegrass Downs of Paducah, Ltd., (“Successor Lessee”) by an unrecorded Assignment of Lease dated June 1, 1987, all as evidenced of record by Memorandum of Lease dated June 1, 1987, of record in Deed Book 703, page 373.
+Said Successor Lessee having assigned all of its right, title and interest in and to said Lease to Players Bluegrass Downs, Inc., a Kentucky corporation, by Assignment of Lease dated November 22, 1993, as evidenced of record by memorandum thereof recorded in Deed Book 801, page 405, and as further affected by Agreement between Inez Johnson and Players Bluegrass Downs, Inc., dated December 16, 1999, recorded in Deed Book 929, page 367, all in the aforesaid clerk’s office.
+TRACT 4:
+(A part of Map Number 095-10-00-014)
+Being Parcel A, containing 1.950 acres more or less, as shown on Waiver of Subdivision, Plat of Survey for Harrah's Entertainment recorded on January 11, 2000 in Plat Section L, Page 404, McCracken County Clerk’s Office, and being more particularly described as follows:
+Being a parcel of land located North of U.S. Highway 60 or Park Avenue and West of Metcalf Lane in the City of Paducah, McCracken County, Kentucky, more particularly described as follows:
+Beginning at a steel rod, ½” diameter by 30" long with a plastic cap stamped "KRLS 1842" set at the time of this survey (hereinafter referred to as a steel rod and cap) at the Southeasterly corner of the herein described property, said steel rod and cap being located N. 02°-25'-25" E., a distance of 229.35 feet from a mag.
+Nail set on the Northwesterly right-of-way line of U.S. Highway 60 with said Mag.
+Nail being located N. 87°-08'-15" W., as distance of 307.10 feet from a concrete right-of-way marker located at the intersection of said Northerly right-of-way line with the Westerly right-of-way line of Metcalf Lane; thence from said point of beginning proceed N. 87°-55'-41" W. along and with the Southwestly line of the herein described parcel and with an existing six foot high chain link fence, 167.45 feet to a steel rod and cap set at the Southwesterly corner of the herein described property; thence N 25°-31'-05" W. and continuing along and with said chain-link fence, a distance of 20.17 feet to a steel rod and cap set on the Westerly line of the herein described parcel of land, thence N 03°03'-47" E. along and with the Westerly line aforesaid and continuing along and with the chain-link fence aforesaid, 471.72 feet
+Annex B
+|US-DOCS\118511784.21||
+to a steel road and cap set, the Northwesterly corner of the subject property; thence S 86°-34'-29" E. along and with the Northerly line of said subject site, 171.66 feet to a steel rod and cap set, the Northeasterly corner of said site; thence S 02°-25'-25" W. along and with an existing six foot high chain-link fence, 485.48 feet to the point of beginning.
+Together with a non-exclusive 40 foot wide easement for ingress and egress set forth in Agreement by and among Inez Johnson, Wayne Simpson and Players Bluegrass Downs, Inc. dated December 16, 1999 recorded Deed Book 929, Page 367, and as shown on as shown on Waiver of Subdivision, Plat of Survey for Harrah's Entertainment recorded on January 11, 2000 in Plat Section L, Page 404, both in the Office aforesaid.
+Being the same property leased to Wayne Simpson and Gloria Simpson from Inez Johnson, by unrecorded lease dated July 31, 1987, and assigned to Players Bluegrass Downs, Inc., by Assignment of Lease dated June 13, 1994, of record in Deed Book 805, Page 423, in the office aforesaid, and as amended by Agreement between Inez Johnson, Wayne Simpson and Gloria Simpson, husband and wife, and Players Bluegrass Downs, Inc., dated December 16, 1999, recorded in Deed Book 929, Page 343, all in the office aforesaid.
+Annex B
+|US-DOCS\118511784.21||
+Annex C
+Ground Leased Property (Bluegrass Downs Facility)
+BLUEGRASS DOWNS - TRACT 3
+TRACT 3:
+(Map Number 095-10-00-014.01)
+Being Parcel B, containing 9.480 acres more or less, as shown on Waiver of Subdivision, Plat of Survey for Harrah's Entertainment recorded on January 11, 2000 in Plat Section L, Page 404, McCracken County Clerk’s Office, and being more particularly described as follows:
+Being a tract of land located North of U.S. Highway 60 or Park Avenue and West of Metcalf Lane in the City of Paducah, McCracken County, Kentucky, more particularly described as follows: Beginning at a steel rod, ½ inch in diameter by 30 inches line with a plastic cap stamped "KRLS 1842" (hereinafter referred to as a steel rod and cap) set at the Southeasterly corner of the herein described property, said steel rod and cap being located North 02° 25' 25" East, a distance of 714.83 feet from a mag nail set on the Northerly right of way line of U.S. Highway 60, with said mag nail being located North 87° 08' 15" West, a distance of 307.10 feet from a concrete right of way marker located at the intersection of said Northerly right of way line with the Westerly right of way line of Metcalf Lane; thence from said point of beginning proceed North 86° 34' 29" West along and with the Southerly line of the herein described parcel 328.86 feet to a rebar with a metal cap found at the Southwesterly corner of the subject site herein described; thence North 02° 31' 05" East, along and with the Westerly line of said site, 1,259.80 feet to a one inch diameter iron pipe found; the Northwesterly corner of the herein descried tract; thence South 86° 34' 19" East, a distance of 326.78 feet to a steel rod and cap set at the Northeasterly corner of the subject site; thence South 02° 25' 25" West, a distance of 1,259.82 feet to the point of beginning.
+Together with a non-exclusive 40 foot wide easement for ingress and egress set forth in Agreement by and among Inez Johnson, Wayne Simpson and Players Bluegrass Downs, Inc. dated December 16, 1999 recorded Deed Book 929, Page 367, and as shown on as shown on Waiver of Subdivision, Plat of Survey for Harrah's Entertainment recorded on January 11, 2000 in Plat Section L, Page 404, both in the McCracken County Clerk’s office.
+Being the same property leased to by unrecorded lease dated May 22, 1987, by and between Inez Johnson and Coy Stacey and Bobby Dextor, the Original Lessees, and subsequently assigned to Bluegrass Downs of Paducah, Ltd., (“Successor Lessee”) by an unrecorded Assignment of Lease dated June 1, 1987, all as evidenced of record by Memorandum of Lease dated June 1, 1987, of record in Deed Book 703, page 373.
+Said Successor Lessee having assigned all of its right, title and interest in and to said Lease to Players Bluegrass Downs, Inc., a Kentucky corporation, by Assignment of Lease dated November 22, 1993, as evidenced of record by memorandum thereof recorded in Deed Book 801, page 405, and as further affected by Agreement between Inez Johnson and Players Bluegrass Downs, Inc., dated December 16, 1999, recorded in Deed Book 929, page 367, all in the aforesaid clerk’s office.
+Annex C
+|US-DOCS\118511784.21||
+BLUEGRASS DOWNS - TRACT 4
+TRACT 4:
+(A part of Map Number 095-10-00-014)
+Being Parcel A, containing 1.950 acres more or less, as shown on Waiver of Subdivision, Plat of Survey for Harrah's Entertainment recorded on January 11, 2000 in Plat Section L, Page 404, McCracken County Clerk’s Office, and being more particularly described as follows:
+Being a parcel of land located North of U.S. Highway 60 or Park Avenue and West of Metcalf Lane in the City of Paducah, McCracken County, Kentucky, more particularly described as follows:
+Beginning at a steel rod, ½” diameter by 30" long with a plastic cap stamped "KRLS 1842" set at the time of this survey (hereinafter referred to as a steel rod and cap) at the Southeasterly corner of the herein described property, said steel rod and cap being located N. 02°-25'-25" E., a distance of 229.35 feet from a mag.
+Nail set on the Northwesterly right-of-way line of U.S. Highway 60 with said Mag.
+Nail being located N. 87°-08'-15" W., as distance of 307.10 feet from a concrete right-of-way marker located at the intersection of said Northerly right-of-way line with the Westerly right-of-way line of Metcalf Lane; thence from said point of beginning proceed N. 87°-55'-41" W. along and with the Southwestly line of the herein described parcel and with an existing six foot high chain link fence, 167.45 feet to a steel rod and cap set at the Southwesterly corner of the herein described property; thence N 25°-31'-05" W. and continuing along and with said chain-link fence, a distance of 20.17 feet to a steel rod and cap set on the Westerly line of the herein described parcel of land, thence N 03°03'-47" E. along and with the Westerly line aforesaid and continuing along and with the chain-link fence aforesaid, 471.72 feet to a steel road and cap set, the Northwesterly corner of the subject property; thence S 86°-34'-29" E. along and with the Northerly line of said subject site, 171.66 feet to a steel rod and cap set, the Northeasterly corner of said site; thence S 02°-25'-25" W. along and with an existing six foot high chain-link fence, 485.48 feet to the point of beginning.
+Together with a non-exclusive 40 foot wide easement for ingress and egress set forth in Agreement by and among Inez Johnson, Wayne Simpson and Players Bluegrass Downs, Inc. dated December 16, 1999 recorded Deed Book 929, Page 367, and as shown on as shown on Waiver of Subdivision, Plat of Survey for Harrah's Entertainment recorded on January 11, 2000 in Plat Section L, Page 404, both in the Office aforesaid.
+Being the same property leased to Wayne Simpson and Gloria Simpson from Inez Johnson, by unrecorded lease dated July 31, 1987, and assigned to Players Bluegrass Downs, Inc., by Assignment of Lease dated June 13, 1994, of record in Deed Book 805, Page 423, in the office aforesaid, and as amended by Agreement between Inez Johnson, Wayne Simpson and Gloria Simpson, husband and wife, and Players Bluegrass Downs, Inc., dated December 16, 1999, recorded in Deed Book 929, Page 343, all in the office aforesaid.
+Annex C
+|US-DOCS\118511784.21||
+Annex D
+Ground Leases (Bluegrass Downs Facility)
+Bluegrass Downs
+Lease Agreement dated as of May 22, 1987, by and between the Inez Johnson, as landlord, and Coy Stacey and Bobby Dexter, as tenant, as assigned to Bluegrass Downs of Paducah, LTD, as of June 1, 1987, as further assigned to Players Bluegrass Downs, Inc. as of November 22, 1993
+Leases dated as of July 31, 1987, by and between the Inez Johnson, as landlord, and Wayne and Gloria Simpson, as tenant, as assigned to Players Bluegrass Downs Inc., as of December 16, 1999, and as extended by that certain Extension of Lease Agreement dated as of September 8, 2017
+Annex D
+|US-DOCS\118511784.21||

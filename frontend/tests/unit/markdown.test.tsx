@@ -477,6 +477,19 @@ describe("a module's text in the places every module shares", () => {
     }
   });
 
+  test("a citation marker is never a register: `C<n>` makes no register link (N142)", () => {
+    // Reached past the qualified-marker rule: a bare `C3` after a register.
+    expect(readRefs("[CP-1 B2/C3]")).toEqual(["[CP-1 B2/C3]"]);
+    // A range of markers names no register either: the module, with the range as its note.
+    expect(readRefs("[CP-1 C3-C5]")).toEqual([
+      { text: "[CP-1 C3-C5]", refs: [{ module: "CP-1", register: null, note: "C3-C5" }] },
+    ]);
+    // A real register still links.
+    expect(readRefs("[CP-1 T3.5]")).toEqual([
+      { text: "[CP-1 T3.5]", refs: [{ module: "CP-1", register: "T3.5", note: null }] },
+    ]);
+  });
+
   test("a run of stars after a sentence's end costs one pass, not one per way to pair them", () => {
     // `**` was one alternative and `*` another, so each run of stars split in
     // a Fibonacci number of ways before the space failed: 44 stars took 15 s

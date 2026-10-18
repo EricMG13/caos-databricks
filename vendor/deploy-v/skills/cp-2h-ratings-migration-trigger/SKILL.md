@@ -54,7 +54,7 @@ This module remains a FULL run when the run profile is `LITE_CREDIT_22`; the ret
 - **missing_input_behavior**: `UPGRADE`
 - **UPGRADE** (canon SEC5): an input this module's FULL method needs that the LITE route does not deliver is never inferred and never a stop. Complete the module on the screening inputs the route delivers, name each missing input as a limitation, set `qa_status` Restricted, and recommend a new, user-confirmed, linked `FULL_CREDIT_32` run to supply it; this run's profile never changes.
 
-In LITE_CREDIT_22 require CP-0 and the validated CP-L10 screening handoff containing the named fundamental and liquidity-sensitivity screen registers. These substitute only the explicitly supported screening inputs for CP-1 and CP-2G. No CP-2G forecast case is delivered: map each trigger against the latest reported period the screen and the evidence support, write that period (for example `reported FY2025`) wherever a register asks for a case or a case/period value, and never construct a forecast case. The missing CP-1 history and CP-2G cases are UPGRADE limitations. Preserve SCREENING_ONLY limitations; no full rating-migration assertion may be inferred. In FULL_CREDIT_32 use the required handoffs above.
+In LITE_CREDIT_22 require CP-0 and the validated CP-L10 screening handoff containing the named fundamental and liquidity-sensitivity screen registers. These substitute only the explicitly supported screening inputs for CP-1 and CP-2G. No CP-2G forecast case is delivered: map each trigger against the latest reported period the screen and the evidence support, write that period (for example `reported FY2025`) wherever a register asks for a case or a period, and never construct a forecast case. The missing CP-1 history and CP-2G cases are UPGRADE limitations. Preserve SCREENING_ONLY limitations; no full rating-migration assertion may be inferred. In FULL_CREDIT_32 use the required handoffs above.
 
 ## Analytical depth — binding on every run
 
@@ -126,7 +126,7 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T2R.4**: structured below
-      - **columns**: agency; rating type; trigger direction; metric; threshold; case/period value; headroom; status
+      - **columns**: agency; rating type; trigger direction; metric; threshold; case; period; value; headroom; status
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1

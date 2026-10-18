@@ -22,7 +22,8 @@
         "documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt",
         "documents/CZR_FINRA_TRACE_12769GAD2_2026-10-02.txt",
         "documents/MGM_FINRA_TRACE_552953CK5_2026-10-02.txt",
-        "documents/PENN_FINRA_TRACE_707569AV1_2026-10-02.txt"
+        "documents/PENN_FINRA_TRACE_707569AV1_2026-10-02.txt",
+        "documents/CZR_FY2025_10K.txt"
       ],
       "expects": [
         {
