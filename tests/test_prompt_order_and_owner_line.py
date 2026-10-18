@@ -213,6 +213,20 @@ def test_an_unreadable_upstream_handoff_leaves_the_owner_section_out(
     assert "not a handoff" not in caplog.text
 
 
+def test_cp0_final_check_names_pages_of_a_page_mapped_source() -> None:
+    """Fork r18's Step I rules 5 and 8: a consumer's `Source files to attach`
+    cell names the pages it needs; the block no longer says "in full"."""
+    block = " ".join(prompt_block("cp0_final_check").split())
+    assert (
+        "Name the pages each consumer needs in its `Source files to attach` cell "
+        "(Step I rules 5 and 8), never the file alone; the consumer is handed "
+        "those pages, unless its own request cannot carry them, which the host "
+        "then tells that consumer. Never rate a consumer CONDITIONAL because "
+        "you saw only a page map of a source it needs."
+    ) in block
+    assert "handed it in full" not in block
+
+
 def _long_owner_line(flags: list[str]) -> str:
     """The `limitation_flags` line of CP-5's owner block over one upstream
     handoff carrying `flags`."""
