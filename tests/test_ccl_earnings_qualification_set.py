@@ -55,41 +55,19 @@ def test_ccl_earnings_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
         "FULL_CREDIT_32",
         "EARNINGS_UPDATE",
     )
-    assert case.expects_ready == ("CP-1", "CP-1B", "CP-2", "CP-5")
-    assert {
-        (key.module_id, key.field, key.value) for key in case.expects_projection
-    } == {("CP-5", "decision_scope", "FULL")}
+    # F653 (N54, R29): keyed to the gate's verdict. CP-0 is expected to hold
+    # CP-1, CP-1B and CP-2, so no module behind them runs and no citation,
+    # projection or register key can be met; a run cannot be scored on one.
+    assert case.expects_blocked == ("CP-1", "CP-1B", "CP-2")
+    assert case.expects_ready == ()
+    assert case.expects == ()
+    assert case.expects_projection == ()
+    assert case.expects_register == ()
 
-    citations = {
-        (key.module_id, key.document_sha256, key.matched_text) for key in case.expects
-    }
-    assert {module for module, _digest, _text in citations} == {
-        "CP-1",
-        "CP-1B",
-        "CP-2",
-        "CP-5",
-    }
-    assert {text for _module, _digest, text in citations} == ANCHORS
-    assert all(digest == DOCUMENT_SHA256 for _module, digest, _text in citations)
+    # The document still carries each figure the earlier key anchored, once,
+    # so the set can be re-keyed to the answers when CP-0 clears the modules.
     evidence = document.read_text(encoding="utf-8")
     assert all(evidence.count(anchor) == 1 for anchor in ANCHORS)
-
-    comparator_cells = {
-        (key.row_key, key.column, key.expected)
-        for key in case.expects_register
-        if key.register_id == "T4.12"
-    }
-    expected_comparator_cells = {
-        ((("metric_id", metric),), column, expected)
-        for metric, values in COMPARATOR_DELTAS.items()
-        for column, expected in (
-            ("values", f"{values[0]}/{values[1]}"),
-            ("changes", values[2]),
-        )
-    }
-    assert comparator_cells == expected_comparator_cells
-    assert all(key.module_id == "CP-1B" for key in case.expects_register)
-    assert len(case.expects_register) == len(comparator_cells)
 
     rules = CONTRACT.completeness_check.load_contract(skill("CP-1B").decode(), "CP-1B")
     comparator_columns = set(rules["registers"]["T4.12"]["columns"])
@@ -112,14 +90,6 @@ def test_ccl_earnings_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
         "values",
         "changes",
     }
-    assert all(
-        key.column in comparator_columns
-        and all(column in comparator_columns for column, _value in key.row_key)
-        for key in case.expects_register
-        if key.register_id == "T4.12"
-    )
-    assert all(key.register_id == "T4.12" for key in case.expects_register)
-
     cp1_reference = (
         REPO
         / "vendor/deploy-v/skills/cp-1-canonical-data-foundation/references"

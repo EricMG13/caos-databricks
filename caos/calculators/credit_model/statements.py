@@ -66,13 +66,15 @@ from caos.calculators.credit_model._cells import (
     FOREIGN,
     RESIDUAL,
     SIGN_NORMALISED,
+    TAX_REFUND,
+    balance_periods,
     beyond_rounding,
     calc,
     join_notes,
     no_negative_zero,
     opening_date,
-    periods_at,
     refs,
+    refused_balance,
     treated_as_zero,
 )
 from caos.calculators.credit_model.debt import (
@@ -85,8 +87,6 @@ from caos.calculators.credit_model.frame import Cell, Column, Frame
 from caos.methodology.model_inputs import Cp1Registers, PfAdjustmentRow
 
 _EXCLUDED = "excluded"
-# A positive cash tax: CP-1 writes inflows positive, so it is a refund.
-TAX_REFUND = "positive: read as a tax refund"
 # The realisation statuses "exclude unrealised" leaves out (spec M7).
 UNREALISED = frozenset({"UNREALIZED", "NOT_STATED"})
 
@@ -297,14 +297,21 @@ def _net_cash(get: _Get, fcf: Cell, opening: Cell) -> dict[str, Cell]:
 
 def _opening_cash(regs: Cp1Registers, column: Column) -> Cell:
     """CP-1's cash at the day before the column starts: the first period
-    ending then with a figure, in register order; a negative zero as zero."""
-    for period_id in periods_at(regs, None, opening_date(column)):
+    ending then with a figure, in register order, none on a footing apart
+    from the column's own period's; a negative zero as zero.
+    `COMPONENT_MISSING`, noted, where only such a period has one."""
+    read, skipped = balance_periods(
+        regs, column.period_id, opening_date(column), read_own=False
+    )
+    for period_id in (*read, *skipped):
         for row in regs.accounts:
             if (
                 row.metric_id == "cash_and_equivalents"
                 and row.period_id == period_id
                 and row.value is not None
             ):
+                if period_id in skipped:
+                    return refused_balance(regs, column.period_id, (period_id,))
                 value = no_negative_zero(row.value)
                 return Cell(value, basis="REPORTED", sources=refs([row.source]))
     return Cell(None, "NOT_SOURCED")
