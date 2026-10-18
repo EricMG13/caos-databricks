@@ -115,6 +115,7 @@ pytest_add_cli_args_test_selection = [
   "tests/test_credit_model_projection.py",
   "tests/test_credit_model_metrics.py",
   "tests/test_credit_model_assemble.py",
+  "tests/test_credit_model_n206.py",
   "tests/test_rate_decks.py",
 ]
 

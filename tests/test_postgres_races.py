@@ -108,12 +108,12 @@ def test_concurrent_sign_freeze_and_file_across_two_cases_keep_one_chain_each(
     from dataclasses import replace
     from typing import cast
 
+    from governed_deliverable import file_deliverable
     from test_deliverable_canonical import LITE, _accept
     from test_execution_freshness import _Harness, harness
     from test_filing_chain import _actor, _freeze, _sign
     from test_revisions import _save
 
-    from caos.deliverable.filing import file_deliverable
     from caos.deliverable.receipts import read_filed_receipt
     from caos.store.audit import audit_trail, verify_chain
 

@@ -326,8 +326,9 @@ def _start(
         },
     ).fetchone()
     if unsettled is not None:
-        # An owed bill is settled by the next pass at once; a call another
-        # session holds waits behind the queue (N116, F421).
+        # An owed bill is settled by the pass that next claims the run, first
+        # in line once the worker has reconnected; a call another session holds
+        # waits behind the queue (N116, F421).
         raise Refusal(
             RefusalCode.ATTEMPT_BILL_OWED
             if unsettled[0]

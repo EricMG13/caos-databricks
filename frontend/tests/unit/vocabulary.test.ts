@@ -76,4 +76,13 @@ describe("the TypeScript vocabulary gate", () => {
     expect(violations("deal_store.ts", "export const x = 1;\n", BANNED)[0]).toContain("'case'");
     expect(violations("m.ts", "const readySet = [];\n", BANNED)[0]).toContain("'frontier'");
   });
+
+  test("ends a word at a digit as the Python gate does (F361, N83)", () => {
+    for (const name of ["deal2", "chunk2Reader", "load1Deal", "deal_2_x", "pipeline10"]) {
+      expect(violations("m.ts", `const ${name} = 1;\n`, BANNED), name).not.toEqual([]);
+    }
+    expect(violations("m.ts", "const readySet2 = [];\n", BANNED)[0]).toContain("'frontier'");
+    expect(violations("m.ts", "const ready_2_set = [];\n", BANNED)[0]).toContain("'frontier'");
+    expect(violations("m.ts", "const sha256 = 1;\n", BANNED)).toEqual([]);
+  });
 });

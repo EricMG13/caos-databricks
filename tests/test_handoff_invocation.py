@@ -8,6 +8,7 @@ exact upstream Markdown and every delivered block, and refuses rather than cuts.
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import json
 import os
@@ -17,6 +18,7 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+from types import MappingProxyType
 from uuid import UUID, uuid4
 
 import pytest
@@ -44,8 +46,10 @@ from fake_chat import ScriptedChat, fake_completions
 from test_execution_freshness import _Harness, harness
 from test_loop_charges import ESTIMATE, MODEL, REPORTED
 
+from caos import provider
 from caos.boundary_text import BoundaryText
 from caos.evidence.citations import MIN_EXCERPT_WORDS, AnchoredCitation, Rect
+from caos.evidence.ingest import _blocks
 from caos.graph.route import (
     NodeResult,
     NodeState,
@@ -62,6 +66,7 @@ from caos.methodology.bundle import (
     verified_bytes,
     verified_root_bytes,
 )
+from caos.methodology.canonical import RETRY_RESERVE_BYTES
 from caos.methodology.executor import Delivery
 from caos.methodology.handoff import (
     INVISIBLE,
@@ -83,6 +88,7 @@ from caos.methodology.invocation import (
     MAX_UPSTREAM_HANDOFF_BYTES,
     MODULE_AUTHORED_SCRIPTS,
     _carried_objects,
+    _evidence_section,
     allowed_uses,
     build_handoff_prompt,
     evidence_tag,
@@ -100,7 +106,8 @@ from caos.methodology.verification import (
     verify_owner_chain,
     verify_owner_restrictions,
 )
-from caos.provider import MAX_REQUEST_BYTES, encode_request
+from caos.provider import MAX_REQUEST_BYTES, encode_request, request_ceiling
+from caos.qualification.harness import _extracted
 from caos.refusals import Refusal, RefusalCode
 from caos.store.outcomes import CallOutcome, record_outcome
 from caos.store.routes import pin_route
@@ -1267,40 +1274,40 @@ def test_an_upstream_handoff_past_its_section_bound_refuses_the_prompt() -> None
     assert whole + 1 < MAX_REQUEST_BYTES
 
 
-def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> None:
-    """Why the declared number is the number: a node's own delivered authority
-    beside its direct upstreams at the bound must still leave the request
-    ceiling room for evidence. A bundle that widens a node or grows an
-    authority set fails here rather than at the first FULL run.
+def test_the_section_bound_is_128_kib_and_carries_the_largest_cp4_answer() -> None:
+    """D152 R32 (N209): live CP-4 answers run 75-99 KB, and retries dropped
+    sections to fit 98,304. The bound is 131,072 bytes and a 99 KB answer is
+    carried whole, with room."""
+    assert MAX_UPSTREAM_HANDOFF_BYTES == 131_072
+    answer = handoff_markdown(identity("CP-0")).ljust(99_000, b" ")
+    ref = upstream_ref(identity("CP-0"), answer)
+    prompt = _prompt(identity("CP-L10", (ref,)), upstream=((ref, answer),))
+    assert answer.decode() in prompt
 
-    Maximised over every node of every profile, not over one pair. The review
-    that asked for this found the single-pair form would pass a bundle whose
-    third profile carried a wider node, or whose authority grew, while the
-    arithmetic the declared number rests on no longer held. **CP-5** of
-    FULL_CREDIT_32 is the maximum on this bundle (D83): 16 direct upstreams at
-    96 KiB beside 169,493 bytes of authority encode to 1,750,342 bytes against
-    the 4,194,304 ceiling, 2,443,962 left for evidence. CP-3 follows on the
-    heavier authority and fewer upstreams; the assertions hold for whichever
-    node is widest, not for CP-5 by name.
 
-    **Measured through `encode_request`, not by summing raw lengths.** The
-    Completion Phase 12 adversarial audit found this test's arithmetic was in
-    the wrong unit: `MAX_REQUEST_BYTES` bounds
-    `len(json.dumps(request).encode())` with `ensure_ascii=True`, so every
-    non-ASCII character costs six bytes and every quote and newline two --
-    and the vendored authority is full of em-dashes, section signs and curly
-    quotes. A sum of raw lengths cannot see any of it, so the test could pass
-    while the real encoded request was over the ceiling. The authority files
-    are used as their real bytes for the same reason.
+# The escaping a real handoff costs beyond the "x" filler the widest-node
+# measurement sends: the round-1 re-review of D152 R32 probed 195 stored live
+# handoffs and found +1.3% at the median and +2.9% at the worst (D116's 195
+# calls measured bytes per token, not escaping), so 4% of 16 sections at the
+# bound is the stated allowance, not a measurement of the next model's prose.
+_ESCAPING_PERCENT = 4
+# The upstream citation register is unbounded (it grows with answer size); one
+# section's worth is the stated allowance, as the largest answers run 75-99 KB.
+_REGISTER_ALLOWANCE = MAX_UPSTREAM_HANDOFF_BYTES
 
-    What it still does not carry is the citation register, which is explicitly
-    unbounded, and the evidence section, which is the room this assertion
-    exists to prove is left. The fixed host sections are included.
-    """
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _widest_request(model: str) -> tuple[int, str, int]:
+    """The widest node's non-evidence request, in bytes as `model` is sent it:
+    the node's delivered authority, one section at the bound for every direct
+    upstream, and the fixed host sections, encoded with `encode_request`
+    (`json_object=True`, as `canonical._fitted` measures). Returns the bytes,
+    the node and the most upstreams any node has, maximised over every node
+    of every profile."""
     filler = "x" * MAX_UPSTREAM_HANDOFF_BYTES
-    worst = 0
-    worst_node = ""
-    most_upstreams = 0
+    worst, worst_node, most_upstreams = 0, "", 0
     for profile in CATALOG["profiles"].values():
         edges = profile["edges"]
         for node in {edge["target"] for edge in edges}:
@@ -1316,17 +1323,170 @@ def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> No
                     _FINAL_CHECK,
                 ]
             )
-            cost = len(encode_request("a-model/for-the-test", prompt))
+            cost = len(encode_request(model, prompt, json_object=True))
             if cost > worst:
                 worst, worst_node = cost, node
-    # The 16-upstream node was measured, every section at the bound, and fits
-    # beside its authority with at least half the request left for evidence.
+    return worst, worst_node, most_upstreams
+
+
+def _declared_models() -> dict[str, int]:
+    """Every approved model name that carries a declared context, and its
+    request ceiling: each `CONTEXT_TOKENS` entry (gateway and workspace) and a
+    `copilot:` model, which takes `COPILOT_CONTEXT_TOKENS` (D116, D119)."""
+    names = [*provider.CONTEXT_TOKENS, "copilot:claude-opus-5"]
+    return {name: request_ceiling(name) for name in names}
+
+
+def _room_for_evidence(model: str) -> int:
+    """What the widest node leaves of `model`'s fit limit (`request_ceiling`
+    less `RETRY_RESERVE_BYTES`, as `canonical._fitted` fits) for evidence and
+    the upstream register: negative when the node's own request does not fit."""
+    widest, _node, _count = _widest_request(model)
+    return request_ceiling(model) - RETRY_RESERVE_BYTES - widest
+
+
+def _tightest_room() -> tuple[str, int]:
+    """The declared model the widest node leaves the least room, and that
+    room. Models at one context differ only by the name each is sent, so among
+    ties the longest name is the tightest; the minimum is taken over every
+    declared model rather than the first of the smallest context in table
+    order."""
+    rooms = {name: _room_for_evidence(name) for name in _declared_models()}
+    tightest = min(rooms, key=rooms.__getitem__)
+    return tightest, rooms[tightest]
+
+
+@functools.cache
+def _source_set_evidence_minimum() -> tuple[int, str]:
+    """The least evidence `pack_view` can send for the largest FULL selection
+    in the committed qualification sets: one line a page of every document of
+    the case, rendered as the evidence section and JSON-escaped. A pack that
+    cannot send this refuses `CONTEXT_OVER_CEILING` (selection.py). Returns the
+    bytes and the case's label."""
+    best, label = 0, ""
+    for manifest in sorted((REPO_ROOT / "qualification").glob("*/qualification.json")):
+        for case in json.loads(manifest.read_text(encoding="utf-8"))["cases"]:
+            if case["profile_id"] != "FULL_CREDIT_32":
+                continue
+            view: list[Delivery] = []
+            for name in dict.fromkeys(case["documents"]):
+                blocks, _packing = _blocks(
+                    _extracted((manifest.parent / name).read_bytes())
+                )
+                source_id, pages = uuid4(), set[int]()
+                for block in blocks:
+                    if block.page not in pages:
+                        pages.add(block.page)
+                        view.append(
+                            Delivery(
+                                source_id,
+                                block.block_id,
+                                block.page,
+                                block.text,
+                                block.hidden,
+                            )
+                        )
+            cost = len(json.dumps(_evidence_section(view))) - 2
+            if cost > best:
+                best, label = cost, case["label"]
+    return best, label
+
+
+def _evidence_need() -> int:
+    """What the room must cover: the evidence minimum, the escaping allowance
+    for 16 sections at the bound, and the register allowance."""
+    minimum, _label = _source_set_evidence_minimum()
+    escaping = 16 * MAX_UPSTREAM_HANDOFF_BYTES * _ESCAPING_PERCENT // 100
+    return minimum + escaping + _REGISTER_ALLOWANCE
+
+
+def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> None:
+    """Why the declared number is the number (D116, D152 R32): for the
+    declared model the widest node leaves the least room, the fit limit
+    (`request_ceiling` less `RETRY_RESERVE_BYTES`) less the widest node's
+    non-evidence request must cover the least evidence a FULL run can send
+    (one line a page of the largest FULL selection in the committed
+    qualification sets), an escaping allowance and the upstream register. A
+    bundle that widens a node, grows an authority set or raises the bound
+    fails here rather than at the first FULL run, where `pack_view` refuses
+    `CONTEXT_OVER_CEILING` once one line a page does not fit.
+
+    Maximised over every node of every profile, not one pair, and minimised
+    over every declared model (`_tightest_room`). **CP-5** of FULL_CREDIT_32
+    is the widest (16 direct upstreams beside 170,803 bytes of authority), and
+    `databricks-claude-opus-5` the tightest model (the longest name among the
+    1,000,000-token contexts): at the bound, 2,278,324 bytes as it is sent,
+    against the fit limit 2,737,856 (request ceiling 2,803,392), which leaves
+    459,532 bytes of evidence room (16.4% of the ceiling; `grok-4-7`, the first
+    tie in table order, has 16 more). At the 98,304 bound the room was
+    983,820; **R32 cost 524,288 bytes of it**. The room is large against the
+    need: 76,009 bytes of one-line-per-page evidence, JSON-escaped (351 pages
+    of czr-2026q2-full-credit-assessment; the rendered section is 73,091
+    characters, 73,417 UTF-8 bytes) plus 4% escaping on 16 sections (83,886)
+    plus one register allowance (131,072) is 290,967. A narrower room is not
+    free: below one line a page the pack refuses.
+
+    **Measured through `encode_request`** for every declared model, with
+    `json_object=True` as `canonical._fitted` measures, because
+    `MAX_REQUEST_BYTES` bounds the JSON encoding (non-ASCII six bytes, quote
+    and newline two); the authority files are used as their real bytes. The
+    escaping allowance is stated (4%; the round-1 re-review of R32 probed 195
+    stored live handoffs at +1.3% median, +2.9% worst), not measured here: the
+    repo holds no stored handoffs.
+    """
+    tightest, room = _tightest_room()
+    widest, node, most_upstreams = _widest_request(tightest)
     assert most_upstreams == 16, most_upstreams
-    assert worst < MAX_REQUEST_BYTES, (worst_node, worst)
-    assert MAX_REQUEST_BYTES - worst >= MAX_REQUEST_BYTES // 2, (worst_node, worst)
+    assert node == "CP-5", node
+    assert widest < MAX_REQUEST_BYTES, (node, widest)
+    minimum, label = _source_set_evidence_minimum()
+    assert label == "czr-2026q2-full-credit-assessment", label
+    assert room >= _evidence_need(), (tightest, node, widest, room, minimum)
     # The largest CP-1 answer the 2 October runs produced, 85,559 bytes (D83),
     # is carried whole with room.
     assert MAX_UPSTREAM_HANDOFF_BYTES >= 85_559 + 8_192, MAX_UPSTREAM_HANDOFF_BYTES
+
+
+def test_a_declared_context_too_small_for_the_widest_node_fails_the_property(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The property is not vacuous: at 800,000 tokens the fit limit
+    (2,137,856) is under CP-5's request at the bound (2,278,315 as
+    `claude-opus-5-5` is sent, 2,278,321 as `copilot:claude-opus-5` is), so
+    the room is negative and cannot cover the evidence need."""
+    monkeypatch.setattr(
+        provider, "CONTEXT_TOKENS", MappingProxyType({"claude-opus-5-5": 800_000})
+    )
+    monkeypatch.setattr(provider, "COPILOT_CONTEXT_TOKENS", 800_000)
+    models = _declared_models()
+    assert set(models) == {"claude-opus-5-5", "copilot:claude-opus-5"}
+    for name in models:
+        assert _room_for_evidence(name) < 0 < _evidence_need(), name
+
+
+def test_the_property_measures_the_least_room_not_the_first_smallest_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two models declared at the same context are sent the same request but
+    for their names, so the one with the longer name has less room by the
+    difference in length; the property must measure that one, not the first
+    of the ties in table order (the round-1 re-review found the figures cited
+    were the first tie's, 16 bytes wider than the least room)."""
+    monkeypatch.setattr(
+        provider,
+        "CONTEXT_TOKENS",
+        MappingProxyType(
+            {"grok-4-7": 1_000_000, "databricks-claude-opus-5": 1_000_000}
+        ),
+    )
+    monkeypatch.setattr(provider, "COPILOT_CONTEXT_TOKENS", 1_000_000)
+    models = _declared_models()
+    first = min(models, key=models.__getitem__)
+    assert first == "grok-4-7", first
+    tightest, room = _tightest_room()
+    assert tightest == "databricks-claude-opus-5", tightest
+    assert room == _room_for_evidence(first) - (len(tightest) - len(first))
+    assert room == min(_room_for_evidence(name) for name in models)
 
 
 def test_section_markers_cannot_be_forged_by_evidence() -> None:

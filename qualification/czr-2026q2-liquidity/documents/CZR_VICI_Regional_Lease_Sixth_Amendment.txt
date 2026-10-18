@@ -1,0 +1,462 @@
+CERTAIN IDENTIFIED INFORMATION HAS BEEN EXCLUDED BECAUSE SUCH INFORMATION (i) IS NOT MATERIAL AND (ii) WOULD BE COMPETITIVELY HARMFUL IF PUBLICLY DISCLOSED.
+EXCLUDED INFORMATION HAS BEEN MARKED AT THE APPROPRIATE PLACES AS FOLLOWS: [****]
+Execution Version
+SIXTH AMENDMENT TO LEASE
+This SIXTH AMENDMENT TO LEASE (this “Amendment”) is entered into as of September 30, 2020, by and among the entities listed on Schedule A attached hereto (collectively, and together with their respective successors and assigns, “Landlord”), the entities listed on Schedule B attached hereto (collectively, and together with their respective successors and assigns, “Tenant”) and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease (as defined below), Propco TRS LLC, a Delaware limited liability company (“Propco TRS”).
+RECITALS
+WHEREAS, Landlord, Tenant and, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease, Propco TRS, are parties to that certain Lease (Non-CPLV), dated as of October 6, 2017, as amended by that certain First Amendment to Lease (Non-CPLV), dated as of December 22, 2017, as amended by that certain Second Amendment to Lease (Non-CPLV) and Ratification of SNDA, dated as of February 16, 2018, as amended by that certain Third Amendment to Lease (Non-CPLV), dated as of April 2, 2018, as amended by that certain Fourth Amendment to Lease (Non-CPLV), dated as of December 26, 2018, as amended by that certain Omnibus Amendment to Leases, dated as of June 1, 2020, and as amended by that certain Fifth Amendment to Lease (Non-CPLV), dated as of July 20, 2020 (collectively, as amended, the “Lease”), pursuant to which Landlord leases to Tenant, and Tenant leases from Landlord, certain real property as more particularly described in the Lease;
+WHEREAS, on the date hereof, Harrah’s Reno LLC and CEOC, LLC, together as sellers, and Reno City Center, LLC, as purchaser, are closing a purchase and sale transaction under that certain Purchase and Sale Agreement and Joint Escrow Instructions, dated as of December 31, 2019, as amended by that certain First Amendment to Purchase and Sale Agreement and Joint Escrow Instructions, dated as of May 29, 2020, with respect to certain real property and FF&E (as defined therein) associated with the gaming and entertainment facility known as “Harrah’s Reno Hotel & Casino” located in Reno, Nevada (the “Harrah’s Reno Transaction”); and
+WHEREAS, in connection with the Harrah’s Reno Transaction, the parties hereto desire to amend the Lease as set forth herein.
+NOW THEREFORE, in consideration of the mutual covenants and agreements hereinafter set forth and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the parties hereto, intending to be legally bound hereby, agree as follows:
+1.Definitions.
+Except as otherwise defined herein, all capitalized terms used herein without definition shall have the meanings applicable to such terms, respectively, as set forth in the Lease.
+2.Amendments to the Lease.
+.
+A.Termination of the Lease as to the Harrah’s Reno Facility.
+Effective as of the date hereof:
+a.the Lease is hereby terminated with respect to the Harrah’s Reno Leased Property (as defined below), the Harrah’s Reno Leased Property no longer constitutes Leased Property under the Lease, and neither Landlord nor Tenant has any further liabilities or obligations, from and after the date of this Amendment, in respect of the Harrah’s Reno Facility (as defined below) and the Harrah’s Reno Leased Property, and
+b.the Guaranty hereby automatically, and without further action by any party, ceases to apply with respect to any Obligations (as defined in the Guaranty) with respect to the Harrah’s Reno Facility or the Harrah’s Reno Leased Property to the extent arising from and after the date of this Amendment (provided that any such Obligations arising prior to such date shall not be terminated, limited or affected by or upon entry into this Amendment).
+c.For the avoidance of doubt, the Lease shall continue in full force and effect with respect to the balance of (x) the Facilities (other than the Harrah’s Reno Facility) and (y) the Leased Property (other than the Harrah’s Reno Leased Property).
+The term “Harrah’s Reno Facility” shall refer to the applicable Facility identified as Facility 16 on the list of the Facilities annexed as Exhibit A to the Lease, other than the portion thereof pertaining to the Leased Property set forth on Annex B hereto (the “Leased Property (Reno Billboard)”).
+The term “Harrah’s Reno Leased Property” shall refer to the Leased Property set forth on Annex A hereto and any other Leased Property pertaining to the Harrah’s Reno Facility (excluding, for the avoidance of doubt, the Leased Property (Reno Billboard)).
+B.Rent.
+Landlord and Tenant hereby expressly acknowledge and agree that there shall be no reduction in the Rent under the Lease as a result of the removal of the Harrah’s Reno Facility from the Lease or otherwise as a result of the Harrah’s Reno Transaction.
+C.Variable Rent.
+i.From and after the date hereof, for purposes of any calculation of Variable Rent under the Lease, including any adjustments in Variable Rent based on increases or decreases in Net Revenue, such calculations of Net Revenue shall exclude Net Revenue attributable to the Harrah’s Reno Facility.
+ii.Article II of the Lease is hereby amended such that the definition of “Base Net Revenue Amount” is hereby deleted and replaced with the following:
+“‘Base Net Revenue Amount’: An amount equal to the arithmetic average of the following: (i) Three Billion Five Hundred Ninety-One Million One Hundred Fifty-Seven Thousand Six Hundred Twenty-Seven and No/100
+2
+Dollars ($3,591,157,627.00), which amount Landlord and Tenant agree represents Net Revenue for the Fiscal Period immediately preceding the first (1st) Lease Year (i.e., the Fiscal Period ending September 30, 2017),
+(ii) Three Billion Five Hundred Ninety-Seven Million Seven Hundred Ninety-Three Thousand Two Hundred Two and No/100 Dollars ($3,597,793,202.00), which amount Landlord and Tenant agree represents the Net Revenue for the Fiscal Period immediately preceding the end of the first (1st) Lease Year (i.e., the Fiscal Period ending September 30, 2018) and (iii) Three Billion Four Hundred Forty-Three Million Three Hundred Sixty-Four Thousand Two Hundred Four and No/100 Dollars ($3,443,364,204.00), which amount Landlord and Tenant agree represents the Net Revenue for the Fiscal Period immediately preceding the end of the second (2nd) Lease Year (i.e., the Fiscal Period ending September 30, 2019).
+For the avoidance of doubt, the term “arithmetic average” as used in this definition refers to the quotient obtained by dividing (x) the sum of the amounts set forth in clauses (i), (ii) and (iii) by (y) three (3).”
+D.Annual Minimum Cap Ex Amount.
+Article II of the Lease is hereby amended such that the definition of “Annual Minimum Cap Ex Amount” is hereby revised and modified to replace the reference therein to “One Hundred Twenty Million Nine Hundred Thousand and No/100 Dollars ($120,900,000.00)” with a reference to “One Hundred Nineteen Million Three Hundred Thousand and No/100 Dollars ($119,300,000.00)”.
+E.Annual Minimum Per-Lease B&I Cap Ex Requirement.
+The Annual Minimum Per-Lease B&I Cap Ex Requirement shall be unchanged by this Amendment.
+Further, Landlord and Tenant hereby acknowledge, for the avoidance of doubt, that the Net Revenue attributable to the Harrah’s Reno Facility during the period the Harrah’s Reno Facility was included in the Lease (i.e., during the period from the Commencement Date until the date of this Amendment) shall be included for purposes of calculating the Capital Expenditures required under Section 10.5(a)(ii) of the Lease (i.e., the Annual Minimum Per-Lease B&I Cap Ex Requirement).
+F.Triennial Allocated Minimum Cap Ex Amount B Floor.
+Article II of the Lease is hereby amended such that the definition of “Triennial Allocated Minimum Cap Ex Amount B Floor” is hereby revised and modified to replace the reference therein to “Three Hundred Thirty-Three Million Six Hundred Thousand and No/100 Dollars ($333,600,000.00)” with a reference to “Three Hundred Twenty-Seven Million Eight Hundred Thousand and No/100 Dollars ($327,800,000.00)”.
+G.Triennial Minimum Cap Ex Amount A. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount A” is hereby revised and modified to replace the reference therein to “Five Hundred Ninety-Eight Million Four Hundred Thousand and No/100 Dollars ($598,400,000.00)” with a reference to “Five Hundred Ninety Million Three Hundred Thousand and No/100 Dollars ($590,300,000.00)”.
+3
+H.Triennial Minimum Cap Ex Amount B. Article II of the Lease is hereby amended such that the definition of “Triennial Minimum Cap Ex Amount B” is hereby revised and modified to replace the reference therein to “Four Hundred Twenty-Seven Million Seven Hundred Thousand and No/100 Dollars ($427,700,000.00)” with a reference to “Four Hundred Twenty-One Million Nine Hundred Thousand and No/100 Dollars ($421,900,000.00)”.
+I.Partial Periods.
+i.Section 10.5(a)(v)(b) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Ninety-Eight Million Four Hundred Thousand and No/100 Dollars ($598,400,000.00)” with a reference to “Five Hundred Ninety Million Three Hundred Thousand and No/100 Dollars ($590,300,000.00)” and (b) replace the reference therein to “One Hundred Ninety-Nine Million Four Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($199,466,666.67)” with a reference to “One Hundred Ninety-Six Million Seven Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($196,766,666.67)”,
+ii.Section 10.5(a)(v)(c) of the Lease is hereby amended to (a) replace the reference therein to “Four Hundred Twenty-Seven Million Seven Hundred Thousand and No/100 Dollars ($427,700,000.00)” with a reference to “Four Hundred Twenty-One Million Nine Hundred Thousand and No/100 Dollars ($421,900,000.00)” and (b) replace the reference therein to “One Hundred Forty-Two Million Five Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($142,566,666.67)” with a reference to “One Hundred Forty Million Six Hundred Thirty-Three Thousand Three Hundred Thirty-Three and 33/100 Dollars ($140,633,333.33)”, and
+iii.The second sentence of Section 10.5(a)(v) of the Lease is hereby amended to (a) replace the reference therein to “Five Hundred Ninety-Eight Million Four Hundred Thousand and No/100 Dollars ($598,400,000.00)” with a reference to “Five Hundred Ninety Million Three Hundred Thousand and No/100 Dollars ($590,300,000.00)”,
+(b) replace the reference therein to “One Hundred Ninety-Nine Million Four Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($199,466,666.67)” with a reference to “One Hundred Ninety-Six Million Seven Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($196,766,666.67)”,
+(c) replace the reference therein to “Four Hundred Twenty-Seven Million Seven Hundred Thousand and No/100 Dollars ($427,700,000.00)” with a reference to “Four Hundred Twenty-One Million Nine Hundred Thousand and No/100 Dollars ($421,900,000.00)” and (d) replace the reference therein to “One Hundred Forty-Two Million Five Hundred Sixty-Six Thousand Six Hundred Sixty-Six and 67/100 Dollars ($142,566,666.67)” with a reference to “One Hundred Forty Million Six Hundred Thirty-Three Thousand Three Hundred Thirty-Three and 33/100 Dollars ($140,633,333.33)”.
+4
+J.Section 22.2(ix) Transfer.
+i.Landlord and Tenant hereby acknowledge and agree that the Harrah’s Reno Transaction shall be deemed to be, and treated as, a transfer and sale of the entire Leased Property with respect to a Facility pursuant to Section 22.2(ix) of the Lease.
+ii.All of the applicable requirements and conditions set forth in Section 22.2(ix) of the Lease with respect to such transfer and sale are deemed satisfied or waived by
+iii.the execution of this Amendment and the consummation of the closing of the Harrah’s Reno Transaction.
+iv.The 2018 Facility EBITDAR of Tenant for the Harrah’s Reno Facility is equal to [****].
+v.The amounts of the 2018 EBITDAR Pool and 2018 EBITDAR Pool Before Fifth Amendment shall not be reduced as a result of the Harrah’s Reno Facility no longer being a Facility under the Lease.
+vi.The words, number and symbols “five percent (5%)” contained in Section 22.2(ix) of the Lease are hereby deleted and replaced with the following: “four and six-tenths percent (4.6%)”.
+vii.For purposes of subsequent calculations of the L1/L2 EBITDAR to Rent Ratio under the Lease, the EBITDAR of Tenant in respect of the Harrah’s Reno Facility shall be disregarded.
+viii.
+ix.The treatment of the Harrah’s Reno Transaction hereunder is not intended to serve as a precedent for the treatment of future dispositions (if any) which may be effectuated under Section 22.2(ix) of the Lease or otherwise.
+K.Revisions to Exhibits and Schedules to the Lease.
+The Exhibits and Schedules to the Lease are hereby amended as follows:
+i.Facilities.
+The list of Facilities set forth on Exhibit A annexed to the Lease is hereby amended such that the reference to “Harrah’s Reno” thereon is deleted and replaced with a reference to “Reno Billboard Parcel”.
+ii.Legal Description.
+The legal descriptions with respect to the Leased Property set forth on Exhibit B annexed to the Lease are hereby amended such that the legal description with respect to the Harrah’s Reno Leased Property set forth on Annex A hereto is hereby deleted from said Exhibit B.
+5
+iii.Property Specific IP.
+The list of Property Specific IP set forth on Exhibit H annexed to the Lease is hereby amended such that the following items of Property Specific IP listed thereon (that relate solely to the Reno Facility) are hereby deleted from said Exhibit H:
+Mark | Jurisdiction | Brand | Specific/ Enterprise | Property | App. No. | App. Date | Reg. No. | Reg. Date | Status
+Carvings | United States of America | Harrah's | Specific | Harrah's Reno | 78/732311 | 10/13/2005 | 3141982 | 9/12/2006 | Registered
+Joy Luck Noodle Bar | United States of America | Harrah's | Specific | Harrah's Reno | 77/634470 | 12/16/2008 | 3647464 | 6/30/2009 | Registered
+Domain Name | Brand | Reg. Date | Registry Expiry Date
+renonumbers.com | Harrah's Reno | 2001-05-18 | 2021-05-18
+renoweddingchapel.com | Harrah's Reno | 2000-01-19 | 2022-01-19
+iv.Description of Title Policies.
+The list of Title Policies set forth on Exhibit J annexed to the Lease is hereby amended such that the reference thereon to the Title Policy relating solely to the Harrah’s Reno Facility is hereby amended and shall be deemed to refer only to the portions of such Title Policy that pertain to the Leased Property (Reno Billboard).
+v.Managed Facilities IP Trademarks.
+The list of Managed Facilities IP set forth on Exhibit P annexed to the Lease is hereby amended such that “Harrah’s Reno” is hereby deleted from said Exhibit P.
+vi.Gaming Licenses.
+The list of Gaming Licenses set forth on Schedule 1 annexed to the Lease is hereby amended such that the Gaming License bearing Unique ID 00718-02 relating to the Harrah’s Reno Facility is hereby deleted from said Schedule 1.
+vii.Maximum Fixed Rent Term.
+The schedule setting forth the Maximum Fixed Rent Term with respect to each Facility set forth on Schedule 3 annexed to the Lease is hereby amended such that the reference to “Harrah’s Reno” thereon is deleted and replaced with a reference to “Reno Billboard Parcel”.
+viii.Specified Subleases.
+The list of Specified Subleases set forth on Schedule 4 annexed to the Lease is hereby amended such that (a) the Specified Subleases bearing Contract ID Nos. 7721, 14991, 14992, 15086, 9761, 7724, 7001, 7142, 7333, 14922,
+1
+14923, 14924, 14925, (b) the two (2) additional Specified Subleases pertaining solely to the Harrah’s Reno Facility that do not have a Contract ID No. are hereby deleted from said Schedule 4 and (c) the following Sublease is hereby added to said Schedule 4:
+Contract ID | Debtor(s) | Property Name | Name of Operation | Counterparty | Description | Contract Date | File Name
+N/A | CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc. | Reno Billboard Parcel | I-80 Billboard | Donrey Outdoor Advertising Company | Lease Agreement | 8/8/1985 | I-80 Parcel Billboard Lease accounting.pdf
+3.No Other Modification or Amendment to the Lease.
+The Lease shall remain in full force and effect except as expressly amended or modified by this Amendment.
+From and after the date of this Amendment, all references in the Lease to the “Lease” shall be deemed to refer to the Lease as amended by this Amendment.
+4.Governing Law; Jurisdiction.
+This Amendment shall be construed according to and governed by the laws of the jurisdiction(s) specified by the Lease without regard to its or their conflicts of law principles.
+The parties hereto hereby irrevocably submit to the jurisdiction of any court of competent jurisdiction located in such applicable jurisdiction in connection with any proceeding arising out of or relating to this Amendment.
+5.Counterparts.
+This Amendment may be executed by one or more of the parties hereto on any number of separate counterparts, and all of such counterparts taken together shall be deemed to constitute one and the same instrument.
+Facsimile and/or .pdf signatures shall be deemed to be originals for all purposes.
+6.Effectiveness.
+This Amendment shall be effective, as of the date hereof, only upon execution and delivery by each of the parties hereto.
+7.Miscellaneous.
+If any provision of this Amendment is adjudicated to be invalid, illegal or unenforceable, in whole or in part, it will be deemed omitted to that extent and all other provisions of this Amendment will remain in full force and effect.
+Neither this Amendment nor any provision hereof may be changed, modified, waived, discharged or terminated orally, but only by an instrument in writing signed by the party against whom enforcement of such change, modification, waiver, discharge or termination is sought.
+The paragraph headings and captions contained in this Amendment are for convenience of reference only and in no event define, describe or limit the scope or intent of this Amendment or any of the provisions or terms hereof.
+This Amendment shall be binding upon and inure to the benefit of the parties and their respective heirs, legal representatives, successors and permitted assigns.
+[Signature Page Follows]
+2
+IN WITNESS WHEREOF, the parties hereto have caused this Amendment to be duly executed by their duly authorized representatives, all as of the date hereof.
+LANDLORD:
+HORSESHOE COUNCIL BLUFFS LLC
+HARRAH’S COUNCIL BLUFFS LLC
+HARRAH’S METROPOLIS LLC
+HORSESHOE SOUTHERN INDIANA LLC
+NEW HORSESHOE HAMMOND LLC
+NEW HARRAH’S NORTH KANSAS CITY LLC
+GRAND BILOXI LLC
+HORSESHOE TUNICA LLC
+NEW TUNICA ROADHOUSE LLC
+CAESARS ATLANTIC CITY LLC
+BALLY’S ATLANTIC CITY LLC
+HARRAH’S LAKE TAHOE LLC
+HARVEY’S LAKE TAHOE LLC
+HARRAH’S RENO LLC
+BLUEGRASS DOWNS PROPERTY OWNER LLC
+VEGAS DEVELOPMENT LLC
+VEGAS OPERATING PROPERTY LLC
+MISCELLANEOUS LAND LLC
+PROPCO GULFPORT LLC
+PHILADELPHIA PROPCO LLC
+HARRAH’S ATLANTIC CITY LLC
+NEW LAUGHLIN OWNER LLC
+HARRAH’S NEW ORLEANS LLC
+each, a Delaware limited liability company
+By: /s/ David Kieske
+Name: David Kieske
+Title: Treasurer
+HORSESHOE BOSSIER CITY PROP LLC
+HARRAH’S BOSSIER CITY LLC
+each, a Louisiana limited liability company
+By: /s/ David Kieske
+Name: David Kieske
+Title: Treasurer
+[Signatures Continue on Following Pages]
+TENANT:
+CEOC, LLC,
+a Delaware limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HBR REALTY COMPANY LLC,
+a Nevada limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARVEYS IOWA MANAGEMENT COMPANY LLC,
+a Nevada limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+SOUTHERN ILLINOIS RIVERBOAT/CASINO CRUISES LLC,
+an Illinois limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+CAESARS RIVERBOAT CASINO, LLC,
+an Indiana limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+ROMAN HOLDING COMPANY OF INDIANA LLC,
+an Indiana limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HORSESHOE HAMMOND, LLC,
+an Indiana limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HORSESHOE ENTERTAINMENT,
+a Louisiana limited partnership
+By: New Gaming Capital Partnership,
+a Nevada Limited Partnership,
+its general partner
+By: Horseshoe GP, LLC,
+a Nevada limited liability company
+its general partner
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARRAH’S BOSSIER CITY INVESTMENT COMPANY, L.L.C.,
+a Louisiana limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARRAH’S NORTH KANSAS CITY LLC,
+a Missouri limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+GRAND CASINOS OF BILOXI, LLC,
+a Minnesota limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+ROBINSON PROPERTY GROUP LLC,
+a Mississippi limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+TUNICA ROADHOUSE LLC,
+a Delaware limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+BOARDWALK REGENCY LLC,
+a New Jersey limited liability company
+By: Caesars New Jersey LLC,
+a New Jersey limited liability company,
+its sole member
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+CAESARS NEW JERSEY LLC,
+a New Jersey limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+BALLY’S PARK PLACE LLC,
+a New Jersey limited liability company
+By: CEOC, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARVEYS TAHOE MANAGEMENT COMPANY LLC,
+a Nevada limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+PLAYERS BLUEGRASS DOWNS LLC,
+a Kentucky limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+CASINO COMPUTER PROGRAMMING, INC.,
+an Indiana corporation
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARVEYS BR MANAGEMENT COMPANY, INC.,
+a Nevada corporation
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HOLE IN THE WALL, LLC,
+a Nevada limited liability company
+By: CEOC, LLC,
+as sole member
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer:
+CHESTER DOWNS AND MARINA, LLC,
+a Pennsylvania limited liability company
+By: Harrah’s Chester Downs Investment Company, LLC,
+as sole member
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARRAH’S ATLANTIC CITY OPERATING COMPANY, LLC,
+a New Jersey limited liability company
+By: Caesars Resort Collection, LLC,
+a Delaware limited liability company,
+its sole member
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+HARRAH’S LAUGHLIN, LLC,
+a Nevada limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+JAZZ CASINO COMPANY, L.L.C.,
+a Louisiana limited liability company
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+Acknowledged and agreed, solely for the purposes of the penultimate paragraph of Section 1.1 of the Lease:
+PROPCO TRS LLC,
+a Delaware limited liability company
+By: /s/ David Kieske
+Name: David Kieske
+Title: Treasurer
+ACKNOWLEDGMENT AND AGREEMENT OF GUARANTOR
+The undersigned (“Guarantor”) hereby:
+(a) acknowledges receipt of the Sixth Amendment to Lease (the “Amendment”; capitalized terms used herein with definition having the meanings set forth in the Amendment), dated as of September 30, 2020, by and among the entities listed on Schedule A attached thereto, as Landlord, and the entities listed on Schedule B attached thereto, as Tenant and the other parties party thereto;
+(b) consents to the terms and execution thereof;
+(c) ratifies and reaffirms Guarantor’s obligations to Landlord pursuant to the terms of that certain Guaranty of Lease, dated as of July 20, 2020 (the “Guaranty”), by and between Guarantor and Landlord, and agrees that, except as expressly set forth in Section 2.A.ii of the Amendment, nothing in the Amendment in any way impairs or lessens the Guarantor’s obligations under the Guaranty; and
+(d) acknowledges and agrees that the Guaranty is in full force and effect and is valid, binding and enforceable in accordance with its terms.
+IN WITNESS WHEREOF, the undersigned has caused this Acknowledgment and Agreement of Guarantor to be duly executed as of September 30, 2020.
+CAESARS ENTERTAINMENT, INC.
+By: /s/ Bret D. Yunker
+Name: Bret D. Yunker
+Title: Chief Financial Officer
+Schedule A
+LANDLORD ENTITIES
+Horseshoe Council Bluffs LLC
+Harrah’s Council Bluffs LLC
+Harrah’s Metropolis LLC
+Horseshoe Southern Indiana LLC
+New Horseshoe Hammond LLC
+Horseshoe Bossier City Prop LLC
+Harrah’s Bossier City LLC
+New Harrah’s North Kansas City LLC
+Grand Biloxi LLC
+Horseshoe Tunica LLC
+New Tunica Roadhouse LLC
+Caesars Atlantic City LLC
+Bally’s Atlantic City LLC
+Harrah’s Lake Tahoe LLC
+Harvey’s Lake Tahoe LLC
+Harrah’s Reno LLC
+Bluegrass Downs Property Owner LLC
+Vegas Development LLC
+Vegas Operating Property LLC
+Miscellaneous Land LLC
+Propco Gulfport LLC
+Philadelphia Propco LLC
+Harrah’s Atlantic City LLC
+New Laughlin Owner LLC
+Harrah’s New Orleans LLC
+Schedule A
+Schedule B
+TENANT ENTITIES
+CEOC, LLC, successor in interest by merger to Caesars Entertainment Operating Company, Inc.
+HBR Realty Company LLC
+Harveys Iowa Management Company LLC
+Southern Illinois Riverboat/Casino Cruises LLC
+Caesars Riverboat Casino LLC
+Roman Holding Company of Indiana LLC
+Horseshoe Hammond, LLC
+Horseshoe Entertainment
+Harrah’s Bossier City Investment Company, LLC
+Harrah’s North Kansas City LLC
+Grand Casinos of Biloxi, LLC
+Robinson Property Group LLC
+Tunica Roadhouse LLC
+Boardwalk Regency LLC
+Caesars New Jersey LLC
+Bally’s Park Place LLC
+Harveys Tahoe Management Company LLC
+Players Bluegrass Downs LLC
+Casino Computer Programming, Inc.
+Harveys BR Management Company, Inc.
+Hole in the Wall, LLC
+Chester Downs and Marina, LLC
+Harrah’s Atlantic City Operating Company, LLC
+Harrah’s Laughlin, LLC
+Jazz Casino Company, L.L.C.
+Schedule B
+Annex A
+Harrah’s Reno Leased Property
+All that certain real property situate in the County of Washoe, State of Nevada, described as follows:
+PARCEL 1A:
+Lot 13, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 1B:
+All that portion of East Douglas Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-37
+PARCEL 2A:
+Lots 14 and 15, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 2B:
+All that portion of East Douglas Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-38
+PARCEL 3A:
+Lot 16, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 3B:
+All that portion of East Douglas Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-39
+PARCEL 4A:
+Lot 17, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+Annex A-1
+PARCEL 4B:
+All that portion of East Douglas Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-40
+PARCEL 5A:
+Lot 18 and the West ½ of Lot 19, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 5B:
+All that portion of East Douglas Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-41
+PARCEL 6A:
+The East one-half of Lot 19 and the West 4 feet of Lot 20, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+The East 21 feet of Lot 20, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 6B:
+All that portion of East Douglas Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-42
+PARCEL 7A:
+Lots 21 through 24, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 7B:
+All that portion of East Douglas Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-43
+Annex A-2
+PARCEL 8A:
+The North 15 feet of Lot 3 and the South 32 feet of Lot 4, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 8B:
+All that portion of Lincoln Alley granted by Order of Abandonment recorded February 22, 2000, as Document No.2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-45
+PARCEL 9A:
+The North 18 feet of Lot 4, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 9B:
+All that portion of Lincoln Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-46
+PARCEL 10A:
+The South half of Lot 5 and the North 6 inches (10 inches more or less per Survey) of Lot 4, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+The North half of Lot 5, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 10B:
+All that portion of Lincoln Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-47
+PARCEL 11A:
+Lot 6, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 11B:
+Annex A-3
+All that portion of East Douglas Alley and Lincoln Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, Official Records Washoe County, State of Nevada.
+APN: 011-052-48
+PARCEL 12:
+Parcel 2 as shown on “Parcel Map 3531 for G and S Investment Company, a Nevada Limited Partnership a portion of Original Reno Townsite Between Blocks H and P-Section 11, T19N, R19E, MDM, Reno, Washoe County, Nevada”, recorded June 18, 1999, Document No. 2352376 in the Office of the County Recorder of Washoe County, Nevada.
+APN: 011-370-50
+PARCEL 13A: The Northerly 36 feet of Lot 2, and the Southerly 35 feet of Lot 3 in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 13B: All that portion of Lincoln Alley granted by Order of Abandonment recorded March 19, 1990, as Document No. 1386768, Official Records Washoe County, State of Nevada.
+APN: 011-052-32
+PARCEL 14A: Lot 1 and the South 14 feet of Lot 2, in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 14B: All that portion of Lincoln Alley granted by Order of Abandonment recorded March 19, 1990, as Document No. 1386768, Official Records Washoe County, State of Nevada.
+APN: 011-052-33
+PARCEL 15A: Lots 7, 8, 9, 10, 11 and 12 in Block P of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 15B: All that portion of East Douglas Alley and Lincoln Alley granted by Order of Abandonment recorded February 22, 2000, as Document No. 2423996, and Lincoln Alley granted by Order of Abandonment recorded March 19, 1990, as Document No. 1386768, Official Records Washoe County, State of Nevada APN: 011-052-35, 36 and 44
+PARCEL 16: Portions of public streets within the City of Reno, as shown on the official map of Town of Reno, Washoe County, Nevada, August 1, 1868, being more particularly described as follows: Beginning at the southwesterly corner of Lot 13 of Block P of the Town of Reno and proceeding thence in a southerly direction along the westerly line of said Block to the southwesterly corner of said Block; Thence proceeding along the southerly line of said Block in an easterly direction to the southeasterly corner of said Block; Thence proceeding along the easterly line of said block corner in a northerly direction to the southeasterly of Lot 24 of said
+Annex A-4
+Block; Thence proceeding along the easterly prolongation of the southerly line of said Lot 24 to the centerline of North Center Street; Thence along said line in a southerly direction to the centerline of East Second Street; Thence along said line in a westerly direction to the centerline of North Virginia Street; Thence along said line a northerly direction to the westerly prolongation of the southerly line of said Lot 13; Thence along said line in an easterly direction to the TRUE POINT OF BEGINNING.
+Document Number 2910777 is provided pursuant to the requirements of Section 6.NRS 111.312
+PARCEL 17: Portions of public streets and alleys within the City of Reno as shown on the Official Map of the Town of Reno, Washoe County, Nevada, August 1, 1868, being more particularly described as follows: Beginning at the southwesterly corner of Block Q of the Town of Reno and proceeding thence in an easterly direction along southerly line of said Block to the southeasterly corner of said Block; Thence along the easterly line of said Block in a northerly direction 230 feet; Thence in a westerly direction along a line parallel to the southerly line of said block 160 feet; Thence along a line parallel to the easterly line of said Block in a northerly direction 90 feet, to a point on the southerly line of Lot 16 of said Block; Thence in an easterly direction along the southerly lines of Lots 16, 17, 18, 19, 20, 21 and 22, 160 feet to the southeasterly corner of Lot 22 of said Block; Thence along the easterly line of said Lot in a northerly direction 50 feet; Thence along the line parallel to the southerly line of said Block in an easterly direction to a point on the centerline of Lake Street; Thence along said line in a southerly direction 60 feet; Thence in a westerly direction along the line parallel to the southerly line of said Block 190 feet; Thence along a line parallel to the easterly line of said Block in a southerly direction 70 feet; Thence along a line parallel with the southerly line of said Block in an easterly direction 190 feet, to a point on the centerline of Lake Street; Thence along said line in a southerly direction to the center line of East Second Street; Thence along said line in a westerly direction to the centerline of North Center Street; Thence along said line in a northerly direction 320 feet; Thence easterly along a line parallel to the southerly line of said Block to a point on the westerly of said Block; Thence along said line in a southerly direction 320 feet to the TRUE POINT OF BEGINNING.
+Document Number 2910777 is provided pursuant to the requirements of Section 6.NRS 111.312
+PARCEL 18: Commencing at the Northeast corner of Second Street and Center Street, the same being the Southwest corner of Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871; Thence Northerly along the East line of North Center Street, a distance of 51’3”; Thence Easterly a distance of 86 feet to a point 52’6” North of the North side line of Second Street; Thence Easterly parallel with the North side line of Second Street, 54 feet to the West line of an alley running Northerly and Southerly through said Block Q; Thence Southerly along the West line of said alley to the North side line of Second Street; Thence Westerly along the North side line of said Second Street a distance of 140 feet to the point of beginning.
+APN: 011-071-09
+PARCEL 19A: Lot 3 in Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+Annex A-5
+PARCEL 19B: The West one-half of that portion of the North-South alley vacated by the City of Reno, by Order of Abandonment recorded October 29, 1979 in Book 1445, Page 215, File No. 638561, Official Records, and re-recorded November 8, 1979 in Book 1448, Page 951, File No. 640621, Official Records which lies Easterly of the Northerly and Southerly extension of the Easterly line of Lot 3 in Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+APN: 011-071-25
+PARCEL 20A: Portion of Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871, being more particularly described as follows: Beginning at a point on the Easterly line of Center Street, 1’3” Northerly from the Southwest corner of Lot 2 of said Block Q; Thence Easterly 86 feet to a point 52’6” Northerly from the North line of Second Street; Thence Easterly parallel with the North line of Second Street, 54 feet to the West line of an alley running Northerly and Southerly through said Block Q; Thence Northerly along the West line of said alley 47’6” to the Northeast corner of Lot 2 in said Block Q; Thence Westerly along the North line of said Lot 2 a distance of 140 feet to the East line of Center Street; Thence Southerly along the East line of Center Street, a distance of 48’9” to the point of beginning.
+PARCEL 20B: Lots 4 and 5 in Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 20C: Lots 8, 9 and 10 in Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+EXCEPTING THEREFROM that portion of Lot 10 conveyed to the City of Reno and described in Deed of Dedication recorded January 19, 1995 in Book 4231, Page 972 as Document No. 1865294 of Official Records.
+PARCEL 20D: Lot 7 in Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+EXCEPTING THEREFROM the North 20 feet of said Lot 7, conveyed to the City of Reno, by Quitclaim Deed recorded September 18, 1979 in Book 1430, page 962, File No. 630152, Official Records.
+PARCEL 20E: Lots 11 through 22, inclusive in Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 20F: That portion of the North-South alley vacated by the City of Reno, by Order of Abandonment, recorded October 29, 1979 in Book 1445, Page 215, File No. 638561, Official Records, and re-recorded November 8, 1979 in Book 1448, page 951, File No. 640621, Official Records, described as follows: Beginning at the Southeast corner of Lot 1 in Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871; Thence along the Easterly ends of the tier of lots to a point in the Easterly end of Lot 4, 180 feet Northerly of said
+Annex A-6
+point of beginning; Thence Easterly at a right angle 20 feet to a point in the Westerly end of Lot 7, 20 feet Southerly of the Northwest corner thereof; Thence along the Westerly ends of the tier of lots, 180 feet to the Southwesterly corner of Lot 10 in said block; Thence at a right angle of 20 feet to the point of beginning.
+EXCEPTING THEREFROM that portion of the West one-half of said vacated alley which lies Easterly of the Northerly and Southerly extension of the Easterly line of Lot 3 in Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871.
+PARCEL 20G: That portion of the East-West alley vacated by the City of Reno by Order of Abandonment, recorded October 29, 1979 in Book 1445, page 215, File No. 638561 and re-recorded November 8, 1979 in Book 1448, page 951, File No. 640621, Official Records, described as follows: Beginning at the Southwest corner of Lot 11 in Block Q of ORIGINAL TOWN, NOW CITY OF RENO, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada, on June 27, 1871; Thence along the Southerly ends of the tier of lots to a point in the Southerly end of Lot 16, 140 feet Easterly of said point of beginning; Thence Southerly at a right angle 20 feet to the Northeasterly corner of Lot 5 of said Block; Thence along the Northerly line of said Lot 5, 140 feet to the Northwesterly corner of said Lot 5; Thence at right angle 20 feet to the point of beginning.
+APN: 011-071-26 Document Number 3715997 is provided pursuant to the requirements of Section 6.NRS 111.312
+All that certain real property situate in the County of Washoe, State of Nevada, described as follows:
+Lot 5, 6, 7 and 8 in Block 5 as shown on the map of Evans North Addition, Tract Map No. 24, according to the map thereof, filed in the office of the County Recorder of Washoe County, State of Nevada on December 16, 1879.
+APN: 007-501-10, 11, 12 and 13
+Annex A-7

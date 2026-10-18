@@ -15,6 +15,7 @@ from cp2h_contract_fixtures import LIMITATION as RATINGS_LIMITATION
 from cp3c_route_fixtures import LIMITATION as REFINANCING_LIMITATION
 from cp4c_contract_fixtures import LIMITATION as RESTRUCTURING_LIMITATION
 from full_assessment_route_fixtures import ROUTE_QUOTES, FullAssessmentCompletions
+from governed_deliverable import freeze_canonical, save_revision, sign_opinion
 from test_canonical_execution import _node
 from test_canonical_runtime import _module_provider, _run_route, _status
 from test_execution_freshness import _counts, _events, _Harness
@@ -24,14 +25,8 @@ from test_loop_charges import ESTIMATE
 from test_runtime import _Boom, _DiesAfterItsBill
 
 from caos.boundary_text import BoundaryText
-from caos.deliverable.canonical import (
-    canonical_payload,
-    freeze_canonical,
-    payload_bytes,
-    verify_frozen,
-)
-from caos.deliverable.filing import sign_opinion
-from caos.deliverable.revisions import read_revision, save_revision
+from caos.deliverable.canonical import canonical_payload, payload_bytes, verify_frozen
+from caos.deliverable.revisions import read_revision
 from caos.graph.route import EdgeType, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, run_route
 from caos.methodology.canonical import accepted_handoff, accepted_projections

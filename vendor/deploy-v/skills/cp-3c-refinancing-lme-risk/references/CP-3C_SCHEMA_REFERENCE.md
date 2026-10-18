@@ -4,7 +4,7 @@
 | ID | Table Name | Key Columns |
 |----|-----------|-------------|
 | T3D.1 | Source Register | source_document_id, source_document_name, source_quality, period / date, entity_covered, data_supplied, limitation, downstream_use |
-| T3D.2 | Maturity Wall Register | Instrument, Amount, Currency, Maturity Date, Years to Maturity, Seniority / Lien, Coupon / Margin, Fixed / Floating, Call Date, Refinancing Pressure, Credit Implication, Source Trace |
+| T3D.2 | Maturity Wall Register | Instrument, Amount, Currency, Scale, Maturity Date, Years to Maturity, Seniority / Lien, Coupon / Margin, Fixed / Floating, Call Date, Refinancing Pressure, Credit Implication, Source Trace |
 | T3D.3 | Liquidity / Market Access Table | Factor, Evidence, Current Level / Status, Direction, Risk Mechanic, Credit Implication, Confidence, Source Trace |
 | T3D.4 | Legal Capacity Register | Legal-Capacity Indicator, Available / Not Available / Unclear, Evidence, Risk Mechanic, LME Paths Enabled, Confidence, Source Trace |
 | T3D.5 | Sponsor Willingness Table | Factor, Evidence, Assessment, Risk Mechanic, Credit Implication, Source Trace |
