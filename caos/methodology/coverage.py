@@ -7,14 +7,16 @@ block of it, so its last page is the highest page delivered. LCR7's CP-0 wrote
 and held CP-L10 (N156). An answer whose P5 row gives a whole source a shown
 range ending below its last delivered page is refused `HANDOFF_MALFORMED` at
 acceptance, and its guided retry is told the source, the pages delivered and
-the last heading line delivered.
+the last heading line delivered. A range ending past the last delivered page
+is refused the same way (N165 (1), D152 R4: LCR6's "1-67" for a 60-page
+source is a false statement in a committee artifact) and its retry is told
+the extent delivered.
 
 The reading is bounded and conservative. Only the P5 register's table rows are
 read, at most `MAX_P5_LINES` of them; a row is read only when its first cell is
 a source id, and a claim only when a whole cell, or one `;`- or sentence-
 separated part of it, is a range from page 1 (`Pages 1-67`, `1-59 shown`, `page
-anchors 1-6 shown`). A claim the parser cannot read is not a fault, and nor is
-a range past the last page (an over-claim holds no consumer back).
+anchors 1-6 shown`). A claim the parser cannot read is not a fault.
 """
 
 from __future__ import annotations
@@ -55,11 +57,13 @@ _SECTION = re.compile(
 
 @dataclass(frozen=True, slots=True)
 class CoverageFault:
-    """A P5 row giving a wholly delivered source fewer pages than it has."""
+    """A P5 row giving a wholly delivered source fewer pages than it has, or
+    (`over`) more."""
 
     source_id: UUID
     claimed: int
     delivered: int
+    over: bool = False
 
 
 def _p5_rows(markdown: str) -> Iterable[list[str]]:
@@ -116,17 +120,23 @@ def coverage_faults(
     only where a page past the claim holds a heading line (`headed`, by
     `heading_pages`): pages the claim leaves out that carry no heading --
     signatures, a pricing grid -- are not worth a
-    whole CP-0 retry (LRV1's 58 of 59). A source's claim is its largest
-    (F536): a bare `1-3` in another cell does not outvote `Pages 1-67`."""
+    whole CP-0 retry (LRV1's 58 of 59). A claim past the last delivered page
+    is a fault whatever the headings (N165 (1)). A source's claim is its
+    largest (F536): a bare `1-3` in another cell does not outvote `Pages 1-67`."""
     largest: dict[UUID, int] = {}
     for source, claimed in coverage_claims(markdown):
         largest[source] = max(claimed, largest.get(source, claimed))
     return [
-        CoverageFault(source, claimed, last)
+        CoverageFault(source, claimed, last, over=claimed > last)
         for source, claimed in largest.items()
         if (last := last_pages.get(source)) is not None
-        and claimed < last
-        and any(page > claimed for page in headed.get(source, ()))
+        and (
+            claimed > last
+            or (
+                claimed < last
+                and any(page > claimed for page in headed.get(source, ()))
+            )
+        )
     ]
 
 
@@ -155,7 +165,7 @@ def coverage_message(
     fault: CoverageFault, filename: str, heading: tuple[int, str] | None
 ) -> str:
     """What the retry is told of `fault`: the source, the pages delivered and,
-    when one reads as such, the last heading line delivered. Within
+    for a short claim, when one reads as such, the last heading line delivered. Within
     `MAX_FEEDBACK_CHARS`, so `_bounded`'s cut never drops the closing
     instruction: past it, the heading goes, then the filename (F522's way)."""
     variants = [(filename, heading), (filename, None), ("", None)]
@@ -170,6 +180,13 @@ def _message(
     fault: CoverageFault, filename: str, heading: tuple[int, str] | None
 ) -> str:
     named = f" ({filename})" if filename else ""
+    if fault.over:
+        return (
+            f"P5 gives source {fault.source_id}{named} pages 1-{fault.claimed},"
+            f" but the host delivered it WHOLE, pages 1-{fault.delivered}, so no"
+            f" page past {fault.delivered} exists; correct its P5 row and every"
+            " finding, gap and T8 status drawn from the longer extent"
+        )
     where = (
         f'; its last heading line delivered, on page {heading[0]}, is "{heading[1]}"'
         if heading is not None

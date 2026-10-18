@@ -82,8 +82,10 @@ def test_preflight_refuses_a_ceiling_below_one_worst_case_call(
 def _widest_profile_spend(price: ModelPrice) -> Decimal:
     """What the widest execution profile reserves when every node carries its
     whole delivered authority and every upstream section at its bound: the
-    widest-node test's request, per node, priced. Evidence is excluded -- it is
-    the headroom the one worst-case call beside this pays for."""
+    widest-node test's request, per node, priced. Evidence is excluded: the
+    calls beside this one are what the default's headroom is sized for: one
+    (a D30 second attempt) is D29's floor; the default covers about two
+    guided retries (D82) on the widest node."""
     spends = []
     for profile in CATALOG["profiles"].values():
         edges = profile["edges"]
@@ -127,6 +129,20 @@ def test_the_default_run_ceiling_finishes_the_widest_profile() -> None:
 
     assert ENDPOINT == values["model_endpoint"]
     assert PRICE == values["model_price"]
+
+
+def test_the_default_run_ceiling_holds_the_widest_profile_and_two_retries() -> None:
+    """R6 (D152, N129; R32 widened the section bound): the default must hold
+    the widest profile plus TWO worst-case calls (two guided retries, D82).
+    Measured with R32's 131,072-byte bound: widest 111.417050 + 2 x 22.609920
+    = 156.636890, which is at most 165.00. 120.00 held only one. The owner
+    kept 165.00 (2026-10-17) rather than size it for D82's third retry: a FULL
+    node needing a third retry fails closed `BUDGET_CEILING_REACHED`."""
+    values = bundle_defaults.defaults()
+    price = price_from_environment(values["model_endpoint"], values["model_price"])
+    default = Decimal(values["run_ceiling"])
+    assert default == Decimal("165.00")
+    assert default >= _widest_profile_spend(price) + 2 * worst_case(price), default
 
 
 @pytest.mark.parametrize(

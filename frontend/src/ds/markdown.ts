@@ -317,8 +317,9 @@ export type RefPiece =
 
 const REF = /\[(CP-[^[\]\n]{1,100})\]/g;
 const REF_MODULE = /^(CP-(?:\d+[A-Z]?|[A-Z][A-Z0-9]*))(?:\s+(.+))?$/;
-// A register id -- never `C3`, which is a citation's marker (D107).
-const REF_REGISTER = /^(?!C\d+$)[A-Z]{1,3}\d+[A-Z]?(?:\.[0-9A-Z]+)*(?:[–-][A-Z0-9.]+)?$/;
+// A register id -- never `C3` nor a range `C3-C5`, which are a citation's
+// marker (D107).
+const REF_REGISTER = /^(?!C\d)[A-Z]{1,3}\d+[A-Z]?(?:\.[0-9A-Z]+)*(?:[–-][A-Z0-9.]+)?$/;
 // An upstream citation's marker as a downstream prompt shows it and a module
 // may copy it, `[CP-1 C3]` or `[CP-1 C2, C5]` (`citation_markers.qualified`):
 // a label naming that module's citation, never a way to a register.

@@ -6,7 +6,7 @@ import os
 import re
 import sys
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit, urlunsplit
@@ -190,8 +190,58 @@ def _development_edge() -> Iterator[None]:
             os.environ[name] = value
 
 
+# What the guard below calls, taken once at import: a later attribute store
+# on `pytest` or `Path` cannot neuter it.
+_EXIT = pytest.exit
+_IS_RELATIVE_TO = Path.is_relative_to
+
+
+def _refuse_run_hooks_from_tests(config: pytest.Config) -> None:
+    """End the session if a conftest or a module under tests/ implements a
+    hook that replaces how a test runs or is judged (N109): a
+    `pytest_pyfunc_call` returning True passes `assert False` unrun. The
+    static gate pins this file whole (`CONFTEST_PIN`); this reads what pytest
+    registered. Its limit: the gate reads conftest-loaded files as their
+    bytes decode (a coding cookie other than utf-8 refused); any code run by
+    a module it does not read -- a helper a conftest imports, a test module,
+    a fixture -- at import or at any later time (including
+    `config.pluginmanager.register` after both calls of this guard) can
+    rebind `_EXIT`, register a hook, or rebind `request.node.runtest`.
+    Nothing here closes that; review of such code is the control."""
+    tests = Path(__file__).resolve().parent
+    for hook in (
+        "pytest_pyfunc_call",
+        "pytest_runtest_protocol",
+        "pytest_runtest_call",
+        "pytest_runtest_makereport",
+        "pytest_report_teststatus",
+    ):
+        for impl in getattr(config.pluginmanager.hook, hook).get_hookimpls():
+            # The registering module's file, never the code object's: code
+            # built by `exec` in a conftest is named "<string>".
+            filename = getattr(impl.plugin, "__file__", None)
+            if not filename:
+                code = getattr(impl.function, "__code__", None)
+                filename = code.co_filename if code else ""
+            if not filename:
+                continue
+            if filename.startswith("<"):
+                _EXIT(
+                    f"{hook} is implemented by {impl.plugin_name} of unknown origin",
+                    returncode=3,
+                )
+            source = Path(filename).resolve()
+            if source.name == "conftest.py" or _IS_RELATIVE_TO(source, tests):
+                _EXIT(
+                    f"{hook} is implemented by {impl.plugin_name} ({source.name}); "
+                    "a conftest or test module may not replace how a test runs",
+                    returncode=3,
+                )
+
+
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Reap leaked databases once: the controller under xdist, never a worker."""
+    _refuse_run_hooks_from_tests(session.config)
     if POSTGRES_URL and not hasattr(session.config, "workerinput"):
         reap_session(POSTGRES_URL)
 
@@ -205,6 +255,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
+    _refuse_run_hooks_from_tests(config)
     live = [item for item in items if item.get_closest_marker("live_provider")]
     if not config.getoption("--live-provider"):
         items[:] = [item for item in items if item not in live]
@@ -469,7 +520,8 @@ def recorded_statements(conn: object) -> Iterator[list[str]]:
     try:
         yield statements
     finally:
-        vars(store).pop("execute", None)
+        with suppress(AttributeError):
+            del store.execute
 
 
 def every_block(conn: object, *sources: UUID) -> dict[UUID, frozenset[str]]:
