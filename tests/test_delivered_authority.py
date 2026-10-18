@@ -73,8 +73,10 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # placeholder instructions only and moves none of the three; fork r17 (D153,
 # build 7a77e6af) moves CP-0 by +152 (the capacity contract and the lender-deck
 # default, N133) and CP-L10 by +3,290 (ten semantic rules and the reason-form
-# line, N132 and N213), and CP-5 not at all.
-MEASURED = {"CP-0": 135_656, "CP-L10": 141_266, "CP-5": 170_803}
+# line, N132 and N213), and CP-5 not at all; fork r18 (N237, build dab8c882)
+# moves CP-0 by +375 (Step I rules 5 and 8 and the T8 row contract name pages
+# for every consumer) and the other two not at all.
+MEASURED = {"CP-0": 136_031, "CP-L10": 141_266, "CP-5": 170_803}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",

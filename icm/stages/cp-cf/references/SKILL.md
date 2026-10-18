@@ -19,6 +19,10 @@ Empty arrays likewise bind their exact `/<pointer> = []` assignment. Cite those
 quotes again in this handoff's citations and their `[C<n>]` in the Evidence Trace;
 quote no other source text in the Markdown. No unrelated number, missing movement
 or unstated zero is authority.
+If no accepted upstream handoff carries the source-supplied JSON-pointer
+assignment lines the request needs, so no request can bind, do not emit a null
+request, empty bindings or a null forecast; answer `qa_status: Blocked` and
+name the owners whose assignments are missing.
 
 Keep the existing transport, tagged tables, vocabulary and all 42 CP-2G
 financial/growth rows. Required legacy movements remain required. Every scalar

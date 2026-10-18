@@ -161,6 +161,15 @@
           },
           "column": "evidence_status",
           "expected": "SUFFICIENT"
+        },
+        {
+          "module_id": "CP-4C",
+          "register_id": "T4E.1",
+          "row_key": {
+            "trigger": "No documented distress trigger"
+          },
+          "column": "status",
+          "expected": "Not Applicable"
         }
       ]
     }
