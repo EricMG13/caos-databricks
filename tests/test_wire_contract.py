@@ -690,6 +690,7 @@ def test_the_v1_wire_key_sets_are_pinned() -> None:
         SectionNote.LIST_TRUNCATED,
         SectionNote.ROUTE_NOT_PINNED,
         SectionNote.HANDOFFS_PENDING,
+        SectionNote.HEAD_UNPROVEN,
     }
     # R24-12: MONEY (an `_amount`), MULTIPLE (the leverage/coverage family) and
     # RATIO (the one margin) are every dimension a projected value carries.

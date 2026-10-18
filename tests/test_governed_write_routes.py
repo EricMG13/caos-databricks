@@ -15,6 +15,7 @@ lock, by the store and not by the view.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -30,14 +31,14 @@ from test_revisions import _save
 from test_run_commands import _Counting
 
 from caos.api.app import app, methodology_bundle, store_connection
-from caos.api.commands import deliverable, members
+from caos.api.commands import availability, deliverable, members
 from caos.api.commands._request import require_case_admin
 from caos.api.deps import actor_from_request
 from caos.api.reads import reports as reports_read
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.deliverable.filing import Receipt, filing_payload
-from caos.refusals import Refusal
+from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, connect
 from caos.store.audit import audit_trail, digest_of
 from caos.store.commands import (
@@ -951,12 +952,14 @@ def test_each_new_command_meets_its_declared_store_budget(
         assert len(downloaded) == blob_budget, (path, downloaded)
     assert deliverable.IO_BUDGET == max(
         deliverable.SAVE_IO,
+        deliverable.SAVE_FROZEN_IO,
         deliverable.SIGN_IO,
         deliverable.FREEZE_IO,
         deliverable.FILE_IO,
     )
     assert deliverable.BLOB_BUDGET == max(
         deliverable.SAVE_BLOBS,
+        deliverable.SAVE_FROZEN_BLOBS,
         deliverable.SIGN_BLOBS,
         deliverable.FREEZE_BLOBS,
         deliverable.FILE_BLOBS,
@@ -1248,3 +1251,237 @@ def test_a_payload_naming_the_request_digest_itself_is_refused() -> None:
     view = _WithRequest({"revision_id": "r"}, "b" * 64)
     assert len(view) == len(list(view)) == 2
     assert view[REQUEST_KEY] == "b" * 64
+
+
+def _frozen_head(filing_client: TestClient, lite: _Harness) -> UUID:
+    """A saved revision signed and frozen, not filed."""
+    frozen = _save(lite)
+    digest = _digest(lite, frozen)
+    for step in ("signature", "freeze"):
+        answer = _post(
+            filing_client,
+            f"{_case(lite)}/revisions/{frozen}/{step}",
+            _approver(lite),
+            {"payload_sha256": digest},
+        )
+        assert answer.status_code == 200, answer.text
+    return frozen
+
+
+def _refusing(code: RefusalCode) -> Callable[..., bytes]:
+    def refuse(*args: object, **kwargs: object) -> bytes:
+        raise Refusal(code)
+
+    return refuse
+
+
+# Exactly the drift refusals `prove_revision` can raise (the renderer's codes
+# are not among them: a head that re-proves but does not render is served
+# complete, FILE refused, SAVE offered).
+DRIFT = [
+    RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING,
+    RefusalCode.DELIVERABLE_PAYLOAD_INVALID,
+    RefusalCode.NARRATIVE_REFERENCE_INVALID,
+    RefusalCode.NARRATIVE_FIGURE_UNREFERENCED,
+]
+
+
+@pytest.mark.parametrize("drift", DRIFT)
+def test_a_frozen_head_that_no_longer_re_proves_is_offered_the_superseding_save(
+    filing_client: TestClient,
+    lite: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    drift: RefusalCode,
+) -> None:
+    """N112. The Report read re-proved the frozen head before building its
+    actions, so a head that no longer re-proves -- a rule tightened after the
+    freeze -- refused the whole read and never offered the superseding save
+    `_fileable` accepts. It is served from its stored bytes, marked partial
+    with `HEAD_UNPROVEN`, the save is offered, and filing is refused with the
+    proof's own code (an independent approver sees it, not only a writer); a
+    head that still re-proves keeps `DELIVERABLE_ALREADY_FROZEN`."""
+    assert availability.UNPROVEN_HEAD_CODES == frozenset(DRIFT)
+    frozen = _frozen_head(filing_client, lite)
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    approver = _approver(lite)
+    before = _shown(filing_client, lite, frozen, writer)
+    assert before["SAVE_REVISION"] == "DELIVERABLE_ALREADY_FROZEN"
+    assert _shown(filing_client, lite, frozen, approver)["FILE_DELIVERABLE"] is None
+
+    monkeypatch.setattr(reports_read, "prove_revision", _refusing(drift))
+    monkeypatch.setattr(deliverable, "prove_revision", _refusing(drift))
+    capsys.readouterr()
+    answer = filing_client.get(
+        f"{_case(lite)}/report?run={lite.run_id}&revision={frozen}",
+        headers=command_headers(approver),
+    )
+    assert answer.status_code == 200, answer.text
+    document = answer.json()
+    assert (document["status"], document["notes"]) == ("partial", ["HEAD_UNPROVEN"])
+    assert capsys.readouterr().err == f"REPORT_HEAD_UNPROVEN {drift.value}\n"
+    after = _judged(document)
+    assert after["FILE_DELIVERABLE"] == drift.value
+    shown = _shown(filing_client, lite, frozen, writer)
+    assert shown["SAVE_REVISION"] is None
+    draft = {"narrative": [], "expected_revision_id": str(frozen)}
+    runs = f"{_case(lite)}/runs/{lite.run_id}/revisions"
+    superseding = _post(filing_client, runs, writer, draft)
+    assert superseding.status_code == 201, superseding.text
+
+
+@pytest.mark.parametrize(
+    "tampered",
+    [
+        RefusalCode.ARTIFACT_RECORD_MISMATCH,
+        RefusalCode.BLOB_DIGEST_MISMATCH,
+        RefusalCode.BLOB_NOT_FOUND,
+    ],
+)
+def test_a_frozen_head_whose_proof_fails_closed_still_refuses_the_report(
+    filing_client: TestClient,
+    lite: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    tampered: RefusalCode,
+) -> None:
+    """N112 fails closed (invariants 5 and 11): only the drift codes the
+    superseding save accepts are served as an unproven head. A tampered or
+    missing blob or a record mismatch is never a clean read."""
+    frozen = _frozen_head(filing_client, lite)
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    monkeypatch.setattr(reports_read, "prove_revision", _refusing(tampered))
+    answer = filing_client.get(
+        f"{_case(lite)}/report?run={lite.run_id}&revision={frozen}",
+        headers=command_headers(writer),
+    )
+    assert answer.status_code >= 400, answer.text
+    assert answer.json()["code"] == tampered.value, answer.text
+
+
+def test_a_frozen_head_with_a_changed_artifact_blob_refuses_the_report(
+    filing_client: TestClient, lite: _Harness
+) -> None:
+    """N112, probed for real: an artifact blob changed on disk after the freeze
+    refuses the Report read rather than serving the stored head as complete."""
+    from test_deliverable_canonical import _row
+
+    frozen = _frozen_head(filing_client, lite)
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    digest = _row(lite, "CP-L10")[0]
+    stored = lite.blobs.get(digest)
+    lite.blobs.path_of(digest).write_bytes(stored.replace(b"Interim", b"Interin"))
+    answer = filing_client.get(
+        f"{_case(lite)}/report?run={lite.run_id}&revision={frozen}",
+        headers=command_headers(writer),
+    )
+    assert answer.status_code >= 400, answer.text
+    assert answer.json()["code"] == "ARTIFACT_RECORD_MISMATCH", answer.text
+
+
+def test_an_unfrozen_revision_that_no_longer_re_proves_still_refuses_the_report(
+    filing_client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N112: only a frozen, unfiled head is served from its stored bytes when it
+    no longer re-proves; a saved revision that is not frozen refuses as before."""
+    saved = _save(lite)
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    drift = RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING
+    monkeypatch.setattr(reports_read, "prove_revision", _refusing(drift))
+    answer = filing_client.get(
+        f"{_case(lite)}/report?run={lite.run_id}&revision={saved}",
+        headers=command_headers(writer),
+    )
+    assert answer.status_code >= 400, answer.text
+    assert answer.json()["code"] == drift.value, answer.text
+
+
+def test_the_unproven_head_read_costs_its_declared_round_trips(
+    filing_client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N112: serving a head that no longer re-proves re-proves it, then reads
+    its stored bytes; that sum is declared as `report_unproven` and held."""
+    frozen = _frozen_head(filing_client, lite)
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    counted = _Counting(lite.conn)
+    app.dependency_overrides[store_connection] = lambda: counted
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted_get(store: BlobStore, key: str) -> bytes:
+        if store.verified is None or key not in store.verified:
+            downloaded.append(key)
+        return real_get(store, key)
+
+    monkeypatch.setattr(BlobStore, "get", counted_get)
+    from caos.deliverable import revisions
+    from caos.methodology.bundle import Bundle
+
+    real_derive = revisions.prove_revision
+
+    def moved(
+        conn: StoreConnection,
+        blobs: BlobStore,
+        bundle: Bundle,
+        *,
+        case_id: UUID,
+        revision_id: UUID,
+    ) -> bytes:
+        real_derive(conn, blobs, bundle, case_id=case_id, revision_id=revision_id)
+        raise Refusal(RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING)
+
+    monkeypatch.setattr(reports_read, "prove_revision", moved)
+    counted.executed = 0
+    answer = filing_client.get(
+        f"{_case(lite)}/report?run={lite.run_id}&revision={frozen}",
+        headers=command_headers(writer),
+    )
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["notes"] == ["HEAD_UNPROVEN"]
+    assert counted.executed <= reports_read.IO_BUDGET["report_unproven"]
+    assert counted.executed == reports_read.IO_BUDGET["report_unproven"]
+    assert len(downloaded) == reports_read.BLOB_BUDGET["report_unproven"]
+
+
+def test_a_save_over_a_frozen_head_costs_its_declared_round_trips(
+    filing_client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N112: the save over a frozen head that can no longer be filed (N77) pays
+    `_fileable`'s re-proof on top of its own derivation, and that sum is held to
+    the module's declaration -- statements and blob downloads -- like every
+    other command's cost."""
+    from caos.deliverable import revisions
+    from caos.deliverable.render import RenderRefused, render
+
+    conn = lite.conn
+    counted = _Counting(conn)
+    app.dependency_overrides[store_connection] = lambda: counted
+    frozen = _frozen_head(filing_client, lite)
+
+    def tightened(payload: dict[str, Any]) -> bytes:
+        if payload["revision_id"] == str(frozen):
+            raise RenderRefused("DELIVERABLE_MARKDOWN_UNSUPPORTED")
+        return render(payload)
+
+    monkeypatch.setattr(revisions, "render", tightened)
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted_get(store: BlobStore, key: str) -> bytes:
+        if store.verified is None or key not in store.verified:
+            downloaded.append(key)
+        return real_get(store, key)
+
+    monkeypatch.setattr(BlobStore, "get", counted_get)
+    writer = member(conn, lite.case_id, Standing.WRITER)
+    counted.executed = 0
+    superseding = _post(
+        filing_client,
+        f"{_case(lite)}/runs/{lite.run_id}/revisions",
+        writer,
+        {"expected_revision_id": str(frozen), "narrative": []},
+    )
+    assert superseding.status_code == 201, superseding.text
+    assert counted.executed <= deliverable.IO_BUDGET
+    assert counted.executed == deliverable.SAVE_FROZEN_IO
+    assert len(downloaded) == deliverable.SAVE_FROZEN_BLOBS
+    assert deliverable.SAVE_FROZEN_BLOBS <= deliverable.BLOB_BUDGET
