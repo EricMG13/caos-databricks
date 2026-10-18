@@ -2208,10 +2208,14 @@ def test_a_bill_no_try_can_write_gives_up_inside_a_bounded_few_seconds(
     assert count(run.conn, "run_attempts", run.run_id) == 2, "no more"
 
 
-# How long another session holds the run's case row in the test below: past
-# every try the bill would get under a 300 ms bound (`canonical.BILL_TRIES`,
-# its pause patched out), with room for a loaded server.
-_CASE_LOCK_SECONDS = 2.5
+# The worker's statement and lock bounds in the test below, and how long
+# another session holds the run's case row: past every try the bill would get
+# under the bound (`canonical.BILL_TRIES`, its pause patched out), 3 x 0.5 s,
+# with a second to spare. A real Postgres timeout has no fake clock, so the
+# bound is a real one with the margin N197 asks for: an ordinary statement
+# here takes milliseconds, and the bound is 500 ms (10x and more).
+_BILL_BOUND_MS = 500
+_CASE_LOCK_SECONDS = 3.0
 
 
 def _case_lock_held(url: str, run_id: UUID, held: Event) -> threading.Thread:
@@ -2256,12 +2260,13 @@ def test_a_paid_call_s_bill_outwaits_a_held_case_lock_under_the_worker_s_bounds(
     monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
     if bound == "lock_timeout":
         with psycopg.connect(empty_database, autocommit=True) as admin:
+            dbname = run.conn.info.dbname
             admin.execute(
-                f'ALTER DATABASE "{run.conn.info.dbname}" SET lock_timeout = 300'
+                f'ALTER DATABASE "{dbname}" SET lock_timeout = {_BILL_BOUND_MS}'
             )
         worker_conn = connect(empty_database)
     else:
-        worker_conn = connect(empty_database, statement_timeout_ms=300)
+        worker_conn = connect(empty_database, statement_timeout_ms=_BILL_BOUND_MS)
     holders: list[threading.Thread] = []
 
     def lock_during_the_first_call() -> None:
@@ -2289,7 +2294,7 @@ def test_a_paid_call_s_bill_outwaits_a_held_case_lock_under_the_worker_s_bounds(
         for holder in holders:
             holder.join(10)
     assert claimed == run.run_id
-    assert kept == ("300ms",), "lifted for the bill's unit alone"
+    assert kept == (f"{_BILL_BOUND_MS}ms",), "lifted for the bill's unit alone"
     assert run_status(run.conn, run.run_id) is RunStatus.COMPLETE
     run.conn.rollback()
     assert len(completions.prompts) == len(run.route.nodes), "one paid call a node"
