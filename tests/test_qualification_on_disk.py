@@ -277,16 +277,16 @@ COMMITTED_SET_DIGESTS = {
         "504fcb0641cb445d6413b0824b2482013f862b739594b0b80fdb3dfa82ae7532"
     ),
     "ccl-fy2025-full-relative-value": (
-        "f4205e4e3606ef68aece138696ea630c7632d2e184a067edce13eebf88e22e79"
+        "f04a9d56567b7b60b88879392c04d1b8291494df3beadfcbee6f81812c397e55"
     ),
     "ccl-fy2025-relative-value": (
-        "fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b"
+        "34eb29c1759fd2f5f5497f1a142a267fa2b8420656d40f30d2d41affba8604bd"
     ),
     "ccl-fy2025-lite-covenant-refinancing": (
         "85fd43d537432db2a5a805ab5855ca2dda28d4b8b8b4e04fe91e0b78421fc2a9"
     ),
     "ccl-fy2025-lite-full-credit-screen": (
-        "f1647d3b593d4a3ec66a001969346f9411da30091b618383a1076b4cefda9608"
+        "d2c64e4db9419eb1754ebf10f7fee7caeff498b3a149bf64a2d4bb66226febac"
     ),
     "ccl-fy2025-market-dislocation": (
         "c01b06c9c09b1ced76c297e0d7bf81ad07ace9e03f3e3322da81b3f85840db35"

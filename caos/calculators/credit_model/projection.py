@@ -117,6 +117,7 @@ from caos.calculators.credit_model.debt import (
     EXCLUDES_UNALLOCATED,
     HISTORY_INCOMPLETE,
     SECURED_RANKS,
+    TERMS_AS_BPS,
     carried,
     facility_keys,
     is_operating_lease,
@@ -188,6 +189,10 @@ _PERCENT = Decimal(100)
 # Each basis-point term's range; a basis-point term is a whole number.
 _SPREAD = (Decimal(0), Decimal(2000))
 _FLOOR = (Decimal(0), Decimal(1000))
+# CP-1 states spreads and floors in integer basis points. One above nil and
+# at most this (the highest percent a fixed coupon takes) reads like a whole
+# percent ("3", "3.00"): priced as the basis points stated, and noted.
+_WHOLE_PERCENT_MAX = Decimal(30)
 # CP-CF's decimal strings (`cash_flow._NUMBER`) and whole day counts.
 _NUMBER = re.compile(r"-?(0|[1-9][0-9]{0,17})(\.[0-9]{1,6})?")
 _WHOLE = re.compile(r"[1-9][0-9]{0,2}")
@@ -299,6 +304,14 @@ def _rate_terms_in_range(row: FacilityRow) -> bool:
     )
 
 
+def _reads_like_percent(row: FacilityRow) -> bool:
+    """Whether a spread or floor is above nil and at most `_WHOLE_PERCENT_MAX`."""
+    return any(
+        term is not None and 0 < term <= _WHOLE_PERCENT_MAX
+        for term in (row.spread_bps, row.floor_bps)
+    )
+
+
 def facility_rate(
     row: FacilityRow,
     deck: RateDeck | None,
@@ -333,6 +346,7 @@ def facility_rate(
         reference = rate_for(deck, row.reference_rate, case, offset)
         if reference is None:
             return _fallback(implied, note)
+        note = join_notes((note, TERMS_AS_BPS if _reads_like_percent(row) else None))
         if row.floor_bps is not None:
             reference = max(reference, row.floor_bps / _BPS)
         return reference + row.spread_bps / _BPS, note
@@ -401,6 +415,7 @@ class _Schedule:
     rated: tuple[tuple[Decimal | None, Decimal | None], ...]  # (opening, rate)
     in_total: Cell  # the closing balances total debt counts
     fraction: bool = False  # a drawn, priced facility's coupon read as a fraction
+    bps: bool = False  # a drawn, priced facility's spread or floor read as bp
 
 
 def _malformed() -> Refusal:
@@ -533,6 +548,20 @@ def _held(row: FacilityRow, opening: Decimal | None, currency: str) -> Cell:
     return _balance_cell(opening, FOREIGN if row.currency != currency else HELD_FLAT)
 
 
+def _read_flags(
+    flags: tuple[bool, bool],
+    rate: Decimal | None,
+    opening: Decimal | None,
+    rate_note: str | None,
+) -> tuple[bool, bool]:
+    """`flags` (a coupon read as a fraction, a spread or floor read as basis
+    points), set by a drawn, priced facility whose rate is noted so."""
+    if rate is None or not opening:
+        return flags
+    found = notes_of(rate_note)
+    return flags[0] or COUPON_AS_FRACTION in found, flags[1] or TERMS_AS_BPS in found
+
+
 def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
     """Each facility's closing balance after the year's amortisation."""
     currency = ctx.regs.currency
@@ -543,6 +572,7 @@ def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
     held: list[tuple[Cell, int]] = []
     rated: list[tuple[Decimal | None, Decimal | None]] = []
     fraction = False
+    bps = False
     in_total: list[tuple[Cell, int]] = []
     for row in ctx.facilities:
         opening = state.balances[row.facility_id]
@@ -571,11 +601,7 @@ def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
             secured.append((cells[key], 1))
         scheduled.append((_balance_cell(paid, None), 1))
         rated.append((opening, rate))
-        fraction = fraction or (
-            rate is not None
-            and bool(opening)
-            and COUPON_AS_FRACTION in notes_of(rate_note)
-        )
+        fraction, bps = _read_flags((fraction, bps), rate, opening, rate_note)
         in_total.append((cells[key], 1))
     return _Schedule(
         cells,
@@ -586,6 +612,7 @@ def _schedule(ctx: _Context, state: _State, period: _Period) -> _Schedule:
         tuple(rated),
         calc(in_total),
         fraction,
+        bps,
     )
 
 
@@ -643,7 +670,9 @@ def _mix(schedule: _Schedule, implied: Cell, base: Cell) -> _Mix:
     no facility weight but a positive base (debt CP-CF issued onto
     facilities at nil), the implied rate, noted; with no base either,
     none. The weighted rate is noted "coupon read as a fraction" where a
-    drawn, priced facility's coupon was (`_Schedule.fraction`), and only so."""
+    drawn, priced facility's coupon was (`_Schedule.fraction`), and "spread or
+    floor read as basis points" where its spread or floor was (`_Schedule.bps`),
+    and only so."""
     known = [(opening, rate) for opening, rate in schedule.rated if opening is not None]
     if len(known) != len(schedule.rated):
         return _Mix(Cell(None, "COMPONENT_MISSING"))
@@ -655,7 +684,12 @@ def _mix(schedule: _Schedule, implied: Cell, base: Cell) -> _Mix:
     if weights <= 0:
         return _Mix(_unweighted(implied, base))
     weighted = sum((opening * rate for opening, rate in priced), Decimal(0))
-    note = COUPON_AS_FRACTION if schedule.fraction else None
+    note = join_notes(
+        (
+            COUPON_AS_FRACTION if schedule.fraction else None,
+            TERMS_AS_BPS if schedule.bps else None,
+        )
+    )
     return _Mix(
         Cell(weighted / weights, basis="CALCULATED", note=note), weighted, weights
     )

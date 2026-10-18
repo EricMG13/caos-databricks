@@ -5,7 +5,10 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `LITE_CREDIT_22 / LITE_FULL_CREDIT_SCREEN` from
 the CCL FY2025 10-K, two governing debt documents, the dated Fitch rating
 action, and the RCL and NCLH FY2025 releases. Its qualification-set digest is
-`f1647d3b593d4a3ec66a001969346f9411da30091b618383a1076b4cefda9608`.
+`d2c64e4db9419eb1754ebf10f7fee7caeff498b3a149bf64a2d4bb66226febac` (was
+`1ce7cf99711b1e6c1da60fb54481ed8cead5033119f86a6ffaeb3ab0027b1b7e` on the base after fork r17 split
+CP-1C T4.5's packed leverage column and the NCLH key was re-keyed, N192, and
+`f1647d3b593d4a3ec66a001969346f9411da30091b618383a1076b4cefda9608` with the CP-4C `T4E.1` key restored (F709), before the two were merged).
 
 The keys bind the LITE scope, CCL liquidity, NCLH leverage, the Fitch-identified
 2030 CCL note, the CCL maturity schedule, and total debt. CP-4C's QA status

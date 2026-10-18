@@ -7,7 +7,7 @@
 | T2R.1 | Rating evidence register | agency, issuer/instrument, rating, outlook/watch, effective date, source, locator, status |
 | T2R.2 | Applicable methodology map | agency, criteria, publication/effective date, applicable entity/instrument, limitation |
 | T2R.3 | Agency metric bridge | agency metric, CP metric, adjustments, period/perimeter, formula, evidence_id |
-| T2R.4 | Quantitative trigger matrix | agency, rating type, trigger direction, metric, threshold, case/period value, headroom, status |
+| T2R.4 | Quantitative trigger matrix | agency, rating type, trigger direction, metric, threshold, case, period, value, headroom, status |
 | T2R.5 | Qualitative modifier matrix | agency, factor, current evidence, supportive/neutral/negative/unknown, rationale, locator |
 | T2R.6 | Migration case matrix | agency, case, transition class, earliest timing, catalyst, confidence, evidence/forecast IDs |
 | T2R.7 | Agency divergence register | issue, agency A/B positions, methodology/perimeter/timing explanation, unresolved conflict |

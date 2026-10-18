@@ -33,6 +33,14 @@ them, and `$TMPDIR` is purged (FP-16).
     scripts/qualify.py qualification/ccl-fy2025-market-dislocation \
         --expect-identity copilot/gpt-6-luna/high/65536 --ceiling 5.00
 
+    # Name where the run database's disk is read from, so a set that would fill
+    # it refuses before it reserves anything (N150, F521); and pick a stopped
+    # set back up in the database it stopped in rather than pin a new one.
+    scripts/qualify.py <set> <the options above> \
+        --docker-container caos-postgres --min-free-bytes 5368709120
+    scripts/qualify.py <set> <the options above> \
+        --resume caos_qualify_<32 hex> --resume-token <the `resume token:` line>
+
 `--expect-identity` is not a convenience. A verdict binds the execution profile
 it was measured under, so the run refuses before spending anything if the
 environment resolves to a different one than the caller believes.
@@ -41,15 +49,18 @@ environment resolves to a different one than the caller believes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
+import shlex
 import sys
 from collections.abc import Mapping
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from decimal import ROUND_DOWN, Decimal
 from enum import Enum
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
 import psycopg
@@ -57,6 +68,8 @@ import psycopg
 # Run as a script, not as a package module: the repository root is what makes
 # `server` importable, and a driver nobody can run is the gap this closes.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tracked import run_argv
 
 from caos.blobs import BlobStore
 from caos.copilot import require_ready
@@ -80,19 +93,33 @@ from caos.qualification.harness import (
     PreparedCase,
     Unrun,
     assert_admissible,
+    assert_pin_eligible,
+    harness_identities,
     perform,
     prepare,
 )
-from caos.qualification.matrix import QualificationSet, assert_measurable
+from caos.qualification.matrix import (
+    QualificationCase,
+    QualificationSet,
+    assert_measurable,
+    qualification_set_digest,
+)
 from caos.qualification.on_disk import load_qualification_set
 from caos.qualification.store import performed_evidence, record_evidence
 from caos.refusals import Refusal, RefusalCode
-from caos.store import RunStatus, StoreConnection, apply_schema, connect
+from caos.store import (
+    RunStatus,
+    StoreConnection,
+    apply_schema,
+    connect,
+    verify_schema,
+)
 from caos.store.budget import remaining, validate_spend
 from caos.store.gates import Gate, GateApproval, approve_gate, gate_preview
 from caos.store.members import Standing, grant
 from caos.store.outcomes import execution_reads, node_attempts
 from caos.store.routes import resolved_route
+from caos.store.run_inputs import load_run_input
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -394,6 +421,232 @@ def _plain(value: object) -> Plain:
     return str(value)
 
 
+# The data directory the local Docker probe reads (N150).
+PGDATA = "/var/lib/postgresql/data"
+_PROBE_SECONDS = 30
+_CONTAINER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
+_DATABASE_NAME = re.compile(r"caos_qualify_[0-9a-f]{32}")
+
+
+class PreflightCode(Enum):
+    """What the script itself refuses before it spends. Typed and text-free:
+    a code and the fixed sentence around it, never a probe's output or a
+    number from the server."""
+
+    FREE_SPACE_BELOW_FLOOR = "FREE_SPACE_BELOW_FLOOR"
+    FREE_SPACE_UNREADABLE = "FREE_SPACE_UNREADABLE"
+    RESUME_DATABASE_INVALID = "RESUME_DATABASE_INVALID"
+    RESUME_NO_PIN = "RESUME_NO_PIN"
+    RESUME_PIN_MISMATCH = "RESUME_PIN_MISMATCH"
+
+
+class PreflightRefusal(Exception):
+    def __init__(self, code: PreflightCode) -> None:
+        super().__init__(code.value)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class Probe:
+    """How free bytes are read: an operator's command, or `df` in a container."""
+
+    command: str | None
+    docker_container: str | None
+
+
+def _parsed_free_bytes(answer: str) -> int:
+    """One whole number of bytes and nothing else; anything more or less is
+    refused, so a probe that misreports can never read as room."""
+    text = answer.strip()
+    if not (text.isascii() and text.isdigit()):
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+    return _whole(text)
+
+
+def _whole(text: str) -> int:
+    """`int(text)` for digits, a refusal for a number Python will not convert
+    (over 4300 digits raises ValueError): never a traceback."""
+    try:
+        return int(text)
+    except ValueError:
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE) from None
+
+
+def _free_bytes_from_df(answer: str) -> int:
+    """The Available column of `df -P` (1024-byte blocks), in bytes: a header
+    and exactly one filesystem line."""
+    lines = answer.strip().splitlines()
+    header = lines[0].split() if lines else []
+    # A POSIXLY_CORRECT busybox prints 512-byte blocks: reading those as KiB
+    # would double the answer, so any other unit refuses.
+    if len(lines) != 2 or header[:2] != ["Filesystem", "1024-blocks"]:
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+    fields = lines[1].split()
+    if len(fields) < 6 or not (fields[3].isascii() and fields[3].isdigit()):
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+    return _whole(fields[3]) * 1024
+
+
+def _free_bytes(probe: Probe) -> int:
+    """Run the named probe (no shell, bounded time) and read its answer. Any
+    failure to run it is a refusal: an unmeasured disk is not a roomy one."""
+    try:
+        argv = (
+            ["docker", "exec", probe.docker_container, "df", "-P", PGDATA]
+            if probe.docker_container is not None
+            else shlex.split(probe.command or "")
+        )
+        # docker's own name rule: a name that starts with `-` would be read as
+        # an option, so it is refused rather than passed.
+        named = probe.docker_container
+        if not argv or (named is not None and not _CONTAINER_NAME.fullmatch(named)):
+            raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+        done = run_argv(argv, timeout=_PROBE_SECONDS)
+    except (OSError, ValueError, TimeoutError):
+        # Unrunnable, unparseable or timed out: the same typed refusal; the
+        # cause (a path, an argument) is not repeated.
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE) from None
+    if done.returncode != 0:
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_UNREADABLE)
+    if probe.docker_container is not None:
+        return _free_bytes_from_df(done.stdout)
+    return _parsed_free_bytes(done.stdout)
+
+
+def _preflight(args: argparse.Namespace) -> None:
+    """The checks that need neither the provider nor the store: the resume
+    name, and the free-space floor when a probe is named (N150)."""
+    if args.resume is not None and not _DATABASE_NAME.fullmatch(args.resume):
+        raise PreflightRefusal(PreflightCode.RESUME_DATABASE_INVALID)
+    if args.free_space_probe is None and args.docker_container is None:
+        print(
+            "no free-space probe named: free space is not checked",
+            file=sys.stderr,
+        )
+        return
+    free = _free_bytes(Probe(args.free_space_probe, args.docker_container))
+    if free < args.min_free_bytes:
+        raise PreflightRefusal(PreflightCode.FREE_SPACE_BELOW_FLOOR)
+
+
+def _non_negative(text: str) -> int:
+    if not (text.isascii() and text.isdigit()):
+        raise ValueError  # argparse names the option and the bad value
+    return int(text)
+
+
+def resume_token(set_digest: str, provider: str, model: str, database: str) -> str:
+    """What a start prints and `--resume` must be given back (N-2, N-3).
+
+    A driver killed before its first snapshot leaves nothing in the database
+    that records the set digest, so a resume could bind paid calls to an edited
+    answer key. The operator carries the binding instead: a SHA-256 over the
+    set digest, the provider and model identity exactly as `--expect-identity`
+    states them (an output-cap segment included), and the database name, so a
+    token another start of the same set printed (another database) does not
+    pass either. It guards against a mistake -- a mixed-up token, an edited
+    key after a crash -- not against an operator who recomputes it: that
+    operator owns the set and the database and could as well start afresh."""
+    bound = json.dumps([set_digest, provider, model, database], separators=(",", ":"))
+    return hashlib.sha256(bound.encode("utf-8")).hexdigest()
+
+
+def _resumed_pins(
+    conn: StoreConnection,
+    harness: Harness,
+    qualification: QualificationSet,
+    database: str,
+    token: str,
+) -> tuple[PreparedCase, ...]:
+    """The set's pins as the database holds them, re-checked as `perform`
+    would: one run per case in order, built from this bundle, and equal to what
+    the set says now; `token` must be the one this database's start printed.
+    Nothing is written."""
+    # An out-of-date store refuses typed up front (STORE_SCHEMA_DRIFT).
+    verify_schema(conn)
+    rows = conn.execute(
+        "SELECT c.title, r.run_id FROM runs r JOIN cases c USING (case_id)"
+        " ORDER BY r.created_at, r.run_id"
+    ).fetchall()
+    conn.rollback()
+    if not rows:
+        raise PreflightRefusal(PreflightCode.RESUME_NO_PIN)
+    if [row[0] for row in rows] != [case.label for case in qualification.cases]:
+        raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
+    digest = qualification_set_digest(qualification)
+    provider, model = harness_identities(harness.completions)
+    if resume_token(digest, provider, model, database) != token:
+        raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
+    _assert_same_binding(conn, (digest, provider, model))
+    try:
+        return tuple(
+            _resumed_pin(conn, harness, case, row, (digest, provider, model))
+            for case, row in zip(qualification.cases, rows, strict=True)
+        )
+    finally:
+        conn.rollback()
+
+
+_OTHER_BINDING = (
+    "SELECT 1 FROM qualification_performed WHERE"
+    " (qualification_set_sha256, provider, model) IS DISTINCT FROM (%s, %s, %s)"
+    " LIMIT 1",
+    "SELECT 1 FROM qualification_evidence WHERE"
+    " (qualification_set_sha256, provider, model) IS DISTINCT FROM (%s, %s, %s)"
+    " LIMIT 1",
+)
+
+
+def _assert_same_binding(conn: StoreConnection, binding: tuple[str, str, str]) -> None:
+    """Refuse `RESUME_PIN_MISMATCH` unless everything the database already
+    recorded was made under this set, provider and model.
+
+    `perform` compares a `PreparedCase` with the harness it was built from, so
+    on a resume that check compares the current values with themselves: a
+    resume under another model paid again and left a set no one can sign. The
+    stored snapshots and evidence name what they were made under, and the
+    calls recorded in the ledger name the model they were paid under (which
+    covers a driver killed before its first snapshot)."""
+    for query in _OTHER_BINDING:
+        if conn.execute(query, binding).fetchone() is not None:
+            conn.rollback()
+            raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
+    paid = conn.execute(
+        "SELECT 1 FROM call_outcomes WHERE model IS NOT NULL AND model <> %s LIMIT 1",
+        (binding[2],),
+    ).fetchone()
+    conn.rollback()
+    if paid is not None:
+        raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH)
+
+
+def _resumed_pin(
+    conn: StoreConnection,
+    harness: Harness,
+    case: QualificationCase,
+    row: tuple[str, UUID],
+    identity: tuple[str, str, str],
+) -> PreparedCase:
+    """One case's pin, from the store, checked as `perform` will check it."""
+    label, run_id = row
+    try:
+        pin = load_run_input(conn, run_id)
+        # The read keeps its transaction; `execution_reads` wants an idle one.
+        conn.rollback()
+        if pin is None:
+            raise PreflightRefusal(PreflightCode.RESUME_NO_PIN)
+        item = PreparedCase(label, pin, *identity)
+        with execution_reads(conn):
+            assert_pin_eligible(conn, harness, case, item)
+    except Refusal as refused:
+        # A pin that will not load or no longer equals the set is a mismatch;
+        # any other typed refusal (the store, the bundle) stands as itself.
+        if refused.code is not RefusalCode.RUN_INPUT_INVALID:
+            raise
+        raise PreflightRefusal(PreflightCode.RESUME_PIN_MISMATCH) from None
+    return item
+
+
 def _perform_until(  # noqa: PLR0913 -- one set, one loop, keyword-only tail
     conn: StoreConnection,
     blobs: BlobStore,
@@ -542,6 +795,37 @@ def _parser() -> argparse.ArgumentParser:
         default=1,
         help="times to enter perform; >1 retries the node that stopped the set",
     )
+    parser.add_argument(
+        "--free-space-probe",
+        help=(
+            "a command (no shell) whose whole output is the free bytes on the"
+            " run database's disk; below --min-free-bytes the run refuses"
+            " before it reserves anything"
+        ),
+    )
+    parser.add_argument(
+        "--docker-container",
+        help=f"read the free bytes with `docker exec <name> df -P {PGDATA}`",
+    )
+    parser.add_argument(
+        "--min-free-bytes",
+        type=_non_negative,
+        default=2**30,
+        help="the free-space floor, in bytes (default 1 GiB)",
+    )
+    parser.add_argument(
+        "--resume-token",
+        metavar="HEX",
+        help="the `resume token:` line the run printed when it started",
+    )
+    parser.add_argument(
+        "--resume",
+        metavar="DATABASE",
+        help=(
+            "re-enter perform on the pins already in this caos_qualify_*"
+            " database instead of creating a new one"
+        ),
+    )
     return parser
 
 
@@ -556,6 +840,19 @@ def _environment() -> tuple[str, str, str] | None:
         print(
             "CAOS_QUALIFY_POSTGRES_URL is unset: name the persistent server the"
             " run's database is kept on; nothing was spent",
+            file=sys.stderr,
+        )
+        return None
+    keys = parse_qs(urlsplit(admin_url).query, keep_blank_values=True)
+    if any(key.lower() in ("dbname", "service") for key in keys):
+        # libpq reads a `dbname` parameter ahead of the URL's path (an empty one
+        # too, which means `postgres`), and a `service` entry may supply one, so
+        # every database URL built from this one would reach another database
+        # than the one minted or asked for (N236). The URL is not echoed.
+        print(
+            "CAOS_QUALIFY_POSTGRES_URL carries a dbname or service parameter: it"
+            " would override the run's database; name the server alone; nothing"
+            " was spent",
             file=sys.stderr,
         )
         return None
@@ -637,11 +934,22 @@ def _planned(
     return qualification, harness, admin_url, blob_root
 
 
+def _database_url(admin_url: str, database: str) -> str:
+    return urlunsplit(urlsplit(admin_url)._replace(path=f"/{database}"))
+
+
+def _database_exists(admin_url: str, database: str) -> bool:
+    with psycopg.connect(admin_url, autocommit=True) as admin:
+        found = admin.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", (database,)
+        ).fetchone()
+    return found is not None
+
+
 def _create_database(admin_url: str) -> tuple[str, str]:
     """A fresh database on the persistent server: its name and its URL."""
     database = f"caos_qualify_{uuid4().hex}"
-    parts = urlsplit(admin_url)
-    run_url = urlunsplit(parts._replace(path=f"/{database}"))
+    run_url = _database_url(admin_url, database)
     with psycopg.connect(admin_url, autocommit=True) as admin:
         admin.execute(
             psycopg.sql.SQL("CREATE DATABASE {}").format(
@@ -651,20 +959,33 @@ def _create_database(admin_url: str) -> tuple[str, str]:
     return database, run_url
 
 
-def _performed_capture(
-    run_url: str,
-    blob_root: str,
-    harness: Harness,
-    qualification: QualificationSet,
-    *,
-    attempts: int,
-) -> dict[str, object]:
-    """Prepare, approve and perform the set in its database; its capture."""
-    with connect(run_url) as conn:
-        apply_schema(conn)
-        blobs = BlobStore(Path(blob_root))
-        prepared = prepare(conn, blobs, harness, qualification=qualification)
-        _approve_every_gate(conn, prepared)
+@dataclass(frozen=True)
+class _Start:
+    """Everything a run needs once every refusal that spends nothing is past:
+    the set, its harness, the database (new, or the one resumed) and the pins a
+    resume found there (None for a new run, which prepares them)."""
+
+    qualification: QualificationSet
+    harness: Harness
+    database: str
+    run_url: str
+    blob_root: str
+    resumed: tuple[PreparedCase, ...] | None
+
+
+def _performed_capture(start: _Start, *, attempts: int) -> dict[str, object]:
+    """Prepare, approve and perform the set in its database; its capture.
+
+    A resumed set is already prepared and approved: it performs on those pins."""
+    harness, qualification = start.harness, start.qualification
+    with connect(start.run_url) as conn:
+        blobs = BlobStore(Path(start.blob_root))
+        if start.resumed is None:
+            apply_schema(conn)
+            prepared = prepare(conn, blobs, harness, qualification=qualification)
+            _approve_every_gate(conn, prepared)
+        else:
+            prepared = start.resumed
         performed = _perform_until(
             conn, blobs, harness, qualification, prepared, attempts=attempts
         )
@@ -677,46 +998,99 @@ def _performed_capture(
     return document
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    if args.attempts < 1:
-        print("--attempts must be at least 1; nothing was spent", file=sys.stderr)
-        return 2
-    try:
-        planned = _planned(args)
-    except Refusal as refused:
-        print(
-            f"{refused.code.value}: the set was refused; nothing was spent",
-            file=sys.stderr,
+def _refused(code: str) -> None:
+    print(f"{code}: the set was refused; nothing was spent", file=sys.stderr)
+
+
+def _resumed_from(
+    admin_url: str,
+    run_url: str,
+    harness: Harness,
+    qualification: QualificationSet,
+    args: argparse.Namespace,
+) -> tuple[PreparedCase, ...]:
+    """The pins of the database `--resume` names. A database the server does
+    not have holds no pin (N236): asked of the server, as a failed connect
+    carries no code."""
+    if not _database_exists(admin_url, args.resume):
+        raise PreflightRefusal(PreflightCode.RESUME_NO_PIN)
+    with connect(run_url) as conn:
+        return _resumed_pins(
+            conn, harness, qualification, args.resume, args.resume_token
         )
-        return 2
-    if planned is None:
-        return 2
-    qualification, harness, admin_url, blob_root = planned
+
+
+def _opened(
+    args: argparse.Namespace,
+    qualification: QualificationSet,
+    harness: Harness,
+    admin_url: str,
+    blob_root: str,
+) -> _Start | None:
+    """The database the run goes in: a new one, or the one `--resume` names with
+    its pins re-checked. None, having said why nothing was spent."""
+    resumed: tuple[PreparedCase, ...] | None = None
     try:
-        database, run_url = _create_database(admin_url)
+        if args.resume is None:
+            database, run_url = _create_database(admin_url)
+        else:
+            database = args.resume
+            run_url = _database_url(admin_url, database)
+            resumed = _resumed_from(admin_url, run_url, harness, qualification, args)
+    except (PreflightRefusal, Refusal) as refused:
+        _refused(refused.code.value)
+        return None
     except psycopg.Error:
         # CF-078: a DSN psycopg itself refuses to parse -- bad percent-encoding
         # in a password included -- quotes the whole string, password and all,
         # in its own message; only the typed code is ever printed here.
-        print(
-            f"{RefusalCode.STORE_UNAVAILABLE.value}: the set was refused;"
-            " nothing was spent",
-            file=sys.stderr,
-        )
-        return 2
+        _refused(RefusalCode.STORE_UNAVAILABLE.value)
+        return None
+    return _Start(qualification, harness, database, run_url, blob_root, resumed)
+
+
+def _started(args: argparse.Namespace) -> _Start | None:
+    """Every check that spends nothing, then the database; None having said
+    which refused. The free-space floor is read first (N150), before the
+    provider is built or anything is reserved."""
+    if args.attempts < 1:
+        print("--attempts must be at least 1; nothing was spent", file=sys.stderr)
+        return None
+    if args.free_space_probe is not None and args.docker_container is not None:
+        print("name one free-space probe, not both; nothing was spent", file=sys.stderr)
+        return None
+    try:
+        _preflight(args)
+        planned = _planned(args)
+    except (PreflightRefusal, Refusal) as refused:
+        _refused(refused.code.value)
+        return None
+    if planned is None:
+        return None
+    return _opened(args, *planned)
+
+
+def _print_resume_token(start: _Start) -> None:
+    """The line `--resume` must be given back, printed before any call."""
+    provider, model = harness_identities(start.harness.completions)
+    digest = qualification_set_digest(start.qualification)
+    token = resume_token(digest, provider, model, start.database)
+    print(f"resume token: {token}", file=sys.stderr)
+
+
+def _print_preamble(start: _Start) -> None:
     # Printed before the call, not after: a driver that dies mid-run must still
     # leave the operator the two names that hold the evidence it paid for, and
     # the dated price every reservation it is about to take will be priced on
     # (Task 8.2) -- an operator reading the ceiling alone cannot tell whether a
     # set was affordable at the price the worker was configured with.
-    price = harness.price
+    price = start.harness.price
     print(
         json.dumps(
             {
-                "database": database,
-                "blob_root": blob_root,
-                "run_ceiling": str(harness.run_ceiling),
+                "database": start.database,
+                "blob_root": start.blob_root,
+                "run_ceiling": str(start.harness.run_ceiling),
                 "price_model": price.model,
                 "price_input_per_token": str(price.input_per_token),
                 "price_output_per_token": str(price.output_per_token),
@@ -726,10 +1100,21 @@ def main(argv: list[str] | None = None) -> int:
         ),
         flush=True,
     )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if (args.resume is None) != (args.resume_token is None):
+        parser.error("--resume and --resume-token are given together")
+    start = _started(args)
+    if start is None:
+        return 2
+    _print_resume_token(start)
+    _print_preamble(start)
+    database = start.database
     try:
-        document = _performed_capture(
-            run_url, blob_root, harness, qualification, attempts=args.attempts
-        )
+        document = _performed_capture(start, attempts=args.attempts)
     except Refusal as refused:
         # After the database exists, so not "nothing was spent": what was
         # performed is kept there, the matrix's own refusal included (DQ-5).

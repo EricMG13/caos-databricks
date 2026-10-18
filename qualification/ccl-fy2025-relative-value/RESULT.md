@@ -8,7 +8,7 @@ costs real money and calls a real model.
 ## The set
 
 - Qualification-set digest:
-  `fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b`
+  `34eb29c1759fd2f5f5497f1a142a267fa2b8420656d40f30d2d41affba8604bd`
 - Route: `LITE_CREDIT_22 / LITE_RELATIVE_VALUE` (`CP-0` → `CP-L10` → `CP-1C`,
   three REQUIRED edges, `decision_scope: SCREENING_ONLY`). CP-1C is a FULL
   module held behind the named-LITE-object boundary until CP-L10's
@@ -81,7 +81,9 @@ plain-text extractor's token index: each matches whole tokens and matches
     are as follows:"). This is the register key the portfolio-screen set
     recorded as owed "with the reading"; this is that reading, for this set.
   - CP-1C `T4.5`, row `Entity = Carnival Corporation & plc`,
-    `Total/Net/Sr Sec Leverage` = `[Calculated] 3.66x / 3.40x`. Debt 26,640
+    `Total Leverage` = `[Calculated] 3.66x` and `Net Leverage` =
+    `[Calculated] 3.40x` (one packed `Total/Net/Sr Sec Leverage` cell, `[Calculated]
+    3.66x / 3.40x`, until fork r17 split it, N192). Debt 26,640
     (2,603 current + 24,037 long-term, carrying value); cash 1,928; EBITDA is
     not reported in the 10-K, so it is derived as operating income 4,483 + D&A
     2,790 = 7,273. Gross 26,640 / 7,273 = 3.66x; net 24,712 / 7,273 = 3.40x.
@@ -89,7 +91,8 @@ plain-text extractor's token index: each matches whole tokens and matches
     (`ANSWER_KEY_3ISSUER.md`, CCL core facts), which was read to confirm them,
     not admitted.
   - CP-1C `T4.5`, row `Entity = Norwegian Cruise Line Holdings Ltd.`,
-    `Total/Net/Sr Sec Leverage` = `[Calculated] 5.35x / 5.3x (reported)`.
+    `Total Leverage` = `[Calculated] 5.35x` and `Net Leverage` = `5.3x (reported)`
+    (the packed cell was `[Calculated] 5.35x / 5.3x (reported)`, N192).
     Total debt 14,606,176 and Adjusted EBITDA 2,730,226 (thousands, the
     release's Net Leverage reconciliation) give a calculated 5.35x gross; the
     5.3x net is the issuer's own reported Net Leverage.
@@ -191,6 +194,11 @@ keys; the `decision_scope` projection keys; the `TL10.2` and `T4.5` register key
 `expects_blocked` is removed. CP-1C sits on the route behind a REQUIRED edge from
 CP-L10 and its keys had been dropped only because Luna's CP-0 held CP-L10. The
 digest is back to
-`fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b` (the one
-stated under "The set"; R29's `715fd96d...` is superseded). Offline edit; no
-provider call, run, or snapshot.
+`34eb29c1759fd2f5f5497f1a142a267fa2b8420656d40f30d2d41affba8604bd` (the one stated under "The set"; R29's `715fd96d...` is
+superseded, and so is `fb201886...`, the digest of the restored keys before the
+merge with fork r17). The `T4.5` keys are restored on r17's split columns:
+`Total Leverage` and `Net Leverage` carry the two halves of the packed cell's
+old values (CCL `[Calculated] 3.66x` and `[Calculated] 3.40x`; NCLH
+`[Calculated] 5.35x` and `5.3x (reported)`), because the packed
+`Total/Net/Sr Sec Leverage` column no longer exists. Offline edit; no provider
+call, run, or snapshot.
