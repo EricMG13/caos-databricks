@@ -98,7 +98,7 @@ Agreement No. 3 and stay. No key here bound it.
 
 ## Keys
 
-Keys authored from the documents; material figures pending owner confirmation.
+Keys authored from the documents; material figures stand as authored by the owner's ruling of 2026-10-17 (N126, F702).
 
 - CP-L10: the 10-Q's `$1.9 billion` of available CEI revolver capacity at
   30 June 2026 (after `$96` million of letters of credit and `$56` million

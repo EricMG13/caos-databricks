@@ -367,10 +367,15 @@ def test_a_refused_token_is_stamped_after_the_workspace_answers(
     spare a slow round trip failed exactly when the round trip was slow.
     """
     refusal_seconds, calls = 0.3, []
+    # The fake clock the file's other cache tests use (N197): the workspace
+    # "takes" `refusal_seconds` by moving it, so no thread handoff or real
+    # wait decides whether the entry had already expired.
+    clock = [0.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
 
     def slow_refusal(token: str) -> WorkspaceUser:
         calls.append(token)
-        threading.Event().wait(refusal_seconds)
+        clock[0] += refusal_seconds
         raise Refusal(RefusalCode.NOT_AUTHENTICATED)
 
     monkeypatch.setattr(identity, "_current_user", slow_refusal)
@@ -890,45 +895,124 @@ def test_a_trickling_workspace_is_given_up_at_the_deadline(
     assert unasked == 0
 
 
+@pytest.mark.parametrize("recorded", [True, False])
+def test_scim_me_waits_for_its_helper_for_the_deadline_and_no_longer(
+    platform: None, monkeypatch: pytest.MonkeyPatch, recorded: bool
+) -> None:
+    """ED-8, the bound `scim_me` holds itself (N197). Both trickle tests end
+    their helper through `_body_by`, which sets `done` first; neither reaches
+    `exchange.done.wait(SCIM_DEADLINE_SECONDS)` giving up. Here the helper
+    never sets `done` and never answers, and the wait on it is recorded
+    rather than slept: `scim_me` asks for exactly the deadline, takes the
+    unanswered exchange as `IDENTITY_UNAVAILABLE`, and the slot is returned
+    when the helper does end. The unrecorded case (N232) lets a real `Event`
+    give up after a short deadline: the argument is also what the wait obeys."""
+    monkeypatch.setenv(identity.HOST_ENV, "https://caos.cloud.databricks.com")
+    deadline = 7.0 if recorded else 0.2
+    monkeypatch.setattr(identity, "SCIM_DEADLINE_SECONDS", deadline)
+    waits: list[float | None] = []
+    ended = threading.Event()
+    slots = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(identity, "_EXCHANGES", slots)
+
+    class _Unanswered(threading.Event):
+        def wait(self, timeout: float | None = None) -> bool:
+            waits.append(timeout)
+            return False
+
+    class _Stalled(identity._Exchange):
+        def __init__(
+            self,
+            address: identity.WorkspaceAddress,
+            authorization: str,
+            deadline: float,
+        ) -> None:
+            super().__init__(address, authorization, deadline)
+            if recorded:
+                self.done = _Unanswered()
+
+        def run(self) -> None:
+            # The helper outlives the wait, and sets neither `answer` nor
+            # `done`; it only gives its slot back, as the real one does.
+            try:
+                ended.wait(_HANG_GUARD_SECONDS)
+            finally:
+                slots.release()
+
+    monkeypatch.setattr(identity, "_Exchange", _Stalled)
+    try:
+        started = time.monotonic()
+        with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
+            scim_me("Bearer tok")
+        took = time.monotonic() - started
+        if recorded:
+            assert waits == [deadline]
+        else:
+            assert deadline <= took < 5, "a real Event gave up after the deadline"
+        assert not slots.acquire(blocking=False), "the helper still holds its slot"
+    finally:
+        ended.set()
+    assert slots.acquire(timeout=_HANG_GUARD_SECONDS), "the slot comes back"
+
+
 def test_requests_past_the_waiting_limit_are_refused_at_once(
-    workspace: str,
+    workspace: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ED-8. The one request actually making a cold lookup holds a worker
     thread for its socket call (N36); every other request sharing it now
     awaits the flight's own async signal, holding nothing. Past
     `SCIM_WAITING_LIMIT` a request is refused at once and holds nothing
-    either, and the limit still leaves every waiter's wait bounded."""
+    either, and the limit still leaves every waiter's wait bounded.
+
+    Ordered on the workspace's hold, not on elapsed time (N197): the cold
+    lookup is held at the workspace until the test releases it, so a request
+    "refused at once" is one answered while the lookup is still held, and a
+    cached caller "holding nothing behind it" is answered before it is let go.
+    """
     total = anyio.run(_thread_limit)
     assert identity.SCIM_WAITING_LIMIT <= total // 2
     anyio.run(actor_from_token, "cached")
+    monkeypatch.setattr(identity, "SCIM_DEADLINE_SECONDS", _HANG_GUARD_SECONDS * 2)
+    monkeypatch.setattr(identity, "SCIM_TIMEOUT_SECONDS", _HANG_GUARD_SECONDS * 2)
+    monkeypatch.setattr(identity, "SHARED_WAIT_SECONDS", _HANG_GUARD_SECONDS * 3)
+    hold = _Hold()
+    monkeypatch.setattr(_SlowWorkspace, "hold", hold, raising=False)
     burst = identity.SCIM_WAITING_LIMIT + 8
-    outcomes: list[tuple[str, float]] = []
+    # (code, whether the workspace had answered the held lookup by then)
+    outcomes: list[tuple[str, bool]] = []
+    over = burst - identity.SCIM_WAITING_LIMIT
 
     async def ask() -> None:
-        started = time.monotonic()
         try:
-            await actor_from_token("slow")
+            await actor_from_token("held")
             code = "actor"
         except Refusal as refused:
             code = refused.code.value
-        outcomes.append((code, time.monotonic() - started))
+        outcomes.append((code, hold.answered.is_set()))
 
     async def main() -> None:
-        async with anyio.create_task_group() as group:
-            for _ in range(burst):
-                group.start_soon(ask)
-            await anyio.sleep(0.3)
-            started = time.monotonic()
-            assert (await actor_from_token("cached")).role is GlobalRole.READER
-            assert time.monotonic() - started < 0.1
+        try:
+            async with anyio.create_task_group() as group:
+                for _ in range(burst):
+                    group.start_soon(ask)
+                with anyio.fail_after(_HANG_GUARD_SECONDS):
+                    while len(outcomes) < over:
+                        await anyio.sleep(0)
+                refused_while_held = list(outcomes)
+                assert (await actor_from_token("cached")).role is GlobalRole.READER
+                cached_while_held = not hold.answered.is_set()
+                hold.release.set()
+        finally:
+            hold.release.set()
+        assert refused_while_held == [("IDENTITY_UNAVAILABLE", False)] * over
+        assert cached_while_held, "the cached caller waited for the held lookup"
 
     anyio.run(main)
 
-    served = [took for code, took in outcomes if code == "actor"]
-    refused = [took for code, took in outcomes if code == "IDENTITY_UNAVAILABLE"]
+    served = [code for code, _ in outcomes if code == "actor"]
+    refused = [code for code, _ in outcomes if code == "IDENTITY_UNAVAILABLE"]
     assert len(served) == identity.SCIM_WAITING_LIMIT
-    assert len(refused) == burst - identity.SCIM_WAITING_LIMIT
-    assert max(refused) < _SlowWorkspace.pause / 2, "a refused request waited"
+    assert len(refused) == over
 
 
 async def _thread_limit() -> int:

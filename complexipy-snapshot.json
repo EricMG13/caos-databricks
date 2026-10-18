@@ -88,16 +88,6 @@
     ]
   },
   {
-    "path": "caos/qualification/proof.py",
-    "file_name": "proof.py",
-    "functions": [
-      {
-        "name": "assert_orchestration_proof",
-        "complexity": 16
-      }
-    ]
-  },
-  {
     "path": "caos/store/run_inputs.py",
     "file_name": "run_inputs.py",
     "functions": [

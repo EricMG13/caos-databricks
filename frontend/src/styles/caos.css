@@ -2919,6 +2919,21 @@
   table.md-table td {
     vertical-align: top;
   }
+  /* A long text cell of a wide register (N95): two lines closed, whole when
+     it has focus or is clicked; the text is in the document either way. */
+  table.md-table td[data-clamp] {
+    cursor: pointer;
+  }
+  table.md-table td[data-clamp="closed"] > .clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  table.md-table td[data-clamp]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
   table.md-table td .tag {
     font-family: var(--font-mono);
   }

@@ -2,7 +2,7 @@
 // reads, each authored character a text node. Nothing here writes HTML, so
 // the page holds under the CSP's Trusted Types whatever the model wrote.
 import * as React from "react";
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { plainHead } from "./format";
 import {
   readInline,
@@ -171,8 +171,42 @@ export function MdCell({ head, text }: { head: string; text: string }) {
   );
 }
 
-/** A model table, scrolling inside its card when wider than it. */
-export function MdTableView({ table, label }: { table: MdTable; label: string }) {
+/** A cell longer than this is clamped in a wide register (N95, R13). */
+const CLAMP_FROM = 60;
+
+/** A long text cell in a wide register: two lines closed, whole on focus or
+    click and closed again on blur (N95). The text is in the document either
+    way, so assistive technology reads all of it; the cell is a tab stop only
+    when it is long enough to be clamped. */
+function ClampCell({ className, head, text }: { className?: string; head: string; text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <td
+      className={className}
+      tabIndex={0}
+      data-clamp={open ? "open" : "closed"}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      onClick={() => setOpen(true)}
+    >
+      <div className="clamp">
+        <MdCell head={head} text={text} />
+      </div>
+    </td>
+  );
+}
+
+/** A model table, scrolling inside its card when wider than it. A `clamp`ed
+    table (a wide register) holds its long text cells to two lines. */
+export function MdTableView({
+  table,
+  label,
+  clamp = false,
+}: {
+  table: MdTable;
+  label: string;
+  clamp?: boolean;
+}) {
   const figures = figureColumns(table);
   const align = (column: number) => (figures[column] ? undefined : "l");
   return (
@@ -190,11 +224,22 @@ export function MdTableView({ table, label }: { table: MdTable; label: string })
         <tbody>
           {table.rows.map((row, index) => (
             <tr key={index}>
-              {row.map((cell, column) => (
-                <td key={column} className={align(column)}>
-                  <MdCell head={table.head[column] ?? ""} text={cell} />
-                </td>
-              ))}
+              {row.map((cell, column) =>
+                clamp &&
+                cell.length > CLAMP_FROM &&
+                toneOf(table.head[column] ?? "", cell) === null ? (
+                  <ClampCell
+                    key={column}
+                    className={align(column)}
+                    head={table.head[column] ?? ""}
+                    text={cell}
+                  />
+                ) : (
+                  <td key={column} className={align(column)}>
+                    <MdCell head={table.head[column] ?? ""} text={cell} />
+                  </td>
+                ),
+              )}
             </tr>
           ))}
         </tbody>

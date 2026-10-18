@@ -221,10 +221,16 @@ export function pinRunInput(
   subject: RunSubjectView,
   research: ResearchBrief | null,
   intent: Intent = newIntent(),
+  command: Pick<PinRunInput, "qualifiers" | "objective"> = { qualifiers: [], objective: null },
 ): Promise<CommandResult<RunInputPinned>> {
-  // D109: no qualifiers and no stated objective from the workspace yet; the
-  // host derives CP-2G's forecast scope from the subject's reporting period.
-  const request: PinRunInput = { subject, research, qualifiers: [], objective: null };
+  // D109: the command the run input's form states (N159). Unstated, the host
+  // derives CP-2G's forecast scope from the subject's reporting period.
+  const request: PinRunInput = {
+    subject,
+    research,
+    qualifiers: command.qualifiers,
+    objective: command.objective,
+  };
   return jsonCommand(intent, `${runPath(caseId, runId)}/input`, request, parseRunInputPinned);
 }
 

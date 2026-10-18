@@ -5410,6 +5410,27 @@ def test_a_worker_whose_copilot_model_is_not_ready_refuses_before_the_store(
     assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
 
 
+def test_a_worker_approving_a_model_the_seat_does_not_offer_refuses_at_start(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """R11 (D152, N184): the Task 5 rule stands. An approved model the seat
+    lacks refuses the worker at start, before the store is read, and is printed
+    `offered=n`; its runs are never claimed and parked."""
+    lacking = "copilot:gpt-6-luna"
+    monkeypatch.setenv(models.ENDPOINT_ENV, MODEL)
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
+    monkeypatch.setenv("CAOS_MODEL_CHOICES", f"{lacking},0.000005,0.00002,2026-10-01")
+    monkeypatch.setattr(
+        worker, "_store_configuration", lambda: pytest.fail("the store was read")
+    )
+    assert worker.main() == 2
+    err = capsys.readouterr().err
+    assert f"copilot {lacking} offered=n" in err
+    assert err.strip().endswith("PROVIDER_NOT_CONFIGURED")
+
+
 def test_the_worker_checks_readiness_on_every_approved_model_before_the_store(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
