@@ -13,6 +13,7 @@
 // Every section is mounted whole, on the demo's `acts` fixtures -- the same
 // documents the a11y matrix now scans -- under the section's own live region.
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { App } from "@/app/App";
@@ -131,7 +132,7 @@ describe("every command says when it succeeded (DF-6)", () => {
       jsonResponse(doc),
     );
     const { container } = inUpload(doc);
-    fireEvent.change(screen.getByLabelText("Documents to admit"), {
+    fireEvent.change(screen.getByLabelText("Choose documents"), {
       target: { files: [new File(["x"], "a.pdf", { type: "application/pdf" })] },
     });
     fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
@@ -320,7 +321,7 @@ describe("focus after a confirmed act takes its own control away (DF-7)", () => 
     fireEvent.click(row.querySelector("[data-confirm-open]")!);
     fireEvent.click(row.querySelector("[data-confirm-yes]")!);
     // The reader moves on before the answer arrives.
-    const elsewhere = screen.getByLabelText("Documents to admit");
+    const elsewhere = screen.getByLabelText("Choose documents");
     elsewhere.focus();
     await settled();
     expect(document.activeElement).toBe(elsewhere);
@@ -384,6 +385,23 @@ describe("the a11y matrix measures every confirmed act available (DF-9)", () => 
     expect(STATE_ROUTES).toContain(armed);
     expect(new URL(armed, "http://localhost").searchParams.get("arm")).toBe("SIGN_OPINION");
     expect(new URL(armed, "http://localhost").searchParams.get("fixture")).toBe("acts");
+  });
+
+  test("test_the_matrix_routes_analysis_blocked_quotes_and_the_signed_record_disclosure", () => {
+    // N141, N142: the Blocked quotes on Analysis (not the Run page only), and
+    // the "Signed record (JSON)" disclosure opened on both artifact pages.
+    expect(STATE_ROUTES).toContain(sectionRoute("analysis", "blocked"));
+    for (const section of ["report", "committee"]) {
+      const route = `${sectionRoute(section)}&disclose=record`;
+      expect(STATE_ROUTES).toContain(route);
+      expect(new URL(route, "http://localhost").searchParams.get("disclose")).toBe("record");
+    }
+    // The disclosure's behaviour is tested in tests/scripts/a11y-disclose.test.mjs;
+    // the selector it opens must be the one the artifact page renders.
+    const disclosure = readFileSync(resolve(process.cwd(), "scripts/a11y-disclose.mjs"), "utf8");
+    const artifact = readFileSync(resolve(process.cwd(), "src/ds/ArtifactMarkdown.tsx"), "utf8");
+    expect(disclosure).toContain("details[data-artifact-record-disclosure]");
+    expect(artifact).toMatch(/<details[^>]*data-artifact-record-disclosure/);
   });
 
   test("test_the_matrix_routes_the_add_to_book_dialog_and_the_withdraw_panel", () => {

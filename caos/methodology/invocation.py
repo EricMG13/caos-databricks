@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import threading
 from collections.abc import Mapping, Sequence
@@ -88,8 +89,9 @@ from caos.store.run_inputs import (
     load_run_input,
 )
 from caos.store.runs import MAX_ATTEMPT_ORDINAL, attempt_ordinal
-from caos.store.source_sets import SourceSet
+from caos.store.source_sets import SourceSet, SourceSetMember
 
+_LOG = logging.getLogger(__name__)
 _CATALOG = "references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
 
 # One accepted upstream handoff's bytes, whole. The per-section bound §45.3
@@ -102,20 +104,27 @@ _CATALOG = "references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
 # UPSTREAM_SECTION_OVER_CEILING before any call (F110). 96 KiB since D83: the
 # 52 KiB that followed refused CP-1's real answers, 9 of 11 CZR sets and 6 of 6
 # CCL at 50,489-85,559 bytes, so the next node stopped on the section rather
-# than the work. The catalog's widest node is CP-5, 16 direct upstreams: 16
-# sections at this bound beside its 169,493 bytes of delivered authority encode
-# to 1,750,342 bytes, leaving 2,443,962 of the 4 MiB request (D29) for evidence
-# and for the upstream citation register, which this figure excludes and which
-# is unbounded (it grows with answer size); a request over the ceiling still
-# fails closed, typed (the widest-node test in
-# `tests/test_handoff_invocation.py`). The bound is on raw bytes and the
-# ceiling on the JSON encoding, so a node whose real sections escape heavier and
-# still reaches the ceiling fails closed there, typed.
-# Nothing is ever truncated: per-node evidence selection (§95,
-# `caos/methodology/selection.py`) narrows a node's evidence to the members its
-# gate row names, but a named member is delivered whole and the upstream
-# sections are bounded here, not selected.
-MAX_UPSTREAM_HANDOFF_BYTES = 98_304
+# than the work. 128 KiB since D152 R32 (N209): live CP-4 answers run 75-99 KB
+# and retries dropped sections to fit the 96 KiB. The catalog's widest node is
+# CP-5, 16 direct upstreams: 16 sections at this bound beside its 170,803
+# bytes of delivered authority encode to about 2,278,300 bytes. Since D116 a
+# node is fitted to its model's request ceiling less `RETRY_RESERVE_BYTES`
+# (2,737,856 for the smallest declared context), not to the 4 MiB transport
+# bound, which leaves CP-5 about 459,500 bytes for evidence and the upstream
+# citation register (unbounded: it grows with answer size); R32 cost 524,288
+# of the 983,820 the 96 KiB bound left. The room must cover the least evidence
+# a FULL run can send, one line a page, which `pack_view` needs or refuses
+# CONTEXT_OVER_CEILING (the widest-node test in
+# `tests/test_handoff_invocation.py` computes it from the committed sets and
+# fails for a declared context too small for the node). The bound is on raw
+# bytes and the ceiling on the JSON encoding, so a node whose real sections
+# escape heavier and still reaches the ceiling fails closed there, typed.
+# An upstream section is never truncated: it is bounded here and refused past
+# the bound. Evidence is the part that narrows: per-node selection (§95,
+# `caos/methodology/selection.py`) names the members a gate row lists, and
+# where those do not fit the request ceiling D116's page maps show a leading
+# part of each page, every page at least once, with the prompt saying so.
+MAX_UPSTREAM_HANDOFF_BYTES = 131_072
 
 
 def host_identity(  # noqa: PLR0913 -- the brief's keyword-only identity inputs
@@ -1045,6 +1054,163 @@ def _delivery_section(
     return _CONSUMER_PAGE_MAP.format(tag=tag, body=body)
 
 
+# N143(c): what CP-5 is told on its first attempt under the credit screen. It
+# is the comparison `owner_restriction_gaps` refuses on, which a guided retry
+# names the dropped items of (F510), said before the answer is written.
+_OWNER_RESTRICTIONS = (
+    "\n--- HOST OWNER RESTRICTIONS {tag} (host-owned note) ---\n"
+    "Your handoff must carry every restriction the upstream handoffs above"
+    " carry: its qa_status must be Restricted while an upstream handoff's is{held},"
+    " and its limitation_flags and validation_warnings must each list every item"
+    " of the upstream handoffs' own, as written, besides yours. A handoff that"
+    " drops one is refused.\n"
+    "{lists}"
+    "--- END HOST OWNER RESTRICTIONS {tag} ---\n"
+)
+
+
+# N228(1): the owner block is part of the prompt, priced with the request; a
+# list shows at most this many items and these bytes (at least one), then
+# counts the rest. Acceptance still refuses any dropped item (F510), and a
+# guided retry names it.
+MAX_OWNER_ITEMS = 24
+MAX_OWNER_LIST_BYTES = 3000
+
+
+class _UnreadableHandoff:
+    """The documented fail-open of `_owner_items`: a handoff the vendor parser
+    cannot read is no guidance, so the error is swallowed and one warning is
+    logged. The text is fixed and names only the exception's type and the
+    owner module id: never the handoff or the exception's message, which may
+    quote it. Only `Exception` is swallowed."""
+
+    def __init__(self, warn: bool) -> None:
+        self.warn = warn
+        self.owner = ""
+
+    def __enter__(self) -> _UnreadableHandoff:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: object,
+    ) -> bool:
+        if exc_type is None or not issubclass(exc_type, Exception):
+            return False
+        if self.warn:
+            _LOG.warning(
+                "owner restrictions left out: an upstream handoff was unreadable"
+                " (%s, owner %s)",
+                exc_type.__name__,
+                self.owner,
+            )
+        return True
+
+
+def _owner_items(
+    contract: VendorContract,
+    upstream: Sequence[tuple[UpstreamRef, bytes]],
+    keys: Sequence[str],
+    *,
+    warn: bool = True,
+) -> tuple[list[str], dict[str, dict[str, list[str]]]] | None:
+    """The upstream owners that are Restricted, and for each front matter list
+    in `keys` every item with the owners that carry it; None when any handoff
+    is unreadable to the vendor parser, so no half-read list is ever shown.
+    The omission logs one warning unless `warn` is off (the tag-deriving pass)."""
+    restricted: list[str] = []
+    items: dict[str, dict[str, list[str]]] = {key: {} for key in keys}
+    guard = _UnreadableHandoff(warn)
+    with guard:
+        for ref, data in upstream:
+            guard.owner = ref.module_id
+            fields = contract.validate_handoff.validate_text(data.decode()).fields
+            if fields["qa_status"] == "Restricted":
+                restricted.append(ref.module_id)
+            for key in keys:
+                for item in fields[key]:
+                    items[key].setdefault(str(item), []).append(ref.module_id)
+        return restricted, items
+    return None
+
+
+def _bounded_owner_items(found: Mapping[str, Sequence[str]]) -> str:
+    """One list's items, each with its owners, cut at `MAX_OWNER_ITEMS` items
+    or `MAX_OWNER_LIST_BYTES` bytes (never fewer than one), then the count of
+    the rest and where to find them (acceptance still requires every item)."""
+    shown: list[str] = []
+    size = 0
+    for item, owners in found.items():
+        text = f"«{item}» (from {', '.join(dict.fromkeys(owners))})"
+        size += len(text.encode()) + 2
+        if shown and (len(shown) >= MAX_OWNER_ITEMS or size > MAX_OWNER_LIST_BYTES):
+            break
+        shown.append(text)
+    rest = len(found) - len(shown)
+    return ", ".join(shown) + (
+        f", and {rest} more in the upstream handoffs above, each also required"
+        if rest
+        else ""
+    )
+
+
+def _owner_restrictions_section(
+    contract: VendorContract,
+    identity: HostIdentity,
+    upstream: Sequence[tuple[UpstreamRef, bytes]],
+    tag: str = "",
+    *,
+    warn: bool = True,
+) -> str:
+    """CP-5's owner-restriction rule with its items, or nothing (N143(c)).
+
+    Only CP-5 under `CREDIT_SCREEN_SELECTION` is held to the rule. The items
+    are the direct upstream handoffs' own front matter, read as acceptance
+    reads it, each quoted once with every owner that carries it. A handoff
+    the vendor parser cannot read leaves the section out: it is guidance,
+    and acceptance (`verify_owner_restrictions`) is unchanged and still
+    refuses a handoff that drops an item.
+    """
+    from caos.methodology.verification import (  # a cycle at import time
+        CREDIT_SCREEN_SELECTION,
+        OWNER_KEYS,
+    )
+
+    if (
+        identity.module_id != "CP-5"
+        or (
+            identity.profile_id,
+            identity.selection_id,
+        )
+        != CREDIT_SCREEN_SELECTION
+    ):
+        return ""
+    read = _owner_items(contract, upstream, OWNER_KEYS, warn=warn)
+    if read is None:
+        return ""
+    restricted, items = read
+    lists = "".join(
+        f"Required in {key}: {_bounded_owner_items(found)}\n"
+        for key, found in items.items()
+        if found
+    )
+    if not restricted and not lists:
+        return ""
+    held = (
+        f" (Restricted: {', '.join(dict.fromkeys(restricted))})" if restricted else ""
+    )
+    return _OWNER_RESTRICTIONS.format(tag=tag, held=held, lists=lists)
+
+
+def _evidence_order(member: SourceSetMember) -> tuple[bytes, str, UUID]:
+    """Where the evidence puts a source (D113): its filename bytewise
+    (`COLLATE "C"` in `read_run_blocks`), then document digest, then
+    `source_id`."""
+    return (member.filename.encode("utf-8"), member.document_sha256, member.source_id)
+
+
 def _source_preparation_section(
     source_set: SourceSet | None,
     tag: str,
@@ -1055,6 +1221,9 @@ def _source_preparation_section(
     Every source says how its evidence was delivered (§102): `PAGE_MAP` with
     its map fields (§98), and one note on what a map is; otherwise `WHOLE`, so
     CP-0 never reads the page-map rule onto a source it was handed entire.
+    The members are listed in the evidence's own order (`_evidence_order`,
+    N166), not the store's `source_id` order, so a run's block reads like its
+    evidence; the set fingerprint sorts them itself and does not move.
     """
     if source_set is None:
         return ""
@@ -1086,7 +1255,7 @@ def _source_preparation_section(
                 if member.source_id in maps
                 else {"evidence_delivery": "WHOLE"}
             )
-            for member in source_set.members
+            for member in sorted(source_set.members, key=_evidence_order)
         ],
     }
     body = json.dumps(metadata, sort_keys=True, ensure_ascii=False, indent=2)
@@ -1373,6 +1542,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _authority_sections(authority, "")
         + _upstream_section(upstream, uses, owned)
         + _citation_register(upstream, upstream_citations, "", upstream_unverified)
+        + _owner_restrictions_section(contract, identity, upstream, warn=False)
         + _research_section(identity)
         + _command_section(identity)
         + _source_preparation_section(source_set, "", page_maps)
@@ -1415,6 +1585,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _authority_sections(authority, tag)
         + _upstream_section(upstream, uses, owned, tag)
         + _citation_register(upstream, upstream_citations, tag, upstream_unverified)
+        + _owner_restrictions_section(contract, identity, upstream, tag)
         + _research_section(identity, tag)
         + _command_section(identity, tag)
         + _source_preparation_section(source_set, tag, page_maps)

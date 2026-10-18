@@ -717,23 +717,43 @@ class _Deadlines:
 
     identity = PlainTextExtractor().identity
     seen: ClassVar[list[float]] = []
+    # Set by a test that runs on a clock of its own instead of sleeping: it is
+    # moved on by what each extraction "takes".
+    clock: ClassVar[list[float] | None] = None
 
     def extract(
         self, data: bytes, *, limits: AdmissionLimits, deadline: float
     ) -> list[Token]:
         type(self).seen.append(deadline)
-        time.sleep(0.05)
+        if self.clock is None:
+            time.sleep(0.05)
+        else:
+            self.clock[0] += 0.05
         return PlainTextExtractor().extract(data, limits=limits, deadline=deadline)
 
 
-def test_one_deadline_bounds_the_whole_pack_not_each_document() -> None:
+def test_one_deadline_bounds_the_whole_pack_not_each_document(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A per-document deadline alone let fifty documents take fifty times it in
     one request (the Phase 4 audit): every document's deadline is capped by the
-    pack's, so the whole extraction ends by `max_pack_seconds`."""
+    pack's, so the whole extraction ends by `max_pack_seconds`.
+
+    On a clock of its own (N197): the ingest and the extractor read one fake
+    `monotonic`, which each extraction moves on by 0.05 s, so the deadlines
+    are exact and not two reads of the wall clock apart.
+    """
+    from types import SimpleNamespace
+
+    now = [1000.0]
+    fake = SimpleNamespace(monotonic=lambda: now[0])
+    monkeypatch.setattr(ingest_module, "time", fake)
+    monkeypatch.setattr(extract_module, "time", fake)
+    monkeypatch.setattr(_Deadlines, "clock", now)
     _Deadlines.seen = []
     limits = replace(DEFAULT_LIMITS, max_seconds=60.0, max_pack_seconds=0.12)
     documents = [_document(f"{n}.txt", TEXT) for n in range(3)]
-    started = time.monotonic()
+    started = now[0]
 
     with pytest.raises(Refusal) as caught:
         prepare_pack(
@@ -744,4 +764,6 @@ def test_one_deadline_bounds_the_whole_pack_not_each_document() -> None:
 
     assert caught.value.code is RefusalCode.SOURCE_EXTRACTION_TIMEOUT
     assert _Deadlines.seen, "extraction ran"
-    assert max(_Deadlines.seen) <= started + limits.max_pack_seconds + 0.01
+    assert set(_Deadlines.seen) == {started + limits.max_pack_seconds}, (
+        "every document is held to the pack's deadline, not 60 s from its own start"
+    )
