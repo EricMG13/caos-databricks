@@ -4,11 +4,26 @@ Status: **BLOCKED AT CP-0 (synthetic mandate, since replaced by the real fund's 
 
 Corpus changed 2026-10-06, D115; earlier runs were on the old corpus. See "Corpus changed 2026-10-06 (D115)" below.
 
+Corpus changed 2026-10-16, R27 (D152, N147); earlier runs were on the old corpus. See "Corpus changed 2026-10-16 (R27, N147)" below.
+
 This immutable set prepares `LITE_CREDIT_22 / LITE_PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a real
 fund's holdings and policies (D115; the synthetic test mandate of D80 is unused). Its qualification-set digest is
-`a1b09b156bead903eed0fa30ad2ae4341123f7dd9b407b02b41a9702de19fc12`.
+`d5f88732e1c3036efcd83f99fcb5ac259ac1d8b325c8ecd3ab31fd8603470e94`.
+
+## Corpus changed 2026-10-16 (R27, N147)
+
+On the owner's ruling R27 of 16 October 2026 (D152; N147) 2 documents already admitted to other CZR sets are added to this set. Nothing was downloaded for them: each is a byte-identical copy of the file in `czr-2026q2`, `czr-2026q2-covenant-refinancing`, copied because the on-disk loader refuses a path outside the set root. CP-0 of the latest run declared that documents in hand would close its gaps: the FY2025 10-K and the merger 8-K.
+
+| document | source | accession | text SHA-256 | raw HTML SHA-256 |
+|---|---|---|---|---|
+| `CZR_FY2025_10K.txt` (Form 10-K, year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
+| `CZR_2026_Merger_Agreement_8K.txt` (Form 8-K, Item 1.01, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382d8k.htm | 0001193125-26-242995 | `6808734cfbb19b56c5624e5a69e7209ccaad8a5039de94ad64563efdedf93169` | `aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96` |
+
+None is over 500 KiB as text, so no large-file pin moves; none is near the 1.5 MiB page-map threshold. The set's CP-0 request, encoded with CP-0's delivered authority (measured with the host's own builders, `check_context` on the pinned route), is 2,296,058 bytes (54.7% of `MAX_REQUEST_BYTES`), up from 1,812,938 (43.2%); no source is shown as a page map on a model with no declared context. For `openai/gpt-6-luna` (request ceiling 2,953,392 bytes under D116) the fitted request is 2,296,055 bytes with no source shown as a page map (before: 1,812,935 bytes, no page map). Set digest `a1b09b156bead903eed0fa30ad2ae4341123f7dd9b407b02b41a9702de19fc12` -> `d5f88732e1c3036efcd83f99fcb5ac259ac1d8b325c8ecd3ab31fd8603470e94`.
+
+Keys re-checked (all 6 keys and the five alternatives of the Adjusted EBITDA key, each scanned against both added documents for a whole-line twin and for its figures): none changes. The 10-K is the year to 31 December 2025, and no key line, alternative or figure appears in it or in the merger 8-K; the keys' sources are the 10-Q, the release, the fund's two documents and FINRA's TRACE line. TL10.2's `SUFFICIENT` register expectation reads liquidity and maturities, which the 10-Q carries more currently than the 10-K. No key is added.
 
 ## Corpus changed 2026-10-06 (D115)
 
@@ -99,7 +114,7 @@ authored from.
 
 ## Keys
 
-Keys authored from the documents; material figures pending owner confirmation.
+Keys authored from the documents; material figures stand as authored by the owner's ruling of 2026-10-17 (N126, F702).
 
 - CP-L10, issuer: the 10-Q's `$1.9 billion` of available CEI revolver
   capacity at 30 June 2026; the release's Adjusted EBITDA (`$920` million for

@@ -168,6 +168,59 @@ def snapshot_in(conn: StoreConnection, case_id: UUID) -> SourceSet:
     return SourceSet(case_id, version, fingerprint, members)
 
 
+@dataclass(frozen=True, slots=True)
+class PinnedSources:
+    """What one read of a run's captured members found: the usable ones by
+    document digest, and the documents the pin captured that have a withdrawn
+    copy and no live copy whose extraction matches its member."""
+
+    live: dict[str, UUID]
+    withdrawn: frozenset[str]
+
+
+def pinned_sources(conn: StoreConnection, run_id: UUID) -> PinnedSources:
+    """The run's captured members, usable and withdrawn, in one statement.
+
+    `live` is `pinned_live_sources`' answer; `withdrawn` (CF-019) is a
+    document captured by the pin that has a withdrawn source and no live copy
+    whose extraction matches its member, so a citation to it is told apart from
+    one naming a document the pin never held. A live member whose extraction
+    identity moved counts for neither set: it never puts its document in
+    `live`, and it never keeps it out of `withdrawn`. So a document whose
+    every copy moved is in neither; one with a moved copy beside a withdrawn
+    copy and no matching live copy is in `withdrawn`; and one with a matching
+    live copy is in `live` whatever stands beside it, unless its matching live
+    copies carry two extractions, when it is in neither.
+    Caller owns the read transaction.
+    """
+    rows = conn.execute(
+        "SELECT m.document_sha256, m.source_id, m.output_sha256,"
+        " COALESCE(s.withdrawn_at IS NULL AND (s.document_sha256,"
+        " e.extractor_identity, e.output_sha256, e.extraction_sha256) ="
+        " (m.document_sha256, m.extractor_identity, m.output_sha256,"
+        " m.extraction_sha256), false), s.withdrawn_at IS NOT NULL"
+        " FROM run_inputs i JOIN source_set_members m"
+        " ON (m.case_id, m.version) = (i.case_id, i.source_version)"
+        " JOIN sources s ON (s.case_id, s.source_id) = (m.case_id, m.source_id)"
+        " LEFT JOIN source_extractions e ON e.source_id = s.source_id"
+        " WHERE i.run_id = %s ORDER BY m.source_id",
+        (run_id,),
+    ).fetchall()
+    resolved: dict[str, UUID] = {}
+    outputs: dict[str, set[str]] = {}
+    gone: set[str] = set()
+    for document, source, output, live, withdrawn in rows:
+        if live:
+            resolved.setdefault(str(document), UUID(str(source)))
+            outputs.setdefault(str(document), set()).add(str(output))
+        elif withdrawn:
+            gone.add(str(document))
+    return PinnedSources(
+        {doc: src for doc, src in resolved.items() if len(outputs[doc]) == 1},
+        frozenset(gone - set(resolved)),
+    )
+
+
 def pinned_live_sources(conn: StoreConnection, run_id: UUID) -> dict[str, UUID]:
     """Document digest to source id: the run's captured members still usable now.
 
@@ -183,24 +236,7 @@ def pinned_live_sources(conn: StoreConnection, run_id: UUID) -> dict[str, UUID]:
     their outputs differ, since a digest cannot say which rectangles it meant.
     Caller owns the read transaction.
     """
-    rows = conn.execute(
-        "SELECT m.document_sha256, m.source_id, m.output_sha256 FROM run_inputs i"
-        " JOIN source_set_members m"
-        " ON (m.case_id, m.version) = (i.case_id, i.source_version)"
-        " JOIN live_sources s ON (s.case_id, s.source_id) = (m.case_id, m.source_id)"
-        " JOIN source_extractions e ON e.source_id = s.source_id"
-        " WHERE i.run_id = %s AND (s.document_sha256, e.extractor_identity,"
-        " e.output_sha256, e.extraction_sha256) = (m.document_sha256,"
-        " m.extractor_identity, m.output_sha256, m.extraction_sha256)"
-        " ORDER BY m.source_id",
-        (run_id,),
-    ).fetchall()
-    resolved: dict[str, UUID] = {}
-    outputs: dict[str, set[str]] = {}
-    for document, source, output in rows:
-        resolved.setdefault(str(document), UUID(str(source)))
-        outputs.setdefault(str(document), set()).add(str(output))
-    return {doc: source for doc, source in resolved.items() if len(outputs[doc]) == 1}
+    return pinned_sources(conn, run_id).live
 
 
 def cited_source_ids(

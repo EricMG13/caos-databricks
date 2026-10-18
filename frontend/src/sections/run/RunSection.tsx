@@ -353,6 +353,10 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           action={actionOf(actions, "PIN_RUN_INPUT")}
           initial={run.subject}
           requiresResearch={run.nodes.some((node) => node.module_id === "CP-DR")}
+          route={{
+            forecast: run.nodes.some((node) => node.module_id === "CP-2G"),
+            objective: run.nodes.some((node) => node.module_id === "CP-0"),
+          }}
           onPinned={learn}
           onRefetch={refetch}
         />

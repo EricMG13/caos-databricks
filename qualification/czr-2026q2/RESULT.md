@@ -38,7 +38,7 @@ map, and all are inside `MAX_REQUEST_BYTES`.
 
 ## Keys
 
-Keys authored from the documents; material figures pending owner confirmation.
+Keys authored from the documents; material figures stand as authored by the owner's ruling of 2026-10-17 (N126, F702).
 
 - CP-0: the release's Q2 2026 consolidated net revenues, `$2,993` million
   against `$2,907` million (+3.0%).
