@@ -296,7 +296,7 @@ COMMITTED_SET_DIGESTS = {
         "03b43aad16b19c0c3ce2d66b3b949a5b21f2708831b1e293ad0efe94c2677d75"
     ),
     "czr-2026q2-liquidity": (
-        "2f274851157840d674ec1308bb9337e1444379175be10bf9564d3a3edb362af0"
+        "82f344e868edcadc6c9bd05000132b0eb355f76c7df4dd92216e184e6cc77f5e"
     ),
     "czr-2026q2-covenant-refinancing": (
         "09fdf67a56d02b96cf0883040609dcf0d6fe2d61019c9ae8ecf7b7796a79584a"
@@ -320,7 +320,7 @@ COMMITTED_SET_DIGESTS = {
         "d5af56fb5fd0fd89be17635993f219b7eb795a2ee94f497d56fba3ec5144316c"
     ),
     "czr-2026q2-full-credit-assessment": (
-        "dd7e23561abb23e220ba1948428b28acd74a9a14a4f0b6bc498c2b694389fecc"
+        "17f44807fe519d8571ced4f33992a9af2c6c702974c78091ac6819f9483c5036"
     ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
