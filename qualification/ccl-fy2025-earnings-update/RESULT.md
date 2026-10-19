@@ -2,7 +2,7 @@
 
 This set is prepared offline for `FULL_CREDIT_32 / EARNINGS_UPDATE`; it does
 not record or claim qualification. Its qualification-set digest is
-`ffbd83e75e1ad65bbfb1b8662ff973f094e8f6990f13e21d67052235c7f3bea7`.
+`36aafade247e6c98811e23be6a5c9ccb6bd17c975b77075b6a7d58a62012be61`.
 
 ## Corpus and key provenance
 
@@ -50,3 +50,16 @@ The owner ruled the set is keyed to that verdict. Following
   digest is the one stated above.
 
 No document byte moves. Offline edit; no provider call, run, or snapshot.
+
+## Owner ruling F709, 18 October 2026 -- the strict keys are restored for Sol
+
+Live runs now use Sol only (owner, 18 October 2026), so the set is keyed to the
+modules READY again rather than held CONDITIONAL by CP-0's gate (R29 above
+records the Luna-era key and stays as history). Every key R29 removed is
+restored byte for byte: `expects_ready` for CP-1, CP-1B, CP-2 and CP-5; the five
+citation keys; the CP-5 `decision_scope` FULL projection; the ten `T4.12`
+register keys. `expects_blocked` is removed. CP-5 sits on the route and its keys
+had been dropped only because Luna's CP-0 held the modules upstream. The digest is
+back to `36aafade247e6c98811e23be6a5c9ccb6bd17c975b77075b6a7d58a62012be61`
+(the one stated at the top; R29's `ffbd83e7...` is superseded). Offline edit; no
+provider call, run, or snapshot.
