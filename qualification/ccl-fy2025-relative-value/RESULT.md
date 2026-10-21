@@ -8,7 +8,7 @@ costs real money and calls a real model.
 ## The set
 
 - Qualification-set digest:
-  `715fd96d6dccee128a405006c20e4fdcd45d4f5cdf301e129e31f613ffe2221d`
+  `34eb29c1759fd2f5f5497f1a142a267fa2b8420656d40f30d2d41affba8604bd`
 - Route: `LITE_CREDIT_22 / LITE_RELATIVE_VALUE` (`CP-0` → `CP-L10` → `CP-1C`,
   three REQUIRED edges, `decision_scope: SCREENING_ONLY`). CP-1C is a FULL
   module held behind the named-LITE-object boundary until CP-L10's
@@ -183,3 +183,22 @@ Following `ccl-fy2025-portfolio` (`expects_blocked`, `docs/DECISIONS.md` §99):
 
 No document byte moves. Offline edit; no provider call, run, or snapshot. Both
 retained captures bind the earlier digest and are not re-scored.
+
+## Owner ruling F709, 18 October 2026 -- the strict keys are restored for Sol
+
+Live runs now use Sol only (owner, 18 October 2026), so the set is keyed to
+CP-L10 and CP-1C READY again rather than held CONDITIONAL by CP-0's gate (R29
+above records the Luna-era key and stays as history). Every key R29 removed is
+restored byte for byte: `expects_ready` for CP-L10 and CP-1C; the four citation
+keys; the `decision_scope` projection keys; the `TL10.2` and `T4.5` register keys.
+`expects_blocked` is removed. CP-1C sits on the route behind a REQUIRED edge from
+CP-L10 and its keys had been dropped only because Luna's CP-0 held CP-L10. The
+digest is back to
+`34eb29c1759fd2f5f5497f1a142a267fa2b8420656d40f30d2d41affba8604bd` (the one stated under "The set"; R29's `715fd96d...` is
+superseded, and so is `fb201886...`, the digest of the restored keys before the
+merge with fork r17). The `T4.5` keys are restored on r17's split columns:
+`Total Leverage` and `Net Leverage` carry the two halves of the packed cell's
+old values (CCL `[Calculated] 3.66x` and `[Calculated] 3.40x`; NCLH
+`[Calculated] 5.35x` and `5.3x (reported)`), because the packed
+`Total/Net/Sr Sec Leverage` column no longer exists. Offline edit; no provider
+call, run, or snapshot.
